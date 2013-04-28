@@ -85,7 +85,6 @@ on_err
 : tuck swap over ;
 : nip swap drop ;
 : rot >r swap r> swap ;
-: -rot rot rot ;
 : <> = 0= ;
 
 : 2drop drop drop ;
@@ -126,10 +125,7 @@ on_err
 : allot here + h !reg ;
 : :noname immediate here _run , ] ;
 : ? 0= if \ ( bool -- ) ( Conditional evaluation )
-        [ '\n' literal ] key <>
-        if 
-            0 ? 
-        then 
+      [ find \ literal ] execute 
     then 
 ;
 
@@ -192,9 +188,10 @@ on_err
 ;
 
 : create 
-	:: 
-	false state 
+  :: 
+  false state 
 ;
+
 
 : constant immediate
 	create 
@@ -230,14 +227,9 @@ on_err
 
 : 40ban 40 ban ;
 
-: @reg. \ ( x -- )
-	@reg .
-;
-
 : _show
     2dup - @dic prnn tab 1- dup 0=
 ;
-
 : show \ ( from to -- )
     40ban
     ." Dictionary contents: " cr
@@ -343,6 +335,8 @@ str @reg dup 32 + str !reg constant filename
     output rewind kernel
 ;
 
+
+
 : [END]
     input fclose kernel 
     output fclose kernel 
@@ -364,11 +358,11 @@ str @reg dup 32 + str !reg constant filename
 
 
 \ ANSI terminal color codes
-'esc' emit .( [2J) cr       \ Reset
-'esc' emit .( [32m) cr    \ Green fg
+ 'esc' emit .( [2J) cr       \ Reset
+ 'esc' emit .( [32m) cr    \ Green fg
 \ 'esc' emit .( [40m) cr    \ Black bg
-.( Howe Forth ) cr .( Base System Loaded ) cr
-.( Memory Usuage: ) here 2 * str @reg + . cr
-'esc' emit .( [31m) .( OK ) cr 'esc' emit .( [30m) cr
-
+ .( Howe Forth ) cr .( Base System Loaded ) cr
+ .( Memory Usuage: ) here 2 * str @reg + . cr
+ 'esc' emit .( [31m) .( OK ) cr 'esc' emit .( [30m) cr
+ 
 [END]
