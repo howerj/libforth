@@ -83,46 +83,50 @@ void debug_print(fobj_t *fo){
 
 int main(void)
 {
+        /*setting I/O streams*/
         fio_t in_file = { io_stdin, 0, 0, {NULL} };
         fio_t out_file = { io_stdout, 0, 0, {NULL} };
         fio_t err_file = { io_stderr, 0, 0, {NULL} };
 
-        mw reg[MAX_REG] = { 0 };
-        mw dic[MAX_DIC] = { 0 };
-        mw var[MAX_VAR] = { 0 };
-        mw ret[MAX_RET] = { 0 };
-        char str[MAX_STR] = { 0 };
-
         fobj_t fo;
 
+        /*initialize input file, fclose is handled elsewhere*/
         in_file.fio = io_rd_file;
         if ((in_file.iou.f = fopen("start.fs", "r")) == NULL) {
                 fprintf(stderr, "Unable to open initial input file!\n");
                 return 1;
         }
 
-        SM_maxReg = MAX_REG;
-        SM_maxDic = MAX_DIC;
-        SM_maxVar = MAX_VAR;
-        SM_maxRet = MAX_RET;
-        SM_maxStr = MAX_STR;
-        SM_inputBufLen = 32;
-        SM_dictionaryOffset = 4;
-        SM_sizeOfMW = sizeof(mw);
-        INI = true;
+        /*memories of the interpreter*/
+        fo.reg = calloc(sizeof(mw), MAX_REG);
+        fo.dic = calloc(sizeof(mw), MAX_DIC);
+        fo.var = calloc(sizeof(mw), MAX_VAR);
+        fo.ret = calloc(sizeof(mw), MAX_RET);
+        fo.str = calloc(sizeof(char), MAX_STR);
+
+        /*initializing memory*/
+        fo.reg[ENUM_maxReg] = MAX_REG;
+        fo.reg[ENUM_maxDic] = MAX_DIC;
+        fo.reg[ENUM_maxVar] = MAX_VAR;
+        fo.reg[ENUM_maxRet] = MAX_RET;
+        fo.reg[ENUM_maxStr] = MAX_STR;
+        fo.reg[ENUM_inputBufLen] = 32;
+        fo.reg[ENUM_dictionaryOffset] = 4;
+        fo.reg[ENUM_sizeOfMW] = sizeof(mw);
+        fo.reg[ENUM_INI] = true;
 
         fo.in_file = &in_file;
         fo.out_file = &out_file;
         fo.err_file = &err_file;
-        fo.reg = reg;
-        fo.dic = dic;
-        fo.var = var;
-        fo.ret = ret;
-        fo.str = str;
 
         forth_monitor(&fo);
 #ifdef DEBUG_PRN
         debug_print(&fo);
-#endif        
+#endif
+        free(fo.reg);
+        free(fo.dic);
+        free(fo.var);
+        free(fo.ret);
+        free(fo.str);
         return 0;
 }

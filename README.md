@@ -44,6 +44,4 @@ TODO:
 
 * DOES>
 
-* EXECUTE
-
 EOF
