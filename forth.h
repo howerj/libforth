@@ -142,6 +142,7 @@ union io_u {
         char *s;
 };
 
+/*IO redirections.*/
 struct fio_s {
         enum forth_io fio;
         mw str_index;           /*index into string */

@@ -13,10 +13,10 @@
 #include <stdlib.h>
 
 #define MAX_REG 32
-#define MAX_DIC 2048
-#define MAX_VAR 128
-#define MAX_RET 128
-#define MAX_STR 2048
+#define MAX_DIC 4196
+#define MAX_VAR 256
+#define MAX_RET 256
+#define MAX_STR 4196
 
 /*Define me via the command line.*/
 #ifdef DEBUG_PRN
@@ -81,52 +81,84 @@ void debug_print(fobj_t *fo){
 }
 #endif
 
-int main(void)
-{
-        /*setting I/O streams*/
-        fio_t in_file = { io_stdin, 0, 0, {NULL} };
-        fio_t out_file = { io_stdout, 0, 0, {NULL} };
-        fio_t err_file = { io_stderr, 0, 0, {NULL} };
+#define CALLOC_FAIL(X)\
+      if((X)==NULL){\
+          fprintf(stderr,"calloc() failed <%s:%d>\n", __FILE__,__LINE__);\
+          return NULL;\
+      }
+fobj_t *forth_vm_create(mw reg_l, mw dic_l, mw var_l, mw ret_l, mw str_l){
+        /*the vm forth object*/
+        fobj_t *fo = calloc(1,sizeof(fobj_t));
+        CALLOC_FAIL(fo);
 
-        fobj_t fo;
+         /*setting I/O streams*/
+        fio_t *in_file  = calloc(1,sizeof(fio_t));
+        fio_t *out_file = calloc(1,sizeof(fio_t));
+        fio_t *err_file = calloc(1,sizeof(fio_t));
+        CALLOC_FAIL(in_file);
+        CALLOC_FAIL(out_file);
+        CALLOC_FAIL(err_file);
 
-        /*initialize input file, fclose is handled elsewhere*/
-        in_file.fio = io_rd_file;
-        if ((in_file.iou.f = fopen("start.fs", "r")) == NULL) {
-                fprintf(stderr, "Unable to open initial input file!\n");
-                return 1;
-        }
+        in_file->fio  = io_stdin;
+        out_file->fio = io_stdout;
+        err_file->fio = io_stderr;
+        
+        fo->in_file  = in_file;
+        fo->out_file = out_file;
+        fo->err_file = err_file;
 
         /*memories of the interpreter*/
-        fo.reg = calloc(sizeof(mw), MAX_REG);
-        fo.dic = calloc(sizeof(mw), MAX_DIC);
-        fo.var = calloc(sizeof(mw), MAX_VAR);
-        fo.ret = calloc(sizeof(mw), MAX_RET);
-        fo.str = calloc(sizeof(char), MAX_STR);
+        fo->reg = calloc(reg_l,sizeof(mw));
+        fo->dic = calloc(dic_l,sizeof(mw));
+        fo->var = calloc(var_l,sizeof(mw));
+        fo->ret = calloc(ret_l,sizeof(mw));
+        fo->str = calloc(str_l,sizeof(char));
+        CALLOC_FAIL(fo->reg);
+        CALLOC_FAIL(fo->dic);
+        CALLOC_FAIL(fo->var);
+        CALLOC_FAIL(fo->ret);
+        CALLOC_FAIL(fo->str);
+
+        /*initialize input file, fclose is handled elsewhere*/
+        fo->in_file->fio = io_rd_file;
+        if ((fo->in_file->iou.f = fopen("start.fs", "r")) == NULL) {
+                fprintf(stderr, "Unable to open initial input file!\n");
+                return NULL;
+        }
 
         /*initializing memory*/
-        fo.reg[ENUM_maxReg] = MAX_REG;
-        fo.reg[ENUM_maxDic] = MAX_DIC;
-        fo.reg[ENUM_maxVar] = MAX_VAR;
-        fo.reg[ENUM_maxRet] = MAX_RET;
-        fo.reg[ENUM_maxStr] = MAX_STR;
-        fo.reg[ENUM_inputBufLen] = 32;
-        fo.reg[ENUM_dictionaryOffset] = 4;
-        fo.reg[ENUM_sizeOfMW] = sizeof(mw);
-        fo.reg[ENUM_INI] = true;
+        fo->reg[ENUM_maxReg] = MAX_REG;
+        fo->reg[ENUM_maxDic] = MAX_DIC;
+        fo->reg[ENUM_maxVar] = MAX_VAR;
+        fo->reg[ENUM_maxRet] = MAX_RET;
+        fo->reg[ENUM_maxStr] = MAX_STR;
+        fo->reg[ENUM_inputBufLen] = 32;
+        fo->reg[ENUM_dictionaryOffset] = 4;
+        fo->reg[ENUM_sizeOfMW] = sizeof(mw);
+        fo->reg[ENUM_INI] = true;
 
-        fo.in_file = &in_file;
-        fo.out_file = &out_file;
-        fo.err_file = &err_file;
+        printf("Forth object initialized.\n");
+        return fo;
+}
 
-        forth_monitor(&fo);
+int main(void)
+{
+        fobj_t *fo;
+
+        fo = forth_vm_create(MAX_REG,MAX_DIC,MAX_VAR,MAX_RET,MAX_STR);
+
+        forth_monitor(fo);
 #ifdef DEBUG_PRN
-        debug_print(&fo);
+        debug_print(fo);
 #endif
-        free(fo.reg);
-        free(fo.dic);
-        free(fo.var);
-        free(fo.ret);
-        free(fo.str);
+        free(fo->reg);
+        free(fo->dic);
+        free(fo->var);
+        free(fo->ret);
+        free(fo->str);
+        free(fo->in_file);
+        free(fo->out_file);
+        free(fo->err_file);
+        free(fo);
         return 0;
 }
