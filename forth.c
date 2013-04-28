@@ -21,11 +21,6 @@
  *  - In general
  *  - When calling certain functions such as compile_word()
  * 0xXX 0XX and XX input handling
- * Add Formula translator?
- *  http://stackoverflow.com/questions/4621151/the-shortest-way-to-convert-infix-expressions-to-postfix-rpn-in-c
- *  main(c){read(0,&c,1)?c-41&&main(c-40&&(c%96<27||main(c),putchar(c))):exit(0);}
- * Add regex library?
- * CATCH and THROW
  * freopen()?
  */
 
@@ -36,12 +31,8 @@
             (X=='6')||(X=='7')||(X=='8')||(X=='9'))
 
 /* IO wrappers 
- * TODO
- *  I could make all of this much more general by doing the following:
- *      - Adding support for the low level read/write system calls.
- *      - Have an array of open file descriptors instead of just one
- *          and a way of indexing those descriptors.
- *
+ * TODO:
+ *  File Stack.
  */
 
 /*Either get input from stdin, a string or a file*/
@@ -630,7 +621,7 @@ mw forth_interpreter(fobj_t * fo)
                         if ((OP1 = find_word(fo)) != ERR_OK)    /*fo contains OP0 */
                                 return OP1;
                         if (OP0 - 1) {
-                                NEXT = OP0 + 2;
+                                NEXT = OP0 + 2; /*Advance over pointers*/
                                 if (!CPF) {
                                         ECUZ(SM_maxDic, NEXT, ERR_NEXT,
                                              err_file);
@@ -744,9 +735,6 @@ mw forth_interpreter(fobj_t * fo)
                         break;
                 case DEC:
                         TOS--;
-                        break;
-                case LESSZ:
-                        TOS = TOS < 0;
                         break;
                 case EQ:
                         ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
@@ -908,7 +896,8 @@ mw forth_interpreter(fobj_t * fo)
                         TOS = var[--VAR];
                         break;
                 case FIND:
-                        if ((OP1 = find_word(fo)) != ERR_OK)    /*fo contains OP0 */
+                        /*fo contains OP0 */
+                        if ((OP1 = find_word(fo)) != ERR_OK)    
                                 return OP1;
                         /*Check if word found */
                         if (!(OP0 - 1)) {
@@ -916,9 +905,19 @@ mw forth_interpreter(fobj_t * fo)
                                 return ERR_WORD;
                         }
                         ECB(0, SM_maxVar, VAR, ERR_VAR, err_file);
+                        ECB(0, SM_maxDic - 3, VAR, ERR_OP0, err_file);
+                        OP0+=2; /*advance over pointers*/
+                        if(dic[OP0]==COMPILE){
+                          ++OP0;
+                        }
                         var[++VAR] = TOS;
                         TOS = OP0;
                         break;
+                case EXECUTE:
+                        ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
+                        NEXT = TOS;
+                        TOS = var[VAR--];
+                        goto TAIL_RECURSE;
                 case KERNEL:
                         if ((OP0 = forth_system_calls(fo, TOS)) != ERR_OK) {
                                 ERR_LN_PRN(err_file);
