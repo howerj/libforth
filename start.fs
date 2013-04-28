@@ -1,7 +1,7 @@
 : immediate read \ exit br ?br + - * % / lshift rshift 
 and or invert xor 1+ 1- = < > @reg @dic @var @ret @str 
 !reg !dic !var !ret !str key emit dup drop swap over >r r> 
-tail ' , printnum get_word strlen isnumber strnequ _find 
+tail ' , printnum get_word strlen isnumber strnequ find 
 execute kernel
 
 \ Howe Forth: Start up code.
@@ -67,7 +67,6 @@ on_err
 
 \ ASCII chars
 
-: 'space' 32 ;
 : 'esc' 27 ;
 : '\n' 10 ;
 : '\t' 9 ;
@@ -189,10 +188,7 @@ on_err
 ;
  
 : :: 	\ compiles a ':'
-	[ 
-		here 1- h !reg	\ back up dictionary pointer
-		_define , 	\ write in primitive for ':'
-	] 
+  [ find : , ]
 ;
 
 : create 

@@ -125,7 +125,7 @@ mw get_word(char *str, const mw str_len, fio_t * io_file)
 mw isnumber(const char s[])
 {
         mw x = 0;
-        if (((s[x] == '-') | (s[x] == '+')) & ISDIGIT(s[x + 1]))
+        if (((s[x] == '-') || (s[x] == '+')) & ISDIGIT(s[x + 1]))
                 x++;
         for (; s[x] != '\0'; x++) {
                 if (!ISDIGIT(s[x])) {
@@ -146,7 +146,7 @@ mw strnequ(const char str1[], const char str2[], const mw lim1, const mw lim2)
                 if (*s1 == '\0')
                         return 0;
 
-        if ((s1 >= str1 + lim1) | (s2 >= str2 + lim2)) {
+        if ((s1 >= str1 + lim1) || (s2 >= str2 + lim2)) {
                 return 2;
         }
         return 1;
@@ -332,12 +332,12 @@ mw forth_initialize(fobj_t * fo)
         dic[DIC++] = PC - 1;
         /*...end special word definition */
 
-        /*more immediate words */
+        /*more immediate words*/
         if (compile_word(COMMENT, fo) != ERR_OK) {
                 return ERR_FAILURE;
         }
 
-        /*define compile only words... */
+        /*define 'compile only' words*/
         ECUZ(SM_maxDic - (LAST_PRIMITIVE - EXIT), DIC, ERR_DIC, err_file);
         for (OP0 = EXIT; OP0 < LAST_PRIMITIVE;) {
                 if (compile_word(COMPILE, fo) != ERR_OK) {
