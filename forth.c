@@ -745,9 +745,6 @@ mw forth_interpreter(fobj_t * fo)
                 case DEC:
                         TOS--;
                         break;
-                case CLR:
-                        TOS = 0;
-                        break;
                 case LESSZ:
                         TOS = TOS < 0;
                         break;

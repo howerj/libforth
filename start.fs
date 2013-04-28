@@ -1,9 +1,9 @@
 : immediate read \ exit br ?br + - * % / lshift rshift 
-and or ~ xor 1+ 1- clear 0> = < > @reg @dic @var @ret @str 
+and or invert xor 1+ 1- 0> = < > @reg @dic @var @ret @str 
 !reg !dic !var !ret !str key emit dup drop swap over >r r> 
 tail ' , printnum get_word strlen isnumber strnequ _find kernel
 
-\ Howe Forth Core 
+\ Howe Forth: Start up code.
 \ @author         Richard James Howe.
 \ @copyright      Copyright 2013 Richard James Howe.
 \ @license        LGPL      
@@ -92,9 +92,6 @@ on_err
 : 2dup over over ;
 
 : 2+ 1+ 1+ ;
-: 2- 1- 1- ;
-
-: negate -1 * ;
 
 : swap- swap - ;
 
@@ -102,6 +99,7 @@ on_err
 	' ?br , 
 	here 0 , 
 ;
+
 : else immediate
 	' br ,
 	here
@@ -124,26 +122,7 @@ on_err
 	' ?br ,
 	here- ,
 ;
-: always immediate
-	' br ,
-	here- ,
-;
 
-: while 	immediate
-	' ?br ,
-	0 ,
-	here
-;
-
-: repeat	immediate 
-	' br ,
-	swap here- ,
-	dup here swap- 1+ swap 1- !dic
-	' drop ,
-;
-
-: abs dup 0> if negate then ;
-: ?dup dup if dup then ;
 : allot here + h !reg ;
 : :noname immediate here _run , ] ;
 : ? 0= if \ ( bool -- ) ( Conditional evaluation )
@@ -307,38 +286,6 @@ on_err
         2dup =
     until
 ;
-
-\ : regs \ ( prints registers )
-\ 	40ban
-\ 	." Registers " cr
-\ 	40ban
-\ 
-\ 	." NEXT " tab 0 @reg.
-\ 	." PC " tab 1 @reg.
-\ 	." TOS " tab 2 @reg.
-\ 	." R " tab r @reg.
-\ 	." V " tab v @reg.
-\ 	." H " tab here .
-\ 	." STR " tab str @reg.
-\ 	." PWD " tab pwd @reg.
-\ 	." OP0 " tab 8 @reg.
-\ 	." OP1 " tab 9 @reg.
-\ 	." X " tab 10 @reg.
-\ 	." Y " tab 11 @reg.
-\ 	." Z " tab 12 @reg.
-\ 	." CPF " tab 13 @reg.
-\ 	." EXF " tab 14 @reg.
-\ 	." INI " tab 15 @reg.
-\ 	." S_REG " tab 16 @reg.
-\ 	." S_DIC " tab 17 @reg.
-\ 	." S_RET " tab 18 @reg.
-\ 	." S_VAR " tab 19 @reg.
-\ 	." S_STR " tab 20 @reg.
-\ 	." S_IOL " tab 21 @reg.
-\ 	." S_DOF " tab 22 @reg.
-\ 	." S_SOM " tab 23 @reg.
-\ 	40ban
-\ ;
 
 3 constant tabvar
 : tabbing \ ( counter X -- counter-1 X )

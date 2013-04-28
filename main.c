@@ -1,3 +1,13 @@
+/*
+ * Howe Forth: Wrapper/Top Level.
+ * @author         Richard James Howe.
+ * @copyright      Copyright 2013 Richard James Howe.
+ * @license        LGPL      
+ * @email          howe.r.j.89@gmail.com
+ *
+ */
+
+
 #include <stdio.h>
 #include "forth.h"
 #include <stdlib.h>
