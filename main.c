@@ -7,16 +7,21 @@
  *
  */
 
-
 #include <stdio.h>
 #include "forth.h"
 #include <stdlib.h>
 
 #define MAX_REG 32
-#define MAX_DIC 4196
-#define MAX_VAR 256
-#define MAX_RET 256
-#define MAX_STR 4196
+#define MAX_DIC (1024*1024/sizeof(mw))
+#define MAX_VAR 8192
+#define MAX_RET 8192
+#define MAX_STR (1024*1024/sizeof(char))
+
+#define CALLOC_FAIL(X,RET)\
+      if((X)==NULL){\
+          fprintf(stderr,"calloc() failed <%s:%d>\n", __FILE__,__LINE__);\
+          return (RET);\
+      }
 
 /*Define me via the command line.*/
 #ifdef DEBUG_PRN
@@ -53,7 +58,8 @@ void print_char_table(char *p, int len, FILE * f)
 }
 
 /*print out main memory.*/
-void debug_print(fobj_t *fo){
+void debug_print(fobj_t * fo)
+{
 
         FILE *table_out;
         if ((table_out = fopen("memory.txt", "w")) == NULL) {
@@ -81,52 +87,50 @@ void debug_print(fobj_t *fo){
 }
 #endif
 
-#define CALLOC_FAIL(X)\
-      if((X)==NULL){\
-          fprintf(stderr,"calloc() failed <%s:%d>\n", __FILE__,__LINE__);\
-          return NULL;\
-      }
-fobj_t *forth_vm_create(mw reg_l, mw dic_l, mw var_l, mw ret_l, mw str_l){
-        /*the vm forth object*/
-        fobj_t *fo = calloc(1,sizeof(fobj_t));
-        CALLOC_FAIL(fo);
+fobj_t *forth_obj_create(mw reg_l, mw dic_l, mw var_l, mw ret_l, mw str_l)
+{
+        /*the vm forth object */
+        fobj_t *fo = calloc(1, sizeof(fobj_t));
 
-         /*setting I/O streams*/
-        fio_t *in_file  = calloc(1,sizeof(fio_t));
-        fio_t *out_file = calloc(1,sizeof(fio_t));
-        fio_t *err_file = calloc(1,sizeof(fio_t));
-        CALLOC_FAIL(in_file);
-        CALLOC_FAIL(out_file);
-        CALLOC_FAIL(err_file);
+        /*setting I/O streams */
+        fio_t *in_file = calloc(1, sizeof(fio_t));
+        fio_t *out_file = calloc(1, sizeof(fio_t));
+        fio_t *err_file = calloc(1, sizeof(fio_t));
 
-        in_file->fio  = io_stdin;
+        CALLOC_FAIL(fo, NULL);
+        CALLOC_FAIL(in_file, NULL);
+        CALLOC_FAIL(out_file, NULL);
+        CALLOC_FAIL(err_file, NULL);
+
+        in_file->fio = io_stdin;
         out_file->fio = io_stdout;
         err_file->fio = io_stderr;
-        
-        fo->in_file  = in_file;
+
+        fo->in_file = in_file;
         fo->out_file = out_file;
         fo->err_file = err_file;
 
-        /*memories of the interpreter*/
-        fo->reg = calloc(reg_l,sizeof(mw));
-        fo->dic = calloc(dic_l,sizeof(mw));
-        fo->var = calloc(var_l,sizeof(mw));
-        fo->ret = calloc(ret_l,sizeof(mw));
-        fo->str = calloc(str_l,sizeof(char));
-        CALLOC_FAIL(fo->reg);
-        CALLOC_FAIL(fo->dic);
-        CALLOC_FAIL(fo->var);
-        CALLOC_FAIL(fo->ret);
-        CALLOC_FAIL(fo->str);
+        /*memories of the interpreter */
+        fo->reg = calloc(reg_l, sizeof(mw));
+        fo->dic = calloc(dic_l, sizeof(mw));
+        fo->var = calloc(var_l, sizeof(mw));
+        fo->ret = calloc(ret_l, sizeof(mw));
+        fo->str = calloc(str_l, sizeof(char));
 
-        /*initialize input file, fclose is handled elsewhere*/
+        CALLOC_FAIL(fo->reg, NULL);
+        CALLOC_FAIL(fo->dic, NULL);
+        CALLOC_FAIL(fo->var, NULL);
+        CALLOC_FAIL(fo->ret, NULL);
+        CALLOC_FAIL(fo->str, NULL);
+
+        /*initialize input file, fclose is handled elsewhere */
         fo->in_file->fio = io_rd_file;
         if ((fo->in_file->iou.f = fopen("start.fs", "r")) == NULL) {
                 fprintf(stderr, "Unable to open initial input file!\n");
                 return NULL;
         }
 
-        /*initializing memory*/
+        /*initializing memory */
         fo->reg[ENUM_maxReg] = MAX_REG;
         fo->reg[ENUM_maxDic] = MAX_DIC;
         fo->reg[ENUM_maxVar] = MAX_VAR;
@@ -137,20 +141,12 @@ fobj_t *forth_vm_create(mw reg_l, mw dic_l, mw var_l, mw ret_l, mw str_l){
         fo->reg[ENUM_sizeOfMW] = sizeof(mw);
         fo->reg[ENUM_INI] = true;
 
-        printf("Forth object initialized.\n");
+        fprintf(stderr, "\tOBJECT INITIALIZED.\n");
         return fo;
 }
 
-int main(void)
+void forth_obj_destroy(fobj_t * fo)
 {
-        fobj_t *fo;
-
-        fo = forth_vm_create(MAX_REG,MAX_DIC,MAX_VAR,MAX_RET,MAX_STR);
-
-        forth_monitor(fo);
-#ifdef DEBUG_PRN
-        debug_print(fo);
-#endif
         free(fo->reg);
         free(fo->dic);
         free(fo->var);
@@ -160,5 +156,23 @@ int main(void)
         free(fo->out_file);
         free(fo->err_file);
         free(fo);
+        fprintf(stderr, "\tOBJECT DESTROYED.\n");
+}
+
+int main(void)
+{
+        fobj_t *fo;
+
+        fprintf(stderr, "HOWE FORTH [%s:%s]:\n\tSTARTING.\n", __DATE__,
+                __TIME__);
+        fo = forth_obj_create(MAX_REG, MAX_DIC, MAX_VAR, MAX_RET, MAX_STR);
+        CALLOC_FAIL(fo, -1);    /*memory might not be free()'d on error. */
+        fprintf(stderr, "\tRUNNING.\n");
+        fprintf(stderr, "\t[RETURNED:%X]\n", forth_monitor(fo));
+#ifdef DEBUG_PRN
+        fprintf(stderr, "\tDEBUG PRINT RUNNING\n");
+        debug_print(fo);
+#endif
+        forth_obj_destroy(fo);
         return 0;
 }

@@ -91,6 +91,7 @@ on_err
 : 2dup over over ;
 
 : 2+ 1+ 1+ ;
+: 2- 1- 1- ;
 
 : swap- swap - ;
 
@@ -129,7 +130,7 @@ on_err
     then 
 ;
 
-: _s \ ( key to halt on -- )
+: _( \ ( key to halt on -- )
     >r
      begin 
         key dup r> dup >r  = dup 
@@ -143,7 +144,7 @@ on_err
 ;
 
 : .( 
-    ')' _s
+    ')' _(
 ;
 
 \ Print out a string stored in string storage
@@ -175,7 +176,7 @@ on_err
 
 : ." immediate
     CPF @reg 0= if
-    '"' _s
+    '"' _(
     else
         _push , str @reg ,
         _."
@@ -187,35 +188,39 @@ on_err
   [ find : , ]
 ;
 
-: create 
-  :: 
-  false state 
+\ The word create involves multiple levels of indirection.
+\ It makes a word which has to write in values into
+\ another word
+: create immediate              \ This is a complicated word! It makes a
+                                    \ word that makes a word.
+  CPF @reg if                   \ Compile time behavour
+  ' :: ,                        \ Make the defining word compile a header
+  ' ' , _push , ' , ,           \ Write in push to the creating word
+  ' here , ' 1+ , ' 2+ , ' , ,  \ Write in the number we want the created word to push
+  ' ' , here 0 , ' , ,          \ Write in a place holder (0) and push a 
+                                    \ pointer to to be used by does>
+  ' ' , ' exit , ' , ,          \ Write in an exit in the word we're compiling.
+  ' false , ' state ,           \ Make sure to change the state back to command mode
+  else                          \ Run time behavour
+    ::                          \ Compile a word
+    _push ,                     \ Write push into new word
+    here 2+ ,                   \ Push a pointer to data field
+    ' exit ,                    \ Write in an exit to new word (data field is after exit)
+    false state                 \ Return to command mode.
+  then
+;
+
+: does> immediate
+  ' exit ,                      \ Write in an exit, we don't want the
+                                  \ defining to run it, but the *defined* word to.
+  here swap !dic                \ Patch in 
+  _run ,
 ;
 
 
-: constant immediate
-	create 
-	_push , , 
-	' exit , 
-; 
-
-: variable immediate
-	create
-	_push , 
-	here 2+ , \ pointer to allocations
-	' exit ,	\ over this
-	,		\ <-- points here
-;
-
-\ There is no bounds checking at the moment...expects NUMBER INDEX
-: array immediate
-	create
-	_push , 
-	here 3 + , \ pointer to allocations
-	' + ,		\ over this
-	' exit ,	\ over this
-	allot		\ <-- points here
-;
+: constant create , does> @dic ; 
+: variable create , does> ;
+: array create allot does> ;
 
 : ban \ ( x -- )
 	begin 
@@ -336,7 +341,6 @@ str @reg dup 32 + str !reg constant filename
 ;
 
 
-
 : [END]
     input fclose kernel 
     output fclose kernel 
@@ -355,6 +359,16 @@ str @reg dup 32 + str !reg constant filename
     cr
     2drop
 ;
+
+
+: head
+  find 2- dup 40 + show
+;
+
+\ : ?dup dup if dup then ;
+\ : negate -1 * ;
+\ : abs dup 0 < if negate then ;
+
 
 
 \ ANSI terminal color codes

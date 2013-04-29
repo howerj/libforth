@@ -332,12 +332,12 @@ mw forth_initialize(fobj_t * fo)
         dic[DIC++] = PC - 1;
         /*...end special word definition */
 
-        /*more immediate words*/
+        /*more immediate words */
         if (compile_word(COMMENT, fo) != ERR_OK) {
                 return ERR_FAILURE;
         }
 
-        /*define 'compile only' words*/
+        /*define 'compile only' words */
         ECUZ(SM_maxDic - (LAST_PRIMITIVE - EXIT), DIC, ERR_DIC, err_file);
         for (OP0 = EXIT; OP0 < LAST_PRIMITIVE;) {
                 if (compile_word(COMPILE, fo) != ERR_OK) {
@@ -621,7 +621,7 @@ mw forth_interpreter(fobj_t * fo)
                         if ((OP1 = find_word(fo)) != ERR_OK)    /*fo contains OP0 */
                                 return OP1;
                         if (OP0 - 1) {
-                                NEXT = OP0 + 2; /*Advance over pointers*/
+                                NEXT = OP0 + 2; /*Advance over pointers */
                                 if (!CPF) {
                                         ECUZ(SM_maxDic, NEXT, ERR_NEXT,
                                              err_file);
@@ -897,7 +897,7 @@ mw forth_interpreter(fobj_t * fo)
                         break;
                 case FIND:
                         /*fo contains OP0 */
-                        if ((OP1 = find_word(fo)) != ERR_OK)    
+                        if ((OP1 = find_word(fo)) != ERR_OK)
                                 return OP1;
                         /*Check if word found */
                         if (!(OP0 - 1)) {
@@ -906,9 +906,9 @@ mw forth_interpreter(fobj_t * fo)
                         }
                         ECB(0, SM_maxVar, VAR, ERR_VAR, err_file);
                         ECB(0, SM_maxDic - 3, VAR, ERR_OP0, err_file);
-                        OP0+=2; /*advance over pointers*/
-                        if(dic[OP0]==COMPILE){
-                          ++OP0;
+                        OP0 += 2;       /*advance over pointers */
+                        if (dic[OP0] == COMPILE) {
+                                ++OP0;
                         }
                         var[++VAR] = TOS;
                         TOS = OP0;
@@ -1050,7 +1050,7 @@ mw forth_monitor(fobj_t * fo)
                         on_err(fo);
                         goto RESTART;
                 }
-                print_string("Err: EOF.\n", MAX_ERR_STR, fo->err_file);
+                print_string("EOF\n", MAX_ERR_STR, fo->err_file);
                 break;
         case ERR_BASE:
                 print_string("Err: Base.\n", MAX_ERR_STR, fo->err_file);

@@ -42,6 +42,10 @@ TODO:
 
 * Cycles.
 
-* DOES>
+NOTES
+=====
+
+The dictionary could be implemented with a 16-bit hash instead to save
+space.
 
 EOF

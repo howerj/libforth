@@ -134,7 +134,7 @@ enum forth_registers {
 #define SM_dictionaryOffset  reg[ENUM_dictionaryOffset]
 #define SM_sizeOfMW  reg[ENUM_sizeOfMW]
 
-typedef signed short mw;
+typedef signed int mw;
 
 /*if input or output is a file or string, store point to it*/
 union io_u {
