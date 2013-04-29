@@ -188,6 +188,10 @@ on_err
   [ find : , ]
 ;
 
+: '', ' ' , ;       \ A word that writes ' into the dictionary
+: ',, ' , , ;       \ A word that writes , into the dictionary
+: 'exit, ' exit , ; \ A word that write exit into the dictionary
+: 3+ 2+ 1+ ;
 \ The word create involves multiple levels of indirection.
 \ It makes a word which has to write in values into
 \ another word
@@ -195,32 +199,31 @@ on_err
                                     \ word that makes a word.
   CPF @reg if                   \ Compile time behavour
   ' :: ,                        \ Make the defining word compile a header
-  ' ' , _push , ' , ,           \ Write in push to the creating word
-  ' here , ' 1+ , ' 2+ , ' , ,  \ Write in the number we want the created word to push
-  ' ' , here 0 , ' , ,          \ Write in a place holder (0) and push a 
+  '', _push , ',,               \ Write in push to the creating word
+  ' here , ' 3+ , ',,           \ Write in the number we want the created word to push
+  '', here 0 , ',,              \ Write in a place holder (0) and push a 
                                     \ pointer to to be used by does>
-  ' ' , ' exit , ' , ,          \ Write in an exit in the word we're compiling.
+  '', 'exit, ',,                \ Write in an exit in the word we're compiling.
   ' false , ' state ,           \ Make sure to change the state back to command mode
   else                          \ Run time behavour
     ::                          \ Compile a word
     _push ,                     \ Write push into new word
     here 2+ ,                   \ Push a pointer to data field
-    ' exit ,                    \ Write in an exit to new word (data field is after exit)
+    'exit,                      \ Write in an exit to new word (data field is after exit)
     false state                 \ Return to command mode.
   then
 ;
 
 : does> immediate
-  ' exit ,                      \ Write in an exit, we don't want the
+  'exit,                      \ Write in an exit, we don't want the
                                   \ defining to run it, but the *defined* word to.
-  here swap !dic                \ Patch in 
-  _run ,
+  here swap !dic                \ Patch in the code fields to point to.
+  _run ,                        \ Write a run in.
 ;
-
 
 : constant create , does> @dic ; 
 : variable create , does> ;
-: array create allot does> ;
+: array create allot does> + ;
 
 : ban \ ( x -- )
 	begin 
@@ -369,7 +372,9 @@ str @reg dup 32 + str !reg constant filename
 \ : negate -1 * ;
 \ : abs dup 0 < if negate then ;
 
+\ TESTING
 
+: cyc 999 25 !reg 1 24 !reg begin 25 @reg . 0 until ;
 
 \ ANSI terminal color codes
  'esc' emit .( [2J) cr       \ Reset

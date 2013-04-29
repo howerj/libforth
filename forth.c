@@ -582,6 +582,16 @@ mw forth_interpreter(fobj_t * fo)
                 NEXT = dic[PC++];
 
  TAIL_RECURSE:
+#ifdef RUN4X
+                if(CYCLES){
+                  if(CCOUNT>0){
+                    CCOUNT--;
+                  } else {
+                    return ERR_CYCLES;
+                  }
+                }
+#endif
+
                 /*simple trace macros */
                 ECUZ(SM_maxDic, NEXT, ERR_NEXT, err_file);
                 switch (dic[NEXT]) {
@@ -1083,13 +1093,16 @@ mw forth_monitor(fobj_t * fo)
                 print_string("Not a system call option.\n", MAX_ERR_STR,
                              fo->err_file);
                 break;
+        case ERR_NOTSYSCALL:
+                print_string("Err: Not a system call\n", MAX_ERR_STR,
+                             fo->err_file);
+                break;
         case ERR_MINIMUM_MEM:
                 print_string("Fatal Err: Minimum memory requirements not met\n",
                              MAX_ERR_STR, fo->err_file);
                 break;
-        case ERR_NOTSYSCALL:
-                print_string("Err: Not a system call\n", MAX_ERR_STR,
-                             fo->err_file);
+        case ERR_CYCLES: /*If cycles runs out, run this code.*/
+                print_string("Cycles complete\n",MAX_ERR_STR, fo->err_file);
                 break;
         case HALT:
                 print_string("HALTING FORTH\n", MAX_ERR_STR, fo->err_file);

@@ -30,7 +30,10 @@ for now it will stay on the computer.
 TODO:
 =====
 
-* Documentation.
+* Documentation. This should be exhaustive, every enum should be documented
+as the this program might be used as a library where only the header is
+available. Also expand the file "MANUAL.md", which should contain the main
+manual.
 
 * Clean up code.
 

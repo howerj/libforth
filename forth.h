@@ -11,6 +11,8 @@
  *
  */
 
+/*#define RUN4X*/
+
 #define true    1
 #define false   0
 
@@ -77,6 +79,7 @@ enum forth_errors {
         ERR_SYSCALL_OPTIONS,
         ERR_NOTSYSCALL,
         ERR_MINIMUM_MEM,
+        ERR_CYCLES,
         HALT,
         LAST_SYS
 };
@@ -105,7 +108,10 @@ enum forth_registers {
         ENUM_maxStr,
         ENUM_inputBufLen,
         ENUM_dictionaryOffset,
-        ENUM_sizeOfMW
+        ENUM_sizeOfMW,
+        ENUM_cycles,
+        ENUM_ccount
+
 };
 
 /*vm macros*/
@@ -113,26 +119,34 @@ enum forth_registers {
 #define PC      reg[ENUM_PC]
 #define TOS     reg[ENUM_TOS]
 #define RET     reg[ENUM_RET]
+
 #define VAR     reg[ENUM_VAR]
 #define DIC     reg[ENUM_DIC]
 #define STR     reg[ENUM_STR]
 #define PWD     reg[ENUM_PWD]
+
 #define OP0     reg[ENUM_OP0]
 #define OP1     reg[ENUM_OP1]
 #define A       reg[ENUM_A]
 #define B       reg[ENUM_B]
+
 #define C       reg[ENUM_C]
 #define CPF     reg[ENUM_CPF]
 #define EXF     reg[ENUM_EXF]
 #define INI     reg[ENUM_INI]
+
 #define SM_maxReg  reg[ENUM_maxReg]
 #define SM_maxDic  reg[ENUM_maxDic]
 #define SM_maxRet  reg[ENUM_maxRet]
 #define SM_maxVar  reg[ENUM_maxVar]
+
 #define SM_maxStr  reg[ENUM_maxStr]
 #define SM_inputBufLen  reg[ENUM_inputBufLen]
 #define SM_dictionaryOffset  reg[ENUM_dictionaryOffset]
 #define SM_sizeOfMW  reg[ENUM_sizeOfMW]
+
+#define CYCLES  reg[ENUM_cycles]
+#define CCOUNT  reg[ENUM_ccount]
 
 typedef signed int mw;
 
