@@ -111,7 +111,6 @@ enum forth_registers {
         ENUM_sizeOfMW,
         ENUM_cycles,
         ENUM_ccount
-
 };
 
 /*vm macros*/

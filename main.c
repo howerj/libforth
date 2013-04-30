@@ -11,6 +11,8 @@
 #include "forth.h"
 #include <stdlib.h>
 
+/*#define DEBUG_PRN*/
+
 #define MAX_REG 32
 #define MAX_DIC (1024*1024/sizeof(mw))
 #define MAX_VAR 8192
@@ -92,23 +94,20 @@ fobj_t *forth_obj_create(mw reg_l, mw dic_l, mw var_l, mw ret_l, mw str_l)
         /*the vm forth object */
         fobj_t *fo = calloc(1, sizeof(fobj_t));
 
-        /*setting I/O streams */
-        fio_t *in_file = calloc(1, sizeof(fio_t));
-        fio_t *out_file = calloc(1, sizeof(fio_t));
-        fio_t *err_file = calloc(1, sizeof(fio_t));
-
         CALLOC_FAIL(fo, NULL);
-        CALLOC_FAIL(in_file, NULL);
-        CALLOC_FAIL(out_file, NULL);
-        CALLOC_FAIL(err_file, NULL);
 
-        in_file->fio = io_stdin;
-        out_file->fio = io_stdout;
-        err_file->fio = io_stderr;
+        /*setting i/o streams*/
+        fo->in_file = calloc(1, sizeof(fio_t));
+        fo->out_file = calloc(1, sizeof(fio_t));
+        fo->err_file = calloc(1, sizeof(fio_t));
 
-        fo->in_file = in_file;
-        fo->out_file = out_file;
-        fo->err_file = err_file;
+        CALLOC_FAIL(fo->in_file, NULL);
+        CALLOC_FAIL(fo->out_file, NULL);
+        CALLOC_FAIL(fo->err_file, NULL);
+
+        fo->in_file->fio = io_stdin;
+        fo->out_file->fio = io_stdout;
+        fo->err_file->fio = io_stderr;
 
         /*memories of the interpreter */
         fo->reg = calloc(reg_l, sizeof(mw));
@@ -125,7 +124,7 @@ fobj_t *forth_obj_create(mw reg_l, mw dic_l, mw var_l, mw ret_l, mw str_l)
 
         /*initialize input file, fclose is handled elsewhere */
         fo->in_file->fio = io_rd_file;
-        if ((fo->in_file->iou.f = fopen("start.fs", "r")) == NULL) {
+        if ((fo->in_file->iou.f = fopen("forth.fs", "r")) == NULL) {
                 fprintf(stderr, "Unable to open initial input file!\n");
                 return NULL;
         }

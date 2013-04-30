@@ -374,10 +374,11 @@ str @reg dup 32 + str !reg constant filename
 
 \ TESTING
 
-: cyc 999 25 !reg 1 24 !reg begin 25 @reg . 0 until ;
+\ : cyc 999 25 !reg 1 24 !reg begin 25 @reg . 0 until ;
 
 \ ANSI terminal color codes
  'esc' emit .( [2J) cr       \ Reset
+ 'esc' emit .( [0;0H ) cr
  'esc' emit .( [32m) cr    \ Green fg
 \ 'esc' emit .( [40m) cr    \ Black bg
  .( Howe Forth ) cr .( Base System Loaded ) cr
