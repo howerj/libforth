@@ -1,6 +1,5 @@
 #!/bin/bash
 echo "Simple git add/commit/push script";
-echo "To use run type ./git.sh \"commit message\".";
 
 if
   [ -z "$1" ]

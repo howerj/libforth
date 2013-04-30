@@ -30,12 +30,13 @@ for now it will stay on the desktop computer.
 NOTES
 =====
 
-To run first compile the program by running "./compile.sh", then type "./forth"
-which will run the interpreter. The manual for the program is in "MANUAL.md".
-The other scripts "./gcov.sh" and "./git.sh" are for my benefit, although feel
-free to reuse them trivial as they maybe. "./pretty.sh" can be run after either
-"./compile.sh" or "./gcov.sh" has been run or the code has been edited. It
-indents the "*.c" and "*.h" files in a standard way and removes any temporary
+To run first compile the program by running **./compile.sh**, then type
+**./forth** which will run the interpreter. The manual for the program
+is in **MANUAL.md**.  The other scripts **./gcov.sh** and **./git.sh**
+are for my benefit, although feel free to reuse them trivial as they
+may be. **./pretty.sh** can be run after either **./compile.sh** or
+**./gcov.sh** has been run or the code has been edited. It indents the
+**\*.c** and **\*.h** files in a standard way and removes any temporary
 files that might be hanging around.
 
 Feel free to contact me.
