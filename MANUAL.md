@@ -70,6 +70,10 @@ a little bit of formatting to a file called "memory.txt".
 forth.c
 -------
 
+This file implements the forth virtual machine, it is a threaded code
+interpreter. It provides mechanisms for error handling and recovery, an
+interface for system calls and input and output redirection.
+
 forth.h
 -------
 

@@ -28,6 +28,7 @@ echo -e "This will compile $BLUE\"Howe Forth\"$DEFAULT.";
 echo -e "To run type $BLUE\"./$TARGET\"$DEFAULT with no arguments.";
 echo -e "To compile with debug flags enable type $BLUE\"./compile -DDEBUG_PRN\"$DEFAULT.";
 echo -e "To compile with debug cycle counter enabled $BLUE\"./compile -DRUN4X\"$DEFAULT.";
+echo -e "For code coverage with \"gcov\"$BLUE\": ./compile --coverage\"$DEFAULT.";
 echo -e "Compiling with:\n\t$BLUE\"$CC $GCC_OPT $1\"$DEFAULT";
 if
   $CC $GCC_OPT $1 -c forth.c -o forth.o && $CC $GCC_OPT $1 main.c forth.o -o $TARGET;

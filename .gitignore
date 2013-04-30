@@ -8,3 +8,7 @@ hello.txt
 note.txt
 log.ascii
 memory.txt
+*.gcov
+*.gcda
+*.gcno
+gcov.vim

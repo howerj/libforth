@@ -24,5 +24,5 @@ echo "indent -nut -linux *.h *.c";
 indent -nut -linux *.h *c;
 
 echo -e "$RED";
-rm -vf forth memory.txt *.swo *.swp *.o *~;
+rm -vf forth memory.txt *.swo *.swp *.o *~ *.gcov *.gcda *.gcno;
 echo -e "$DEFAULT";
