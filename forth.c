@@ -583,12 +583,12 @@ mw forth_interpreter(fobj_t * fo)
 
  TAIL_RECURSE:
 #ifdef RUN4X
-                if(CYCLES){
-                  if(CCOUNT>0){
-                    CCOUNT--;
-                  } else {
-                    return ERR_CYCLES;
-                  }
+                if (CYCLES) {
+                        if (CCOUNT > 0) {
+                                CCOUNT--;
+                        } else {
+                                return ERR_CYCLES;
+                        }
                 }
 #endif
 
@@ -1101,8 +1101,8 @@ mw forth_monitor(fobj_t * fo)
                 print_string("Fatal Err: Minimum memory requirements not met\n",
                              MAX_ERR_STR, fo->err_file);
                 break;
-        case ERR_CYCLES: /*If cycles runs out, run this code.*/
-                print_string("Cycles complete\n",MAX_ERR_STR, fo->err_file);
+        case ERR_CYCLES:       /*If cycles runs out, run this code. */
+                print_string("Cycles complete\n", MAX_ERR_STR, fo->err_file);
                 break;
         case HALT:
                 print_string("HALTING FORTH\n", MAX_ERR_STR, fo->err_file);
