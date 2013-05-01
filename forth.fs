@@ -374,7 +374,53 @@ str @reg dup 32 + str !reg constant filename
 
 \ TESTING
 
+\ Prints out the number of cycles left if compile with -DRUN4X
 \ : cyc 999 25 !reg 1 24 !reg begin 25 @reg . 0 until ;
+
+\ HASHING TESTS
+
+\ Simple rotating has, 32 bit:
+\ unsigned rot_hash ( void *key, int len )
+\ {
+\   unsigned char *p = key;
+\    unsigned h = 0;
+\    int i;
+\  
+\    for ( i = 0; i < len; i++ )
+\      h = ( h << 4 ) ^ ( h >> 28 ) ^ p[i];
+\  
+\    return h;
+\ }
+
+0 variable hvar
+: hash \ Hashes a string, rotating XOR hash
+    0 hvar !dic
+    begin
+        dup @str dup 0= \ if null
+        if
+            2drop 1       
+        else
+            
+            hvar @dic 4 lshift
+            hvar @dic 28 rshift xor
+            xor
+            hvar @dic xor
+            hvar !dic   
+            1+ 0
+        then
+    until
+    hvar @dic
+;
+
+: words
+    tabvar pwd @reg 
+    begin
+        dup 1+ @dic dup hash prnn 32 emit prn cr
+        @dic dup 0=   
+    until
+    cr
+    2drop
+;
 
 \ ANSI terminal color codes
  'esc' emit .( [2J) cr       \ Reset

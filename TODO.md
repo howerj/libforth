@@ -28,3 +28,72 @@ point to stderr. This may pose a problem when porting to embedded devices.
 space.
 
 * Test on more platforms, with different compilers.
+
+* Profiling.
+
+* Possible ways of increasing compile time and why: 
+
+The search algorithm used in the dictionary search is incredibly simple,
+changing it so searches are quicker would speed compilation up potentially
+greatly. At the moment it is a simple link list of strings. Here are
+some ways of changing the search function:
+
+Use hashes (length depending on machine word choice, this would have to
+selected at compile time), a simple hash of the string could
+be stored instead of the string itself to reduce the string comparison to one of
+an equality test.
+
+Move more commonly used words higher up in the dictionary space so they are
+found quicker, this may reduce average search times.
+
+Binary search.
+
+I would like to make a compromise between complexity and performance.
+
+Using the following and a test rotating XOR hash available from 
+http://eternallyconfuzzled.com/tuts/algorithms/jsw_tut_hashing.aspx
+
+
+~~~
+
+  : hash \ Hashes a string, rotating XOR hash
+      0 hvar !dic
+      begin
+          dup @str dup 0= \ if null
+          if
+              2drop 1       
+          else
+              
+              hvar @dic 4 lshift hvar @dic 28 rshift xor
+              xor hvar !dic 1+ 0
+          then
+      until
+      hvar @dic
+  ;
+
+  : words
+      tabvar pwd @reg 
+      begin
+          dup 1+ @dic dup hash prnn 32 emit prn cr
+          @dic dup 0=   
+      until
+      cr
+      2drop
+  ;
+
+  foutput words.log
+  words
+
+~~~
+
+Then:
+
+~~~
+
+    awk '{ print $1 }' words.log | sort | uniq -d
+
+~~~
+
+We can see collisions, which should exclude the command 'words' itself due to
+both its redefinition and a quirk. This hash fails the test, 'immediate' and
+'_immediate' and 'immediate' both hash to the same value.

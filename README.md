@@ -39,6 +39,6 @@ may be. **./pretty.sh** can be run after either **./compile.sh** or
 **\*.c** and **\*.h** files in a standard way and removes any temporary
 files that might be hanging around.
 
-Feel free to contact me.
+Please contact me with any errors you encounter.
 
 EOF
