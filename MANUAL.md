@@ -1,6 +1,8 @@
 A Portable FORTH implementation: Howe Forth
 ===========================================
 
+![Howe Forth Logo](https://github.com/howerj/c-forth/logo.png "By the power of HOWE FORTH!")
+
 Author:             
 
 * Richard James Howe.
@@ -365,15 +367,45 @@ Pop two numbers off the variable stack, test if the first of is
 less than the second and push the result.
 
 * "@reg":
+
+Use the top of the variable stack as an index into the register array, push
+the data in that address to the variable stack.
+
 * "@dic":
+
+Use the top of the variable stack as an index into the dictionary array, push
+the data in that address to the variable stack.
+
 * "@var":
-* "@ret":
+
+Use the top of the variable stack as an index into the variable stack itself , push
+the data in that address to the variable stack.
+
 * "@str":
+
+Use the top of the variable stack as an index into the string storage array, push
+the data in that address to the variable stack.
+
 * "\!reg":
+
+Pop two number off the stack, the first off is an index into the register array,
+the second off is the data to write there.
+
 * "\!dic":
+
+Pop two number off the stack, the first off is an index into the dictionary array,
+the second off is the data to write there.
+
 * "\!var":
-* "\!ret":
+
+Pop two number off the stack, the first off is an index into the variable stack
+itself, the second off is the data to write there.
+
 * "\!str":
+
+Pop two number off the stack, the first off is an index into the string storage array,
+the second off is the data to write there.
+
 * "key":
 
 Push one character of input to the variable stack.
@@ -396,6 +428,9 @@ Drop an item from the variable stack.
 Swap the first two items on the variable stack.
 
 * "over":
+
+Duplicate the second item on the variable stack.
+
 * "\>r":
 
 Move the top of the variable stack to the return stack.
@@ -406,11 +441,23 @@ Move the top of the return stack to the variable stack.
 
 * "tail":
 
+This allows the next word compiled word to be called recursively, there is
+no 'recurse' word in this FORTH.
+
 * "\'":
 
+Push the value of the next compiled word to the variable stack at run time.
 
 * ",":
+
+Write the top of the stack into the next available dictionary field.
+
 * "printnum":
+
+Pop two items off the variable stack, the second off is the base and the second
+is the number to print off, print this number off as a string in the selected
+base.
+
 * "get\_word":
 * "strlen":
 * "isnumber":
@@ -460,9 +507,14 @@ You can that being limited to only these primitives would not create a very
 forth-like system. However as any forth programmer knows you can extend the
 language in itself, which is what the first file does that is read in.
 
+SYSTEM CALLS
+------------
+
+ERROR DETECTION AND HANDLING
+----------------------------
+
 FORTH PROGRAM
 =============
-
 
 FINAL WORDS
 ===========
