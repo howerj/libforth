@@ -48,7 +48,7 @@ The program is compiled with the following flags:
 
 "-ansi -g -Wall -Wno-write-strings -Wshadow -Wextra -pedantic -O2"
 
-In [GCC][GCC].
+With [GCC][GCC].
 
 There are some extra options that can be added on, both of which are simply
 defining macros.
@@ -164,7 +164,7 @@ a defined word can be as well as some other things.
     fo->reg[ENUM_inputBufLen] = 32;
 
 The first four cells in the dictionary should be zero, this is the offset into
-that dictionary. The reason for this is that it contains a 'fake' dictionary
+that dictionary. The reason for this is that it contains a fake dictionary
 word which pushes zero if accidentally run, points to itself, points to the
 currently processed word in string storage and will run the first virtual
 machine instruction when called 'push', although this information is not
@@ -213,29 +213,157 @@ character.
 Forth primitives
 ----------------
 
-* ":":
+* ":": 
+
+This does two things; 
+
+1) Compiles a header for the next space delimited word in the input stream into
+the dictionary.
+
+2) Enter compile mode, instead of executing words that are found and pushing
+numbers onto the stack, compile are pointer to those words and literals into the
+dictionary.
+
 * "immediate":
+
+Make the word just compiled *immediate*, an immediate word will execute
+regardless of whether or not we are in compile or command mode. Unlike in normal
+FORTHs this word is called just after the definition of the header instead of
+after the definition of the entire word, so like this:
+
+~~~
+
+    : define_me immediate ...
+
+~~~
+
+And not:
+
+
+~~~
+
+    : define_me ... ; immediate
+
+~~~
+
 * "read":
+
+This reads in a single space delimited word or number and what it does depends
+on the state. In either state if it is not a defined word or number then it will
+throw an error. A word is always looked for before a number is as a word has no
+limitations as to what its name is bar its length.
+
+In command mode:
+
+In command mode 'read' executes words and pushes numbers on to the variable stack.
+
+In compile mode:
+
+In compile mode 'read' compiles a pointer to the word in the next available
+slot in the dictionary, for numbers it compiles a 'push integer' (described
+later) followed by said number. Immediate words however are executed.
+
+The first word that the interpreter runs is one that calls 'read' and then calls
+itself recursively so 'read' decrements the return stack pointer as well so the
+stack does no blow up.
+
 * "\\":
+
+This is a comment, it is an immediate word, it will ignore all input until the
+end of the line has been reached.
+
 * "exit":
+
+Return from a called word, the return address should be on the return stack, it
+is popped off.
+
 * "br":
+
+Branch unconditionally to the next space indicated in the dictionary.
+
 * "?br":
+
+Branch conditionally to the next space indicated in the dictionary if the
+top of the stack is zero, else continue. The top of the stack is dropped.
+
 * "\+":
+
+Pop two numbers off the variable stack, add
+them and push the result.
+
 * "\-":
+
+Pop two numbers off the variable stack, subtract the first off from the second
+and push the result.
+
+
 * "\*":
+
+Pop two numbers off the variable stack, multiply
+them and push the result.
+
 * "%":
+
+Pop two numbers off the variable stack, compute the remainder when the first off
+divides the second off and push the result.
+
 * "/":
+
+Pop two numbers off the variable stack, compute the first off
+dividing the second off and push the result.
+
 * "lshift":
+
+Pop two numbers off the variable stack, compute the first off
+shifting the second off logicically towards the left and push the result.
+
 * "rshift":
+
+Pop two numbers off the variable stack, compute the first off
+shifting the second off logicically towards the right and push the result.
+
 * "and":
+
+Pop two numbers off the variable stack, compute the bitwise AND of
+them and push the result.
+
 * "or":
+
+Pop two numbers off the variable stack, compute the bitwise OR of
+them and push the result.
+
 * "invert":
+
+Bitwise inversion of the top of the variable stack.
+
 * "xor":
+
+Pop two numbers off the variable stack, compute the bitwise XOR of
+them and push the result.
+
 * "1\+":
+
+Add one to the top of the variable stack.
+
 * "1\-":
+
+Subtract one from the top of the variable stack.
+
 * "=":
+
+Pop two numbers off the variable stack, test for equality of
+them and push the result.
+
 * "<":
+
+Pop two numbers off the variable stack, test if the first of is
+greater than the second and push the result.
+
 * "\>":
+
+Pop two numbers off the variable stack, test if the first of is
+less than the second and push the result.
+
 * "@reg":
 * "@dic":
 * "@var":
@@ -247,15 +375,40 @@ Forth primitives
 * "\!ret":
 * "\!str":
 * "key":
+
+Push one character of input to the variable stack.
+
 * "emit":
+
+Pop an item from the variable stack and output the *lower* 8-bits as a
+character.
+
 * "dup":
+
+Duplicate the top of the variable stack.
+
 * "drop":
+
+Drop an item from the variable stack.
+
 * "swap":
+
+Swap the first two items on the variable stack.
+
 * "over":
 * "\>r":
+
+Move the top of the variable stack to the return stack.
+
 * "r\>":
+
+Move the top of the return stack to the variable stack.
+
 * "tail":
+
 * "\'":
+
+
 * ",":
 * "printnum":
 * "get\_word":
@@ -263,14 +416,44 @@ Forth primitives
 * "isnumber":
 * "strnequ":
 * "find":
+
+Find a word in the dictionary if it exists and push a pointer to that words
+execution field.
+
 * "execute":
+
+Given an execution token of a word is on the variable stack, it pops it and
+executes it, if it is not a valid execution token the behaviour is undefined.
+
+The code:
+
+    find word execute
+
+Will cause the word 'word' to be executed.
+
+
 * "kernel":
+
+This executes system calls, for example file opening and reading. It pops off a
+number from the variable stack which is used as an index into a number of
+function calls. If the function call needs any more arguments it gets them from
+the variable stack.
+
+Hidden words
+------------
 
 In addition to this there are three 'invisible' forth words which do not have
 a name which are:
 
 * "push integer":
+
+This pushes the next dictionary location onto the variable stack.
+
 * "compile":
+
+This compiles a pointer to the next memory location in the dictionary after the
+compile to the next memory location available in the dictionary. 
+
 * "run":
 
 You can that being limited to only these primitives would not create a very

@@ -12,3 +12,5 @@ memory.txt
 *.gcda
 *.gcno
 gcov.vim
+*.html
+*.htm

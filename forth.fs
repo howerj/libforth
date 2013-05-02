@@ -393,24 +393,44 @@ str @reg dup 32 + str !reg constant filename
 \ }
 
 0 variable hvar
-: hash \ Hashes a string, rotating XOR hash
-    0 hvar !dic
-    begin
-        dup @str dup 0= \ if null
-        if
-            2drop 1       
-        else
-            
-            hvar @dic 4 lshift
-            hvar @dic 28 rshift xor
-            xor
-            hvar @dic xor
-            hvar !dic   
-            1+ 0
-        then
-    until
-    hvar @dic
-;
+\ : hash \ Hashes a string, rotating XOR hash
+\     0 hvar !dic
+\     begin
+\         dup @str dup 0= \ if null
+\         if
+\             2drop 1       
+\         else
+\             
+\             hvar @dic 4 lshift
+\             hvar @dic 28 rshift xor
+\             xor
+\             hvar @dic xor
+\             hvar !dic   
+\             1+ 0
+\         then
+\     until
+\     hvar @dic
+\ ;
+
+: hash \ shift-add-xor hash for strings
+     0 hvar !dic
+     begin
+         dup @str dup 0= \ if null
+         if
+             2drop 1       
+         else
+             
+             hvar @dic 5 lshift
+             hvar @dic 2 rshift +
+             +
+             hvar @dic xor
+             hvar !dic   
+             1+ 0
+         then
+     until
+     hvar @dic
+ ;
+
 
 : words
     tabvar pwd @reg 

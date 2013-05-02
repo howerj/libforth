@@ -10,13 +10,15 @@ manual.
 
 * Clean up code.
 
+Remove "@reg", "\!reg" and rename "@var" and "\!var".
+
+* String manipulation words.
+
 * Stress testing, stress testing with Valgrind (currently gives no errors).
 
 * File stack.
 
 * Eval()
-
-* Cycles.
 
 * On INI Forth should check for valid pointers, ie. Not NULL. It current does
 not do this for certain pointers (input/output io)
