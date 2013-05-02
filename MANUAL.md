@@ -1,7 +1,8 @@
+
 A Portable FORTH implementation: Howe Forth
 ===========================================
 
-![Howe Forth Logo](https://github.com/howerj/c-forth/logo.png "By the power of HOWE FORTH!")
+![Howe Forth Logo](https://raw.github.com/howerj/c-forth/master/logo.png "By the power of HOWE FORTH!")
 
 Author:             
 
@@ -29,7 +30,7 @@ it is written in C with the aim of being portable, even to radically
 different systems from the normal desktop to embedded systems with very
 few modifications.
 
-This interpreter traces its lineage back to an entry from the [ioccc][ioccc]. A
+This interpreter traces its lineage back to an entry from the [IOCCC][ioccc]. A
 person submitting under the name **buzzard** entered two winning entries, one
 listed as *buzzard.2* in the year 1992 was a small FORTH interpreter, this one
 is a relative of it.
@@ -459,9 +460,27 @@ is the number to print off, print this number off as a string in the selected
 base.
 
 * "get\_word":
+
+Use top of stack as an index into string storage and store the next space
+delimited word there.
+
 * "strlen":
+
+Use top of stack as an index into string storage, compute that strings length
+and push the result to the variable stack.
+
 * "isnumber":
+
+Use top of stack as an index into string storage, test whether or not the string
+there is a number and push the result.
+
 * "strnequ":
+
+Pop two numbers of the variable stack, use both as indices into string storage
+and test whether they are equal or not, push zero if they are equal, one if they
+are not and two if the strings are too long (what is too long is defined in the
+source code).
+
 * "find":
 
 Find a word in the dictionary if it exists and push a pointer to that words

@@ -14,10 +14,10 @@
 /*#define DEBUG_PRN*/
 
 #define MAX_REG 32
-#define MAX_DIC (1024*1024/sizeof(mw))
+#define MAX_DIC (1024*1024)
 #define MAX_VAR 8192
 #define MAX_RET 8192
-#define MAX_STR (1024*1024/sizeof(char))
+#define MAX_STR (1024*1024)
 
 #define CALLOC_FAIL(X,RET)\
       if((X)==NULL){\

@@ -1,5 +1,9 @@
+
 TO DO:
 ======
+
+![Howe Forth Logo](https://raw.github.com/howerj/c-forth/master/logo.png "By the power of HOWE FORTH!")
+
 
 These are some notes for myself:
 
@@ -12,11 +16,19 @@ manual.
 
 Rename "@var" and "\!var".
 
+strnequ should have an absolute address which it can not pass instead of a
+maximum length as should a few other words.
+
 * String manipulation words.
 
 * Stress testing, stress testing with Valgrind (currently gives no errors).
 
 * File stack.
+
+* Make the system more standards compliant where possible.
+
+I should not go out of my way to do so, just renaming a few things and checking
+how a few words behave.
 
 * Eval()
 

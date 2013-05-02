@@ -21,12 +21,14 @@ execute kernel
 	' exit , 
 	false state
 exit
+
 : r 3 ;	\ Return stack pointer
 : v 4 ;	\ Variable stack pointer
 : h 5 ;	\ Dictionary pointer
 : str 6 ; \ String storage pointer
 : here h @reg ;
 : pwd 7 ;
+: iobl 21 ; \ I/O buf len address
 
 \ change to command mode
 : [ immediate false state ;
@@ -188,10 +190,12 @@ on_err
   [ find : , ]
 ;
 
+\ Helper words for create
 : '', ' ' , ;       \ A word that writes ' into the dictionary
 : ',, ' , , ;       \ A word that writes , into the dictionary
 : 'exit, ' exit , ; \ A word that write exit into the dictionary
 : 3+ 2+ 1+ ;
+
 \ The word create involves multiple levels of indirection.
 \ It makes a word which has to write in values into
 \ another word
@@ -308,7 +312,7 @@ on_err
 ;
 
 \ Store filenames (temporary) here.
-str @reg dup 32 + str !reg constant filename
+str @reg dup iobl @reg + str !reg constant filename
 
 \ file i/o
 : foutput
@@ -363,84 +367,17 @@ str @reg dup 32 + str !reg constant filename
     2drop
 ;
 
-
-: head
+\ Shows the header of a word.
+: header
   find 2- dup 40 + show
 ;
 
 \ : ?dup dup if dup then ;
 \ : negate -1 * ;
 \ : abs dup 0 < if negate then ;
+\ : -rot rot rot ;
+\ : inc create , does> dup dup @dic 1+ swap !dic @dic ;
 
-\ TESTING
-
-\ Prints out the number of cycles left if compile with -DRUN4X
-\ : cyc 999 25 !reg 1 24 !reg begin 25 @reg . 0 until ;
-
-\ HASHING TESTS
-
-\ Simple rotating has, 32 bit:
-\ unsigned rot_hash ( void *key, int len )
-\ {
-\   unsigned char *p = key;
-\    unsigned h = 0;
-\    int i;
-\  
-\    for ( i = 0; i < len; i++ )
-\      h = ( h << 4 ) ^ ( h >> 28 ) ^ p[i];
-\  
-\    return h;
-\ }
-
-0 variable hvar
-\ : hash \ Hashes a string, rotating XOR hash
-\     0 hvar !dic
-\     begin
-\         dup @str dup 0= \ if null
-\         if
-\             2drop 1       
-\         else
-\             
-\             hvar @dic 4 lshift
-\             hvar @dic 28 rshift xor
-\             xor
-\             hvar @dic xor
-\             hvar !dic   
-\             1+ 0
-\         then
-\     until
-\     hvar @dic
-\ ;
-
-: hash \ shift-add-xor hash for strings
-     0 hvar !dic
-     begin
-         dup @str dup 0= \ if null
-         if
-             2drop 1       
-         else
-             
-             hvar @dic 5 lshift
-             hvar @dic 2 rshift +
-             +
-             hvar @dic xor
-             hvar !dic   
-             1+ 0
-         then
-     until
-     hvar @dic
- ;
-
-
-: words
-    tabvar pwd @reg 
-    begin
-        dup 1+ @dic dup hash prnn 32 emit prn cr
-        @dic dup 0=   
-    until
-    cr
-    2drop
-;
 
 \ ANSI terminal color codes
  'esc' emit .( [2J) cr       \ Reset
