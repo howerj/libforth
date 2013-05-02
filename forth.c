@@ -441,27 +441,6 @@ mw forth_system_calls(fobj_t * fo, mw enum_syscall)
                         }
                         return ERR_OK;
                 case SYS_OPT_ERR:
-                        if (err_file->fio == io_stdin ||
-                            err_file->fio == io_rd_str ||
-                            err_file->fio == io_rd_file) {
-                                ERR_LN_PRN(err_file);
-                                return ERR_SYSCALL;
-                        }
-                        if (err_file->fio != io_stderr) {
-                                fflush(err_file->iou.f);
-                                fclose(err_file->iou.f);
-                        }
-                        ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
-                        TOS = var[VAR--];
-                        if ((err_file->iou.f = fopen(str + TOS, "w")) == NULL) {
-                                ERR_LN_PRN(err_file);
-                                err_file->fio = io_stderr;
-                                return ERR_SYSCALL;
-                        } else {
-                                TOS = var[VAR--];
-                                err_file->fio = io_wr_file;
-                        }
-                        return ERR_OK;
                 default:
                         ERR_LN_PRN(err_file);
                         return ERR_SYSCALL_OPTIONS;
@@ -498,19 +477,6 @@ mw forth_system_calls(fobj_t * fo, mw enum_syscall)
                         out_file->fio = io_stdout;
                         return ERR_OK;
                 case SYS_OPT_ERR:
-                        if (err_file->fio == io_stdin ||
-                            err_file->fio == io_rd_str ||
-                            err_file->fio == io_rd_file) {
-                                ERR_LN_PRN(err_file);
-                                return ERR_SYSCALL;
-                        }
-                        if (err_file->iou.f != NULL
-                            && err_file->fio != io_stderr) {
-                                fclose(err_file->iou.f);
-                                err_file->iou.f = NULL;
-                        }
-                        err_file->fio = io_stderr;
-                        return ERR_OK;
                 default:
                         ERR_LN_PRN(err_file);
                         return ERR_SYSCALL_OPTIONS;

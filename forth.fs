@@ -56,7 +56,7 @@ exit
 \ Constants for system call arguments
 : input 0 ;
 : output 1 ;
-: error 2 ;
+\ : error 2 ; \ Not used, stderr can not be redirected from outside the C prog.
 
 : literal immediate _push , , ;
 
@@ -325,11 +325,6 @@ str @reg dup iobl @reg + str !reg constant filename
     filename input fopen kernel 
 ;
 
-: ferror
-    filename get_word
-    filename error fopen kernel 
-;
-
 : fremove
     filename get_word
     filename remove kernel
@@ -351,9 +346,8 @@ str @reg dup iobl @reg + str !reg constant filename
 : [END]
     input fclose kernel 
     output fclose kernel 
-    error fclose kernel
     \ drops temporary measure
-    2drop drop 
+    2drop 
 ;
 
 : .s
@@ -382,10 +376,10 @@ str @reg dup iobl @reg + str !reg constant filename
 \ ANSI terminal color codes
  'esc' emit .( [2J) cr       \ Reset
  'esc' emit .( [0;0H ) cr
- 'esc' emit .( [32m) cr    \ Green fg
-\ 'esc' emit .( [40m) cr    \ Black bg
+ 'esc' emit .( [32;1m) cr    \ Green fg
+\ 'esc' emit .( [40;1m) cr    \ Black bg
  .( Howe Forth ) cr .( Base System Loaded ) cr
  .( Memory Usuage: ) here 2 * str @reg + . cr
- 'esc' emit .( [31m) .( OK ) cr 'esc' emit .( [30m) cr
+ 'esc' emit .( [31;1m) .( OK ) cr 'esc' emit .( [30;1m) cr
  
 [END]
