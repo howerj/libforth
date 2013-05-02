@@ -766,10 +766,6 @@ mw forth_interpreter(fobj_t * fo)
                         ECUZ(SM_maxDic, TOS, ERR_TOS_DIC, err_file);
                         TOS = dic[TOS];
                         break;
-                case FETCH_RET:
-                        ECUZ(SM_maxRet, TOS, ERR_TOS_RET, err_file);
-                        TOS = ret[TOS];
-                        break;
                 case FETCH_STR:
                         ECUZ(SM_maxStr, TOS, ERR_TOS_STR, err_file);
                         TOS = (mw) str[TOS];
@@ -788,12 +784,6 @@ mw forth_interpreter(fobj_t * fo)
                         ECUZ(SM_maxDic, TOS, ERR_TOS_DIC, err_file);
                         ECB(1, SM_maxVar, VAR, ERR_VAR, err_file);
                         dic[TOS] = var[VAR--];
-                        TOS = var[VAR--];
-                        break;
-                case STORE_RET:
-                        ECUZ(SM_maxRet, TOS, ERR_TOS_RET, err_file);
-                        ECB(1, SM_maxVar, VAR, ERR_VAR, err_file);
-                        ret[TOS] = var[VAR--];
                         TOS = var[VAR--];
                         break;
                 case STORE_STR:

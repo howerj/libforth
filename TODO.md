@@ -10,7 +10,7 @@ manual.
 
 * Clean up code.
 
-Remove "@reg", "\!reg" and rename "@var" and "\!var".
+Rename "@var" and "\!var".
 
 * String manipulation words.
 

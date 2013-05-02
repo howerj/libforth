@@ -1,6 +1,6 @@
 : immediate read \ exit br ?br + - * % / lshift rshift 
-and or invert xor 1+ 1- = < > @reg @dic @var @ret @str 
-!reg !dic !var !ret !str key emit dup drop swap over >r r> 
+and or invert xor 1+ 1- = < > @reg @dic @var @str 
+!reg !dic !var !str key emit dup drop swap over >r r> 
 tail ' , printnum get_word strlen isnumber strnequ find 
 execute kernel
 
