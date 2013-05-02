@@ -216,11 +216,12 @@ void print_line_file(int line, const char *file, fio_t * err_file)
         print_string(file, MAX_ERR_STR, err_file);
         wrap_put(err_file, '\n');
 }
+#ifndef UNCHECK
 
 /*Error Check Bounds*/
-#define    ECB(MIN,MAX,TEST,ERR,ERR_STRM)    if((TEST>(MAX-2))||(TEST<MIN)){     \
-    print_line_file(__LINE__,__FILE__,ERR_STRM);                                 \
-    return ERR;                                                                  \
+#define ECB(MIN,MAX,TEST,ERR,ERR_STRM)    if((TEST>(MAX-2))||(TEST<MIN)){ \
+    print_line_file(__LINE__,__FILE__,ERR_STRM);                          \
+    return ERR;                                                           \
 }
 /*Error Check Upper (Bound) (and) Zero (Lower bound)*/
 #define ECUZ(MAX,VT,ERR,ERR_STRM) if((VT>(MAX-2))||(VT<0)){  \
@@ -228,6 +229,14 @@ void print_line_file(int line, const char *file, fio_t * err_file)
     return ERR;                                              \
 }
 #define ERR_LN_PRN(ERR_STRM) print_line_file(__LINE__,__FILE__,ERR_STRM);
+
+#else
+
+#define ECB(MIN,MAX,TEST,ERR,ERR_STRM)    
+#define ECUZ(MAX,VT,ERR,ERR_STRM) 
+#define ERR_LN_PRN(ERR_STRM) 
+
+#endif
 
 /*****************************************************************************/
 /* Begin the interpreter!                                                    */
@@ -936,15 +945,68 @@ mw forth_interpreter(fobj_t * fo)
 /*Error and IO handler for the Forth interpreter*/
 mw forth_monitor(fobj_t * fo)
 {
+        char *null_err="Fatal Err: forth_monitor() passed NULL pointer\n";
         mw tmp;
-        if ((fo == NULL) || (fo->reg == NULL) || (fo->dic == NULL)
-            || (fo->var == NULL) || (fo->ret == NULL) || (fo->str == NULL)
-            || (fo->in_file == NULL) || (fo->out_file == NULL)) {
 
-                print_string("Fatal Err: forth_monitor() passed NULL pointer\n",
-                             MAX_ERR_STR, fo->err_file);
-                return ERR_FAILURE;
+        if(fo==NULL){
+          print_string(null_err,MAX_ERR_STR,fo->err_file);
+          return ERR_FAILURE;
         }
+
+        if(fo->err_file == NULL){ /*This doesn't work yet obviously.*/
+          print_string(null_err,MAX_ERR_STR,fo->err_file);
+          return ERR_FAILURE;
+        }
+
+        if(fo->reg == NULL){
+          print_string(null_err,MAX_ERR_STR,fo->err_file);
+          return ERR_FAILURE;
+        }
+
+        if(fo->dic == NULL){
+          print_string(null_err,MAX_ERR_STR,fo->err_file);
+          return ERR_FAILURE;
+        }
+
+        if(fo->var == NULL){
+          print_string(null_err,MAX_ERR_STR,fo->err_file);
+          return ERR_FAILURE;
+        }
+
+        if(fo->ret == NULL){
+          print_string(null_err,MAX_ERR_STR,fo->err_file);
+          return ERR_FAILURE;
+        }
+
+        if(fo->str == NULL){
+          print_string(null_err,MAX_ERR_STR,fo->err_file);
+          return ERR_FAILURE;
+        }
+
+        if(fo->in_file == NULL){
+          print_string(null_err,MAX_ERR_STR,fo->err_file);
+          return ERR_FAILURE;
+        } else {
+          if(fo->in_file->fio != io_stdin){
+            if(fo->in_file->iou.f == NULL){
+              print_string(null_err,MAX_ERR_STR,fo->err_file);
+              return ERR_FAILURE;
+            }
+          }
+        }
+
+        if(fo->out_file == NULL){
+          print_string(null_err,MAX_ERR_STR,fo->err_file);
+          return ERR_FAILURE;
+        } else {
+          if(fo->out_file->fio != io_stdout && fo->out_file->fio != io_stderr){
+            if(fo->out_file->iou.f == NULL){
+              print_string(null_err,MAX_ERR_STR,fo->err_file);
+              return ERR_FAILURE;
+            }
+          }
+        }
+
 
         /* I should check that EXF is potentially valid, ie. Not zero */
  RESTART:
