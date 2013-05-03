@@ -1,5 +1,5 @@
 #/bin/bash
-echo "gcov of ./forth program";
+echo "gcov of \"./forth\" program";
 echo "Run script with \"--complex\" argument for more detailed output";
 
 if
