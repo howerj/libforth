@@ -387,8 +387,7 @@ mw forth_system_calls(fobj_t * fo, mw enum_syscall)
 {
         mw *reg = fo->reg, *var = fo->var;
         char *str = fo->str;
-        fio_t *in_file = fo->in_file[IN_STRM], 
-              *out_file = fo->out_file, *err_file=fo->err_file;
+        fio_t *out_file = fo->out_file, *err_file=fo->err_file;
 
         ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
         TOS = var[VAR--];       /* Get rid of top of stack, it's just been used. */
@@ -400,25 +399,20 @@ mw forth_system_calls(fobj_t * fo, mw enum_syscall)
         case SYS_FOPEN:
                 switch (TOS) {
                 case SYS_OPT_IN:
-                        if (in_file->fio == io_stdout ||
-                            in_file->fio == io_stderr ||
-                            in_file->fio == io_wr_str ||
-                            in_file->fio == io_wr_file) {
-                                ERR_LN_PRN(err_file);
-                                return ERR_SYSCALL;
-                        }
-                        if (in_file->fio != io_stdin) {
-                                fflush(in_file->iou.f);
-                                fclose(in_file->iou.f);
+                        if(IN_STRM<0||IN_STRM>MAX_INSTRM){
+                          ERR_LN_PRN(err_file);
+                          return ERR_SYSCALL;
                         }
                         ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
                         TOS = var[VAR--];
-                        if ((in_file->iou.f = fopen(str + TOS, "r")) == NULL) {
+
+                        IN_STRM++; 
+                        if ((fo->in_file[IN_STRM]->iou.f = fopen(str + TOS, "r")) == NULL) {
+                                IN_STRM--;
                                 ERR_LN_PRN(err_file);
-                                in_file->fio = io_stdin;
                                 return ERR_SYSCALL;
                         } else {
-                                in_file->fio = io_rd_file;
+                                fo->in_file[IN_STRM]->fio = io_rd_file;
                         }
                         return ERR_OK;
                 case SYS_OPT_OUT:
@@ -451,18 +445,17 @@ mw forth_system_calls(fobj_t * fo, mw enum_syscall)
         case SYS_FCLOSE:
                 switch (TOS) {
                 case SYS_OPT_IN:
-                        if (in_file->fio == io_stdout ||
-                            in_file->fio == io_stderr ||
-                            in_file->fio == io_wr_str ||
-                            in_file->fio == io_wr_file) {
-                                ERR_LN_PRN(err_file);
-                                return ERR_SYSCALL;
+                        if(IN_STRM<1||IN_STRM>MAX_INSTRM){
+                          ERR_LN_PRN(err_file);
+                          return ERR_SYSCALL;
                         }
-                        if (in_file->iou.f != NULL && in_file->fio != io_stdin) {
-                                fclose(in_file->iou.f);
-                                in_file->iou.f = NULL;
+                        if(fo->in_file[IN_STRM]->fio != io_rd_file){
+                          ERR_LN_PRN(err_file);
+                          return ERR_SYSCALL;
                         }
-                        in_file->fio = io_stdin;
+                        fo->in_file[IN_STRM]->fio = io_stdin;
+                        fclose(fo->in_file[IN_STRM]->iou.f);
+                        IN_STRM--;
                         return ERR_OK;
                 case SYS_OPT_OUT:
                         if (out_file->fio == io_stdin ||
@@ -471,11 +464,11 @@ mw forth_system_calls(fobj_t * fo, mw enum_syscall)
                                 ERR_LN_PRN(err_file);
                                 return ERR_SYSCALL;
                         }
-                        if (out_file->iou.f != NULL
-                            && out_file->fio != io_stdout) {
+                        if (out_file->iou.f != NULL)
+                            if(out_file->fio != io_stdout) {
                                 fclose(out_file->iou.f);
                                 out_file->iou.f = NULL;
-                        }
+                            }
                         out_file->fio = io_stdout;
                         return ERR_OK;
                 case SYS_OPT_ERR:
@@ -508,18 +501,20 @@ mw forth_system_calls(fobj_t * fo, mw enum_syscall)
         case SYS_REWIND:
                 switch (TOS) {
                 case SYS_OPT_IN:
-                        if (in_file->iou.f != NULL
-                            && in_file->fio == io_rd_file) {
-                                rewind(in_file->iou.f);
-                        } else if (in_file->iou.s != NULL
-                                   && in_file->fio == io_rd_str) {
-                                in_file->str_index = 0;
+                        if (fo->in_file[IN_STRM]->iou.f != NULL){
+                            if(fo->in_file[IN_STRM]->fio == io_rd_file) {
+                                rewind(fo->in_file[IN_STRM]->iou.f);
+                            }
+                        } else if (fo->in_file[IN_STRM]->iou.s != NULL
+                                   && fo->in_file[IN_STRM]->fio == io_rd_str) {
+                                fo->in_file[IN_STRM]->str_index = 0;
                         }
                         return ERR_OK;
                 case SYS_OPT_OUT:
-                        if (out_file->iou.f != NULL
-                            && out_file->fio == io_wr_file) {
+                        if (out_file->iou.f != NULL){
+                            if(out_file->fio == io_wr_file){
                                 rewind(out_file->iou.f);
+                            }
                         } else if (out_file->iou.s != NULL
                                    && out_file->fio == io_wr_str) {
                                 out_file->str_index = 0;
@@ -544,8 +539,7 @@ mw forth_interpreter(fobj_t * fo)
         /*copy pointers, removes level of indirection */
         mw *reg = fo->reg, *dic = fo->dic, *var = fo->var, *ret = fo->ret;
         char *str = fo->str;
-        fio_t *in_file = fo->in_file[IN_STRM], *out_file = fo->out_file, 
-              *err_file = fo->err_file;
+        fio_t *out_file = fo->out_file, *err_file = fo->err_file;
 
         /*Initialization */
         if (INI == true) {
@@ -637,7 +631,7 @@ mw forth_interpreter(fobj_t * fo)
                 case COMMENT:
                         OP0 = 0;
                         while (true) {
-                                OP0 = wrap_get(in_file);
+                                OP0 = wrap_get(fo->in_file[IN_STRM]);
                                 if (OP0 == '\n') {
                                         break;
                                 } else if (OP0 == (mw) EOF) {
@@ -778,7 +772,7 @@ mw forth_interpreter(fobj_t * fo)
                 case KEY:
                         ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
                         var[++VAR] = TOS;
-                        TOS = wrap_get(in_file);
+                        TOS = wrap_get(fo->in_file[IN_STRM]);
                         if (TOS == (mw) EOF) {
                                 ERR_LN_PRN(err_file);
                                 return ERR_EOF;
@@ -852,7 +846,7 @@ mw forth_interpreter(fobj_t * fo)
                 case GET_WORD:
                         ECB(1, SM_maxVar, VAR, ERR_VAR, err_file);
                         ECUZ(SM_maxStr, VAR, ERR_TOS_STR, err_file);
-                        if (get_word(str + TOS, SM_inputBufLen, in_file) ==
+                        if (get_word(str + TOS, SM_inputBufLen, fo->in_file[IN_STRM]) ==
                             ERR_FAILURE) {
                                 ERR_LN_PRN(err_file);
                                 return ERR_EOF;
@@ -1074,14 +1068,18 @@ mw forth_monitor(fobj_t * fo)
                 /*Reset input to stdin in, if already stdin, quit, same with
                  * stdout?*/
                 break;
-        case ERR_EOF:
-                if ((fo->in_file[IN_STRM])->fio != io_stdin) {
-                        print_string("Finished Reading Input file!\n",
-                                     MAX_ERR_STR, fo->err_file);
-                        if ((fo->in_file[IN_STRM])->fio == io_rd_file)
-                                fclose(fo->in_file[IN_STRM]->iou.f);
-                        on_err(fo);
-                        goto RESTART;
+        case ERR_EOF: /*There are some problems with EOF error handling.*/
+                if(IN_STRM>0&&IN_STRM<MAX_INSTRM){
+                  if(fo->in_file[IN_STRM]->fio == io_rd_file){
+                    if(fo->in_file[IN_STRM]->iou.f != NULL ){
+                      fclose(fo->in_file[IN_STRM]->iou.f);
+                      fo->in_file[IN_STRM]->iou.f = NULL;
+                    }
+                  }
+                  IN_STRM--;
+                  print_string("IO DONE.\n", MAX_ERR_STR, fo->err_file);
+
+                  goto RESTART;
                 }
                 print_string("EOF\n", MAX_ERR_STR, fo->err_file);
                 break;

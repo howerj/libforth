@@ -129,8 +129,8 @@ fobj_t *forth_obj_create(mw reg_l, mw dic_l, mw var_l, mw ret_l, mw str_l)
         CALLOC_FAIL(fo->str, NULL);
 
         /*initialize input file, fclose is handled elsewhere */
-        fo->in_file[0]->fio = io_rd_file;
-        if ((fo->in_file[0]->iou.f = fopen("forth.fs", "r")) == NULL) {
+        fo->in_file[1]->fio = io_rd_file;
+        if ((fo->in_file[1]->iou.f = fopen("forth.fs", "r")) == NULL) {
                 fprintf(stderr, "Unable to open initial input file!\n");
                 return NULL;
         }
@@ -147,7 +147,7 @@ fobj_t *forth_obj_create(mw reg_l, mw dic_l, mw var_l, mw ret_l, mw str_l)
         fo->reg[ENUM_INI] = true;
         fo->reg[ENUM_cycles] = false;   /*Run for X amount of cycles turned off by default. */
         fo->reg[ENUM_ccount] = 0;       /*Run for X amount of cycles turned off by default. */
-        fo->reg[ENUM_inStrm] = 0;
+        fo->reg[ENUM_inStrm] = 1;
 
         fprintf(stderr, "\tOBJECT INITIALIZED.\n");
         return fo;

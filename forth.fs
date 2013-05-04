@@ -345,9 +345,9 @@ str @reg dup iobl @reg + str !reg constant filename
 
 : [END]
     input fclose kernel 
-    output fclose kernel 
+\    output fclose kernel 
     \ drops temporary measure
-    2drop 
+    drop 
 ;
 
 : .s
@@ -381,5 +381,10 @@ str @reg dup iobl @reg + str !reg constant filename
  .( Howe Forth ) cr .( Base System Loaded ) cr
  .( Memory Usuage: ) here 2 * str @reg + . cr
  'esc' emit .( [31;1m) .( OK ) cr 'esc' emit .( [30;1m) cr
- 
-[END]
+
+finput input.fs
+
+
+3 3 + .
+." lol " cr
+." hello world " cr
