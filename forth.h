@@ -13,13 +13,16 @@
 
 /*#define RUN4X*/
 
+#ifndef forth_h_header_guard
+#define forth_h_header_guard
+
 #define true    1
 #define false   0
 
-#define    MAX_PRN_STR    50
-#define    MAX_ERR_STR    50
+#define    MAX_PRN_STR    64
+#define    MAX_ERR_STR    64
 #define    MAX_STRLEN     32
-#define    MAX_INSTRM     4
+#define    MAX_INSTRM     32
 
 /*minimum memory requirements*/
 #define MIN_REG        32
@@ -170,14 +173,14 @@ struct fio_s {
 typedef struct fio_s fio_t;
 
 struct forth_obj {
-        fio_t *in_file[MAX_INSTRM]; /*File input redirection */
-        fio_t *out_file;          /*File output redirection */
-        fio_t *err_file;          /*File error output redirection */
-        mw *reg;                  /*pointer to registers */
-        mw *dic;                  /*pointer to dictionary */
-        mw *var;                  /*pointer to variable stack */
-        mw *ret;                  /*pointer to return stack */
-        char *str;                /*pointer to character storage */
+        fio_t *in_file[MAX_INSTRM];     /*File input redirection */
+        fio_t *out_file;        /*File output redirection */
+        fio_t *err_file;        /*File error output redirection */
+        mw *reg;                /*pointer to registers */
+        mw *dic;                /*pointer to dictionary */
+        mw *var;                /*pointer to variable stack */
+        mw *ret;                /*pointer to return stack */
+        char *str;              /*pointer to character storage */
 };
 
 typedef struct forth_obj fobj_t;
@@ -185,3 +188,4 @@ typedef struct forth_obj fobj_t;
 /* Function prototypes for external API */
 mw forth_interpreter(fobj_t * fo);
 mw forth_monitor(fobj_t * fo);
+#endif                          /*end header guard */

@@ -23,8 +23,6 @@ maximum length as should a few other words.
 
 * Stress testing, stress testing with Valgrind (currently gives no errors).
 
-* File stack.
-
 * Make the system more standards compliant where possible.
 
 I should not go out of my way to do so, just renaming a few things and checking

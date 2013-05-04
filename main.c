@@ -98,10 +98,10 @@ fobj_t *forth_obj_create(mw reg_l, mw dic_l, mw var_l, mw ret_l, mw str_l)
         CALLOC_FAIL(fo, NULL);
 
         /*setting i/o streams */
-        for(i=0;i<MAX_INSTRM;i++){
-            fo->in_file[i] = calloc(1, sizeof(fio_t));
-            CALLOC_FAIL(fo->in_file[i], NULL);
-            fo->in_file[i]->fio = io_stdin;
+        for (i = 0; i < MAX_INSTRM; i++) {
+                fo->in_file[i] = calloc(1, sizeof(fio_t));
+                CALLOC_FAIL(fo->in_file[i], NULL);
+                fo->in_file[i]->fio = io_stdin;
         }
 
         fo->out_file = calloc(1, sizeof(fio_t));
@@ -161,8 +161,8 @@ void forth_obj_destroy(fobj_t * fo)
         free(fo->var);
         free(fo->ret);
         free(fo->str);
-        for(i=0; i< MAX_INSTRM; i++)
-          free(fo->in_file[i]);
+        for (i = 0; i < MAX_INSTRM; i++)
+                free(fo->in_file[i]);
         free(fo->out_file);
         free(fo->err_file);
         free(fo);
