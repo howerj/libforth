@@ -26,7 +26,7 @@ fi;
 if 
   ! git push -u origin master; 
 then 
-  echo "\"git push -tags -u origin master\" failed."; 
+  echo "\"git push --tags -u origin master\" failed."; 
   exit 1; 
 fi;
 
