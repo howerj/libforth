@@ -248,7 +248,7 @@ mw find_word(fobj_t * fo)
 {
         mw *reg = fo->reg, *dic = fo->dic;
         char *str = fo->str;
-        fio_t *in_file = fo->in_file, *err_file = fo->err_file;
+        fio_t *in_file = fo->in_file[IN_STRM], *err_file = fo->err_file;
 
         if (get_word(str, SM_inputBufLen, in_file) == ERR_FAILURE) {
                 ERR_LN_PRN(err_file);
@@ -280,7 +280,7 @@ mw compile_word(enum forth_primitives fp, fobj_t * fo)
 {
         mw *reg = fo->reg, *dic = fo->dic;
         char *str = fo->str;
-        fio_t *in_file = fo->in_file, *err_file = fo->err_file;
+        fio_t *in_file = fo->in_file[IN_STRM], *err_file = fo->err_file;
 
         ECUZ(SM_maxDic - 3, DIC, ERR_DIC, err_file);
         dic[DIC++] = PWD;
@@ -376,7 +376,8 @@ void on_err(fobj_t * fo)
         fo->TOS = 0;
         fo->RET = 1;
         fo->PC = fo->EXF;
-        (fo->in_file)->fio = io_stdin;
+        fo->IN_STRM = 0;
+        (fo->in_file[0])->fio = io_stdin;
         (fo->out_file)->fio = io_stdout;
         (fo->err_file)->fio = io_stderr;
 }
@@ -386,8 +387,8 @@ mw forth_system_calls(fobj_t * fo, mw enum_syscall)
 {
         mw *reg = fo->reg, *var = fo->var;
         char *str = fo->str;
-        fio_t *in_file = fo->in_file, *out_file = fo->out_file, *err_file =
-            fo->err_file;
+        fio_t *in_file = fo->in_file[IN_STRM], 
+              *out_file = fo->out_file, *err_file=fo->err_file;
 
         ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
         TOS = var[VAR--];       /* Get rid of top of stack, it's just been used. */
@@ -543,8 +544,8 @@ mw forth_interpreter(fobj_t * fo)
         /*copy pointers, removes level of indirection */
         mw *reg = fo->reg, *dic = fo->dic, *var = fo->var, *ret = fo->ret;
         char *str = fo->str;
-        fio_t *in_file = fo->in_file, *out_file = fo->out_file, *err_file =
-            fo->err_file;
+        fio_t *in_file = fo->in_file[IN_STRM], *out_file = fo->out_file, 
+              *err_file = fo->err_file;
 
         /*Initialization */
         if (INI == true) {
@@ -914,6 +915,7 @@ mw forth_monitor(fobj_t * fo)
 {
         char *null_err = "Fatal Err: forth_monitor() passed NULL pointer\n";
         mw tmp;
+        mw *reg = fo->reg;
 
         if (fo == NULL) {
                 print_string(null_err, MAX_ERR_STR, fo->err_file);
@@ -954,8 +956,8 @@ mw forth_monitor(fobj_t * fo)
                 print_string(null_err, MAX_ERR_STR, fo->err_file);
                 return ERR_FAILURE;
         } else {
-                if (fo->in_file->fio != io_stdin) {
-                        if (fo->in_file->iou.f == NULL) {
+                if (fo->in_file[IN_STRM]->fio != io_stdin) {
+                        if (fo->in_file[IN_STRM]->iou.f == NULL) {
                                 print_string(null_err, MAX_ERR_STR,
                                              fo->err_file);
                                 return ERR_FAILURE;
@@ -1073,11 +1075,11 @@ mw forth_monitor(fobj_t * fo)
                  * stdout?*/
                 break;
         case ERR_EOF:
-                if ((fo->in_file)->fio != io_stdin) {
+                if ((fo->in_file[IN_STRM])->fio != io_stdin) {
                         print_string("Finished Reading Input file!\n",
                                      MAX_ERR_STR, fo->err_file);
-                        if ((fo->in_file)->fio == io_rd_file)
-                                fclose(fo->in_file->iou.f);
+                        if ((fo->in_file[IN_STRM])->fio == io_rd_file)
+                                fclose(fo->in_file[IN_STRM]->iou.f);
                         on_err(fo);
                         goto RESTART;
                 }

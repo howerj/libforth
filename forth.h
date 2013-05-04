@@ -19,6 +19,7 @@
 #define    MAX_PRN_STR    50
 #define    MAX_ERR_STR    50
 #define    MAX_STRLEN     32
+#define    MAX_INSTRM     4
 
 /*minimum memory requirements*/
 #define MIN_REG        32
@@ -110,7 +111,8 @@ enum forth_registers {
         ENUM_dictionaryOffset,
         ENUM_sizeOfMW,
         ENUM_cycles,
-        ENUM_ccount
+        ENUM_ccount,
+        ENUM_inStrm
 };
 
 /*vm macros*/
@@ -147,6 +149,8 @@ enum forth_registers {
 #define CYCLES  reg[ENUM_cycles]
 #define CCOUNT  reg[ENUM_ccount]
 
+#define IN_STRM reg[ENUM_inStrm]
+
 typedef signed int mw;
 
 /*if input or output is a file or string, store point to it*/
@@ -166,14 +170,14 @@ struct fio_s {
 typedef struct fio_s fio_t;
 
 struct forth_obj {
-        fio_t *in_file;         /*File input redirection */
-        fio_t *out_file;        /*File output redirection */
-        fio_t *err_file;        /*File error output redirection */
-        mw *reg;                /*pointer to registers */
-        mw *dic;                /*pointer to dictionary */
-        mw *var;                /*pointer to variable stack */
-        mw *ret;                /*pointer to return stack */
-        char *str;              /*pointer to character storage */
+        fio_t *in_file[MAX_INSTRM]; /*File input redirection */
+        fio_t *out_file;          /*File output redirection */
+        fio_t *err_file;          /*File error output redirection */
+        mw *reg;                  /*pointer to registers */
+        mw *dic;                  /*pointer to dictionary */
+        mw *var;                  /*pointer to variable stack */
+        mw *ret;                  /*pointer to return stack */
+        char *str;                /*pointer to character storage */
 };
 
 typedef struct forth_obj fobj_t;

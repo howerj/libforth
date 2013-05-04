@@ -30,6 +30,9 @@ maximum length as should a few other words.
 I should not go out of my way to do so, just renaming a few things and checking
 how a few words behave.
 
+* Pushes and Pops should be put in there own functions, it would save
+duplicating so much checking code.
+
 * Eval()
 
 * On INI Forth should check for valid pointers, ie. Not NULL. It current does

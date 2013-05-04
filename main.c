@@ -92,12 +92,18 @@ void debug_print(fobj_t * fo)
 fobj_t *forth_obj_create(mw reg_l, mw dic_l, mw var_l, mw ret_l, mw str_l)
 {
         /*the vm forth object */
+        int i = 0;
         fobj_t *fo = calloc(1, sizeof(fobj_t));
 
         CALLOC_FAIL(fo, NULL);
 
         /*setting i/o streams */
-        fo->in_file = calloc(1, sizeof(fio_t));
+        for(i=0;i<MAX_INSTRM;i++){
+            fo->in_file[i] = calloc(1, sizeof(fio_t));
+            CALLOC_FAIL(fo->in_file[i], NULL);
+            fo->in_file[i]->fio = io_stdin;
+        }
+
         fo->out_file = calloc(1, sizeof(fio_t));
         fo->err_file = calloc(1, sizeof(fio_t));
 
@@ -105,7 +111,7 @@ fobj_t *forth_obj_create(mw reg_l, mw dic_l, mw var_l, mw ret_l, mw str_l)
         CALLOC_FAIL(fo->out_file, NULL);
         CALLOC_FAIL(fo->err_file, NULL);
 
-        fo->in_file->fio = io_stdin;
+        fo->in_file[0]->fio = io_stdin;
         fo->out_file->fio = io_stdout;
         fo->err_file->fio = io_stderr;
 
@@ -123,8 +129,8 @@ fobj_t *forth_obj_create(mw reg_l, mw dic_l, mw var_l, mw ret_l, mw str_l)
         CALLOC_FAIL(fo->str, NULL);
 
         /*initialize input file, fclose is handled elsewhere */
-        fo->in_file->fio = io_rd_file;
-        if ((fo->in_file->iou.f = fopen("forth.fs", "r")) == NULL) {
+        fo->in_file[0]->fio = io_rd_file;
+        if ((fo->in_file[0]->iou.f = fopen("forth.fs", "r")) == NULL) {
                 fprintf(stderr, "Unable to open initial input file!\n");
                 return NULL;
         }
@@ -141,6 +147,7 @@ fobj_t *forth_obj_create(mw reg_l, mw dic_l, mw var_l, mw ret_l, mw str_l)
         fo->reg[ENUM_INI] = true;
         fo->reg[ENUM_cycles] = false;   /*Run for X amount of cycles turned off by default. */
         fo->reg[ENUM_ccount] = 0;       /*Run for X amount of cycles turned off by default. */
+        fo->reg[ENUM_inStrm] = 0;
 
         fprintf(stderr, "\tOBJECT INITIALIZED.\n");
         return fo;
@@ -148,12 +155,14 @@ fobj_t *forth_obj_create(mw reg_l, mw dic_l, mw var_l, mw ret_l, mw str_l)
 
 void forth_obj_destroy(fobj_t * fo)
 {
+        int i = 0;
         free(fo->reg);
         free(fo->dic);
         free(fo->var);
         free(fo->ret);
         free(fo->str);
-        free(fo->in_file);
+        for(i=0; i< MAX_INSTRM; i++)
+          free(fo->in_file[i]);
         free(fo->out_file);
         free(fo->err_file);
         free(fo);
