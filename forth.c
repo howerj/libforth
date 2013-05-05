@@ -742,9 +742,9 @@ mw forth_interpreter(fobj_t * fo)
                         ECUZ(SM_maxStr, TOS, ERR_TOS_STR, err_file);
                         TOS = (mw) str[TOS];
                         break;
-                case FETCH_VAR:
-                        ECUZ(SM_maxVar, TOS, ERR_TOS_VAR, err_file);
-                        TOS = var[TOS];
+                case PICK:
+                        ECUZ(SM_maxVar, VAR - TOS, ERR_TOS_VAR, err_file);
+                        TOS = var[VAR - TOS];
                         break;
                 case STORE_REG:
                         ECUZ(SM_maxReg, TOS, ERR_TOS_REG, err_file);

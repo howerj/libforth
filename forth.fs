@@ -1,6 +1,6 @@
 : immediate read \ exit br ?br + - * % / lshift rshift 
-and or invert xor 1+ 1- = < > @reg @dic @var @str 
-!reg !dic !var !str key emit dup drop swap over >r r> 
+and or invert xor 1+ 1- = < > @reg @ pick @str 
+!reg ! !var !str key emit dup drop swap over >r r> 
 tail ' , printnum get_word strlen isnumber strnequ find 
 execute kernel
 
@@ -30,6 +30,11 @@ exit
 : pwd 7 ;
 : iobl 21 ; \ I/O buf len address
 
+\ Error handling!
+: EXF 14 ;
+: on_err read on_err ;
+find on_err EXF !reg
+
 \ change to command mode
 : [ immediate false state ;
 \ change to compile mode
@@ -56,29 +61,20 @@ exit
 \ Constants for system call arguments
 : input 0 ;
 : output 1 ;
-\ : error 2 ; \ Not used, stderr can not be redirected from outside the C prog.
 
 : literal immediate _push , , ;
-
-\ Error handling!
-: EXF 14 ;
-: _on_err read _on_err ;
-
-: on_err ' _on_err EXF !reg ;
-on_err
 
 \ ASCII chars
 
 : 'esc' 27 ;
-: '\n' 10 ;
-: '\t' 9 ;
 : '"' 34 ;
 : ')' 41 ;
 
 : 0= 0 = ;
 
-: cr '\n' emit ;
-: tab '\t' emit ;
+: space 32 emit ;
+: cr 10 emit ;
+: tab 9 emit ;
 
 : prnn 10 swap printnum ;
 : . prnn cr ;
@@ -88,6 +84,12 @@ on_err
 : nip swap drop ;
 : rot >r swap r> swap ;
 : <> = 0= ;
+
+\ : ?dup dup if dup then ;
+\ : negate -1 * ;
+\ : abs dup 0 < if negate then ;
+\ : -rot rot rot ;
+\ : incrementer create , does> dup dup @ 1+ swap ! @ ;
 
 : 2drop drop drop ;
 : 2dup over over ;
@@ -107,12 +109,12 @@ on_err
 	here
 	0 ,
 	swap dup here swap-
-	swap !dic
+	swap !
 ;
 : then immediate 
 	dup here 
 	swap- swap 
-	!dic 
+	! 
 ;
 
 : here- here - ;
@@ -221,11 +223,11 @@ on_err
 : does> immediate
   'exit,                      \ Write in an exit, we don't want the
                                   \ defining to run it, but the *defined* word to.
-  here swap !dic                \ Patch in the code fields to point to.
+  here swap !                \ Patch in the code fields to point to.
   _run ,                        \ Write a run in.
 ;
 
-: constant create , does> @dic ; 
+: constant create , does> @ ; 
 : variable create , does> ;
 : array create allot does> + ;
 
@@ -240,7 +242,7 @@ on_err
 : 40ban 40 ban ;
 
 : _show
-    2dup - @dic prnn tab 1- dup 0=
+    2dup - @ prnn tab 1- dup 0=
 ;
 : show \ ( from to -- )
     40ban
@@ -288,24 +290,12 @@ on_err
     until
 ;
 
-3 constant tabvar
-: tabbing \ ( counter X -- counter-1 X )
-        swap dup if
-            tab 
-            1-
-        else
-            cr
-            drop
-            tabvar
-        then swap
-;
-
 : words
-    tabvar pwd @reg 
+    pwd @reg 
     begin
-        dup 1+ @dic prn
-        tabbing
-        @dic dup 0=   
+        dup 1+ @ prn
+        space
+        @ dup @ 0=   
     until
     cr
     2drop
@@ -342,23 +332,14 @@ str @reg dup iobl @reg + str !reg constant filename
     output rewind kernel
 ;
 
-
-: [END]
-    input fclose kernel 
-\    output fclose kernel 
-    \ drops temporary measure
-    drop 
-;
-
 : .s
-    v @reg tabvar swap
-    begin
-        dup @var prnn 
-        tabbing
-        1- dup 0=
-    until
-    cr
-    2drop
+  v @reg 1-
+  begin
+    dup pick prnn space
+    1- dup 0= 
+  until
+  drop
+  cr
 ;
 
 \ Shows the header of a word.
@@ -366,18 +347,18 @@ str @reg dup iobl @reg + str !reg constant filename
   find 2- dup 40 + show
 ;
 
-\ : ?dup dup if dup then ;
-\ : negate -1 * ;
-\ : abs dup 0 < if negate then ;
-\ : -rot rot rot ;
-\ : inc create , does> dup dup @dic 1+ swap !dic @dic ;
 
 
 \ ANSI terminal color codes
  'esc' emit .( [2J) cr       \ Reset
  'esc' emit .( [0;0H ) cr
  'esc' emit .( [32;1m) cr    \ Green fg
-\ 'esc' emit .( [40;1m) cr    \ Black bg
  .( Howe Forth ) cr .( Base System Loaded ) cr
- .( Memory Usuage: ) here 2 * str @reg + . cr
+ .( @author         Richard James Howe. ) cr
+ .( @copyright      Copyright 2013 Richard James Howe. ) cr
+ .( @license        LGPL ) cr
+ .( @email          howe.r.j.89@gmail.com ) cr
+ .( Memory Used: ) cr 
+ .(   Dictionary: ) here 4 * str @reg + .
+ .(   Strings:    ) str @reg . cr
  'esc' emit .( [31;1m) .( OK ) cr 'esc' emit .( [30;1m) cr
