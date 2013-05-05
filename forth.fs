@@ -22,16 +22,17 @@ execute kernel
 	false state
 exit
 
-: r 3 ;	\ Return stack pointer
-: v 4 ;	\ Variable stack pointer
-: h 5 ;	\ Dictionary pointer
-: str 6 ; \ String storage pointer
+\ Register constants
+: r 3 ;	        \ Return stack pointer
+: v 4 ;	        \ Variable stack pointer
+: h 5 ;	        \ Dictionary pointer
+: str 6 ;       \ String storage pointer
+: pwd 7 ;       \ previous word
+: EXF 14 ;      \ Pointer to execution token, executed on error.
+: iobl 21 ;     \ I/O buf len address
 : here h @reg ;
-: pwd 7 ;
-: iobl 21 ; \ I/O buf len address
 
 \ Error handling!
-: EXF 14 ;
 : on_err read on_err ;
 find on_err EXF !reg
 
@@ -40,14 +41,10 @@ find on_err EXF !reg
 \ change to compile mode
 : ] true state ;
 
+\ invisible forth words, they have no name!
 : _push 0 ;
 : _compile 1 ;
 : _run 2 ;
-: _define 3 ;
-: _immediate 4 ;
-: _read 5 ;
-: _comment 6 ;
-: _exit 7 ;
 
 \ System calls
 : reset 0 ;
@@ -78,13 +75,12 @@ find on_err EXF !reg
 
 : prnn 10 swap printnum ;
 : . prnn cr ;
-: # dup . ;
+\ : # dup . ;
 
 : tuck swap over ;
 : nip swap drop ;
 : rot >r swap r> swap ;
-: <> = 0= ;
-
+\ : <> = 0= ;
 \ : ?dup dup if dup then ;
 \ : negate -1 * ;
 \ : abs dup 0 < if negate then ;
@@ -134,27 +130,32 @@ find on_err EXF !reg
     then 
 ;
 
-: _( \ ( key to halt on -- )
-    >r
+: _( \ ( letter bool -- ) \ 
+  >r \ Store bool on return stack for simplicity
      begin 
-        key dup r> dup >r  = dup 
-        if 
-            nip
+        key 2dup = \ key in a letter, test if it is equal to out terminator
+        if
+          2drop 1 \ Drop items, quit loop
         else 
-            swap emit 
+          r> dup >r \ test for bool
+          if        \ bool == 1, emit letter, bool == 0 drop it.
+             emit 
+          else 
+             drop 
+          then 
+          0 \ Continue
         then 
     until 
-    r> drop
+  r> drop \ Return stack back to normal now.
 ;
 
-: .( 
-    ')' _(
-;
+: ( immediate ')' 0 _( ;  ( Now we have proper comments )
+: .( immediate ')' 1 _( ; ( Print out word )
 
-\ Print out a string stored in string storage
-: prn \ ( str_ptr -- )
+ ( Print out a string stored in string storage )
+: prn ( str_ptr -- )
     begin
-        dup @str dup 0= \ if null
+        dup @str dup 0= ( if null )
         if
             2drop 1       
         else
@@ -163,8 +164,8 @@ find on_err EXF !reg
     until
 ;
 
-\ Store a '"' terminated string in string storage
-: _." \ ( -- )
+ ( Store a '"' terminated string in string storage )
+: _." ( -- )
     str @reg 1-
     begin
         key dup >r '"' =
@@ -180,7 +181,7 @@ find on_err EXF !reg
 
 : ." immediate
     CPF @reg 0= if
-    '"' _(
+    '"' 1 _(
     else
         _push , str @reg ,
         _."
@@ -231,55 +232,32 @@ find on_err EXF !reg
 : variable create , does> ;
 : array create allot does> + ;
 
-: ban \ ( x -- )
-	begin 
-		[ key = literal ] 
-		emit 1- dup 0= 
-	until 
-	cr drop 
-;
-
-: 40ban 40 ban ;
-
-: _show
-    2dup - @ prnn tab 1- dup 0=
-;
-: show \ ( from to -- )
-    40ban
-    ." Dictionary contents: " cr
-    40ban
+: ps 2dup - prnn ." :" tab ;
+: _show 2dup - @ prnn tab 1- ;
+: show \ ( from to -- ) \ Show dictionary storage
     tuck swap-
     begin
-        2dup - prnn ." :" tab 
-        _show if 2drop cr 40ban exit then 
-        _show if 2drop cr 40ban exit then 
-        _show if 2drop cr 40ban exit then 
-        _show
+        ps
+        _show _show _show _show dup 0 <
         cr
     until
     2drop
-    40ban
 ;
 
 : _shstr
-    2dup - @str emit tab 1- dup 0=
+    2dup - @str emit tab 1- 
 ;
-: shstr \ ( from to -- )
-    40ban
-    ." String Storage contents: " cr
-    40ban
+: shstr \ ( from to -- ) \ Show string storage contents
     tuck
     swap-
     begin
-        2dup - prnn ." :" tab 
-        _shstr if 2drop cr 40ban exit then 
-        _shstr if 2drop cr 40ban exit then 
-        _shstr if 2drop cr 40ban exit then 
-        _shstr
+        _shstr 
+        _shstr 
+        _shstr 
+        _shstr dup 0 <
         cr
     until
     2drop
-    40ban
 ;
 
 : regs \ ( -- ) \ Print off register contents
@@ -295,10 +273,10 @@ find on_err EXF !reg
     begin
         dup 1+ @ prn
         space
-        @ dup @ 0=   
+        @ dup @ 0 =   
     until
     cr
-    2drop
+    drop
 ;
 
 \ Store filenames (temporary) here.
@@ -333,7 +311,7 @@ str @reg dup iobl @reg + str !reg constant filename
 ;
 
 : .s
-  v @reg 1-
+  v @reg 1- dup 0= if exit then
   begin
     dup pick prnn space
     1- dup 0= 

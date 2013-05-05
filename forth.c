@@ -14,26 +14,13 @@
 #include <stdio.h>
 #include "forth.h"
 
-/* 
- * Error checking, go over every line of code for errors
- * Improve I/O redirection
- * Error handling
- *  - In general
- *  - When calling certain functions such as compile_word()
- * 0xXX 0XX and XX input handling
- * freopen()?
- */
-
 #define ISSPACE(X)    ((X=='\n')||(X=='\r')||(X=='\t')||(X=='\v')||(X==' ')||\
             (X=='\f'))
 
 #define ISDIGIT(X)    ((X=='0')||(X=='1')||(X=='2')||(X=='3')||(X=='4')||(X=='5')||\
             (X=='6')||(X=='7')||(X=='8')||(X=='9'))
 
-/* IO wrappers 
- * TODO:
- *  File Stack.
- */
+/* IO wrappers*/
 
 /*Either get input from stdin, a string or a file*/
 int wrap_get(fio_t * in_file)
@@ -125,7 +112,7 @@ mw get_word(char *str, const mw str_len, fio_t * io_file)
 mw isnumber(const char s[])
 {
         mw x = 0;
-        if (((s[x] == '-') || (s[x] == '+')) & ISDIGIT(s[x + 1]))
+        if (((s[x] == '-') || (s[x] == '+')) && ISDIGIT(s[x + 1]))
                 x++;
         for (; s[x] != '\0'; x++) {
                 if (!ISDIGIT(s[x])) {
@@ -141,7 +128,7 @@ mw strnequ(const char str1[], const char str2[], const mw lim1, const mw lim2)
 
         char *s1 = (char *)str1, *s2 = (char *)str2;
 
-        for (; (*s1 == *s2) & (s1 < str1 + lim1) & (s2 < str2 + lim2);
+        for (; (*s1 == *s2) && (s1 < str1 + lim1) && (s2 < str2 + lim2);
              s1++, s2++)
                 if (*s1 == '\0')
                         return 0;
@@ -273,6 +260,7 @@ mw find_word(fobj_t * fo)
                 }
                 OP0 = dic[OP0];
         }
+
         return ERR_OK;
 }
 
