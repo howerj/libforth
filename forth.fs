@@ -15,8 +15,8 @@ execute kernel
 : true 1 exit
 : false 0 exit
 
-: CPF 13 exit \ Compile Flag 
-: state CPF !reg exit
+: cpf 13 exit \ Compile Flag 
+: state cpf !reg exit
 : ; immediate 
 	' exit , 
 	false state
@@ -28,13 +28,13 @@ exit
 : h 5 ;	        \ Dictionary pointer
 : str 6 ;       \ String storage pointer
 : pwd 7 ;       \ previous word
-: EXF 14 ;      \ Pointer to execution token, executed on error.
+: exf 14 ;      \ Pointer to execution token, executed on error.
 : iobl 21 ;     \ I/O buf len address
 : here h @reg ;
 
 \ Error handling!
 : on_err read on_err ;
-find on_err EXF !reg
+find on_err exf !reg
 
 \ change to command mode
 : [ immediate false state ;
@@ -180,7 +180,7 @@ find on_err EXF !reg
 ;
 
 : ." immediate
-    CPF @reg 0= if
+    cpf @reg 0= if
     '"' 1 _(
     else
         _push , str @reg ,
@@ -204,7 +204,7 @@ find on_err EXF !reg
 \ another word
 : create immediate              \ This is a complicated word! It makes a
                                     \ word that makes a word.
-  CPF @reg if                   \ Compile time behavour
+  cpf @reg if                   \ Compile time behavour
   ' :: ,                        \ Make the defining word compile a header
   '', _push , ',,               \ Write in push to the creating word
   ' here , ' 3+ , ',,           \ Write in the number we want the created word to push
@@ -328,8 +328,8 @@ str @reg dup iobl @reg + str !reg constant filename
 
 
 \ ANSI terminal color codes
- 'esc' emit .( [2J) cr       \ Reset
- 'esc' emit .( [0;0H ) cr
+ 'esc' emit .( [2J) cr       \ Clear screen
+ 'esc' emit .( [0;0H ) cr    \ Set cursor to 0,0
  'esc' emit .( [32;1m) cr    \ Green fg
  .( Howe Forth ) cr .( Base System Loaded ) cr
  .( @author         Richard James Howe. ) cr
@@ -339,4 +339,4 @@ str @reg dup iobl @reg + str !reg constant filename
  .( Memory Used: ) cr 
  .(   Dictionary: ) here 4 * str @reg + .
  .(   Strings:    ) str @reg . cr
- 'esc' emit .( [31;1m) .( OK ) cr 'esc' emit .( [30;1m) cr
+ 'esc' emit .( [31m) .( OK ) cr 'esc' emit .( [0m) cr

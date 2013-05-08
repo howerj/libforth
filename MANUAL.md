@@ -92,47 +92,55 @@ memory, I will give a short example of what to do with reference to the code:
 
     fobj_t *forth_obj_create(mw reg_l, mw dic_l, mw var_l, mw ret_l, mw str_l)
     {
-            /*the vm forth object */
-            fobj_t *fo = calloc(1, sizeof(fobj_t));
+        /*the vm forth object */
+        int i = 0;
+        fobj_t *fo = calloc(1, sizeof(fobj_t));
 
-            /*setting i/o streams*/
-            fo->in_file = calloc(1, sizeof(fio_t));
-            fo->out_file = calloc(1, sizeof(fio_t));
-            fo->err_file = calloc(1, sizeof(fio_t));
 
-            fo->in_file->fio = io_stdin;
-            fo->out_file->fio = io_stdout;
-            fo->err_file->fio = io_stderr;
+        /*setting i/o streams */
+        for (i = 0; i < MAX_INSTRM; i++) {
+                fo->in_file[i] = calloc(1, sizeof(fio_t));
+                CALLOC_FAIL(fo->in_file[i], NULL);
+                fo->in_file[i]->fio = io_stdin;
+        }
 
-            /*memories of the interpreter */
-            fo->reg = calloc(reg_l, sizeof(mw));
-            fo->dic = calloc(dic_l, sizeof(mw));
-            fo->var = calloc(var_l, sizeof(mw));
-            fo->ret = calloc(ret_l, sizeof(mw));
-            fo->str = calloc(str_l, sizeof(char));
+        fo->out_file = calloc(1, sizeof(fio_t));
+        fo->err_file = calloc(1, sizeof(fio_t));
 
-            /*initialize input file, fclose is handled elsewhere */
-            fo->in_file->fio = io_rd_file;
-            if ((fo->in_file->iou.f = fopen("forth.fs", "r")) == NULL) {
-                    fprintf(stderr, "Unable to open initial input file!\n");
-                    return NULL;
-            }
+        fo->in_file[0]->fio = io_stdin;
+        fo->out_file->fio = io_stdout;
+        fo->err_file->fio = io_stderr;
 
-            /*initializing memory */
-            fo->reg[ENUM_maxReg] = MAX_REG;
-            fo->reg[ENUM_maxDic] = MAX_DIC;
-            fo->reg[ENUM_maxVar] = MAX_VAR;
-            fo->reg[ENUM_maxRet] = MAX_RET;
-            fo->reg[ENUM_maxStr] = MAX_STR;
-            fo->reg[ENUM_inputBufLen] = 32;
-            fo->reg[ENUM_dictionaryOffset] = 4;
-            fo->reg[ENUM_sizeOfMW] = sizeof(mw);
-            fo->reg[ENUM_INI] = true;
-            fo->reg[ENUM_cycles] = false; 
-            fo->reg[ENUM_ccount] = 0; 
+        /*memories of the interpreter */
+        fo->reg = calloc(reg_l, sizeof(mw));
+        fo->dic = calloc(dic_l, sizeof(mw));
+        fo->var = calloc(var_l, sizeof(mw));
+        fo->ret = calloc(ret_l, sizeof(mw));
+        fo->str = calloc(str_l, sizeof(char));
 
-            fprintf(stderr, "\tOBJECT INITIALIZED.\n");
-            return fo;
+        /*initialize input file, fclose is handled elsewhere */
+        fo->in_file[1]->fio = io_rd_file;
+        if ((fo->in_file[1]->iou.f = fopen("forth.fs", "r")) == NULL) {
+                fprintf(stderr, "Unable to open initial input file!\n");
+                return NULL;
+        }
+
+        /*initializing memory */
+        fo->reg[ENUM_maxReg] = MAX_REG;
+        fo->reg[ENUM_maxDic] = MAX_DIC;
+        fo->reg[ENUM_maxVar] = MAX_VAR;
+        fo->reg[ENUM_maxRet] = MAX_RET;
+        fo->reg[ENUM_maxStr] = MAX_STR;
+        fo->reg[ENUM_inputBufLen] = 32;
+        fo->reg[ENUM_dictionaryOffset] = 4;
+        fo->reg[ENUM_sizeOfMW] = sizeof(mw);
+        fo->reg[ENUM_INI] = true;
+        fo->reg[ENUM_cycles] = false;   /*Run for X amount of cycles turned off by default. */
+        fo->reg[ENUM_ccount] = 0;       /*Run for X amount of cycles turned off by default. */
+        fo->reg[ENUM_inStrm] = 1;
+
+        fprintf(stderr, "\tOBJECT INITIALIZED.\n");
+        return fo;
     }
 
 ~~~
@@ -198,6 +206,13 @@ is enabled a counter is decrement when this is less than zero
 
     fo->reg[ENUM_cycles] = false; 
     fo->reg[ENUM_ccount] = 0; 
+
+
+As there is one file opened as input, this file must be put on the input file
+stack, it will be removed once the EOF has been reached. This simply indicates
+there is one file on the stack.
+
+    fo->reg[ENUM_inStrm] = 1;
 
 ~~~
 
@@ -377,7 +392,7 @@ the data in that address to the variable stack.
 Use the top of the variable stack as an index into the dictionary array, push
 the data in that address to the variable stack.
 
-* "@var":
+* "pick":
 
 Use the top of the variable stack as an index into the variable stack itself , push
 the data in that address to the variable stack.

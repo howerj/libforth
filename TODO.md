@@ -14,7 +14,7 @@ manual.
 
 * Clean up code.
 
-Rename "@var" and "\!var".
+Rename "\!var".
 
 strnequ should have an absolute address which it can not pass instead of a
 maximum length as should a few other words.
@@ -31,6 +31,8 @@ how a few words behave.
 * Pushes and Pops should be put in there own functions, it would save
 duplicating so much checking code.
 
+* Clean up code with splint, static code analysis tool.
+
 * Eval()
 
 * On INI Forth should check for valid pointers, ie. Not NULL. It current does
@@ -46,7 +48,7 @@ space.
 
 * Profiling.
 
-* Possible ways of increasing compile time and why: 
+* Possible ways of decreasing compile time and why: 
 
 The search algorithm used in the dictionary search is incredibly simple,
 changing it so searches are quicker would speed compilation up potentially
