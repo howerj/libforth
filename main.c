@@ -143,9 +143,9 @@ fobj_t *forth_obj_create(mw reg_l, mw dic_l, mw var_l, mw ret_l, mw str_l)
         fo->reg[ENUM_maxStr] = str_l;
         fo->reg[ENUM_inputBufLen] = 32;
         fo->reg[ENUM_dictionaryOffset] = 4;
-        fo->reg[ENUM_sizeOfMW] = sizeof(mw);
-        fo->reg[ENUM_INI] = true;
-        fo->reg[ENUM_cycles] = false;   /*Run for X amount of cycles turned off by default. */
+        fo->reg[ENUM_sizeOfMW] = (mw) sizeof(mw);
+        fo->reg[ENUM_INI] = (mw) true;
+        fo->reg[ENUM_cycles] = (mw) false;      /*Run for X amount of cycles turned off by default. */
         fo->reg[ENUM_ccount] = 0;       /*Run for X amount of cycles turned off by default. */
         fo->reg[ENUM_inStrm] = 1;
 

@@ -33,7 +33,7 @@ banner:
 	@echo -e "Email:     $(BLUE)howe.r.j.89@gmail.com$(DEFAULT)."
 	@echo -e "Add the following to \"CCOPT\" for different functionality"
 	@echo -e "To compile with debug flags enable type $(BLUE)\"-DDEBUG_PRN\".$(DEFAULT)";
-	@echo -e "To compile with debug cycle counter enabled $(BLUE)\"./compile -DRUN4X\".$(DEFAULT)";
+	@echo -e "To compile with debug cycle counter enabled $(BLUE)\"-DRUN4X\".$(DEFAULT)";
 	@echo -e "To compile $(RED)without$(DEFAULT) bounds checking:$(BLUE) \"-DUNCHECK\".$(DEFAULT)";
 	@echo -e "\n"
 
