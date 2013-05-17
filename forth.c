@@ -647,7 +647,8 @@ mw forth_interpreter(fobj_t * fo)
                         break;
                 case EXIT:
                         ECUZ(SM_maxRet, RET, ERR_RET, err_file);
-                        PC = ret[RET--];
+                        PC = ret[RET];
+                        RET--;
                         break;
                 case BRANCH:
                         ECUZ(SM_maxDic, PC, ERR_PC, err_file);
@@ -662,25 +663,29 @@ mw forth_interpreter(fobj_t * fo)
                         }
                         /*ECUZ(SM_maxDic, PC, ERR_PC); */
                         ECUZ(SM_maxVar, VAR, ERR_PC, err_file);
-                        TOS = var[VAR--];
+                        TOS = var[VAR];
+                        VAR--;
                         break;
                 case PLUS:
                         ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
-                        TOS = var[VAR--] + TOS;
+                        TOS = var[VAR] + TOS;
+                        VAR--;
                         break;
                 case MINUS:
                         ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
-                        TOS = var[VAR--] - TOS;
+                        TOS = var[VAR] - TOS;
+                        VAR--;
                         break;
-
                 case MUL:
                         ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
-                        TOS = var[VAR--] * TOS;
+                        TOS = var[VAR] * TOS;
+                        VAR--;
                         break;
                 case MOD:
                         if (TOS) {
                                 ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
-                                TOS = var[VAR--] % TOS;
+                                TOS = var[VAR] % TOS;
+                                VAR--;
                                 break;
                         }
                         ERR_LN_PRN(err_file);
@@ -688,33 +693,39 @@ mw forth_interpreter(fobj_t * fo)
                 case DIV:
                         if (TOS) {
                                 ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
-                                TOS = var[VAR--] / TOS;
+                                TOS = var[VAR] / TOS;
+                                VAR--;
                                 break;
                         }
                         ERR_LN_PRN(err_file);
                         return ERR_DIV0;
                 case LS:
                         ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
-                        TOS = (unsigned)var[VAR--] << (unsigned)TOS;
+                        TOS = (unsigned)var[VAR] << (unsigned)TOS;
+                        VAR--;
                         break;
                 case RS:
                         ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
-                        TOS = (unsigned)var[VAR--] >> (unsigned)TOS;
+                        TOS = (unsigned)var[VAR] >> (unsigned)TOS;
+                        VAR--;
                         break;
                 case AND:
                         ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
-                        TOS = var[VAR--] & TOS;
+                        TOS = var[VAR] & TOS;
+                        VAR--;
                         break;
                 case OR:
                         ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
-                        TOS = var[VAR--] | TOS;
+                        TOS = var[VAR] | TOS;
+                        VAR--;
                         break;
                 case INV:
                         TOS = ~TOS;
                         break;
                 case XOR:
                         ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
-                        TOS = var[VAR--] ^ TOS;
+                        TOS = var[VAR] ^ TOS;
+                        VAR--;
                         break;
                 case INC:
                         TOS++;
@@ -724,15 +735,18 @@ mw forth_interpreter(fobj_t * fo)
                         break;
                 case EQ:
                         ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
-                        TOS = var[VAR--] == TOS;
+                        TOS = var[VAR] == TOS;
+                        VAR--;
                         break;
                 case LESS:
                         ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
-                        TOS = var[VAR--] < TOS;
+                        TOS = var[VAR] < TOS;
+                        VAR--;
                         break;
                 case MORE:
                         ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
-                        TOS = var[VAR--] > TOS;
+                        TOS = var[VAR] > TOS;
+                        VAR--;
                         break;
                 case FETCH_REG:
                         ECUZ(SM_maxReg, TOS, ERR_TOS_REG, err_file);
@@ -753,30 +767,39 @@ mw forth_interpreter(fobj_t * fo)
                 case STORE_REG:
                         ECUZ(SM_maxReg, TOS, ERR_TOS_REG, err_file);
                         ECB(1, SM_maxVar, VAR, ERR_VAR, err_file);
-                        reg[TOS] = var[VAR--];
-                        TOS = var[VAR--];
+                        reg[TOS] = var[VAR];
+                        VAR--;
+                        TOS = var[VAR];
+                        VAR--;
                         break;
                 case STORE_DIC:
                         ECUZ(SM_maxDic, TOS, ERR_TOS_DIC, err_file);
                         ECB(1, SM_maxVar, VAR, ERR_VAR, err_file);
-                        dic[TOS] = var[VAR--];
-                        TOS = var[VAR--];
+                        dic[TOS] = var[VAR];
+                        VAR--;
+                        TOS = var[VAR];
+                        VAR--;
                         break;
                 case STORE_STR:
                         ECUZ(SM_maxStr, TOS, ERR_TOS_STR, err_file);
                         ECB(1, SM_maxVar, VAR, ERR_VAR, err_file);
-                        str[TOS] = (char)var[VAR--];
-                        TOS = var[VAR--];
+                        str[TOS] = (char)var[VAR];
+                        VAR--;
+                        TOS = var[VAR];
+                        VAR--;
                         break;
                 case STORE_VAR:
                         ECUZ(SM_maxVar, TOS, ERR_TOS_VAR, err_file);
                         ECB(1, SM_maxVar, VAR, ERR_VAR, err_file);
-                        var[TOS] = var[VAR--];
-                        TOS = var[VAR--];
+                        var[TOS] = var[VAR];
+                        VAR--;
+                        TOS = var[VAR];
+                        VAR--;
                         break;
                 case KEY:
                         ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
-                        var[++VAR] = TOS;
+                        VAR++;
+                        var[VAR] = TOS;
                         TOS = wrap_get(fo->in_file[IN_STRM]);
                         if (TOS == (mw) EOF) {
                                 ERR_LN_PRN(err_file);
@@ -787,39 +810,47 @@ mw forth_interpreter(fobj_t * fo)
                         /*need to check if putchar is winning or not */
                         wrap_put(out_file, (char)TOS);
                         ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
-                        TOS = var[VAR--];
+                        TOS = var[VAR];
+                        VAR--;
                         break;
                 case DROP:
                         ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
-                        TOS = var[VAR--];
+                        TOS = var[VAR];
+                        VAR--;
                         break;
                 case DUP:
                         ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
-                        var[++VAR] = TOS;
+                        VAR++;
+                        var[VAR] = TOS;
                         break;
                 case SWAP:
                         OP0 = TOS;
                         ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
-                        TOS = var[VAR--];
-                        var[++VAR] = OP0;
+                        TOS = var[VAR];
+                        var[VAR] = OP0;
                         break;
                 case OVER:
                         ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
-                        var[++VAR] = TOS;
+                        VAR++;
+                        var[VAR] = TOS;
                         TOS = var[VAR - 1];
                         break;
                 case TOR:
                         ECUZ(SM_maxRet - 1, RET, ERR_RET, err_file);
                         ret[RET + 1] = ret[RET];
-                        ret[++RET] = TOS;
+                        RET++;
+                        ret[RET] = TOS;
                         ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
-                        TOS = var[VAR--];
+                        TOS = var[VAR];
+                        VAR--;
                         break;
                 case FROMR:
                         ECUZ(SM_maxVar - 1, VAR, ERR_VAR, err_file);
-                        var[++VAR] = TOS;
+                        VAR++;
+                        var[VAR] = TOS;
                         ECUZ(SM_maxRet, RET, ERR_RET, err_file);
-                        TOS = ret[RET--];
+                        TOS = ret[RET];
+                        RET--;
                         break;
                 case TAIL:
                         ECUZ(SM_maxRet, VAR, ERR_RET, err_file);
@@ -827,16 +858,19 @@ mw forth_interpreter(fobj_t * fo)
                         break;
                 case QUOTE:
                         ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
-                        var[++VAR] = TOS;
+                        VAR++;
+                        var[VAR] = TOS;
                         ECB(0, SM_maxDic, PC, ERR_PC, err_file);
                         TOS = dic[PC];
                         PC++;
                         break;
                 case COMMA:
                         ECUZ(SM_maxDic, DIC, ERR_DIC, err_file);
-                        dic[DIC++] = TOS;
+                        dic[DIC] = TOS;
+                        DIC++;
                         ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
-                        TOS = var[VAR--];
+                        TOS = var[VAR];
+                        VAR--;
                         break;
                 case PRINTNUM:
                         ECB(2, SM_maxVar, VAR, ERR_VAR, err_file);
@@ -846,7 +880,8 @@ mw forth_interpreter(fobj_t * fo)
                         }
                         print_string(my_itoa(TOS, var[VAR--]), MAX_ERR_STR,
                                      out_file);
-                        TOS = var[VAR--];
+                        TOS = var[VAR];
+                        VAR--;
                         break;
                 case GET_WORD:
                         ECB(1, SM_maxVar, VAR, ERR_VAR, err_file);
@@ -857,7 +892,8 @@ mw forth_interpreter(fobj_t * fo)
                                 ERR_LN_PRN(err_file);
                                 return ERR_EOF;
                         }
-                        TOS = var[VAR--];
+                        TOS = var[VAR];
+                        VAR--;
                         break;
                 case STRLEN:
                         ECUZ(SM_maxStr, TOS, ERR_TOS_STR, err_file);
@@ -870,7 +906,8 @@ mw forth_interpreter(fobj_t * fo)
                 case STRNEQU:
                         strnequ(str + TOS, str + var[VAR--], MAX_STRLEN,
                                 MAX_STRLEN);
-                        TOS = var[--VAR];
+                        VAR--;
+                        TOS = var[VAR];
                         break;
                 case FIND:
                         /*fo contains OP0 */
@@ -887,13 +924,15 @@ mw forth_interpreter(fobj_t * fo)
                         if (dic[OP0] == COMPILE) {
                                 ++OP0;
                         }
-                        var[++VAR] = TOS;
+                        VAR++;
+                        var[VAR] = TOS;
                         TOS = OP0;
                         break;
                 case EXECUTE:
                         ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
                         NEXT = TOS;
-                        TOS = var[VAR--];
+                        TOS = var[VAR];
+                        VAR--;
                         goto TAIL_RECURSE;
                 case KERNEL:
                         if ((OP0 = forth_system_calls(fo, TOS)) != ERR_OK) {
