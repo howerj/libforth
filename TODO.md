@@ -16,6 +16,8 @@ manual.
 
 Rename "\!var".
 
+* Test strnequ, rename, remove calls and functions.
+
 strnequ should have an absolute address which it can not pass instead of a
 maximum length as should a few other words.
 

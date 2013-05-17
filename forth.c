@@ -893,7 +893,10 @@ mw forth_interpreter(fobj_t * fo)
                                 ERR_LN_PRN(err_file);
                                 return ERR_BASE;
                         }
-                        print_string(my_itoa(TOS, var[VAR--]), MAX_ERR_STR,
+                        OP0=TOS;
+                        OP1=var[VAR];
+                        VAR--;
+                        print_string(my_itoa(OP0, OP1), MAX_ERR_STR,
                                      out_file);
                         TOS = var[VAR];
                         VAR--;
@@ -919,17 +922,19 @@ mw forth_interpreter(fobj_t * fo)
                         TOS = isnumber(TOS + str);
                         break;
                 case STRNEQU:
-                        strnequ(str + TOS, str + var[VAR--], MAX_STRLEN,
+                        ECB(1, SM_maxVar, VAR, ERR_VAR, err_file);
+                        ECUZ(SM_maxStr, TOS, ERR_TOS_STR, err_file);
+                        ECUZ(SM_maxStr, var[VAR], ERR_TOS_STR, err_file);
+                        TOS=strnequ(str+TOS,str+var[VAR], MAX_STRLEN,
                                 MAX_STRLEN);
                         VAR--;
-                        TOS = var[VAR];
                         break;
                 case FIND:
                         /*fo contains OP0 */
                         if ((OP1 = find_word(fo)) != ERR_OK)
                                 return OP1;
                         /*Check if word found */
-                        if (!(OP0 - 1)) {
+                        if ((OP0 - 1)==0) {
                                 ERR_LN_PRN(err_file);
                                 return ERR_WORD;
                         }
@@ -962,8 +967,6 @@ mw forth_interpreter(fobj_t * fo)
                         return ERR_INSTRUCTION;
                 }
         }
-
-        return ERR_ABNORMAL_END;
 }
 
 /*Error and IO handler for the Forth interpreter*/
@@ -1157,7 +1160,7 @@ mw forth_monitor(fobj_t * fo)
                 goto RESTART;
         case ERR_WORD:
                 print_string(fo->str, MAX_ERR_STR, fo->err_file);
-                wrap_put(fo->err_file, '\n');
+                (void)wrap_put(fo->err_file, '\n');
                 print_string("Err: Word not found?\n", MAX_ERR_STR,
                              fo->err_file);
                 on_err(fo);
