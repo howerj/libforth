@@ -471,7 +471,7 @@ mw forth_system_calls(fobj_t * fo, mw enum_syscall)
                         }
                         if (out_file->iou.f != NULL)
                                 if (out_file->fio != io_stdout) {
-                                        fclose(out_file->iou.f);
+                                        (void)fclose(out_file->iou.f);
                                         out_file->iou.f = NULL;
                                 }
                         out_file->fio = io_stdout;
@@ -484,7 +484,7 @@ mw forth_system_calls(fobj_t * fo, mw enum_syscall)
                         return ERR_SYSCALL_OPTIONS;
                 }
         case SYS_FLUSH:
-                fflush(NULL);   /* Flush all streams for ease of use. */
+                (void)fflush(NULL);   /* Flush all streams for ease of use. */
                 return ERR_OK;
         case SYS_REMOVE:
                 if (remove(str + TOS) != 0) {
@@ -820,7 +820,10 @@ mw forth_interpreter(fobj_t * fo)
                         break;
                 case EMIT:
                         /*need to check if putchar is winning or not */
-                        wrap_put(out_file, (char)TOS);
+                        if(wrap_put(out_file, (char)TOS)==EOF){
+                          ERR_LN_PRN(err_file);
+                          return ERR_EOF;
+                        }
                         ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
                         TOS = var[VAR];
                         VAR--;
@@ -1131,7 +1134,7 @@ mw forth_monitor(fobj_t * fo)
                 if (IN_STRM > 0 && IN_STRM < MAX_INSTRM) {
                         if (fo->in_file[IN_STRM]->fio == io_rd_file) {
                                 if (fo->in_file[IN_STRM]->iou.f != NULL) {
-                                        fclose(fo->in_file[IN_STRM]->iou.f);
+                                        (void)fclose(fo->in_file[IN_STRM]->iou.f);
                                         fo->in_file[IN_STRM]->iou.f = NULL;
                                 }
                         }
