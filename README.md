@@ -31,17 +31,29 @@ be customizable to your needs, modular and fairly fast. Eventually it is
 intended that this will be ported to an embedded system (Most likely ARM based),
 for now it will stay on the desktop computer.
 
+REQUIREMENTS
+============
+
+* GCC
+
+* GNU Make
+
+OPTIONAL REQUIREMENTS
+---------------------
+
+* markdown
+
+* gcov
+
+* valgrind
+
+* GNU indent
+
 NOTES
 =====
 
-To run first compile the program by running **./compile.sh**, then type
-**./forth** which will run the interpreter. The manual for the program
-is in **MANUAL.md**.  The other scripts **./gcov.sh** and **./git.sh**
-are for my benefit, although feel free to reuse them trivial as they
-may be. **./pretty.sh** can be run after either **./compile.sh** or
-**./gcov.sh** has been run or the code has been edited. It indents the
-**\*.c** and **\*.h** files in a standard way and removes any temporary
-files that might be hanging around.
+To compile type **make** and then to run type **./forth**. The makefile has more
+options in it which can be displayed with the command **make help**.
 
 Please contact me with any errors you encounter.
 
