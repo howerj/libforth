@@ -136,11 +136,11 @@ fobj_t *forth_obj_create(mw reg_l, mw dic_l, mw var_l, mw ret_l, mw str_l)
         }
 
         /*initializing memory */
-        fo->reg[ENUM_maxReg] = MAX_REG;
-        fo->reg[ENUM_maxDic] = MAX_DIC;
-        fo->reg[ENUM_maxVar] = MAX_VAR;
-        fo->reg[ENUM_maxRet] = MAX_RET;
-        fo->reg[ENUM_maxStr] = MAX_STR;
+        fo->reg[ENUM_maxReg] = reg_l;
+        fo->reg[ENUM_maxDic] = dic_l;
+        fo->reg[ENUM_maxVar] = var_l;
+        fo->reg[ENUM_maxRet] = ret_l;
+        fo->reg[ENUM_maxStr] = str_l;
         fo->reg[ENUM_inputBufLen] = 32;
         fo->reg[ENUM_dictionaryOffset] = 4;
         fo->reg[ENUM_sizeOfMW] = sizeof(mw);
