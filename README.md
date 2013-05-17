@@ -21,8 +21,6 @@ Email(s):
 
 * howe.r.j.89@googlemail.com
 
-* howerj@aston.ac.uk
-
 INTRO
 =====
 
@@ -36,16 +34,32 @@ REQUIREMENTS
 
 * GCC
 
+Used to compile the C program.
+
 * GNU Make
+
+Used for the build system.
 
 OPTIONAL REQUIREMENTS
 ---------------------
 
 * markdown
 
+Typing **make html** will create html files of all \*.md in the directory. 
+
 * gcov
 
+**make gcov** will compile the forth interpreter and run it with the initial
+configuration file. "gcov" is then run showing what lines are executed most
+frequently.
+
 * valgrind
+
+**make valgrind**
+
+This compiles the program and runs it in valgrind, outputting everything to a
+file called *valgrind.log*. The program halts after the initial configuration
+file is given as with **make gcov**.
 
 * GNU indent
 
@@ -54,6 +68,10 @@ NOTES
 
 To compile type **make** and then to run type **./forth**. The makefile has more
 options in it which can be displayed with the command **make help**.
+
+The documentation is provided in three files: *MANUAL.md*, *README.md* (this
+file) and *TODO.md*. You probably want to start off with the file *MANUAL.md*
+which naturally contains the manual.
 
 Please contact me with any errors you encounter.
 

@@ -99,10 +99,10 @@ valgrind: forth
 	@echo "  This command needs changing in the makefile"
 	-valgrind ./forth &> valgrind.log << EOF
 
-gcov: clean coverage_set forth
+gcov: CCOPTS:=$(CCOPTS) --coverage
+gcov: clean forth
 	@echo "Providing gcov statistics for forth program."
 	@./forth << EOF
 	@gcov forth.c main.c
 
-coverage_set:
-CCOPTS:=$(CCOPTS) --coverage
+

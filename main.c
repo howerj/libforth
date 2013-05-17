@@ -178,7 +178,7 @@ int main(void)
         fo = forth_obj_create(MAX_REG, MAX_DIC, MAX_VAR, MAX_RET, MAX_STR);
         CALLOC_FAIL(fo, -1);    /*memory might not be free()'d on error. */
         fprintf(stderr, "\tRUNNING.\n");
-        fprintf(stderr, "\t[RETURNED:%X]\n", forth_monitor(fo));
+        fprintf(stderr, "\t[RETURNED:%X]\n", (unsigned int)forth_monitor(fo));
 #ifdef DEBUG_PRN
         fprintf(stderr, "\tDEBUG PRINT RUNNING\n");
         debug_print(fo);

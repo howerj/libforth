@@ -14,8 +14,8 @@
 #include <stdio.h>
 #include "forth.h"
 
-#define ISSPACE(X)    ((X=='\n')||(X=='\r')||(X=='\t')||(X=='\v')||(X==' ')||\
-            (X=='\f'))
+#define ISSPACE(X)    ((((char)X)=='\n')||(((char)X)=='\r')||(((char)X)=='\t')||\
+    (((char)X)=='\v')||(((char)X)==' ')|| (((char)X)=='\f'))
 
 #define ISDIGIT(X)    ((X=='0')||(X=='1')||(X=='2')||(X=='3')||(X=='4')||(X=='5')||\
             (X=='6')||(X=='7')||(X=='8')||(X=='9'))
@@ -40,7 +40,7 @@ int wrap_get(fio_t * in_file)
                                 return EOF;
                         tmp = in_file->iou.s[++in_file->str_index];
                         if (tmp != '\0')
-                                return tmp;
+                                return (int)tmp;
                         else
                                 return EOF;
                 } else
@@ -68,8 +68,10 @@ int wrap_put(fio_t * out_file, char c)
                         if (out_file->str_index > out_file->str_max_len)
                                 return EOF;
                         out_file->iou.s[++(out_file->str_index)] = c;
-                } else
+                } else{
                         return EOF;
+                }
+                return ERR_OK;
         default:
                 return EOF;
         }
@@ -85,7 +87,7 @@ mw get_word(char *str, const mw str_len, fio_t * io_file)
 
         /*memset */
         for (i = 0; i < str_len; i++)
-                str[i] = 0;
+                str[i] = '\0';
 
         /*discard spaces */
         for (c = wrap_get(io_file); ISSPACE(c); c = wrap_get(io_file))
@@ -94,7 +96,7 @@ mw get_word(char *str, const mw str_len, fio_t * io_file)
 
         /*copy word */
         for (i = 0; (i < str_len) && (!ISSPACE(c)); i++, c = wrap_get(io_file)) {
-                str[i] = c;
+                str[i] = (char)c;
                 if (c == EOF)
                         return ERR_FAILURE;
         }
@@ -119,7 +121,7 @@ mw isnumber(const char s[])
                         return false;
                 }
         }
-        return true;
+        return (mw)true;
 }
 
 /* 1 if not equal, 0 if equal, 2 means string limit exceeded*/
@@ -158,7 +160,7 @@ mw kr_atoi(const char s[])
         if ((s[i] == '+') || (s[i] == '-'))
                 i++;
         for (n = 0; ISDIGIT(s[i]); i++) {
-                n = 10 * n + (s[i] - '0');
+                n = 10 * n + (mw)(s[i] - '0');
         }
         return sign * n;
 }
@@ -169,22 +171,22 @@ mw kr_atoi(const char s[])
 char *my_itoa(mw value, int base)
 {
         mw v = value;
-        static char buf[MAX_ERR_STR] = { 0 };
+        static char buf[MAX_ERR_STR] = { '\0' };
         mw i = MAX_ERR_STR - 2;
         if (value == 0) {
                 buf[i] = '0';
-                return &buf[i];
+                return buf+i;
         }
         if ((signed)value < 0)
                 v *= -1;
         if ((base > 1) && (base <= 16))
-                for (; v && i; --i, v /= base)
+                for (; (v!=0) && (i!=0); --i, v /= base)
                         buf[i] = "0123456789abcdef"[v % base];
         if ((signed)value < 0) {
                 buf[i] = '-';
-                return &buf[i];
+                return buf+i;
         }
-        return &buf[i + 1];
+        return buf+i+1;
 }
 
 /*Error handling needed!*/
@@ -192,16 +194,16 @@ void print_string(const char *s, const mw max, fio_t * out_file)
 {
         mw i;
         for (i = 0; (i < max) && (s[i] != '\0'); i++) {
-                wrap_put(out_file, s[i]);
+                (void)wrap_put(out_file, s[i]);
         }
 }
 
 void print_line_file(int line, const char *file, fio_t * err_file)
 {
         print_string(my_itoa(line, 10), MAX_ERR_STR, err_file);
-        wrap_put(err_file, '\t');
+        (void)wrap_put(err_file, '\t');
         print_string(file, MAX_ERR_STR, err_file);
-        wrap_put(err_file, '\n');
+        (void)wrap_put(err_file, '\n');
 }
 
 #ifndef UNCHECK
@@ -246,7 +248,7 @@ mw find_word(fobj_t * fo)
         ECUZ(SM_maxStr, dic[OP0 + 1], ERR_DIC, err_file);
 
         while ((OP1 =
-                strnequ(str, &str[dic[OP0 + 1]], SM_inputBufLen, SM_maxStr))) {
+                strnequ(str, &str[dic[OP0 + 1]], SM_inputBufLen, SM_maxStr))!=0) {
                 if (OP1 == 2) { /*2 signifies string limited exceeded. */
                         ERR_LN_PRN(err_file);
                         return ERR_IO;
@@ -271,10 +273,13 @@ mw compile_word(enum forth_primitives fp, fobj_t * fo)
         fio_t *in_file = fo->in_file[IN_STRM], *err_file = fo->err_file;
 
         ECUZ(SM_maxDic - 3, DIC, ERR_DIC, err_file);
-        dic[DIC++] = PWD;
+        dic[DIC] = PWD;
+        DIC++;
         PWD = DIC - 1;
-        dic[DIC++] = STR;
-        dic[DIC++] = fp;
+        dic[DIC] = STR;
+        DIC++;
+        dic[DIC] = fp;
+        DIC++;
         if (get_word(str + STR, SM_inputBufLen, in_file) != ERR_OK)
                 return ERR_FAILURE;
         STR += my_strlen(str + STR, MAX_STRLEN) + 1;
@@ -322,12 +327,16 @@ mw forth_initialize(fobj_t * fo)
         }
         OP0 = DIC;
         ECUZ(SM_maxDic - 2, DIC, ERR_DIC, err_file);
-        dic[DIC++] = READ;
-        dic[DIC++] = RUN;
+        dic[DIC] = READ;
+        DIC++;
+        dic[DIC] = RUN;
+        DIC++;
         PC = DIC;
         ECUZ(SM_maxDic - 2, DIC, ERR_DIC, err_file);
-        dic[DIC++] = OP0;
-        dic[DIC++] = PC - 1;
+        dic[DIC] = OP0;
+        DIC++;
+        dic[DIC] = PC - 1;
+        DIC++;
         /*...end special word definition */
 
         /*more immediate words */
@@ -341,12 +350,15 @@ mw forth_initialize(fobj_t * fo)
                 if (compile_word(COMPILE, fo) != ERR_OK) {
                         return ERR_FAILURE;
                 }
-                dic[DIC++] = OP0++;
+                dic[DIC] = OP0;
+                DIC++;
+                OP0++;
         }
         ECUZ(SM_maxRet, RET, ERR_RET, err_file);
-        ret[++RET] = DIC;
-        CPF = true;
-        INI = false;
+        RET++;
+        ret[RET] = DIC;
+        CPF = (mw)true;
+        INI = (mw)false;
 
         return ERR_OK;
 }
@@ -358,8 +370,8 @@ mw forth_initialize(fobj_t * fo)
  */
 void on_err(fobj_t * fo)
 {
-        fflush(NULL);
-        fo->CPF = false;
+        (void)fflush(NULL);
+        fo->CPF = (mw)false;
         fo->VAR = 0;
         fo->TOS = 0;
         fo->RET = 1;
@@ -378,7 +390,8 @@ mw forth_system_calls(fobj_t * fo, mw enum_syscall)
         fio_t *out_file = fo->out_file, *err_file = fo->err_file;
 
         ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
-        TOS = var[VAR--];       /* Get rid of top of stack, it's just been used. */
+        TOS = var[VAR];       /* Get rid of top of stack, it's just been used. */
+        VAR--;
 
         switch (enum_syscall) {
         case SYS_RESET:
@@ -392,7 +405,8 @@ mw forth_system_calls(fobj_t * fo, mw enum_syscall)
                                 return ERR_SYSCALL;
                         }
                         ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
-                        TOS = var[VAR--];
+                        TOS = var[VAR];
+                        VAR--;
 
                         IN_STRM++;
                         if ((fo->in_file[IN_STRM]->iou.f =
@@ -416,7 +430,8 @@ mw forth_system_calls(fobj_t * fo, mw enum_syscall)
                                 fclose(out_file->iou.f);
                         }
                         ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
-                        TOS = var[VAR--];
+                        TOS = var[VAR];
+                        VAR--;
                         if ((out_file->iou.f = fopen(str + TOS, "w")) == NULL) {
                                 ERR_LN_PRN(err_file);
                                 out_file->fio = io_stdout;
@@ -484,7 +499,8 @@ mw forth_system_calls(fobj_t * fo, mw enum_syscall)
                         print_string("Could not rename file.\n", MAX_ERR_STR,
                                      fo->err_file);
                 }
-                TOS = var[--VAR];
+                VAR--;
+                TOS = var[VAR];
                 VAR--;
                 return ERR_OK;
         case SYS_REWIND:
@@ -601,7 +617,7 @@ mw forth_interpreter(fobj_t * fo)
                                 }
                                 goto TAIL_RECURSE;
                         }
-                        if (isnumber(str)) {
+                        if (isnumber(str)!=0) {
                                 if (CPF) {
                                         ECUZ(SM_maxDic - 1, DIC, ERR_DIC,
                                              err_file);
