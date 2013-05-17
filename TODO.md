@@ -19,6 +19,13 @@ Rename "\!var".
 strnequ should have an absolute address which it can not pass instead of a
 maximum length as should a few other words.
 
+* SIGFPE on ( minimal value of int / -1 ). Needs checking.
+  try:
+  1 31 lshift -1 /
+
+* Special text encoding for strings and help messages.
+  Space, e, t, a, o, i, n, ... (Encoding based on word frequency, Huffman).
+
 * String manipulation words.
 
 * Stress testing, stress testing with Valgrind (currently gives no errors).

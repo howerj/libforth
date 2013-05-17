@@ -2,7 +2,7 @@
 and or invert xor 1+ 1- = < > @reg @ pick @str 
 !reg ! !var !str key emit dup drop swap over >r r> 
 tail ' , printnum get_word strlen isnumber strnequ find 
-execute kernel
+execute kernel error
 
 \ Howe Forth: Start up code.
 \ @author         Richard James Howe.
@@ -325,18 +325,25 @@ str @reg dup iobl @reg + str !reg constant filename
   find 2- dup 40 + show
 ;
 
-
-
 \ ANSI terminal color codes
- 'esc' emit .( [2J) cr       \ Clear screen
- 'esc' emit .( [0;0H ) cr    \ Set cursor to 0,0
- 'esc' emit .( [32;1m) cr    \ Green fg
- .( Howe Forth ) cr .( Base System Loaded ) cr
- .( @author         Richard James Howe. ) cr
- .( @copyright      Copyright 2013 Richard James Howe. ) cr
- .( @license        LGPL ) cr
- .( @email          howe.r.j.89@gmail.com ) cr
- .( Memory Used: ) cr 
- .(   Dictionary: ) here 4 * str @reg + .
- .(   Strings:    ) str @reg . cr
- 'esc' emit .( [31m) .( OK ) cr 'esc' emit .( [0m) cr
+: esc 'esc' emit ;
+: rst esc ." [2J" cr ;    \ Clear screen
+: clr esc ." [0;0H" cr ;  \ Set cursor to 0,0
+: red esc ." [31;1m" ;    \ Change text color to red.
+: grn esc ." [32;1m" ;    \ ...to green.
+: blu esc ." [34;1m" ;    \ ...to blue.
+: nrm esc ." [0m" cr ;    \ ...to the default.
+
+: vocabulary create pwd @reg , does> @ pwd !reg ;
+vocabulary forth
+\ Welcome message.
+rst clr grn
+.( Howe Forth ) cr .( Base System Loaded ) cr
+.( @author         ) blu .( Richard James Howe. ) grn cr
+.( @copyright      ) blu .( Copyright 2013 Richard James Howe. ) grn cr
+.( @license        ) blu .( LGPL ) grn cr
+.( @email          ) blu .( howe.r.j.89@gmail.com ) grn cr
+.( Memory Used: ) cr 
+.(   Dictionary:   ) blu here 4 * str @reg + . grn
+.(   Strings:      ) blu str @reg . grn
+red .( OK ) nrm
