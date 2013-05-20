@@ -1,4 +1,3 @@
-
 TO DO:
 ======
 
@@ -15,6 +14,9 @@ manual.
 * Clean up code.
 
 Rename "\!var".
+
+* On an error (on_err) all the input streams that have not been closed properly
+should be. They currently are not, be careful not to close file pointers twice.
 
 * Test strnequ, rename, remove calls and functions.
 

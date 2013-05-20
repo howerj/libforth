@@ -1,4 +1,3 @@
-
 A Portable FORTH implementation: Howe Forth
 ===========================================
 
@@ -19,8 +18,6 @@ License:
 Email(s):              
 
 * howe.r.j.89@googlemail.com
-
-* howerj@aston.ac.uk
 
 INTRO
 =====
@@ -126,11 +123,11 @@ memory, I will give a short example of what to do with reference to the code:
         }
 
         /*initializing memory */
-        fo->reg[ENUM_maxReg] = MAX_REG;
-        fo->reg[ENUM_maxDic] = MAX_DIC;
-        fo->reg[ENUM_maxVar] = MAX_VAR;
-        fo->reg[ENUM_maxRet] = MAX_RET;
-        fo->reg[ENUM_maxStr] = MAX_STR;
+        fo->reg[ENUM_maxReg] = reg_l;
+        fo->reg[ENUM_maxDic] = dic_l;
+        fo->reg[ENUM_maxVar] = var_l;
+        fo->reg[ENUM_maxRet] = ret_l;
+        fo->reg[ENUM_maxStr] = str_l;
         fo->reg[ENUM_inputBufLen] = 32;
         fo->reg[ENUM_dictionaryOffset] = 4;
         fo->reg[ENUM_sizeOfMW] = sizeof(mw);
@@ -387,7 +384,7 @@ less than the second and push the result.
 Use the top of the variable stack as an index into the register array, push
 the data in that address to the variable stack.
 
-* "@dic":
+* "@":
 
 Use the top of the variable stack as an index into the dictionary array, push
 the data in that address to the variable stack.
@@ -407,7 +404,7 @@ the data in that address to the variable stack.
 Pop two number off the stack, the first off is an index into the register array,
 the second off is the data to write there.
 
-* "\!dic":
+* "\!":
 
 Pop two number off the stack, the first off is an index into the dictionary array,
 the second off is the data to write there.
@@ -512,7 +509,6 @@ The code:
 
 Will cause the word 'word' to be executed.
 
-
 * "kernel":
 
 This executes system calls, for example file opening and reading. It pops off a
@@ -544,8 +540,73 @@ language in itself, which is what the first file does that is read in.
 SYSTEM CALLS
 ------------
 
+There are a few system calls which are there to handle files; input, output,
+renaming, removing, closing. Nothing too fancy. If you have an extra system
+calls you want to add, adding them to here and wrappers around the I/O is where
+to do it. Any system dependent code would go here, for example if I wanted to
+set up a timer on an embedded system the call would go here.
+
+The current system calls that have been defined are:
+
+* "SYS_RESET":
+
+This resets the virtual machine as if an error had occurred (resetting the stack
+pointers, setting I/O to defaults, executing the read-eval-loop function).
+
+* "SYS_FOPEN":
+
+This takes two arguments off the variable stack, the first is to decide what this is to
+act on, the input or the output, and the second off as a pointer into string storage
+where the file name is to be held.
+
+The options are; SYS_OPT_IN, SYS_OPT_OUT for input and output respectively. If a
+new input file is opened that is added to the input stream stack and reading
+from that stream begins immediately, when an EOF occurs that file stream is
+automatically closed and removed from the stack, the input stream then continues
+from where it left off. There is no output stack, if a new file is opened the
+old one is flushed and closed and the output redirected to that new file.
+
+The error stream cannot be redirected from within the forth interpreter, only
+input and output.
+
+* "SYS_FCLOSE":
+
+This takes one argument from the variable stack, an option to decide whether
+this operation occurs on the input (SYS_OPT_IN) or the output (SYS_OPT_OUT)
+liked "SYS_FOPEN". 
+
+If SYS_OPT_IN is selected and the current input is a file then it is closed and
+the next on the file input stack is selected as input. If it is output the
+output is closed and all output is then redirected to standard out (stdout).
+
+* "SYS_FLUSH":
+
+Flush all file streams "fflush(NULL)".
+
+* "SYS_REMOVE":
+
+Pop one number off the variable stack, treat that as an index into string
+storage where a file name is kept, try to remove that file.
+
+* "SYS_RENAME":
+
+Pop two numbers off the variable stack, treat both as indices into string
+storage where file names are kept, try to rename a file pointed to by the first
+into a new name pointed to by the second off.
+
+* "SYS_REWIND":
+
+Pop a number off the variable stack, which either represents SYS_OPT_IN or
+SYS_OPT_OUT and try to rewind that input or output.
+
 ERROR DETECTION AND HANDLING
 ----------------------------
+
+Unlike traditional Forth implementations errors are handled by the interpreter
+although it is possible to disable some of the error checking with a compile
+type option, although this is not recommended. All possible errors that can be
+detected by this program should be, if it does not detect a possible error then
+this is a bug. 
 
 FORTH PROGRAM
 =============

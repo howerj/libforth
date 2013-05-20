@@ -1,4 +1,3 @@
-
 A Portable FORTH implementation: Howe Forth
 ===========================================
 
@@ -40,6 +39,9 @@ Used to compile the C program.
 
 Used for the build system.
 
+There are some optional dependencies that are more to do with debugging the
+system then anything else and are probably not relevant. 
+
 OPTIONAL REQUIREMENTS
 ---------------------
 
@@ -71,7 +73,8 @@ options in it which can be displayed with the command **make help**.
 
 The documentation is provided in three files: *MANUAL.md*, *README.md* (this
 file) and *TODO.md*. You probably want to start off with the file *MANUAL.md*
-which naturally contains the manual.
+which naturally contains the manual. *FORTH.md* contains a tutorial on my
+dialect of Forth in more details than *MANUAL.md*.
 
 Please contact me with any errors you encounter.
 

@@ -25,7 +25,8 @@ static int wrap_get(fio_t * in_file);
 static int wrap_put(fio_t * out_file, char c);
 static mw get_word(char *str, const mw str_len, fio_t * io_file);
 static mw isnumber(const char s[]);
-static mw strnequ(const char str1[], const char str2[], const mw lim1, const mw lim2);
+static mw strnequ(const char str1[], const char str2[], const mw lim1,
+                  const mw lim2);
 static mw my_strlen(const char s[], int maxlen);
 static mw kr_atoi(const char s[]);
 static char *my_itoa(mw value, int base);
@@ -36,8 +37,6 @@ static mw compile_word(enum forth_primitives fp, fobj_t * fo);
 static mw forth_initialize(fobj_t * fo);
 static void on_err(fobj_t * fo);
 static mw forth_system_calls(fobj_t * fo, mw enum_syscall);
-
-
 
 /* IO wrappers*/
 
@@ -144,7 +143,8 @@ static mw isnumber(const char s[])
 }
 
 /* 1 if not equal, 0 if equal, 2 means string limit exceeded*/
-static mw strnequ(const char str1[], const char str2[], const mw lim1, const mw lim2)
+static mw strnequ(const char str1[], const char str2[], const mw lim1,
+                  const mw lim2)
 {
 
         char *s1 = (char *)str1, *s2 = (char *)str2;
@@ -535,9 +535,10 @@ static mw forth_system_calls(fobj_t * fo, mw enum_syscall)
                                 if (fo->in_file[IN_STRM]->fio == io_rd_file) {
                                         rewind(fo->in_file[IN_STRM]->iou.f);
                                 }
-                        } else if (fo->in_file[IN_STRM]->iou.s != NULL
-                                   && fo->in_file[IN_STRM]->fio == io_rd_str) {
-                                fo->in_file[IN_STRM]->str_index = 0;
+                        } else if (fo->in_file[IN_STRM]->iou.s != NULL) {
+                                if (fo->in_file[IN_STRM]->fio == io_rd_str) {
+                                        fo->in_file[IN_STRM]->str_index = 0;
+                                }
                         }
                         return ERR_OK;
                 case SYS_OPT_OUT:
@@ -545,9 +546,10 @@ static mw forth_system_calls(fobj_t * fo, mw enum_syscall)
                                 if (out_file->fio == io_wr_file) {
                                         rewind(out_file->iou.f);
                                 }
-                        } else if (out_file->iou.s != NULL
-                                   && out_file->fio == io_wr_str) {
-                                out_file->str_index = 0;
+                        } else if (out_file->iou.s != NULL) {
+                                if (out_file->fio == io_wr_str) {
+                                        out_file->str_index = 0;
+                                }
                         }
                         return ERR_OK;
                 case SYS_OPT_ERR:
@@ -715,7 +717,7 @@ mw forth_interpreter(fobj_t * fo)
                         VAR--;
                         break;
                 case MOD:
-                        if (TOS == 0) {
+                        if (TOS != 0) {
                                 ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
                                 TOS = var[VAR] % TOS;
                                 VAR--;
@@ -724,7 +726,7 @@ mw forth_interpreter(fobj_t * fo)
                         ERR_LN_PRN(err_file);
                         return ERR_MOD0;
                 case DIV:
-                        if (TOS == 0) {
+                        if (TOS != 0) {
                                 ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
                                 TOS = var[VAR] / TOS;
                                 VAR--;
@@ -1157,8 +1159,8 @@ mw forth_monitor(fobj_t * fo)
                 if (IN_STRM > 0 && IN_STRM < MAX_INSTRM) {
                         if (fo->in_file[IN_STRM]->fio == io_rd_file) {
                                 if (fo->in_file[IN_STRM]->iou.f != NULL) {
-                                        (void)fclose(fo->in_file[IN_STRM]->iou.
-                                                     f);
+                                        (void)fclose(fo->in_file[IN_STRM]->
+                                                     iou.f);
                                         fo->in_file[IN_STRM]->iou.f = NULL;
                                 }
                         }
