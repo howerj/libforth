@@ -1159,8 +1159,8 @@ mw forth_monitor(fobj_t * fo)
                 if (IN_STRM > 0 && IN_STRM < MAX_INSTRM) {
                         if (fo->in_file[IN_STRM]->fio == io_rd_file) {
                                 if (fo->in_file[IN_STRM]->iou.f != NULL) {
-                                        (void)fclose(fo->in_file[IN_STRM]->
-                                                     iou.f);
+                                        (void)fclose(fo->in_file[IN_STRM]->iou.
+                                                     f);
                                         fo->in_file[IN_STRM]->iou.f = NULL;
                                 }
                         }
