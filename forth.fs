@@ -33,15 +33,15 @@ exit
 : here h @reg ;
 
 \ Error handling!
-: on_err read on_err ;
-find on_err exf !reg
+: on_err read on_err ;  \ This word is executed when an error occurs.
+find on_err exf !reg    \ Write the executable token for on_err into the dictionary.
 
 \ change to command mode
 : [ immediate false state ;
 \ change to compile mode
 : ] true state ;
 
-\ invisible forth words, they have no name!
+\ These words represent words with no name in the dictionary, the 'invisible' words.
 : _push 0 ;
 : _compile 1 ;
 : _run 2 ;
@@ -85,15 +85,12 @@ find on_err exf !reg
 \ : negate -1 * ;
 \ : abs dup 0 < if negate then ;
 \ : -rot rot rot ;
-\ : incrementer create , does> dup dup @ 1+ swap ! @ ;
 
 : 2drop drop drop ;
 : 2dup over over ;
 
 : 2+ 1+ 1+ ;
 : 2- 1- 1- ;
-
-: swap- swap - ;
 
 : if immediate 
 	' ?br , 
@@ -104,23 +101,22 @@ find on_err exf !reg
 	' br ,
 	here
 	0 ,
-	swap dup here swap-
+	swap dup here swap -
 	swap !
 ;
+
 : then immediate 
 	dup here 
-	swap- swap 
+	swap - swap 
 	! 
 ;
-
-: here- here - ;
 
 : begin immediate
 	here
 ;
 : until immediate
 	' ?br ,
-	here- ,
+	here - ,
 ;
 
 : allot here + h !reg ;
@@ -203,13 +199,13 @@ find on_err exf !reg
 \ It makes a word which has to write in values into
 \ another word
 : create immediate              \ This is a complicated word! It makes a
-                                    \ word that makes a word.
+                                \ word that makes a word.
   cpf @reg if                   \ Compile time behavour
   ' :: ,                        \ Make the defining word compile a header
   '', _push , ',,               \ Write in push to the creating word
   ' here , ' 3+ , ',,           \ Write in the number we want the created word to push
   '', here 0 , ',,              \ Write in a place holder (0) and push a 
-                                    \ pointer to to be used by does>
+                                \ pointer to to be used by does>
   '', 'exit, ',,                \ Write in an exit in the word we're compiling.
   ' false , ' state ,           \ Make sure to change the state back to command mode
   else                          \ Run time behavour
@@ -222,9 +218,9 @@ find on_err exf !reg
 ;
 
 : does> immediate
-  'exit,                      \ Write in an exit, we don't want the
-                                  \ defining to run it, but the *defined* word to.
-  here swap !                \ Patch in the code fields to point to.
+  'exit,                        \ Write in an exit, we don't want the
+                                \ defining to run it, but the *defined* word to.
+  here swap !                   \ Patch in the code fields to point to.
   _run ,                        \ Write a run in.
 ;
 
@@ -235,7 +231,7 @@ find on_err exf !reg
 : ps 2dup - prnn ." :" tab ;
 : _show 2dup - @ prnn tab 1- ;
 : show \ ( from to -- ) \ Show dictionary storage
-    tuck swap-
+    tuck swap -
     begin
         ps
         _show _show _show _show dup 0 <
@@ -249,7 +245,7 @@ find on_err exf !reg
 ;
 : shstr \ ( from to -- ) \ Show string storage contents
     tuck
-    swap-
+    swap -
     begin
         _shstr 
         _shstr 
@@ -278,7 +274,6 @@ find on_err exf !reg
     cr
     drop
 ;
-
 \ Store filenames (temporary) here.
 str @reg dup iobl @reg + str !reg constant filename
 

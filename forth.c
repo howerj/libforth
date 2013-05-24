@@ -189,9 +189,13 @@ static mw kr_atoi(const char s[])
 #define MAX_BASE 16
 static char *my_itoa(mw value, int base)
 {
-        mw v = value;
-        static char buf[MAX_ERR_STR] = { '\0' };
-        mw i = MAX_ERR_STR - 2;
+        mw v = value, i = 0;
+        static char buf[MAX_ERR_STR]; 
+
+        for(i=0;i<MAX_ERR_STR;i++)
+          buf[i] = '\0';
+
+        i = MAX_ERR_STR - 2;
 
         if (value == 0) {
                 buf[i] = '0';
@@ -199,7 +203,7 @@ static char *my_itoa(mw value, int base)
         }
         if ((signed)value < 0)
                 v *= -1;
-        if ((base > 1) && (base <= 16))
+        if ((base > 1) && (base <= MAX_BASE))
                 for (; (v != 0) && (i != 0); --i, v /= base)
                         buf[i] = "0123456789abcdef"[v % base];
         if ((signed)value < 0) {
