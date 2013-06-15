@@ -1,16 +1,8 @@
-: immediate read \ exit br ?br + - * % / lshift rshift 
-and or invert xor 1+ 1- = < > @reg @ pick @str 
-!reg ! !var !str key emit dup drop swap over >r r> 
-tail ' , printnum get_word strlen isnumber strnequ find 
-execute kernel error
-
 \ Howe Forth: Start up code.
 \ @author         Richard James Howe.
 \ @copyright      Copyright 2013 Richard James Howe.
 \ @license        LGPL      
 \ @email          howe.r.j.89@gmail.com
-\ This notice cannot go at the top of the file, comments
-\  will not work until the comment symbol is read in.
 
 : true 1 exit
 : false 0 exit
