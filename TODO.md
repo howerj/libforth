@@ -6,6 +6,11 @@ TO DO:
 
 These are some notes for myself:
 
+* Turn #define TRUE into enums, replace function returns with bool type
+where I can.
+
+* Simplify I/O redirection...
+
 * Documentation. This should be exhaustive, every enum should be documented
 as the this program might be used as a library where only the header is
 available. Also expand the file "MANUAL.md", which should contain the main

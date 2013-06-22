@@ -357,13 +357,16 @@ static mw compile_word(enum forth_primitives fp, fobj_t * fo, enum bool flag,
 /*should add error checking.*/
 static mw compile_word_prim(fobj_t * fo, char *prim)
 {
-        mw *reg = fo->reg, *dic = fo->dic;
-        compile_word(COMPILE, fo, true, prim);
+        mw *reg = fo->reg, *dic = fo->dic, ret;
+        ret = compile_word(COMPILE, fo, true, prim);
         dic[DIC] = OP0;
         DIC++;
         OP0++;
+        /*Here in case I want to return error codes instead. */
+        return ret;
 }
 
+#define COMPILE_PRIM(X)  if(compile_word_prim(fo,(X))!=ERR_OK){ return ERR_FAILURE; }
 static mw forth_initialize(fobj_t * fo)
 {
         /*copy pointers, removes level of indirection */
@@ -422,54 +425,53 @@ static mw forth_initialize(fobj_t * fo)
                 return ERR_FAILURE;
         }
         OP0 = EXIT;
-#warning "Should check return for error."
-        compile_word_prim(fo, "exit");
-        compile_word_prim(fo, "br");
-        compile_word_prim(fo, "?br");
-        compile_word_prim(fo, "+");
-        compile_word_prim(fo, "-");
-        compile_word_prim(fo, "*");
-        compile_word_prim(fo, "%");
-        compile_word_prim(fo, "/");
-        compile_word_prim(fo, "lshift");
-        compile_word_prim(fo, "rshift");
-        compile_word_prim(fo, "and");
-        compile_word_prim(fo, "or");
-        compile_word_prim(fo, "invert");
-        compile_word_prim(fo, "xor");
-        compile_word_prim(fo, "1+");
-        compile_word_prim(fo, "1-");
-        compile_word_prim(fo, "=");
-        compile_word_prim(fo, "<");
-        compile_word_prim(fo, ">");
-        compile_word_prim(fo, "@reg");
-        compile_word_prim(fo, "@");
-        compile_word_prim(fo, "pick");
-        compile_word_prim(fo, "@str");
-        compile_word_prim(fo, "!reg");
-        compile_word_prim(fo, "!");
-        compile_word_prim(fo, "!var");
-        compile_word_prim(fo, "!str");
-        compile_word_prim(fo, "key");
-        compile_word_prim(fo, "emit");
-        compile_word_prim(fo, "dup");
-        compile_word_prim(fo, "drop");
-        compile_word_prim(fo, "swap");
-        compile_word_prim(fo, "over");
-        compile_word_prim(fo, ">r");
-        compile_word_prim(fo, "r>");
-        compile_word_prim(fo, "tail");
-        compile_word_prim(fo, "'");
-        compile_word_prim(fo, ",");
-        compile_word_prim(fo, "printnum");
-        compile_word_prim(fo, "get_word");
-        compile_word_prim(fo, "strlen");
-        compile_word_prim(fo, "isnumber");
-        compile_word_prim(fo, "strnequ");
-        compile_word_prim(fo, "find");
-        compile_word_prim(fo, "execute");
-        compile_word_prim(fo, "kernel");
-        compile_word_prim(fo, "error");
+        COMPILE_PRIM("exit");
+        COMPILE_PRIM("br");
+        COMPILE_PRIM("?br");
+        COMPILE_PRIM("+");
+        COMPILE_PRIM("-");
+        COMPILE_PRIM("*");
+        COMPILE_PRIM("%");
+        COMPILE_PRIM("/");
+        COMPILE_PRIM("lshift");
+        COMPILE_PRIM("rshift");
+        COMPILE_PRIM("and");
+        COMPILE_PRIM("or");
+        COMPILE_PRIM("invert");
+        COMPILE_PRIM("xor");
+        COMPILE_PRIM("1+");
+        COMPILE_PRIM("1-");
+        COMPILE_PRIM("=");
+        COMPILE_PRIM("<");
+        COMPILE_PRIM(">");
+        COMPILE_PRIM("@reg");
+        COMPILE_PRIM("@");
+        COMPILE_PRIM("pick");
+        COMPILE_PRIM("@str");
+        COMPILE_PRIM("!reg");
+        COMPILE_PRIM("!");
+        COMPILE_PRIM("!var");
+        COMPILE_PRIM("!str");
+        COMPILE_PRIM("key");
+        COMPILE_PRIM("emit");
+        COMPILE_PRIM("dup");
+        COMPILE_PRIM("drop");
+        COMPILE_PRIM("swap");
+        COMPILE_PRIM("over");
+        COMPILE_PRIM(">r");
+        COMPILE_PRIM("r>");
+        COMPILE_PRIM("tail");
+        COMPILE_PRIM("'");
+        COMPILE_PRIM(",");
+        COMPILE_PRIM("printnum");
+        COMPILE_PRIM("get_word");
+        COMPILE_PRIM("strlen");
+        COMPILE_PRIM("isnumber");
+        COMPILE_PRIM("strnequ");
+        COMPILE_PRIM("find");
+        COMPILE_PRIM("execute");
+        COMPILE_PRIM("kernel");
+        COMPILE_PRIM("error");
 
         ECUZ(SM_maxRet, RET, ERR_RET, err_file);
         RET++;
@@ -1255,8 +1257,8 @@ mw forth_monitor(fobj_t * fo)
                 if (IN_STRM > 0 && IN_STRM < MAX_INSTRM) {
                         if (fo->in_file[IN_STRM]->fio == io_rd_file) {
                                 if (fo->in_file[IN_STRM]->iou.f != NULL) {
-                                        (void)fclose(fo->in_file[IN_STRM]->iou.
-                                                     f);
+                                        (void)fclose(fo->in_file[IN_STRM]->
+                                                     iou.f);
                                         fo->in_file[IN_STRM]->iou.f = NULL;
                                 }
                         }
