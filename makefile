@@ -104,5 +104,3 @@ gcov: clean forth
 	@echo "Providing gcov statistics for forth program."
 	@./forth << EOF
 	@gcov forth.c main.c
-
-

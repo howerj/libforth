@@ -1,10 +1,12 @@
-TO DO:
-======
+## TO DO:
 
 ![Howe Forth Logo](https://raw.github.com/howerj/c-forth/master/logo.png "By the power of HOWE FORTH!")
 
 
 These are some notes for myself:
+
+* Replace all memory operations with functions to check if it with in bounds
+first, same with all stack operations.
 
 * Turn #define TRUE into enums, replace function returns with bool type
 where I can.
@@ -16,11 +18,9 @@ as the this program might be used as a library where only the header is
 available. Also expand the file "MANUAL.md", which should contain the main
 manual.
 
-* Clean up code.
-
 Rename "\!var".
 
-* On an error (on_err) all the input streams that have not been closed properly
+* On an error (on\_err) all the input streams that have not been closed properly
 should be. They currently are not, be careful not to close file pointers twice.
 
 * Test strnequ, rename, remove calls and functions.
@@ -39,30 +39,16 @@ maximum length as should a few other words.
 
 * String manipulation words.
 
-* Make the system more standards compliant where possible.
-
 I should not go out of my way to do so, just renaming a few things and checking
 how a few words behave.
 
 * Pushes and Pops should be put in there own functions, it would save
 duplicating so much checking code.
 
-* Clean up code with splint, static code analysis tool.
-
 * Eval()
-
-* On INI Forth should check for valid pointers, ie. Not NULL. It current does
-not do this for certain pointers (input/output io)
-
-* Remove options for changing the settings for io_stderr, it should always
-point to stderr. This may pose a problem when porting to embedded devices.
 
 * The dictionary could be implemented with a 16-bit hash instead to save
 space.
-
-* Test on more platforms, with different compilers.
-
-* Profiling.
 
 * Possible ways of decreasing compile time and why: 
 
@@ -84,7 +70,7 @@ Binary search.
 I would like to make a compromise between complexity and performance.
 
 Using the following and a test rotating XOR hash available from 
-http://eternallyconfuzzled.com/tuts/algorithms/jsw_tut_hashing.aspx
+[here](http://eternallyconfuzzled.com/tuts/algorithms/jsw_tut_hashing.aspx)
 
 
 ~~~
@@ -129,4 +115,4 @@ Then:
 
 We can see collisions, which should exclude the command 'words' itself due to
 both its redefinition and a quirk. This hash fails the test, 'immediate' and
-'_immediate' and 'immediate' both hash to the same value.
+'\_immediate' and 'immediate' both hash to the same value.
