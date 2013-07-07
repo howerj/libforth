@@ -321,8 +321,35 @@ str @reg dup iobl @reg + str !reg constant filename
 : blu esc ." [34;1m" ;    \ ...to blue.
 : nrm esc ." [0m" cr ;    \ ...to the default.
 
-: vocabulary create pwd @reg , does> @ pwd !reg ;
-vocabulary forth
+\ : vocabulary create pwd @reg , does> @ pwd !reg ;
+\ vocabulary forth
+
+0 variable i
+0 variable j
+
+: i! i ! ;
+: j! j ! ;
+: i@ i @ ;
+: j@ j @ ;
+
+: do immediate
+  ' j! ,
+  ' i! ,
+  here
+;
+
+: (++i)==j
+  i@ 1+ i! i@ j@ = 
+;
+
+: loop immediate
+  ' (++i)==j ,
+  ' ?br ,
+  here - ,
+;
+
+\ : test 0 5 do ." hello world " cr loop ;
+
 \ Welcome message.
 rst clr grn
 .( Howe Forth ) cr .( Base System Loaded ) cr
