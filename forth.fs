@@ -76,7 +76,7 @@ find on_err exf !reg    \ Write the executable token for on_err into the diction
 \ : ?dup dup if dup then ;
 \ : negate -1 * ;
 \ : abs dup 0 < if negate then ;
-\ : -rot rot rot ;
+: -rot rot rot ;
 
 : 2drop drop drop ;
 : 2dup over over ;
@@ -220,52 +220,6 @@ find on_err exf !reg    \ Write the executable token for on_err into the diction
 : variable create , does> ;
 : array create allot does> + ;
 
-: ps 2dup - prnn ." :" tab ;
-: _show 2dup - @ prnn tab 1- ;
-: show \ ( from to -- ) \ Show dictionary storage
-    tuck swap -
-    begin
-        ps
-        _show _show _show _show dup 0 <
-        cr
-    until
-    2drop
-;
-
-: _shstr
-    2dup - @str emit tab 1- 
-;
-: shstr \ ( from to -- ) \ Show string storage contents
-    tuck
-    swap -
-    begin
-        _shstr 
-        _shstr 
-        _shstr 
-        _shstr dup 0 <
-        cr
-    until
-    2drop
-;
-
-: regs \ ( -- ) \ Print off register contents
-    16 @reg 1- 0 \ register 16 holds the maximum number of registers
-    begin
-        dup prnn ." :" tab dup @reg . 1+
-        2dup =
-    until
-;
-
-: words
-    pwd @reg 
-    begin
-        dup 1+ @ prn
-        space
-        @ dup @ 0 =   
-    until
-    cr
-    drop
-;
 \ Store filenames (temporary) here.
 str @reg dup iobl @reg + str !reg constant filename
 
@@ -307,23 +261,6 @@ str @reg dup iobl @reg + str !reg constant filename
   cr
 ;
 
-\ Shows the header of a word.
-: header
-  find 2- dup 40 + show
-;
-
-\ ANSI terminal color codes
-: esc 'esc' emit ;
-: rst esc ." [2J" cr ;    \ Clear screen
-: clr esc ." [0;0H" cr ;  \ Set cursor to 0,0
-: red esc ." [31;1m" ;    \ Change text color to red.
-: grn esc ." [32;1m" ;    \ ...to green.
-: blu esc ." [34;1m" ;    \ ...to blue.
-: nrm esc ." [0m" cr ;    \ ...to the default.
-
-\ : vocabulary create pwd @reg , does> @ pwd !reg ;
-\ vocabulary forth
-
 0 variable i
 0 variable j
 
@@ -338,17 +275,89 @@ str @reg dup iobl @reg + str !reg constant filename
   here
 ;
 
-: (++i)==j
-  i@ 1+ i! i@ j@ = 
+: not
+  if 0 else 1 then
+;
+
+: >=
+  < not
+;
+
+: (++i)>=j
+  i@ 1+ i! i@ j@ >= 
 ;
 
 : loop immediate
-  ' (++i)==j ,
+  ' (++i)>=j ,
   ' ?br ,
   here - ,
 ;
 
-\ : test 0 5 do ." hello world " cr loop ;
+
+: _show i@ @ prnn tab i@ 1+ i!  ;
+: show \ ( from to -- ) \ Show dictionary storage
+  do
+        i@ prnn ." :" tab
+        _show _show _show _show i@ 1- i!
+        cr
+  loop
+;
+
+: _shstr
+    2dup - @str emit tab 1- 
+;
+: shstr \ ( from to -- ) \ Show string storage contents
+    tuck
+    swap -
+    begin
+        _shstr 
+        _shstr 
+        _shstr 
+        _shstr dup 0 <
+        cr
+    until
+    2drop
+;
+
+: regs \ ( -- ) \ Print off register contents
+    16 @reg 1- 0 \ register 16 holds the maximum number of registers
+    begin
+        dup prnn ." :" tab dup @reg . 1+
+        2dup =
+    until
+;
+
+: words
+    pwd @reg 
+    begin
+        dup 1+ @ prn
+        space
+        @ dup @ 0 =   
+    until
+    cr
+    drop
+;
+
+
+
+\ Shows the header of a word.
+: header
+  find 2- dup 40 + show
+;
+
+\ ANSI terminal color codes
+: esc 'esc' emit ;
+: rst esc ." [2J" cr ;    \ Clear screen
+: clr esc ." [0;0H" cr ;  \ Set cursor to 0,0
+: red esc ." [31;1m" ;    \ Change text color to red.
+: grn esc ." [32;1m" ;    \ ...to green.
+: blu esc ." [34;1m" ;    \ ...to blue.
+: nrm esc ." [0m" cr ;    \ ...to the default.
+
+: cursor esc ." [" prnn ." ;" prnn ." H" fflush kernel ;
+
+\ : vocabulary create pwd @reg , does> @ pwd !reg ;
+\ vocabulary forth
 
 \ Welcome message.
 rst clr grn

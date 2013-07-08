@@ -431,7 +431,7 @@ static mw forth_initialize(fobj_t * fo)
         COMPILE_PRIM("+");
         COMPILE_PRIM("-");
         COMPILE_PRIM("*");
-        COMPILE_PRIM("%");
+        COMPILE_PRIM("mod");
         COMPILE_PRIM("/");
         COMPILE_PRIM("lshift");
         COMPILE_PRIM("rshift");
