@@ -37,6 +37,10 @@ static mw forth_initialize(fobj_t * fo);
 static void on_err(fobj_t * fo);
 static mw forth_system_calls(fobj_t * fo, mw enum_syscall);
 
+/* Stack control function */
+/*static mw pop (mw *array, mw *index, enum stack_control sc);
+ *static mw push(mw *array, mw *index, enum stack_control sc);
+ */
 /* IO wrappers*/
 
 static enum bool my_isspace(char x)
