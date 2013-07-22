@@ -77,7 +77,7 @@ pretty:
 	@/bin/echo -e "$(RED)"
 	@rm -vf forth memory.txt *.log *.swo *.swp *.o *~ *.gcov *.gcda *.gcno *.html *.htm;
 	@/bin/echo -e "$(DEFAULT)"
-	@wc *.c *.h *.fs makefile
+	@wc *.c *.h *.4th makefile
 
 # Clean up directory.
 clean:

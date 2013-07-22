@@ -117,7 +117,7 @@ memory, I will give a short example of what to do with reference to the code:
 
         /*initialize input file, fclose is handled elsewhere */
         fo->in_file[1]->fio = io_rd_file;
-        if ((fo->in_file[1]->iou.f = fopen("forth.fs", "r")) == NULL) {
+        if ((fo->in_file[1]->iou.f = fopen("forth.4th", "r")) == NULL) {
                 fprintf(stderr, "Unable to open initial input file!\n");
                 return NULL;
         }

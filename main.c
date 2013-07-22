@@ -130,7 +130,7 @@ fobj_t *forth_obj_create(mw reg_l, mw dic_l, mw var_l, mw ret_l, mw str_l)
 
         /*initialize input file, fclose is handled elsewhere */
         fo->in_file[1]->fio = io_rd_file;
-        if ((fo->in_file[1]->iou.f = fopen("forth.fs", "r")) == NULL) {
+        if ((fo->in_file[1]->iou.f = fopen("forth.4th", "r")) == NULL) {
                 fprintf(stderr, "Unable to open initial input file!\n");
                 return NULL;
         }
