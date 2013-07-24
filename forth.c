@@ -36,7 +36,7 @@ static mw compile_word_prim(fobj_t * fo, char *prim);
 static mw forth_initialize(fobj_t * fo);
 static void on_err(fobj_t * fo);
 static mw forth_system_calls(fobj_t * fo, mw enum_syscall);
-
+/*
 enum stack_control{
   do_nothing,
   pre_decrement,
@@ -47,6 +47,7 @@ enum stack_control{
 
 static mw pop (mw *tos, mw *array, mw *index, enum stack_control sc);
 static mw push(mw *tos, mw *array, mw *index, enum stack_control sc);
+*/
 /* IO wrappers*/
 
 static enum bool my_isspace(char x)
