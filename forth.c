@@ -45,8 +45,8 @@ enum stack_control{
   post_increment
 };
 
-static mw pop (mw *array, mw *index, enum stack_control sc);
-static mw push(mw *array, mw *index, enum stack_control sc);
+static mw pop (mw *tos, mw *array, mw *index, enum stack_control sc);
+static mw push(mw *tos, mw *array, mw *index, enum stack_control sc);
 /* IO wrappers*/
 
 static enum bool my_isspace(char x)
