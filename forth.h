@@ -74,7 +74,7 @@ enum forth_error_action{
   onerr_break_e,
   onerr_goto_restart_e,
   onerr_special_e,
-  onerr_return
+  onerr_return_e
 };
 
 /* X macro X(The error code, the error string, which action to take)*/
@@ -111,7 +111,7 @@ enum forth_error_action{
   X(ERR_MINIMUM_MEM, "Fatal Err: Minimum memory requirements not met\n",onerr_break_e)\
   X(ERR_CYCLES, "Cycles complete\n" ,onerr_break_e)\
   X(HALT,"HALTING FORTH\n" ,onerr_break_e)\
-  X(LAST_SYS, "Fatal Err: Incorrect error code or call!\n",onerr_break_e)
+  X(LAST_SYS, "Fatal Err: Incorrect error code or call!\n",onerr_return_e)
 
 #define X(a, b, c) a,
 enum forth_errors {

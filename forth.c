@@ -39,14 +39,14 @@ static mw forth_system_calls(fobj_t * fo, mw enum_syscall);
 
 /*X-Macro definition of error strings*/
 #define X(a, b, c) b,
-char *forth_error_str[] = {
+const char *forth_error_str[] = {
   FORTH_ERROR_XMACRO
 };
 #undef X 
 
 /*X-Macro definition of actions to take on error*/
 #define X(a, b, c) c,
-enum forth_error_action f_error_action[] = {
+const enum forth_error_action f_error_action[] = {
   FORTH_ERROR_XMACRO
 };
 #undef X 
@@ -1176,166 +1176,43 @@ mw forth_monitor(fobj_t * fo)
 
         /* I should check that EXF is potentially valid, ie. Not zero */
  RESTART:
-        switch (tmp = forth_interpreter(fo)) {
-        case ERR_OK:
-                print_string(forth_error_str[ERR_OK], MAX_ERR_STR, fo->err_file);
-                on_err(fo);
-                goto RESTART;
-        case ERR_FAILURE:
-                print_string(forth_error_str[ERR_FAILURE], MAX_ERR_STR,
-                             fo->err_file);
-                on_err(fo);
-                goto RESTART;
-        case ERR_REG:
-                print_string(forth_error_str[ERR_REG], MAX_ERR_STR,
-                             fo->err_file);
-                on_err(fo);
-                goto RESTART;
-        case ERR_DIC:
-                print_string(forth_error_str[ERR_DIC], MAX_ERR_STR,
-                             fo->err_file);
-                on_err(fo);
-                goto RESTART;
-        case ERR_VAR:
-                print_string(forth_error_str[ERR_VAR], MAX_ERR_STR,
-                             fo->err_file);
-                on_err(fo);
-                goto RESTART;
-        case ERR_RET:
-                print_string(forth_error_str[ERR_RET], MAX_ERR_STR, fo->err_file);
-                on_err(fo);
-                goto RESTART;
-        case ERR_STR:
-                print_string(forth_error_str[ERR_STR], MAX_ERR_STR, fo->err_file);
-                on_err(fo);
-                goto RESTART;
-        case ERR_PWD:
-                print_string(forth_error_str[ERR_PWD], MAX_ERR_STR, fo->err_file);
-                on_err(fo);
-                goto RESTART;
-        case ERR_NEXT:
-                print_string(forth_error_str[ERR_NEXT], MAX_ERR_STR, fo->err_file);
-                on_err(fo);
-                goto RESTART;
-        case ERR_PC:
-                print_string(forth_error_str[ERR_PC], MAX_ERR_STR, fo->err_file);
-                on_err(fo);
-                goto RESTART;
-        case ERR_TOS_REG:
-                print_string(forth_error_str[ERR_TOS_REG], MAX_ERR_STR,
-                             fo->err_file);
-                on_err(fo);
-                goto RESTART;
-        case ERR_TOS_DIC:
-                print_string(forth_error_str[ERR_TOS_DIC], MAX_ERR_STR,
-                             fo->err_file);
-                on_err(fo);
-                goto RESTART;
-        case ERR_TOS_VAR:
-                print_string(forth_error_str[ERR_TOS_VAR], MAX_ERR_STR,
-                             fo->err_file);
-                on_err(fo);
-                goto RESTART;
-        case ERR_TOS_RET:
-                print_string(forth_error_str[ERR_TOS_RET], MAX_ERR_STR,
-                             fo->err_file);
-                on_err(fo);
-                goto RESTART;
-        case ERR_TOS_STR:
-                print_string(forth_error_str[ERR_TOS_STR], MAX_ERR_STR,
-                             fo->err_file);
-                on_err(fo);
-                goto RESTART;
-        case ERR_OP0:
-                print_string(forth_error_str[ERR_OP0], MAX_ERR_STR, fo->err_file);
-                on_err(fo);
-                goto RESTART;
-        case ERR_OP1:
-                print_string(forth_error_str[ERR_OP1], MAX_ERR_STR, fo->err_file);
-                on_err(fo);
-                goto RESTART;
-        case ERR_DIV0:
-                print_string(forth_error_str[ERR_DIV0], MAX_ERR_STR,
-                             fo->err_file);
-                on_err(fo);
-                goto RESTART;
-        case ERR_MOD0:
-                print_string(forth_error_str[ERR_MOD0], MAX_ERR_STR,
-                             fo->err_file);
-                on_err(fo);
-                goto RESTART;
-        case ERR_IO:
-                print_string(forth_error_str[ERR_IO], MAX_ERR_STR, fo->err_file);
-                /*Reset input to stdin in, if already stdin, quit, same with
-                 * stdout?*/
-                break;
-        case ERR_EOF:          /*There are some problems with EOF error handling. */
-                if (IN_STRM > 0 && IN_STRM < MAX_INSTRM) {
-                        if (fo->in_file[IN_STRM]->fio == io_rd_file) {
-                                if (fo->in_file[IN_STRM]->iou.f != NULL) {
-                                        (void)fclose(fo->in_file[IN_STRM]->iou.
-                                                     f);
-                                        fo->in_file[IN_STRM]->iou.f = NULL;
-                                }
-                        }
-                        IN_STRM--;
-                        print_string("EOF -> Next stream.\n", MAX_ERR_STR,
-                                     fo->err_file);
+  tmp = forth_interpreter(fo);
+  if(tmp >= LAST_SYS){
+  } else if(onerr_goto_restart_e==f_error_action[tmp]){
+    print_string(forth_error_str[tmp], MAX_ERR_STR, fo->err_file);
+    on_err(fo);
+    goto RESTART;
+  } else if (onerr_break_e==f_error_action[tmp]){
+    print_string(forth_error_str[ERR_IO], MAX_ERR_STR, fo->err_file);
+    return tmp;
+  } else if (onerr_special_e==f_error_action[tmp]){
+    if(tmp == ERR_EOF){
+      if (IN_STRM > 0 && IN_STRM < MAX_INSTRM) {
+              if (fo->in_file[IN_STRM]->fio == io_rd_file) {
+                      if (fo->in_file[IN_STRM]->iou.f != NULL) {
+                              (void)fclose(fo->in_file[IN_STRM]->iou.
+                                           f);
+                              fo->in_file[IN_STRM]->iou.f = NULL;
+                      }
+              }
+              IN_STRM--;
+              print_string("EOF -> Next stream.\n", MAX_ERR_STR,
+                           fo->err_file);
 
-                        goto RESTART;
-                }
-                print_string(forth_error_str[ERR_EOF], MAX_ERR_STR, fo->err_file);
-                break;
-        case ERR_BASE:
-                print_string(forth_error_str[ERR_BASE], MAX_ERR_STR, fo->err_file);
-                on_err(fo);
-                goto RESTART;
-        case ERR_INSTRUCTION:
-                print_string(forth_error_str[ERR_INSTRUCTION], MAX_ERR_STR,
-                             fo->err_file);
-                on_err(fo);
-                goto RESTART;
-        case ERR_WORD:
-                print_string(fo->str, MAX_ERR_STR, fo->err_file);
-                (void)wrap_put(fo->err_file, '\n');
-                print_string(forth_error_str[ERR_WORD], MAX_ERR_STR,
-                             fo->err_file);
-                on_err(fo);
-                goto RESTART;
-        case ERR_ABNORMAL_END:
-                print_string(forth_error_str[ERR_ABNORMAL_END], MAX_ERR_STR,
-                             fo->err_file);
-                break;
-        case ERR_GENERAL:
-                print_string(forth_error_str[ERR_GENERAL], MAX_ERR_STR, fo->err_file);
-                break;
-        case ERR_SYSCALL:
-                print_string(forth_error_str[ERR_SYSCALL], MAX_ERR_STR,
-                             fo->err_file);
-                break;
-        case ERR_SYSCALL_OPTIONS:
-                print_string(forth_error_str[ERR_SYSCALL_OPTIONS], MAX_ERR_STR,
-                             fo->err_file);
-                break;
-        case ERR_NOTSYSCALL:
-                print_string(forth_error_str[ERR_NOTSYSCALL], MAX_ERR_STR,
-                             fo->err_file);
-                break;
-        case ERR_MINIMUM_MEM:
-                print_string(forth_error_str[ERR_MINIMUM_MEM],
-                             MAX_ERR_STR, fo->err_file);
-                break;
-        case ERR_CYCLES:       /*If cycles runs out, run this code. */
-                print_string(forth_error_str[ERR_CYCLES], MAX_ERR_STR, fo->err_file);
-                break;
-        case HALT:
-                print_string(forth_error_str[HALT], MAX_ERR_STR, fo->err_file);
-                break;
-        default:
-                print_string(forth_error_str[LAST_SYS],
-                             MAX_ERR_STR, fo->err_file);
-                return ERR_SYSCALL;
-        }
+              goto RESTART;
+      }
+      print_string(forth_error_str[ERR_EOF], MAX_ERR_STR, fo->err_file);
+      return ERR_EOF;
+    } else if(ERR_WORD == tmp){
+      print_string(fo->str, MAX_ERR_STR, fo->err_file);
+      (void)wrap_put(fo->err_file, '\n');
+      print_string(forth_error_str[ERR_WORD], MAX_ERR_STR,
+                 fo->err_file);
+      on_err(fo);
+      goto RESTART;
+    } else{ /*No special action defined*/
 
-        return ERR_ABNORMAL_END;
+    }
+  }
+  return ERR_ABNORMAL_END;
 }
