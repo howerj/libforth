@@ -79,39 +79,41 @@ enum forth_error_action{
 
 /* X macro X(The error code, the error string, which action to take)*/
 #define FORTH_ERROR_XMACRO \
-  X(ERR_OK, "OK!\n",onerr_goto_restart_e)\
-  X(ERR_FAILURE, "General Failure? Unknown cause.\n",onerr_goto_restart_e)\
-  X(ERR_REG, "Err: Register addr.\n",onerr_goto_restart_e)\
-  X(ERR_DIC, "Err: Dictionary addr.\n" ,onerr_goto_restart_e)\
-  X(ERR_VAR,"Err: Variable addr.\n" ,onerr_goto_restart_e)\
-  X(ERR_RET, "Err: Return addr.\n",onerr_goto_restart_e)\
-  X(ERR_STR, "Err: String addr.\n",onerr_goto_restart_e)\
-  X(ERR_PWD, "Err: PWD!\n",onerr_goto_restart_e)\
-  X(ERR_NEXT, "Err: NEXT!\n",onerr_goto_restart_e)\
-  X(ERR_PC,"Err: PC!\n" ,onerr_goto_restart_e)\
-  X(ERR_TOS_REG, "Err: TOS addr. Reg.\n",onerr_goto_restart_e)\
-  X(ERR_TOS_DIC, "Err: TOS addr. Dic.\n",onerr_goto_restart_e)\
-  X(ERR_TOS_VAR, "Err: TOS addr. Var.\n",onerr_goto_restart_e)\
-  X(ERR_TOS_RET, "Err: TOS addr. Ret.\n",onerr_goto_restart_e)\
-  X(ERR_TOS_STR, "Err: TOS addr. Str.\n",onerr_goto_restart_e)\
-  X(ERR_OP0, "Err: OP0!\n",onerr_goto_restart_e)\
-  X(ERR_OP1, "Err: OP1!\n",onerr_goto_restart_e)\
-  X(ERR_DIV0, "Err: Division by zero.\n",onerr_goto_restart_e)\
-  X(ERR_MOD0, "Err: Modulo by zero.\n",onerr_goto_restart_e)\
-  X(ERR_IO, "Err: IO Error.\n",onerr_break_e)\
-  X(ERR_EOF, "EOF\n",onerr_special_e)\
-  X(ERR_BASE, "Err: Base.\n",onerr_goto_restart_e)\
-  X(ERR_INSTRUCTION, "Err: Illegal Instruction.\n",onerr_goto_restart_e)\
-  X(ERR_WORD, "Err: Word not found?\n",onerr_special_e)\
-  X(ERR_ABNORMAL_END, "Fatal Err: !!!Abnormal End!!!\n",onerr_break_e)\
-  X(ERR_GENERAL, "General Error.\n",onerr_break_e)\
-  X(ERR_SYSCALL, "System call failed.\n",onerr_break_e)\
-  X(ERR_SYSCALL_OPTIONS, "Not a system call option.\n",onerr_break_e)\
-  X(ERR_NOTSYSCALL, "Err: Not a system call\n",onerr_break_e)\
-  X(ERR_MINIMUM_MEM, "Fatal Err: Minimum memory requirements not met\n",onerr_break_e)\
-  X(ERR_CYCLES, "Cycles complete\n" ,onerr_break_e)\
-  X(HALT,"HALTING FORTH\n" ,onerr_break_e)\
-  X(LAST_SYS, "Fatal Err: Incorrect error code or call!\n",onerr_return_e)
+  X(ERR_OK,               "OK!\n",                                            onerr_goto_restart_e)\
+  X(ERR_FAILURE,          "General Failure? Unknown cause.\n",                onerr_goto_restart_e)\
+  X(ERR_REG,              "Err: Register addr.\n",                            onerr_goto_restart_e)\
+  X(ERR_DIC,              "Err: Dictionary addr.\n",                          onerr_goto_restart_e)\
+  X(ERR_VAR,              "Err: Variable addr.\n",                            onerr_goto_restart_e)\
+  X(ERR_RET,              "Err: Return addr.\n",                              onerr_goto_restart_e)\
+  X(ERR_STR,              "Err: String addr.\n",                              onerr_goto_restart_e)\
+  X(ERR_PWD,              "Err: PWD!\n",                                      onerr_goto_restart_e)\
+  X(ERR_NEXT,             "Err: NEXT!\n",                                     onerr_goto_restart_e)\
+  X(ERR_PC,               "Err: PC!\n",                                       onerr_goto_restart_e)\
+  X(ERR_TOS_REG,          "Err: TOS addr. Reg.\n",                            onerr_goto_restart_e)\
+  X(ERR_TOS_DIC,          "Err: TOS addr. Dic.\n",                            onerr_goto_restart_e)\
+  X(ERR_TOS_VAR,          "Err: TOS addr. Var.\n",                            onerr_goto_restart_e)\
+  X(ERR_TOS_RET,          "Err: TOS addr. Ret.\n",                            onerr_goto_restart_e)\
+  X(ERR_TOS_STR,          "Err: TOS addr. Str.\n",                            onerr_goto_restart_e)\
+  X(ERR_OP0,              "Err: OP0!\n",                                      onerr_goto_restart_e)\
+  X(ERR_OP1,              "Err: OP1!\n",                                      onerr_goto_restart_e)\
+  X(ERR_DIV0,             "Err: Division by zero.\n",                         onerr_goto_restart_e)\
+  X(ERR_MOD0,             "Err: Modulo by zero.\n",                           onerr_goto_restart_e)\
+  X(ERR_IO,               "Err: IO Error.\n",                                 onerr_break_e)\
+  X(ERR_EOF,              "EOF\n",                                            onerr_special_e)\
+  X(ERR_BASE,             "Err: Base.\n",                                     onerr_goto_restart_e)\
+  X(ERR_INSTRUCTION,      "Err: Illegal Instruction.\n",                      onerr_goto_restart_e)\
+  X(ERR_WORD,             "Err: Word not found?\n",                           onerr_special_e)\
+  X(ERR_ABNORMAL_END,     "Fatal Err: !!!Abnormal End!!!\n",                  onerr_break_e)\
+  X(ERR_GENERAL,          "General Error.\n",                                 onerr_break_e)\
+  X(ERR_SYSCALL,          "System call failed.\n",                            onerr_break_e)\
+  X(ERR_SYSCALL_OPTIONS,  "Not a system call option.\n",                      onerr_break_e)\
+  X(ERR_NOTSYSCALL,       "Err: Not a system call\n",                         onerr_break_e)\
+  X(ERR_MINIMUM_MEM,      "Fatal Err: Minimum memory requirements not met\n", onerr_break_e)\
+  X(ERR_CYCLES,           "Cycles complete\n",                                onerr_break_e)\
+  X(HALT,                 "HALTING FORTH\n",                                  onerr_break_e)\
+  X(ERR_NULL,             "(Internal) Null not expected\n",                   onerr_break_e)\
+  X(ERR_SPECIAL_ERROR,    "(Internal) Special error handler not defined!\n",  onerr_break_e)\
+  X(LAST_SYS,             "Fatal Err: Incorrect error code or call!\n",       onerr_return_e)
 
 #define X(a, b, c) a,
 enum forth_errors {

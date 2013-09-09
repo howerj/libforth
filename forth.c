@@ -1178,6 +1178,8 @@ mw forth_monitor(fobj_t * fo)
  RESTART:
   tmp = forth_interpreter(fo);
   if(tmp >= LAST_SYS){
+    print_string(forth_error_str[LAST_SYS], MAX_ERR_STR, fo->err_file);
+    return tmp;
   } else if(onerr_goto_restart_e==f_error_action[tmp]){
     print_string(forth_error_str[tmp], MAX_ERR_STR, fo->err_file);
     on_err(fo);
@@ -1186,7 +1188,7 @@ mw forth_monitor(fobj_t * fo)
     print_string(forth_error_str[ERR_IO], MAX_ERR_STR, fo->err_file);
     return tmp;
   } else if (onerr_special_e==f_error_action[tmp]){
-    if(tmp == ERR_EOF){
+    if(tmp == ERR_EOF){ /*Some EOF situations might not be handled correctly*/
       if (IN_STRM > 0 && IN_STRM < MAX_INSTRM) {
               if (fo->in_file[IN_STRM]->fio == io_rd_file) {
                       if (fo->in_file[IN_STRM]->iou.f != NULL) {
@@ -1203,7 +1205,7 @@ mw forth_monitor(fobj_t * fo)
       }
       print_string(forth_error_str[ERR_EOF], MAX_ERR_STR, fo->err_file);
       return ERR_EOF;
-    } else if(ERR_WORD == tmp){
+    } else if(ERR_WORD == tmp){ /*Special action: Print out word*/
       print_string(fo->str, MAX_ERR_STR, fo->err_file);
       (void)wrap_put(fo->err_file, '\n');
       print_string(forth_error_str[ERR_WORD], MAX_ERR_STR,
@@ -1211,7 +1213,9 @@ mw forth_monitor(fobj_t * fo)
       on_err(fo);
       goto RESTART;
     } else{ /*No special action defined*/
-
+      print_string(forth_error_str[ERR_SPECIAL_ERROR], MAX_ERR_STR,
+                 fo->err_file);
+      return ERR_SPECIAL_ERROR;
     }
   }
   return ERR_ABNORMAL_END;
