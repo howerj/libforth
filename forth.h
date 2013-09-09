@@ -71,39 +71,39 @@ enum forth_syscall_options {
 };
 
 #define FORTH_ERROR_XMACRO \
-  X(ERR_OK, "ERROR CODE NOT IMPLEMENTED\n")\
-  X(ERR_FAILURE, "ERROR CODE NOT IMPLEMENTED\n")\
-  X(ERR_REG, "ERROR CODE NOT IMPLEMENTED\n")\
-  X(ERR_DIC, "ERROR CODE NOT IMPLEMENTED\n")\
-  X(ERR_VAR, "ERROR CODE NOT IMPLEMENTED\n")\
-  X(ERR_RET, "ERROR CODE NOT IMPLEMENTED\n")\
-  X(ERR_STR, "ERROR CODE NOT IMPLEMENTED\n")\
-  X(ERR_PWD, "ERROR CODE NOT IMPLEMENTED\n")\
-  X(ERR_NEXT, "ERROR CODE NOT IMPLEMENTED\n")\
-  X(ERR_PC, "ERROR CODE NOT IMPLEMENTED\n")\
-  X(ERR_TOS_REG, "ERROR CODE NOT IMPLEMENTED\n")\
-  X(ERR_TOS_DIC, "ERROR CODE NOT IMPLEMENTED\n")\
-  X(ERR_TOS_VAR, "ERROR CODE NOT IMPLEMENTED\n")\
-  X(ERR_TOS_RET, "ERROR CODE NOT IMPLEMENTED\n")\
-  X(ERR_TOS_STR, "ERROR CODE NOT IMPLEMENTED\n")\
-  X(ERR_OP0, "ERROR CODE NOT IMPLEMENTED\n")\
-  X(ERR_OP1, "ERROR CODE NOT IMPLEMENTED\n")\
-  X(ERR_DIV0, "ERROR CODE NOT IMPLEMENTED\n")\
-  X(ERR_MOD0, "ERROR CODE NOT IMPLEMENTED\n")\
-  X(ERR_IO, "ERROR CODE NOT IMPLEMENTED\n")\
-  X(ERR_EOF, "ERROR CODE NOT IMPLEMENTED\n")\
-  X(ERR_BASE, "ERROR CODE NOT IMPLEMENTED\n")\
-  X(ERR_INSTRUCTION, "ERROR CODE NOT IMPLEMENTED\n")\
-  X(ERR_WORD, "ERROR CODE NOT IMPLEMENTED\n")\
-  X(ERR_ABNORMAL_END, "ERROR CODE NOT IMPLEMENTED\n")\
-  X(ERR_GENERAL, "ERROR CODE NOT IMPLEMENTED\n")\
-  X(ERR_SYSCALL, "ERROR CODE NOT IMPLEMENTED\n")\
-  X(ERR_SYSCALL_OPTIONS, "ERROR CODE NOT IMPLEMENTED\n")\
-  X(ERR_NOTSYSCALL, "ERROR CODE NOT IMPLEMENTED\n")\
-  X(ERR_MINIMUM_MEM, "ERROR CODE NOT IMPLEMENTED\n")\
-  X(ERR_CYCLES, "ERROR CODE NOT IMPLEMENTED\n")\
-  X(HALT, "ERROR CODE NOT IMPLEMENTED\n")\
-  X(LAST_SYS, "ERROR CODE NOT IMPLEMENTED\n")
+  X(ERR_OK, "OK!\n")\
+  X(ERR_FAILURE, "General Failure? Unknown cause.\n")\
+  X(ERR_REG, "Err: Register addr.\n")\
+  X(ERR_DIC, "Err: Dictionary addr.\n" )\
+  X(ERR_VAR,"Err: Variable addr.\n" )\
+  X(ERR_RET, "Err: Return addr.\n")\
+  X(ERR_STR, "Err: String addr.\n")\
+  X(ERR_PWD, "Err: PWD!\n")\
+  X(ERR_NEXT, "Err: NEXT!\n")\
+  X(ERR_PC,"Err: PC!\n" )\
+  X(ERR_TOS_REG, "Err: TOS addr. Reg.\n")\
+  X(ERR_TOS_DIC, "Err: TOS addr. Dic.\n")\
+  X(ERR_TOS_VAR, "Err: TOS addr. Var.\n")\
+  X(ERR_TOS_RET, "Err: TOS addr. Ret.\n")\
+  X(ERR_TOS_STR, "Err: TOS addr. Str.\n")\
+  X(ERR_OP0, "Err: OP0!\n")\
+  X(ERR_OP1, "Err: OP1!\n")\
+  X(ERR_DIV0, "Err: Division by zero.\n")\
+  X(ERR_MOD0, "Err: Modulo by zero.\n")\
+  X(ERR_IO, "Err: IO Error.\n")\
+  X(ERR_EOF, "EOF\n")\
+  X(ERR_BASE, "Err: Base.\n")\
+  X(ERR_INSTRUCTION, "Err: Illegal Instruction.\n")\
+  X(ERR_WORD, "Err: Word not found?\n")\
+  X(ERR_ABNORMAL_END, "Fatal Err: !!!Abnormal End!!!\n")\
+  X(ERR_GENERAL, "General Error.\n")\
+  X(ERR_SYSCALL, "System call failed.\n")\
+  X(ERR_SYSCALL_OPTIONS, "Not a system call option.\n")\
+  X(ERR_NOTSYSCALL, "Err: Not a system call\n")\
+  X(ERR_MINIMUM_MEM, "Fatal Err: Minimum memory requirements not met\n")\
+  X(ERR_CYCLES, "Cycles complete\n" )\
+  X(HALT,"HALTING FORTH\n" )\
+  X(LAST_SYS, "Fatal Err: Incorrect error code or call!\n")
 
 #define X(a, b) a,
 enum forth_errors {

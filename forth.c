@@ -1169,94 +1169,94 @@ mw forth_monitor(fobj_t * fo)
  RESTART:
         switch (tmp = forth_interpreter(fo)) {
         case ERR_OK:
-                print_string("OK!\n", MAX_ERR_STR, fo->err_file);
+                print_string(forth_error_str[ERR_OK], MAX_ERR_STR, fo->err_file);
                 on_err(fo);
                 goto RESTART;
         case ERR_FAILURE:
-                print_string("General Failure? Unknown cause.\n", MAX_ERR_STR,
+                print_string(forth_error_str[ERR_FAILURE], MAX_ERR_STR,
                              fo->err_file);
                 on_err(fo);
                 goto RESTART;
         case ERR_REG:
-                print_string("Err: Register addr.\n", MAX_ERR_STR,
+                print_string(forth_error_str[ERR_REG], MAX_ERR_STR,
                              fo->err_file);
                 on_err(fo);
                 goto RESTART;
         case ERR_DIC:
-                print_string("Err: Dictionary addr.\n", MAX_ERR_STR,
+                print_string(forth_error_str[ERR_DIC], MAX_ERR_STR,
                              fo->err_file);
                 on_err(fo);
                 goto RESTART;
         case ERR_VAR:
-                print_string("Err: Variable addr.\n", MAX_ERR_STR,
+                print_string(forth_error_str[ERR_VAR], MAX_ERR_STR,
                              fo->err_file);
                 on_err(fo);
                 goto RESTART;
         case ERR_RET:
-                print_string("Err: Return addr.\n", MAX_ERR_STR, fo->err_file);
+                print_string(forth_error_str[ERR_RET], MAX_ERR_STR, fo->err_file);
                 on_err(fo);
                 goto RESTART;
         case ERR_STR:
-                print_string("Err: String add.\n", MAX_ERR_STR, fo->err_file);
+                print_string(forth_error_str[ERR_STR], MAX_ERR_STR, fo->err_file);
                 on_err(fo);
                 goto RESTART;
         case ERR_PWD:
-                print_string("Err: PWD!\n", MAX_ERR_STR, fo->err_file);
+                print_string(forth_error_str[ERR_PWD], MAX_ERR_STR, fo->err_file);
                 on_err(fo);
                 goto RESTART;
         case ERR_NEXT:
-                print_string("Err: NEXT!\n", MAX_ERR_STR, fo->err_file);
+                print_string(forth_error_str[ERR_NEXT], MAX_ERR_STR, fo->err_file);
                 on_err(fo);
                 goto RESTART;
         case ERR_PC:
-                print_string("Err: PC!\n", MAX_ERR_STR, fo->err_file);
+                print_string(forth_error_str[ERR_PC], MAX_ERR_STR, fo->err_file);
                 on_err(fo);
                 goto RESTART;
         case ERR_TOS_REG:
-                print_string("Err: TOS addr. Reg.\n", MAX_ERR_STR,
+                print_string(forth_error_str[ERR_TOS_REG], MAX_ERR_STR,
                              fo->err_file);
                 on_err(fo);
                 goto RESTART;
         case ERR_TOS_DIC:
-                print_string("Err: TOS addr. Dic.\n", MAX_ERR_STR,
+                print_string(forth_error_str[ERR_TOS_DIC], MAX_ERR_STR,
                              fo->err_file);
                 on_err(fo);
                 goto RESTART;
         case ERR_TOS_VAR:
-                print_string("Err: TOS addr. Var.\n", MAX_ERR_STR,
+                print_string(forth_error_str[ERR_TOS_VAR], MAX_ERR_STR,
                              fo->err_file);
                 on_err(fo);
                 goto RESTART;
         case ERR_TOS_RET:
-                print_string("Err: TOS addr. Ret.\n", MAX_ERR_STR,
+                print_string(forth_error_str[ERR_TOS_RET], MAX_ERR_STR,
                              fo->err_file);
                 on_err(fo);
                 goto RESTART;
         case ERR_TOS_STR:
-                print_string("Err: TOS addr. Str.\n", MAX_ERR_STR,
+                print_string(forth_error_str[ERR_TOS_STR], MAX_ERR_STR,
                              fo->err_file);
                 on_err(fo);
                 goto RESTART;
         case ERR_OP0:
-                print_string("Err: OP0!\n", MAX_ERR_STR, fo->err_file);
+                print_string(forth_error_str[ERR_OP0], MAX_ERR_STR, fo->err_file);
                 on_err(fo);
                 goto RESTART;
         case ERR_OP1:
-                print_string("Err: OP1!\n", MAX_ERR_STR, fo->err_file);
+                print_string(forth_error_str[ERR_OP1], MAX_ERR_STR, fo->err_file);
                 on_err(fo);
                 goto RESTART;
         case ERR_DIV0:
-                print_string("Err: Division by zero.\n", MAX_ERR_STR,
+                print_string(forth_error_str[ERR_DIV0], MAX_ERR_STR,
                              fo->err_file);
                 on_err(fo);
                 goto RESTART;
         case ERR_MOD0:
-                print_string("Err: Modulo by zero.\n", MAX_ERR_STR,
+                print_string(forth_error_str[ERR_MOD0], MAX_ERR_STR,
                              fo->err_file);
                 on_err(fo);
                 goto RESTART;
         case ERR_IO:
-                print_string("Err: IO Error.\n", MAX_ERR_STR, fo->err_file);
+                print_string(forth_error_str[ERR_IO], MAX_ERR_STR, fo->err_file);
                 /*Reset input to stdin in, if already stdin, quit, same with
                  * stdout?*/
                 break;
@@ -1275,55 +1275,55 @@ mw forth_monitor(fobj_t * fo)
 
                         goto RESTART;
                 }
-                print_string("EOF\n", MAX_ERR_STR, fo->err_file);
+                print_string(forth_error_str[ERR_EOF], MAX_ERR_STR, fo->err_file);
                 break;
         case ERR_BASE:
-                print_string("Err: Base.\n", MAX_ERR_STR, fo->err_file);
+                print_string(forth_error_str[ERR_BASE], MAX_ERR_STR, fo->err_file);
                 on_err(fo);
                 goto RESTART;
         case ERR_INSTRUCTION:
-                print_string("Err: Illegal Instruction.\n", MAX_ERR_STR,
+                print_string(forth_error_str[ERR_INSTRUCTION], MAX_ERR_STR,
                              fo->err_file);
                 on_err(fo);
                 goto RESTART;
         case ERR_WORD:
                 print_string(fo->str, MAX_ERR_STR, fo->err_file);
                 (void)wrap_put(fo->err_file, '\n');
-                print_string("Err: Word not found?\n", MAX_ERR_STR,
+                print_string(forth_error_str[ERR_WORD], MAX_ERR_STR,
                              fo->err_file);
                 on_err(fo);
                 goto RESTART;
         case ERR_ABNORMAL_END:
-                print_string("Fatal Err: !!!Abnormal End!!!\n", MAX_ERR_STR,
+                print_string(forth_error_str[ERR_ABNORMAL_END], MAX_ERR_STR,
                              fo->err_file);
                 break;
         case ERR_GENERAL:
-                print_string("General Error.\n", MAX_ERR_STR, fo->err_file);
+                print_string(forth_error_str[ERR_GENERAL], MAX_ERR_STR, fo->err_file);
                 break;
         case ERR_SYSCALL:
-                print_string("System call failed.\n", MAX_ERR_STR,
+                print_string(forth_error_str[ERR_SYSCALL], MAX_ERR_STR,
                              fo->err_file);
                 break;
         case ERR_SYSCALL_OPTIONS:
-                print_string("Not a system call option.\n", MAX_ERR_STR,
+                print_string(forth_error_str[ERR_SYSCALL_OPTIONS], MAX_ERR_STR,
                              fo->err_file);
                 break;
         case ERR_NOTSYSCALL:
-                print_string("Err: Not a system call\n", MAX_ERR_STR,
+                print_string(forth_error_str[ERR_NOTSYSCALL], MAX_ERR_STR,
                              fo->err_file);
                 break;
         case ERR_MINIMUM_MEM:
-                print_string("Fatal Err: Minimum memory requirements not met\n",
+                print_string(forth_error_str[ERR_MINIMUM_MEM],
                              MAX_ERR_STR, fo->err_file);
                 break;
         case ERR_CYCLES:       /*If cycles runs out, run this code. */
-                print_string("Cycles complete\n", MAX_ERR_STR, fo->err_file);
+                print_string(forth_error_str[ERR_CYCLES], MAX_ERR_STR, fo->err_file);
                 break;
         case HALT:
-                print_string("HALTING FORTH\n", MAX_ERR_STR, fo->err_file);
+                print_string(forth_error_str[HALT], MAX_ERR_STR, fo->err_file);
                 break;
         default:
-                print_string("Fatal Err: Incorrect error code or call!\n",
+                print_string(forth_error_str[LAST_SYS],
                              MAX_ERR_STR, fo->err_file);
                 return ERR_SYSCALL;
         }
