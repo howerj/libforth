@@ -5,6 +5,9 @@
 
 These are some notes for myself:
 
+* X-macros!
+
+
 * Replace all memory operations with functions to check if it with in bounds
 first, same with all stack operations.
 
