@@ -38,11 +38,20 @@ static void on_err(fobj_t * fo);
 static mw forth_system_calls(fobj_t * fo, mw enum_syscall);
 
 /*X-Macro definition of error strings*/
-#define X(a, b) b,
+#define X(a, b, c) b,
 char *forth_error_str[] = {
   FORTH_ERROR_XMACRO
 };
 #undef X 
+
+/*X-Macro definition of actions to take on error*/
+#define X(a, b, c) c,
+enum forth_error_action f_error_action[] = {
+  FORTH_ERROR_XMACRO
+};
+#undef X 
+
+
 
 /* IO wrappers*/
 
