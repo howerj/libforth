@@ -30,28 +30,29 @@ static void print_string(const char *s, const mw max, fio_t * out_file);
 static void print_line_file(int line, const char *file, fio_t * err_file);
 static mw find_word(fobj_t * fo);
 void my_strcpy(char *destination, char *source);
-static mw compile_word(enum forth_primitives fp, fobj_t * fo, enum bool flag,
+static mw compile_word(forth_primitives_e fp, fobj_t * fo, enum bool flag,
                        char *prim);
 static mw compile_word_prim(fobj_t * fo, char *prim);
 static mw forth_initialize(fobj_t * fo);
 static void on_err(fobj_t * fo);
 static mw forth_system_calls(fobj_t * fo, mw enum_syscall);
+static void report_error(forth_errors_e e);
 
 /*X-Macro definition of error strings*/
 #define X(a, b, c) b,
 const char *forth_error_str[] = {
-  FORTH_ERROR_XMACRO
+        FORTH_ERROR_XMACRO
 };
-#undef X 
+
+#undef X
 
 /*X-Macro definition of actions to take on error*/
 #define X(a, b, c) c,
-const enum forth_error_action f_error_action[] = {
-  FORTH_ERROR_XMACRO
+const forth_error_action_e f_error_action[] = {
+        FORTH_ERROR_XMACRO
 };
-#undef X 
 
-
+#undef X
 
 /* IO wrappers*/
 
@@ -97,12 +98,12 @@ static int wrap_get(fio_t * in_file)
         case io_stdin:
                 return getc(stdin);
         case io_rd_file:
-                if (in_file->iou.f != NULL)
+                if (NULL != in_file->iou.f)
                         return fgetc(in_file->iou.f);
                 else
                         return EOF;
         case io_rd_str:
-                if (in_file->iou.s != NULL) {
+                if (NULL != in_file->iou.s) {
                         if (in_file->str_index > in_file->str_max_len)
                                 return EOF;
                         tmp = in_file->iou.s[++in_file->str_index];
@@ -126,12 +127,12 @@ static int wrap_put(fio_t * out_file, char c)
         case io_stderr:
                 return putc(c, stderr);
         case io_wr_file:
-                if (out_file->iou.f != NULL)
+                if (NULL != out_file->iou.f)
                         return fputc(c, out_file->iou.f);
                 else
                         return EOF;
         case io_wr_str:
-                if (out_file->iou.s != NULL) {
+                if (NULL != out_file->iou.s) {
                         if (out_file->str_index > out_file->str_max_len)
                                 return EOF;
                         out_file->iou.s[++(out_file->str_index)] = c;
@@ -158,14 +159,14 @@ static mw get_word(char *str, const mw str_len, fio_t * io_file)
 
         /*discard spaces */
         for (c = wrap_get(io_file); my_isspace(c); c = wrap_get(io_file))
-                if (c == EOF)
+                if (EOF == c)
                         return ERR_FAILURE;
 
         /*copy word */
         for (i = 0; (i < str_len) && (!my_isspace(c));
              i++, c = wrap_get(io_file)) {
                 str[i] = (char)c;
-                if (c == EOF)
+                if (EOF == c)
                         return ERR_FAILURE;
         }
 
@@ -347,7 +348,7 @@ void my_strcpy(char *destination, char *source)
                 *destination++ = *source++;
 }
 
-static mw compile_word(enum forth_primitives fp, fobj_t * fo, enum bool flag,
+static mw compile_word(forth_primitives_e fp, fobj_t * fo, enum bool flag,
                        char *prim)
 {
         mw *reg = fo->reg, *dic = fo->dic;
@@ -544,8 +545,8 @@ static mw forth_system_calls(fobj_t * fo, mw enum_syscall)
                         VAR--;
 
                         IN_STRM++;
-                        if ((fo->in_file[IN_STRM]->iou.f =
-                             fopen(str + TOS, "r")) == NULL) {
+                        if (NULL == (fo->in_file[IN_STRM]->iou.f =
+                                     fopen(str + TOS, "r"))) {
                                 IN_STRM--;
                                 ERR_LN_PRN(err_file);
                                 return ERR_SYSCALL;
@@ -567,7 +568,7 @@ static mw forth_system_calls(fobj_t * fo, mw enum_syscall)
                         ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
                         TOS = var[VAR];
                         VAR--;
-                        if ((out_file->iou.f = fopen(str + TOS, "w")) == NULL) {
+                        if (NULL == (out_file->iou.f = fopen(str + TOS, "w"))) {
                                 ERR_LN_PRN(err_file);
                                 out_file->fio = io_stdout;
                                 return ERR_SYSCALL;
@@ -585,7 +586,7 @@ static mw forth_system_calls(fobj_t * fo, mw enum_syscall)
         case SYS_FCLOSE:
                 switch (TOS) {
                 case SYS_OPT_IN:
-                        if (IN_STRM < 1 || IN_STRM > MAX_INSTRM) {
+                        if ((IN_STRM < 1) || (IN_STRM > MAX_INSTRM)) {
                                 ERR_LN_PRN(err_file);
                                 return ERR_SYSCALL;
                         }
@@ -604,8 +605,8 @@ static mw forth_system_calls(fobj_t * fo, mw enum_syscall)
                                 ERR_LN_PRN(err_file);
                                 return ERR_SYSCALL;
                         }
-                        if (out_file->iou.f != NULL)
-                                if (out_file->fio != io_stdout) {
+                        if (NULL != out_file->iou.f)
+                                if (io_stdout != out_file->fio) {
                                         (void)fclose(out_file->iou.f);
                                         out_file->iou.f = NULL;
                                 }
@@ -622,7 +623,7 @@ static mw forth_system_calls(fobj_t * fo, mw enum_syscall)
                 (void)fflush(NULL);     /* Flush all streams for ease of use. */
                 return ERR_OK;
         case SYS_REMOVE:
-                if (remove(str + TOS) != 0) {
+                if (0 != remove(str + TOS)) {
                         ERR_LN_PRN(err_file);
                         print_string("Could not remove file.\n", MAX_ERR_STR,
                                      fo->err_file);
@@ -632,7 +633,7 @@ static mw forth_system_calls(fobj_t * fo, mw enum_syscall)
                 VAR--;
                 return ERR_OK;
         case SYS_RENAME:
-                if (rename(str + TOS, str + var[VAR]) != 0) {
+                if (0 != rename(str + TOS, str + var[VAR])) {
                         VAR--;
                         ERR_LN_PRN(err_file);
                         print_string("Could not rename file.\n", MAX_ERR_STR,
@@ -645,23 +646,23 @@ static mw forth_system_calls(fobj_t * fo, mw enum_syscall)
         case SYS_REWIND:
                 switch (TOS) {
                 case SYS_OPT_IN:
-                        if (fo->in_file[IN_STRM]->iou.f != NULL) {
-                                if (fo->in_file[IN_STRM]->fio == io_rd_file) {
+                        if (NULL != fo->in_file[IN_STRM]->iou.f) {
+                                if (io_rd_file == fo->in_file[IN_STRM]->fio) {
                                         rewind(fo->in_file[IN_STRM]->iou.f);
                                 }
-                        } else if (fo->in_file[IN_STRM]->iou.s != NULL) {
-                                if (fo->in_file[IN_STRM]->fio == io_rd_str) {
+                        } else if (NULL != fo->in_file[IN_STRM]->iou.s) {
+                                if (io_rd_str == fo->in_file[IN_STRM]->fio) {
                                         fo->in_file[IN_STRM]->str_index = 0;
                                 }
                         }
                         return ERR_OK;
                 case SYS_OPT_OUT:
-                        if (out_file->iou.f != NULL) {
-                                if (out_file->fio == io_wr_file) {
+                        if (NULL != out_file->iou.f) {
+                                if (io_wr_file == out_file->fio) {
                                         rewind(out_file->iou.f);
                                 }
-                        } else if (out_file->iou.s != NULL) {
-                                if (out_file->fio == io_wr_str) {
+                        } else if (NULL != out_file->iou.s) {
+                                if (io_wr_str == out_file->fio) {
                                         out_file->str_index = 0;
                                 }
                         }
@@ -750,21 +751,21 @@ mw forth_interpreter(fobj_t * fo)
                          * simpler functions, these simpler functions
                          * could be used by the VM as extra primitives */
                         RET--;
-                        if ((OP1 = find_word(fo)) != ERR_OK)    /*fo contains OP0 */
+                        if (ERR_OK != (OP1 = find_word(fo)))    /*fo contains OP0 */
                                 return OP1;
-                        if ((OP0 - 1) != 0) {
+                        if (0 != (OP0 - 1)) {
                                 NEXT = OP0 + 2; /*Advance over pointers */
-                                if (CPF == 0) {
+                                if (0 == CPF) {
                                         ECUZ(SM_maxDic, NEXT, ERR_NEXT,
                                              err_file);
-                                        if (dic[NEXT] == COMPILE) {
+                                        if (COMPILE == dic[NEXT]) {
                                                 NEXT++;
                                         }
                                 }
                                 goto TAIL_RECURSE;
                         }
-                        if (isnumber(str) != 0) {
-                                if (CPF != 0) {
+                        if (0 != isnumber(str)) {
+                                if (0 != CPF) {
                                         ECUZ(SM_maxDic - 1, DIC, ERR_DIC,
                                              err_file);
                                         dic[DIC] = PUSH_INT;
@@ -804,7 +805,7 @@ mw forth_interpreter(fobj_t * fo)
                         PC += dic[PC];
                         break;
                 case NBRANCH:
-                        if (TOS == 0) {
+                        if (0 == TOS) {
                                 ECB(0, SM_maxDic, PC, ERR_PC, err_file);
                                 PC += dic[PC];
                         } else {
@@ -831,7 +832,7 @@ mw forth_interpreter(fobj_t * fo)
                         VAR--;
                         break;
                 case MOD:
-                        if (TOS != 0) {
+                        if (0 != TOS) {
                                 ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
                                 TOS = var[VAR] % TOS;
                                 VAR--;
@@ -840,7 +841,7 @@ mw forth_interpreter(fobj_t * fo)
                         ERR_LN_PRN(err_file);
                         return ERR_MOD0;
                 case DIV:
-                        if (TOS != 0) {
+                        if (0 != TOS) {
                                 ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
                                 TOS = var[VAR] / TOS;
                                 VAR--;
@@ -950,14 +951,14 @@ mw forth_interpreter(fobj_t * fo)
                         VAR++;
                         var[VAR] = TOS;
                         TOS = wrap_get(fo->in_file[IN_STRM]);
-                        if (TOS == (mw) EOF) {
+                        if ((mw) EOF == TOS) {
                                 ERR_LN_PRN(err_file);
                                 return ERR_EOF;
                         }
                         break;
                 case EMIT:
                         /*need to check if putchar is winning or not */
-                        if (wrap_put(out_file, (char)TOS) == EOF) {
+                        if (EOF == wrap_put(out_file, (char)TOS)) {
                                 ERR_LN_PRN(err_file);
                                 return ERR_EOF;
                         }
@@ -1026,7 +1027,7 @@ mw forth_interpreter(fobj_t * fo)
                         break;
                 case PRINTNUM:
                         ECB(2, SM_maxVar, VAR, ERR_VAR, err_file);
-                        if (var[VAR] > MAX_BASE) {
+                        if (MAX_BASE < var[VAR]) {
                                 ERR_LN_PRN(err_file);
                                 return ERR_BASE;
                         }
@@ -1067,17 +1068,17 @@ mw forth_interpreter(fobj_t * fo)
                         break;
                 case FIND:
                         /*fo contains OP0 */
-                        if ((OP1 = find_word(fo)) != ERR_OK)
+                        if (ERR_OK != (OP1 = find_word(fo)))
                                 return OP1;
                         /*Check if word found */
-                        if ((OP0 - 1) == 0) {
+                        if (0 == (OP0 - 1)) {
                                 ERR_LN_PRN(err_file);
                                 return ERR_WORD;
                         }
                         ECB(0, SM_maxVar, VAR, ERR_VAR, err_file);
                         ECB(0, SM_maxDic - 3, VAR, ERR_OP0, err_file);
                         OP0 += 2;       /*advance over pointers */
-                        if (dic[OP0] == COMPILE) {
+                        if (COMPILE == dic[OP0]) {
                                 ++OP0;
                         }
                         VAR++;
@@ -1091,7 +1092,7 @@ mw forth_interpreter(fobj_t * fo)
                         VAR--;
                         goto TAIL_RECURSE;
                 case KERNEL:
-                        if ((OP0 = forth_system_calls(fo, TOS)) != ERR_OK) {
+                        if (ERR_OK != (OP0 = forth_system_calls(fo, TOS))) {
                                 ERR_LN_PRN(err_file);
                                 return OP0;
                         }
@@ -1105,70 +1106,75 @@ mw forth_interpreter(fobj_t * fo)
         }
 }
 
+static void report_error(forth_errors_e e)
+{
+        struct fio_s err_file_local;
+        err_file_local.fio = io_stderr;
+        print_string(forth_error_str[e], MAX_ERR_STR, &err_file_local);
+        return;
+}
+
 /*Error and IO handler for the Forth interpreter*/
 mw forth_monitor(fobj_t * fo)
 {
-        char *null_err = "Fatal Err: forth_monitor() passed NULL pointer\n";
         mw tmp;
         mw *reg = fo->reg;
 
-        if (fo == NULL) {
-                print_string(null_err, MAX_ERR_STR, fo->err_file);
+        if (NULL == fo) {
+                report_error(ERR_NULL);
                 return ERR_FAILURE;
         }
 
-        if (fo->err_file == NULL) {     /*This doesn't work yet obviously. */
-                print_string(null_err, MAX_ERR_STR, fo->err_file);
+        if (NULL == fo->err_file) {
+                report_error(ERR_NULL);
                 return ERR_FAILURE;
         }
 
-        if (fo->reg == NULL) {
-                print_string(null_err, MAX_ERR_STR, fo->err_file);
+        if (NULL == fo->reg) {
+                report_error(ERR_NULL);
                 return ERR_FAILURE;
         }
 
-        if (fo->dic == NULL) {
-                print_string(null_err, MAX_ERR_STR, fo->err_file);
+        if (NULL == fo->dic) {
+                report_error(ERR_NULL);
                 return ERR_FAILURE;
         }
 
-        if (fo->var == NULL) {
-                print_string(null_err, MAX_ERR_STR, fo->err_file);
+        if (NULL == fo->var) {
+                report_error(ERR_NULL);
                 return ERR_FAILURE;
         }
 
-        if (fo->ret == NULL) {
-                print_string(null_err, MAX_ERR_STR, fo->err_file);
+        if (NULL == fo->ret) {
+                report_error(ERR_NULL);
                 return ERR_FAILURE;
         }
 
-        if (fo->str == NULL) {
-                print_string(null_err, MAX_ERR_STR, fo->err_file);
+        if (NULL == fo->str) {
+                report_error(ERR_NULL);
                 return ERR_FAILURE;
         }
 
-        if (fo->in_file == NULL) {
-                print_string(null_err, MAX_ERR_STR, fo->err_file);
+        if (NULL == fo->in_file) {
+                report_error(ERR_NULL);
                 return ERR_FAILURE;
         } else {
-                if (fo->in_file[IN_STRM]->fio != io_stdin) {
-                        if (fo->in_file[IN_STRM]->iou.f == NULL) {
-                                print_string(null_err, MAX_ERR_STR,
-                                             fo->err_file);
+                if (io_stdin != fo->in_file[IN_STRM]->fio) {
+                        if (NULL == fo->in_file[IN_STRM]->iou.f) {
+                                report_error(ERR_NULL);
                                 return ERR_FAILURE;
                         }
                 }
         }
 
-        if (fo->out_file == NULL) {
-                print_string(null_err, MAX_ERR_STR, fo->err_file);
+        if (NULL == fo->out_file) {
+                report_error(ERR_NULL);
                 return ERR_FAILURE;
         } else {
-                if (fo->out_file->fio != io_stdout
-                    && fo->out_file->fio != io_stderr) {
-                        if (fo->out_file->iou.f == NULL) {
-                                print_string(null_err, MAX_ERR_STR,
-                                             fo->err_file);
+                if ((io_stdout != fo->out_file->fio)
+                    && (io_stderr != fo->out_file->fio)) {
+                        if (NULL == fo->out_file->iou.f) {
+                                report_error(ERR_NULL);
                                 return ERR_FAILURE;
                         }
                 }
@@ -1176,47 +1182,52 @@ mw forth_monitor(fobj_t * fo)
 
         /* I should check that EXF is potentially valid, ie. Not zero */
  RESTART:
-  tmp = forth_interpreter(fo);
-  if(tmp >= LAST_SYS){
-    print_string(forth_error_str[LAST_SYS], MAX_ERR_STR, fo->err_file);
-    return tmp;
-  } else if(onerr_goto_restart_e==f_error_action[tmp]){
-    print_string(forth_error_str[tmp], MAX_ERR_STR, fo->err_file);
-    on_err(fo);
-    goto RESTART;
-  } else if (onerr_break_e==f_error_action[tmp]){
-    print_string(forth_error_str[ERR_IO], MAX_ERR_STR, fo->err_file);
-    return tmp;
-  } else if (onerr_special_e==f_error_action[tmp]){
-    if(tmp == ERR_EOF){ /*Some EOF situations might not be handled correctly*/
-      if (IN_STRM > 0 && IN_STRM < MAX_INSTRM) {
-              if (fo->in_file[IN_STRM]->fio == io_rd_file) {
-                      if (fo->in_file[IN_STRM]->iou.f != NULL) {
-                              (void)fclose(fo->in_file[IN_STRM]->iou.
-                                           f);
-                              fo->in_file[IN_STRM]->iou.f = NULL;
-                      }
-              }
-              IN_STRM--;
-              print_string("EOF -> Next stream.\n", MAX_ERR_STR,
-                           fo->err_file);
+        tmp = forth_interpreter(fo);
+        if (tmp >= LAST_SYS) {
+                print_string(forth_error_str[LAST_SYS], MAX_ERR_STR,
+                             fo->err_file);
+                return tmp;
+        } else if (onerr_goto_restart_e == f_error_action[tmp]) {
+                print_string(forth_error_str[tmp], MAX_ERR_STR, fo->err_file);
+                on_err(fo);
+                goto RESTART;
+        } else if (onerr_break_e == f_error_action[tmp]) {
+                print_string(forth_error_str[ERR_IO], MAX_ERR_STR,
+                             fo->err_file);
+                return tmp;
+        } else if (onerr_special_e == f_error_action[tmp]) {
+                if (tmp == ERR_EOF) {   /*Some EOF situations might not be handled correctly */
+                        if ((IN_STRM > 0) && (IN_STRM < MAX_INSTRM)) {
+                                if (io_rd_file == fo->in_file[IN_STRM]->fio) {
+                                        if (NULL != fo->in_file[IN_STRM]->iou.f) {
+                                                (void)fclose(fo->
+                                                             in_file[IN_STRM]->
+                                                             iou.f);
+                                                fo->in_file[IN_STRM]->iou.f =
+                                                    NULL;
+                                        }
+                                }
+                                IN_STRM--;
+                                print_string(forth_error_str[ERR_NEXT_STRM],
+                                             MAX_ERR_STR, fo->err_file);
 
-              goto RESTART;
-      }
-      print_string(forth_error_str[ERR_EOF], MAX_ERR_STR, fo->err_file);
-      return ERR_EOF;
-    } else if(ERR_WORD == tmp){ /*Special action: Print out word*/
-      print_string(fo->str, MAX_ERR_STR, fo->err_file);
-      (void)wrap_put(fo->err_file, '\n');
-      print_string(forth_error_str[ERR_WORD], MAX_ERR_STR,
-                 fo->err_file);
-      on_err(fo);
-      goto RESTART;
-    } else{ /*No special action defined*/
-      print_string(forth_error_str[ERR_SPECIAL_ERROR], MAX_ERR_STR,
-                 fo->err_file);
-      return ERR_SPECIAL_ERROR;
-    }
-  }
-  return ERR_ABNORMAL_END;
+                                goto RESTART;
+                        }
+                        print_string(forth_error_str[ERR_EOF], MAX_ERR_STR,
+                                     fo->err_file);
+                        return ERR_EOF;
+                } else if (ERR_WORD == tmp) {   /*Special action: Print out word */
+                        print_string(fo->str, MAX_ERR_STR, fo->err_file);
+                        (void)wrap_put(fo->err_file, '\n');
+                        print_string(forth_error_str[ERR_WORD], MAX_ERR_STR,
+                                     fo->err_file);
+                        on_err(fo);
+                        goto RESTART;
+                } else {        /*No special action defined */
+                        print_string(forth_error_str[ERR_SPECIAL_ERROR],
+                                     MAX_ERR_STR, fo->err_file);
+                        return ERR_SPECIAL_ERROR;
+                }
+        }
+        return ERR_ABNORMAL_END;
 }

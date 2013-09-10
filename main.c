@@ -156,16 +156,26 @@ fobj_t *forth_obj_create(mw reg_l, mw dic_l, mw var_l, mw ret_l, mw str_l)
 void forth_obj_destroy(fobj_t * fo)
 {
         int i = 0;
-        free(fo->reg);
-        free(fo->dic);
-        free(fo->var);
-        free(fo->ret);
-        free(fo->str);
-        for (i = 0; i < MAX_INSTRM; i++)
-                free(fo->in_file[i]);
-        free(fo->out_file);
-        free(fo->err_file);
-        free(fo);
+        if (NULL != fo) {
+                if (NULL != fo->reg)
+                        free(fo->reg);
+                if (NULL != fo->dic)
+                        free(fo->dic);
+                if (NULL != fo->var)
+                        free(fo->var);
+                if (NULL != fo->ret)
+                        free(fo->ret);
+                if (NULL != fo->str)
+                        free(fo->str);
+                for (i = 0; i < MAX_INSTRM; i++)
+                        if (NULL != fo->in_file[i])
+                                free(fo->in_file[i]);
+                if (NULL != fo->out_file)
+                        free(fo->out_file);
+                if (NULL != fo->err_file)
+                        free(fo->err_file);
+                free(fo);
+        }
         fprintf(stderr, "\tOBJECT DESTROYED.\n");
 }
 

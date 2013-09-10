@@ -13,7 +13,7 @@
 
 /*#define RUN4X*/
 
-#ifndef forth_h_header_guard
+#ifndef forth_h_header_guard    /* begin header guard for forth.h */
 #define forth_h_header_guard
 
 #define MAX_PRN_STR    64
@@ -33,7 +33,7 @@
 /* Enums */
 enum bool { false, true };
 
-enum forth_io {
+typedef enum {
         io_stdin,               /*read from stdin */
         io_stdout,              /*write to stdout */
         io_stderr,              /*output to stderr */
@@ -41,9 +41,9 @@ enum forth_io {
         io_rd_file,             /*read from file */
         io_wr_str,              /*write to a string */
         io_rd_str               /*read from a string (null terminated!) */
-};
+} forth_io_e;
 
-enum forth_primitives {
+typedef enum {
         PUSH_INT, COMPILE, RUN, DEFINE, IMMEDIATE, READ, COMMENT, EXIT,
         BRANCH, NBRANCH, PLUS, MINUS, MUL, MOD, DIV,
         LS, RS, AND, OR, INV, XOR, INC, DEC, EQ, LESS, MORE,
@@ -55,27 +55,27 @@ enum forth_primitives {
         KERNEL,
         ERROR,
         LAST_PRIMITIVE
-};
+} forth_primitives_e;
 
 /*forth_interpreter() return calls*/
-enum forth_syscall {
+typedef enum {
         SYS_RESET,
         SYS_FOPEN, SYS_FCLOSE, SYS_FLUSH,
         SYS_REMOVE, SYS_RENAME, SYS_REWIND
             /* remove() rename() tmpfile() tmpnam() ... other stdio.h functions */
-};
+} forth_syscall_e;
 
 /*Options passed to system call*/
-enum forth_syscall_options {
+typedef enum {
         SYS_OPT_IN, SYS_OPT_OUT, SYS_OPT_ERR
-};
+} forth_syscall_options_e;
 
-enum forth_error_action{
-  onerr_break_e,
-  onerr_goto_restart_e,
-  onerr_special_e,
-  onerr_return_e
-};
+typedef enum {
+        onerr_break_e,
+        onerr_goto_restart_e,
+        onerr_special_e,
+        onerr_return_e
+} forth_error_action_e;
 
 /* X macro X(The error code, the error string, which action to take)*/
 #define FORTH_ERROR_XMACRO \
@@ -111,17 +111,18 @@ enum forth_error_action{
   X(ERR_MINIMUM_MEM,      "Fatal Err: Minimum memory requirements not met\n", onerr_break_e)\
   X(ERR_CYCLES,           "Cycles complete\n",                                onerr_break_e)\
   X(HALT,                 "HALTING FORTH\n",                                  onerr_break_e)\
+  X(ERR_NEXT_STRM,        "EOF -> Next Stream.\n",                            onerr_special_e)\
   X(ERR_NULL,             "(Internal) Null not expected\n",                   onerr_break_e)\
   X(ERR_SPECIAL_ERROR,    "(Internal) Special error handler not defined!\n",  onerr_break_e)\
   X(LAST_SYS,             "Fatal Err: Incorrect error code or call!\n",       onerr_return_e)
 
 #define X(a, b, c) a,
-enum forth_errors {
-  FORTH_ERROR_XMACRO
-};
-#undef X 
+typedef enum {
+        FORTH_ERROR_XMACRO
+} forth_errors_e;
+#undef X
 
-enum forth_registers {
+typedef enum {
         ENUM_NEXT,
         ENUM_PC,
         ENUM_TOS,
@@ -149,7 +150,7 @@ enum forth_registers {
         ENUM_cycles,
         ENUM_ccount,
         ENUM_inStrm
-};
+} forth_registers_e;
 
 /*vm macros*/
 #define NEXT    reg[ENUM_NEXT]
@@ -197,7 +198,7 @@ union io_u {
 
 /*IO redirections.*/
 struct fio_s {
-        enum forth_io fio;
+        forth_io_e fio;
         mw str_index;           /*index into string */
         mw str_max_len;         /*max string length */
         union io_u iou;
@@ -221,4 +222,4 @@ typedef struct forth_obj fobj_t;
 /* Function prototypes for external API */
 mw forth_interpreter(fobj_t * fo);
 mw forth_monitor(fobj_t * fo);
-#endif                          /*end header guard */
+#endif                          /*end header guard for forth.h */
