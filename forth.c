@@ -1118,12 +1118,14 @@ static void report_error(forth_errors_e e)
 mw forth_monitor(fobj_t * fo)
 {
         mw tmp;
-        mw *reg = fo->reg;
+        mw *reg;
 
         if (NULL == fo) {
                 report_error(ERR_NULL);
                 return ERR_FAILURE;
         }
+
+        reg = fo -> reg;
 
         if (NULL == fo->err_file) {
                 report_error(ERR_NULL);
