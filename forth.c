@@ -29,7 +29,7 @@ static char *my_itoa(mw value, int base);
 static void print_string(const char *s, const mw max, fio_t * out_file);
 static void print_line_file(int line, const char *file, fio_t * err_file);
 static mw find_word(fobj_t * fo);
-void my_strcpy(char *destination, char *source);
+static void my_strcpy(char *destination, char *source);
 static mw compile_word(forth_primitives_e fp, fobj_t * fo, enum bool flag,
                        char *prim);
 static mw compile_word_prim(fobj_t * fo, char *prim);
@@ -40,7 +40,7 @@ static void report_error(forth_errors_e e);
 
 /*X-Macro definition of error strings*/
 #define X(a, b, c) b,
-const char *forth_error_str[] = {
+static const char *forth_error_str[] = {
         FORTH_ERROR_XMACRO
 };
 
@@ -48,7 +48,7 @@ const char *forth_error_str[] = {
 
 /*X-Macro definition of actions to take on error*/
 #define X(a, b, c) c,
-const forth_error_action_e f_error_action[] = {
+static const forth_error_action_e f_error_action[] = {
         FORTH_ERROR_XMACRO
 };
 
@@ -158,12 +158,12 @@ static mw get_word(char *str, const mw str_len, fio_t * io_file)
                 str[i] = '\0';
 
         /*discard spaces */
-        for (c = wrap_get(io_file); my_isspace(c); c = wrap_get(io_file))
+        for (c = wrap_get(io_file); my_isspace((char)c); c = wrap_get(io_file))
                 if (EOF == c)
                         return ERR_FAILURE;
 
         /*copy word */
-        for (i = 0; (i < str_len) && (!my_isspace(c));
+        for (i = 0; (i < str_len) && (!my_isspace((char)c));
              i++, c = wrap_get(io_file)) {
                 str[i] = (char)c;
                 if (EOF == c)
@@ -342,7 +342,7 @@ static mw find_word(fobj_t * fo)
         return ERR_OK;
 }
 
-void my_strcpy(char *destination, char *source)
+static void my_strcpy(char *destination, char *source)
 {
         while (*source != '\0')
                 *destination++ = *source++;
@@ -1108,7 +1108,7 @@ mw forth_interpreter(fobj_t * fo)
 
 static void report_error(forth_errors_e e)
 {
-        struct fio_s err_file_local;
+        fio_t err_file_local;
         err_file_local.fio = io_stderr;
         print_string(forth_error_str[e], MAX_ERR_STR, &err_file_local);
         return;

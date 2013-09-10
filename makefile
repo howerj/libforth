@@ -87,8 +87,8 @@ clean:
 
 # Static checking.
 splint:
-	@/bin/echo "Running \"splint *.c *.h &> splint.log\""
-	-splint *.c *.h &> splint.log 
+	@/bin/echo "Running \"splint *.c *.h\""
+	-splint -forcehint *.c *.h
 
 html:
 	@/bin/echo -e "Compiling markdown to html."

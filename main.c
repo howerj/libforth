@@ -28,7 +28,13 @@
 /*Define me via the command line.*/
 #ifdef DEBUG_PRN
 /*print out a table of integers*/
-void print_table(mw * p, int len, FILE * f)
+static void print_table(mw * p, int len, FILE * f);
+static void print_char_table(char *p, int len, FILE * f);
+static void debug_print(fobj_t * fo);
+static fobj_t *forth_obj_create(mw reg_l, mw dic_l, mw var_l, mw ret_l, mw str_l);
+static void forth_obj_destroy(fobj_t * fo);
+
+static void print_table(mw * p, int len, FILE * f)
 {
         int i;
         for (i = 0; i < len; i++)
@@ -41,7 +47,7 @@ void print_table(mw * p, int len, FILE * f)
 }
 
 /*print out a character table*/
-void print_char_table(char *p, int len, FILE * f)
+static void print_char_table(char *p, int len, FILE * f)
 {
         int i;
         for (i = 0; i < len; i++)
@@ -60,7 +66,7 @@ void print_char_table(char *p, int len, FILE * f)
 }
 
 /*print out main memory.*/
-void debug_print(fobj_t * fo)
+static void debug_print(fobj_t * fo)
 {
 
         FILE *table_out;
@@ -89,7 +95,7 @@ void debug_print(fobj_t * fo)
 }
 #endif
 
-fobj_t *forth_obj_create(mw reg_l, mw dic_l, mw var_l, mw ret_l, mw str_l)
+static fobj_t *forth_obj_create(mw reg_l, mw dic_l, mw var_l, mw ret_l, mw str_l)
 {
         /*the vm forth object */
         int i = 0;
@@ -153,7 +159,7 @@ fobj_t *forth_obj_create(mw reg_l, mw dic_l, mw var_l, mw ret_l, mw str_l)
         return fo;
 }
 
-void forth_obj_destroy(fobj_t * fo)
+static void forth_obj_destroy(fobj_t * fo)
 {
         int i = 0;
         if (NULL != fo) {
