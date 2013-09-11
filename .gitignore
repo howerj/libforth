@@ -14,3 +14,5 @@ memory.txt
 gcov.vim
 *.html
 *.htm
+ctags
+tags

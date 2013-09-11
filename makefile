@@ -99,6 +99,9 @@ valgrind: forth
 	@/bin/echo "  This command needs changing in the makefile"
 	-valgrind ./forth &> valgrind.log << EOF
 
+ctags:
+	@ctags -R .
+
 gcov: CCOPTS:=$(CCOPTS) --coverage
 gcov: clean forth
 	@/bin/echo "Providing gcov statistics for forth program."
