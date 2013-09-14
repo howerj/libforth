@@ -5,6 +5,18 @@
 
 These are some notes for myself:
 
+### Hosted Forth
+
+* Separate out all the code for a hosted desktop into another file
+  to simplify things
+
+* For the hosted forth remove sys calls and put them in the hosted
+  section, a lot of the sys calls I have are only available for a
+  hosted platform.
+
+* Remove all fprintfs?
+
+## General
 
 * Replace all memory operations with functions to check if it with in bounds
 first, same with all stack operations.
@@ -28,8 +40,6 @@ should be. They currently are not, be careful not to close file pointers twice.
 
 strnequ should have an absolute address which it can not pass instead of a
 maximum length as should a few other words.
-
-* Add symbols to forth.c instead of having them in forth.fs
 
 * SIGFPE on ( minimal value of int / -1 ). Needs checking.
   try:
