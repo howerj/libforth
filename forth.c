@@ -22,7 +22,7 @@ static int wrap_put(fio_t * out_file, char c);
 static mw get_word(char *str, const mw str_len, fio_t * io_file);
 static mw isnumber(const char s[]);
 static mw strnequ(const char str1[], const char str2[], const mw lim1, const mw lim2);
-static mw my_strlen(const char s[], int maxlen);
+static mw my_strlen(const char s[], const int maxlen);
 static mw kr_atoi(const char s[]);
 static char *my_itoa(mw value, int base);
 static void print_string(const char *s, const mw max, fio_t * out_file);
@@ -180,9 +180,9 @@ static mw get_word(char *str, const mw str_len, fio_t * io_file)
 static mw isnumber(const char s[])
 {
         mw x = 0;
-        if (((s[x] == '-') || (s[x] == '+')) && my_isdigit(s[x + 1]))
+        if ((('-' == s[x]) || ('+' == s[x])) && my_isdigit(s[x + 1]))
                 x++;
-        for (; s[x] != '\0'; x++) {
+        for (; '\0' != s[x]; x++) {
                 if (!my_isdigit(s[x])) {
                         return false;
                 }
@@ -197,7 +197,7 @@ static mw strnequ(const char str1[], const char str2[], const mw lim1, const mw 
         char *s1 = (char *)str1, *s2 = (char *)str2;
 
         for (; (*s1 == *s2) && (s1 < str1 + lim1) && (s2 < str2 + lim2); s1++, s2++)
-                if (*s1 == '\0')
+                if ('\0' == (*s1))
                         return 0;
 
         if ((s1 >= str1 + lim1) || (s2 >= str2 + lim2)) {
@@ -206,11 +206,11 @@ static mw strnequ(const char str1[], const char str2[], const mw lim1, const mw 
         return 1;
 }
 
-static mw my_strlen(const char s[], int maxlen)
+static mw my_strlen(const char s[], const int maxlen)
 {
         int i = 0;
         char *p = (char *)s;
-        while (*p != '\0' && i++ < maxlen)
+        while (('\0' != (*p)) && (i++ < maxlen))
                 p++;
         return p - s;
 }

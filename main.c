@@ -155,7 +155,9 @@ fobj_t *forth_obj_create(mw reg_l, mw dic_l, mw var_l, mw ret_l, mw str_l)
         fo->reg[ENUM_ccount] = 0;       /*Run for X amount of cycles turned off by default. */
         fo->reg[ENUM_inStrm] = 1;
 
+#ifdef DEBUG_PRN
         fprintf(stderr, "\tOBJECT INITIALIZED.\n");
+#endif
         return fo;
 }
 
@@ -174,21 +176,27 @@ void forth_obj_destroy(fobj_t * fo)
                 free(fo->err_file);
                 free(fo);
         }
+#ifdef DEBUG_PRN
         fprintf(stderr, "\tOBJECT DESTROYED.\n");
+#endif
 }
 
 int main(void)
 {
         fobj_t *fo;
 
+#ifdef DEBUG_PRN
         fprintf(stderr, "HOWE FORTH [%s:%s]:\n\tSTARTING.\n", __DATE__, __TIME__);
+#endif
         fo = forth_obj_create(MAX_REG, MAX_DIC, MAX_VAR, MAX_RET, MAX_STR);
         CALLOC_FAIL(fo, -1);    /*memory might not be free()'d on error. */
+#ifdef DEBUG_PRN
         fprintf(stderr, "\tRUNNING.\n");
         fprintf(stderr, "\t[RETURNED:%X]\n", (unsigned int)forth_monitor(fo));
-#ifdef DEBUG_PRN
         fprintf(stderr, "\tDEBUG PRINT RUNNING\n");
         debug_print(fo);
+#else
+        fprintf(stderr, "[%X]\n", (unsigned int)forth_monitor(fo));
 #endif
         forth_obj_destroy(fo);
         return 0;
