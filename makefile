@@ -59,11 +59,8 @@ help:
 
 ## Main forth program
 
-forth: main.c hhforth.o forth.o
-	$(CC) $(CCOPTS) main.c hhforth.o forth.o -o forth
-
-hhforth.o: hhforth.h hhforth.c forth.o
-	$(CC) $(CCOPTS) -c hhforth.c forth.o -o hhforth.o
+forth: main.c forth.o
+	$(CC) $(CCOPTS) main.c forth.o -o forth
 
 forth.o: forth.c forth.h
 	$(CC) $(CCOPTS) -c forth.c -o forth.o

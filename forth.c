@@ -39,7 +39,7 @@ static mw forth_system_calls(fobj_t * fo, mw enum_syscall);
 static void report_error(forth_errors_e e);
 
 /*X-Macro definition of error strings*/
-#define X(a, b, c) b,
+#define X(a, b, c) b
 static const char *forth_error_str[] = {
         FORTH_ERROR_XMACRO
 };
@@ -47,7 +47,7 @@ static const char *forth_error_str[] = {
 #undef X
 
 /*X-Macro definition of actions to take on error*/
-#define X(a, b, c) c,
+#define X(a, b, c) c
 static const forth_error_action_e f_error_action[] = {
         FORTH_ERROR_XMACRO
 };
