@@ -91,8 +91,7 @@ void debug_print(fobj_t * fo)
         fclose(table_out);
 
         fprintf(stderr, "Maximum memory usuage = %d\n",
-                (sizeof(mw) * (MAX_REG + MAX_DIC + MAX_VAR + MAX_RET)) +
-                (sizeof(char) * MAX_STR));
+                (sizeof(mw) * (MAX_REG + MAX_DIC + MAX_VAR + MAX_RET)) + (sizeof(char) * MAX_STR));
 }
 #endif
 
@@ -170,7 +169,7 @@ void forth_obj_destroy(fobj_t * fo)
                 free(fo->ret);
                 free(fo->str);
                 for (i = 0; i < MAX_INSTRM; i++)
-                  free(fo->in_file[i]);
+                        free(fo->in_file[i]);
                 free(fo->out_file);
                 free(fo->err_file);
                 free(fo);
@@ -178,13 +177,11 @@ void forth_obj_destroy(fobj_t * fo)
         fprintf(stderr, "\tOBJECT DESTROYED.\n");
 }
 
-
 int main(void)
 {
         fobj_t *fo;
 
-        fprintf(stderr, "HOWE FORTH [%s:%s]:\n\tSTARTING.\n", __DATE__,
-                __TIME__);
+        fprintf(stderr, "HOWE FORTH [%s:%s]:\n\tSTARTING.\n", __DATE__, __TIME__);
         fo = forth_obj_create(MAX_REG, MAX_DIC, MAX_VAR, MAX_RET, MAX_STR);
         CALLOC_FAIL(fo, -1);    /*memory might not be free()'d on error. */
         fprintf(stderr, "\tRUNNING.\n");
