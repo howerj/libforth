@@ -72,8 +72,8 @@ pretty:
 	@/bin/echo -e "$(BLUE)"
 	@/bin/echo -e "Indent files and clean up system.$(DEFAULT)"
 	@/bin/echo -e "$(GREEN)"
-	@/bin/echo "indent -v -linux -nut -l120 -lc120 *.h *.c";
-	@indent -v -linux -nut -l120 -lc120 *.h *c;
+	@/bin/echo "indent -v -linux -nut -i2 -l120 -lc120 *.h *.c";
+	@indent -v  -linux -nut -i2 -l120 -lc120 *.h *c;
 	@/bin/echo -e "$(RED)"
 	@rm -vf forth memory.txt *.log *.swo *.swp *.o *~ *.gcov *.gcda *.gcno *.html *.htm;
 	@/bin/echo -e "$(DEFAULT)"

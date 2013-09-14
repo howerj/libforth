@@ -34,47 +34,47 @@
 enum bool { false, true };
 
 typedef enum {
-        io_stdin,               /*read from stdin */
-        io_stdout,              /*write to stdout */
-        io_stderr,              /*output to stderr */
-        io_wr_file,             /*write to file */
-        io_rd_file,             /*read from file */
-        io_wr_str,              /*write to a string */
-        io_rd_str               /*read from a string (null terminated!) */
+  io_stdin,                     /*read from stdin */
+  io_stdout,                    /*write to stdout */
+  io_stderr,                    /*output to stderr */
+  io_wr_file,                   /*write to file */
+  io_rd_file,                   /*read from file */
+  io_wr_str,                    /*write to a string */
+  io_rd_str                     /*read from a string (null terminated!) */
 } forth_io_e;
 
 typedef enum {
-        PUSH_INT, COMPILE, RUN, DEFINE, IMMEDIATE, READ, COMMENT, EXIT,
-        BRANCH, NBRANCH, PLUS, MINUS, MUL, MOD, DIV,
-        LS, RS, AND, OR, INV, XOR, INC, DEC, EQ, LESS, MORE,
-        FETCH_REG, FETCH_DIC, PICK, FETCH_STR,
-        STORE_REG, STORE_DIC, STORE_VAR, STORE_STR,
-        KEY, EMIT, DUP, DROP, SWAP, OVER, TOR, FROMR,
-        TAIL, QUOTE, COMMA, PRINTNUM, GET_WORD, STRLEN, ISNUMBER, STRNEQU, FIND,
-        EXECUTE,
-        KERNEL,
-        ERROR,
-        LAST_PRIMITIVE
+  PUSH_INT, COMPILE, RUN, DEFINE, IMMEDIATE, READ, COMMENT, EXIT,
+  BRANCH, NBRANCH, PLUS, MINUS, MUL, MOD, DIV,
+  LS, RS, AND, OR, INV, XOR, INC, DEC, EQ, LESS, MORE,
+  FETCH_REG, FETCH_DIC, PICK, FETCH_STR,
+  STORE_REG, STORE_DIC, STORE_VAR, STORE_STR,
+  KEY, EMIT, DUP, DROP, SWAP, OVER, TOR, FROMR,
+  TAIL, QUOTE, COMMA, PRINTNUM, GET_WORD, STRLEN, ISNUMBER, STRNEQU, FIND,
+  EXECUTE,
+  KERNEL,
+  ERROR,
+  LAST_PRIMITIVE
 } forth_primitives_e;
 
 /*forth_interpreter() return calls*/
 typedef enum {
-        SYS_RESET,
-        SYS_FOPEN, SYS_FCLOSE, SYS_FLUSH,
-        SYS_REMOVE, SYS_RENAME, SYS_REWIND
-            /* remove() rename() tmpfile() tmpnam() ... other stdio.h functions */
+  SYS_RESET,
+  SYS_FOPEN, SYS_FCLOSE, SYS_FLUSH,
+  SYS_REMOVE, SYS_RENAME, SYS_REWIND
+      /* remove() rename() tmpfile() tmpnam() ... other stdio.h functions */
 } forth_syscall_e;
 
 /*Options passed to system call*/
 typedef enum {
-        SYS_OPT_IN, SYS_OPT_OUT, SYS_OPT_ERR
+  SYS_OPT_IN, SYS_OPT_OUT, SYS_OPT_ERR
 } forth_syscall_options_e;
 
 typedef enum {
-        onerr_break_e,
-        onerr_goto_restart_e,
-        onerr_special_e,
-        onerr_return_e
+  onerr_break_e,
+  onerr_goto_restart_e,
+  onerr_special_e,
+  onerr_return_e
 } forth_error_action_e;
 
 /* X macro X(The error code, the error string, which action to take)*/
@@ -118,38 +118,38 @@ typedef enum {
 
 #define X(a, b, c) a
 typedef enum {
-        FORTH_ERROR_XMACRO
+  FORTH_ERROR_XMACRO
 } forth_errors_e;
 #undef X
 
 typedef enum {
-        ENUM_NEXT,
-        ENUM_PC,
-        ENUM_TOS,
-        ENUM_RET,
-        ENUM_VAR,
-        ENUM_DIC,
-        ENUM_STR,
-        ENUM_PWD,
-        ENUM_OP0,
-        ENUM_OP1,
-        ENUM_A,
-        ENUM_B,
-        ENUM_C,
-        ENUM_CPF,
-        ENUM_EXF,
-        ENUM_INI,
-        ENUM_maxReg,
-        ENUM_maxDic,
-        ENUM_maxRet,
-        ENUM_maxVar,
-        ENUM_maxStr,
-        ENUM_inputBufLen,
-        ENUM_dictionaryOffset,
-        ENUM_sizeOfMW,
-        ENUM_cycles,
-        ENUM_ccount,
-        ENUM_inStrm
+  ENUM_NEXT,
+  ENUM_PC,
+  ENUM_TOS,
+  ENUM_RET,
+  ENUM_VAR,
+  ENUM_DIC,
+  ENUM_STR,
+  ENUM_PWD,
+  ENUM_OP0,
+  ENUM_OP1,
+  ENUM_A,
+  ENUM_B,
+  ENUM_C,
+  ENUM_CPF,
+  ENUM_EXF,
+  ENUM_INI,
+  ENUM_maxReg,
+  ENUM_maxDic,
+  ENUM_maxRet,
+  ENUM_maxVar,
+  ENUM_maxStr,
+  ENUM_inputBufLen,
+  ENUM_dictionaryOffset,
+  ENUM_sizeOfMW,
+  ENUM_cycles,
+  ENUM_ccount,
+  ENUM_inStrm
 } forth_registers_e;
 
 /*vm macros*/
@@ -192,29 +192,29 @@ typedef signed int mw;
 
 /*if input or output is a file or string, store point to it*/
 union io_u {
-        FILE *f;
-        char *s;
+  FILE *f;
+  char *s;
 };
 
 /*IO redirections.*/
 struct fio_s {
-        forth_io_e fio;
-        mw str_index;           /*index into string */
-        mw str_max_len;         /*max string length */
-        union io_u iou;
+  forth_io_e fio;
+  mw str_index;                 /*index into string */
+  mw str_max_len;               /*max string length */
+  union io_u iou;
 };
 
 typedef struct fio_s fio_t;
 
 struct forth_obj {
-        fio_t *in_file[MAX_INSTRM];     /*File input redirection */
-        fio_t *out_file;        /*File output redirection */
-        fio_t *err_file;        /*File error output redirection */
-        mw *reg;                /*pointer to registers */
-        mw *dic;                /*pointer to dictionary */
-        mw *var;                /*pointer to variable stack */
-        mw *ret;                /*pointer to return stack */
-        char *str;              /*pointer to character storage */
+  fio_t *in_file[MAX_INSTRM];   /*File input redirection */
+  fio_t *out_file;              /*File output redirection */
+  fio_t *err_file;              /*File error output redirection */
+  mw *reg;                      /*pointer to registers */
+  mw *dic;                      /*pointer to dictionary */
+  mw *var;                      /*pointer to variable stack */
+  mw *ret;                      /*pointer to return stack */
+  char *str;                    /*pointer to character storage */
 };
 
 typedef struct forth_obj fobj_t;
