@@ -153,9 +153,6 @@ find on_err exf !reg    \ Write the executable token for on_err into the diction
     until
 ;
 
-
-
-
  ( Store a '"' terminated string in string storage )
 : _." ( -- )
     str @reg 1-
@@ -255,7 +252,7 @@ str @reg dup iobl @reg + str !reg constant filename
     output rewind kernel
 ;
 
-: .s
+: .s ( print out stack without altering it )
   v @reg 1- dup 0= if exit then
   begin
     dup pick prnn space
@@ -273,17 +270,17 @@ str @reg dup iobl @reg + str !reg constant filename
 : i@ i @ ;
 : j@ j @ ;
 
-: do immediate
+: do immediate ( this needs redoing so it can be nested )
   ' j! ,
   ' i! ,
   here
 ;
 
-: not
+: not ( a -- ~a )
   if 0 else 1 then
 ;
 
-: >=
+: >= ( a b -- bool )
   < not
 ;
 
@@ -323,7 +320,7 @@ str @reg dup iobl @reg + str !reg constant filename
     2drop
 ;
 
-: regs \ ( -- ) \ Print off register contents
+: regs  ( -- ) ( Print off register contents )
     16 @reg 1- 0 \ register 16 holds the maximum number of registers
     begin
         dup prnn ." :" tab dup @reg . 1+
@@ -342,7 +339,7 @@ str @reg dup iobl @reg + str !reg constant filename
     drop
 ;
 
-: gcd ( a b -- n )
+: gcd ( a b -- n ) ( greatest common divisor )
   begin
     dup
     if
@@ -354,6 +351,12 @@ str @reg dup iobl @reg + str !reg constant filename
   drop
 ;
 
+: 2swap ( a b c d -- c d a b  ) rot >r rot r> ;
+
+( =========================================================================== )
+( == Words for manipulating real types ====================================== )
+( =========================================================================== )
+
 : simplify ( a b -- a/gcd{a,b} b/gcd{a/b} )
   2dup
   gcd
@@ -363,8 +366,6 @@ str @reg dup iobl @reg + str !reg constant filename
   /
   swap \ ? check this
 ;
-
-: 2swap rot >r rot r> ;
 
 : crossmultiply ( a b c d -- a*d b*d c*b d*b )
   rot   ( a c d b )
@@ -414,6 +415,7 @@ str @reg dup iobl @reg + str !reg constant filename
   simplify
 ;
 
+( =========================================================================== )
 ( Shows the header of a word. )
 : header
   find 2- dup 40 + show

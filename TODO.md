@@ -18,6 +18,10 @@ These are some notes for myself:
 
 ## General
 
+* do...loop should be able to be nested.
+
+* print "ok" after each loop?
+
 * Define "recurse"
 
 * Replace all memory operations with functions to check if it with in bounds
