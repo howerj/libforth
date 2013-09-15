@@ -67,15 +67,13 @@ find on_err exf !reg    \ Write the executable token for on_err into the diction
 
 : prnn 10 swap printnum ;
 : . prnn cr ;
-\ : # dup . ;
+: # dup . ;
 
 : tuck swap over ;
 : nip swap drop ;
 : rot >r swap r> swap ;
-\ : <> = 0= ;
-\ : ?dup dup if dup then ;
-\ : negate -1 * ;
-\ : abs dup 0 < if negate then ;
+: <> = 0= ;
+: negate -1 * ;
 : -rot rot rot ;
 
 : 2drop drop drop ;
@@ -110,6 +108,9 @@ find on_err exf !reg    \ Write the executable token for on_err into the diction
 	' ?br ,
 	here - ,
 ;
+
+: ?dup dup if dup then ;
+: abs dup 0 < if negate then ;
 
 : allot here + h !reg ;
 : :noname immediate here _run , ] ;
@@ -152,6 +153,9 @@ find on_err exf !reg    \ Write the executable token for on_err into the diction
     until
 ;
 
+
+
+
  ( Store a '"' terminated string in string storage )
 : _." ( -- )
     str @reg 1-
@@ -177,19 +181,19 @@ find on_err exf !reg    \ Write the executable token for on_err into the diction
     then
 ;
  
-: :: 	\ compiles a ':'
+: :: 	( compiles a ':' )
   [ find : , ]
 ;
 
-\ Helper words for create
+( Helper words for create )
 : '', ' ' , ;       \ A word that writes ' into the dictionary
 : ',, ' , , ;       \ A word that writes , into the dictionary
 : 'exit, ' exit , ; \ A word that write exit into the dictionary
 : 3+ 2+ 1+ ;
 
-\ The word create involves multiple levels of indirection.
-\ It makes a word which has to write in values into
-\ another word
+( The word create involves multiple levels of indirection.
+ It makes a word which has to write in values into
+ another word )
 : create immediate              \ This is a complicated word! It makes a
                                 \ word that makes a word.
   cpf @reg if                   \ Compile time behavour
@@ -220,10 +224,10 @@ find on_err exf !reg    \ Write the executable token for on_err into the diction
 : variable create , does> ;
 : array create allot does> + ;
 
-\ Store filenames (temporary) here.
+( Store temporary filenames temporary here. )
 str @reg dup iobl @reg + str !reg constant filename
 
-\ file i/o
+( file i/o )
 : foutput
     filename get_word
     filename output fopen kernel 
@@ -295,7 +299,7 @@ str @reg dup iobl @reg + str !reg constant filename
 
 
 : _show i@ @ prnn tab i@ 1+ i!  ;
-: show \ ( from to -- ) \ Show dictionary storage
+: show  ( from to -- ) ( Show dictionary storage )
   do
         i@ prnn ." :" tab
         _show _show _show _show i@ 1- i!
@@ -306,7 +310,7 @@ str @reg dup iobl @reg + str !reg constant filename
 : _shstr
     2dup - @str emit tab 1- 
 ;
-: shstr \ ( from to -- ) \ Show string storage contents
+: shstr  ( from to -- ) ( Show string storage contents )
     tuck
     swap -
     begin
@@ -338,9 +342,79 @@ str @reg dup iobl @reg + str !reg constant filename
     drop
 ;
 
+: gcd ( a b -- n )
+  begin
+    dup
+    if
+      tuck mod 0
+    else
+      1
+    then
+  until
+  drop
+;
 
+: simplify ( a b -- a/gcd{a,b} b/gcd{a/b} )
+  2dup
+  gcd
+  tuck
+  /
+  -rot
+  /
+  swap \ ? check this
+;
 
-\ Shows the header of a word.
+: 2swap rot >r rot r> ;
+
+: crossmultiply ( a b c d -- a*d b*d c*b d*b )
+  rot   ( a c d b )
+  2dup  ( a c d b d b )
+  *     ( a c d b d*b )
+  >r    ( a c d b , d*b )
+  rot   ( a d b c , d*b )
+  *     ( a d b*c , d*b )
+  -rot  ( b*c a d , d*b )
+  *     ( b*c a*d , d*b )
+  r>    ( b*c a*d d*b )
+  tuck  ( b*c d*b a*d d*b )
+  2swap ( done! )
+;
+
+: realmul ( a/b c/d -- {a/b}*{c/d} )
+  rot
+  *
+  -rot
+  *
+  swap
+  simplify
+;
+
+: realdiv ( a/b c/d -- {a/b}/{c/d} )
+  swap
+  realmul
+;
+
+: realadd ( a/b c/d -- {a/b}+{c/d} )
+  crossmultiply
+  rot
+  drop ( or check if equal, if not there is an error )
+  -rot
+  +
+  swap
+  simplify
+;
+
+: realsub ( a/b c/d -- {a/b}-{c/d} )
+  crossmultiply
+  rot
+  drop ( or check if equal, if not there is an error )
+  -rot
+  -
+  swap
+  simplify
+;
+
+( Shows the header of a word. )
 : header
   find 2- dup 40 + show
 ;
