@@ -23,13 +23,14 @@ CCOPTS=-ansi -g -Wall -Wno-write-strings -Wshadow -Wextra -pedantic -O2
 
 ## Long strings passed to commands
 
-RMSTR=bin/forth bin/*.o memory.txt *.log *.swo *.swp *.o lib/*~ *~ *.gcov *.gcda *.gcno doc/*.html doc/*.htm
+RMSTR=bin/forth bin/*.o memory.txt *.log *.swo *.swp *.o lib/*~ *~ *.gcov *.gcda *.gcno doc/*.html doc/*.htm log/*
 
 INDENTSTR=-v -linux -nut -i2 -l120 -lc120 lib/*.h lib/*.c main.c
+SPLINTSTR=-forcehint main.c lib/*.h lib/*.c
 
 ## Help
 
-all: banner forth
+all: banner bin/forth
 
 banner:
 	@/bin/echo -e "Howe Forth, GNU Makefile\n"
@@ -43,13 +44,14 @@ banner:
 	@/bin/echo -e "To compile $(RED)without$(DEFAULT) bounds checking:$(BLUE) \"-DUNCHECK\".$(DEFAULT)";
 	@/bin/echo -e "\n"
 
-
 help:
 	@/bin/echo "Options:"
 	@/bin/echo "make"
 	@/bin/echo "     Print out banner, this help message and compile program."
 	@/bin/echo "make forth"
-	@/bin/echo "     Compile howe forth."
+	@/bin/echo "     Compile Howe forth."
+	@/bin/echo "make run"
+	@/bin/echo "     Run Howe forth."
 	@/bin/echo "make pretty"
 	@/bin/echo "     Indent source, print out word count, clean up directory."
 	@/bin/echo "make clean"
@@ -65,13 +67,18 @@ help:
 
 ## Main forth program
 
-forth: main.c bin/forth.o
+bin/forth: main.c bin/forth.o
 	$(CC) $(CCOPTS) main.c bin/forth.o -o bin/forth
 
 bin/forth.o: lib/forth.c lib/forth.h
 	$(CC) $(CCOPTS) -c lib/forth.c -o bin/forth.o
 
 ## Optional extras, helper functions
+
+# Run the interpreter
+
+run: bin/forth
+	@cd bin; ./forth
 
 # Indent the files, clean up directory, word count.
 pretty: 
@@ -93,8 +100,8 @@ clean:
 
 # Static checking.
 splint:
-	@/bin/echo "Running \"splint *.c *.h\""
-	-splint -forcehint *.c *.h
+	@/bin/echo "$(SPLINTSTR)";
+	-splint $(SPLINTSTR);
 
 html:
 	@/bin/echo -e "Compiling markdown to html."
@@ -103,7 +110,7 @@ html:
 		markdown $$i > $$i.html;\
 	done
 
-valgrind: forth
+valgrind: bin/forth
 	@/bin/echo "Running valgrind on ./forth"
 	@/bin/echo "  This command needs changing in the makefile"
 	-valgrind bin/./forth << EOF
@@ -112,7 +119,8 @@ ctags:
 	@ctags -R .
 
 gcov: CCOPTS:=$(CCOPTS) --coverage
-gcov: clean forth
+gcov: clean bin/forth
 	@/bin/echo "Providing gcov statistics for forth program."
-	@bin/./forth << EOF
-	@gcov lib/forth.c main.c
+	@cd bin/; ./forth << EOF
+	@mv *.gcda *.gcno bin/*.gcda bin/*.gcno log/
+	@cd log/; gcov forth.c main.c

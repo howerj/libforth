@@ -414,6 +414,11 @@ str @reg dup iobl @reg + str !reg constant filename
   simplify
 ;
 
+: realprint ( a/b -- )
+  swap
+  prnn ."  / " prnn cr
+;
+
 ( =========================================================================== )
 
 : header ( Shows the header of a word. )

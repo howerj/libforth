@@ -16,3 +16,4 @@ gcov.vim
 *.htm
 ctags
 tags
+log/
