@@ -21,6 +21,12 @@ CC=gcc
 CCOPTS=-ansi -g -Wall -Wno-write-strings -Wshadow -Wextra -pedantic -O2
 #CCOPTS=-ansi --coverage -g -Wall -Wno-write-strings -Wshadow -Wextra -pedantic -O2
 
+## Long strings passed to commands
+
+RMSTR=bin/forth bin/*.o memory.txt *.log *.swo *.swp *.o lib/*~ *~ *.gcov *.gcda *.gcno doc/*.html doc/*.htm
+
+INDENTSTR=-v -linux -nut -i2 -l120 -lc120 lib/*.h lib/*.c main.c
+
 ## Help
 
 all: banner forth
@@ -59,12 +65,11 @@ help:
 
 ## Main forth program
 
-forth: main.c forth.o
-	$(CC) $(CCOPTS) main.c forth.o -o forth
-	@mv forth bin/
+forth: main.c bin/forth.o
+	$(CC) $(CCOPTS) main.c bin/forth.o -o bin/forth
 
-forth.o: forth.c forth.h
-	$(CC) $(CCOPTS) -c forth.c -o forth.o
+bin/forth.o: lib/forth.c lib/forth.h
+	$(CC) $(CCOPTS) -c lib/forth.c -o bin/forth.o
 
 ## Optional extras, helper functions
 
@@ -73,17 +78,17 @@ pretty:
 	@/bin/echo -e "$(BLUE)"
 	@/bin/echo -e "Indent files and clean up system.$(DEFAULT)"
 	@/bin/echo -e "$(GREEN)"
-	@/bin/echo "indent -v -linux -nut -i2 -l120 -lc120 *.h *.c";
-	@indent -v  -linux -nut -i2 -l120 -lc120 *.h *c;
+	@/bin/echo "indent $(INDENTSTR)"
+	@indent $(INDENTSTR);
 	@/bin/echo -e "$(RED)"
-	@rm -vf forth/bin memory.txt *.log *.swo *.swp *.o *~ *.gcov *.gcda *.gcno *.html *.htm;
+	@rm -vf $(RMSTR);
 	@/bin/echo -e "$(DEFAULT)"
-	@wc *.c *.h fth/*.4th makefile
+	@wc lib/*.c lib/*.h *.c fth/*.4th makefile
 
 # Clean up directory.
 clean:
 	@/bin/echo -e "$(RED)"
-	@rm -vf bin/forth memory.txt *.log *.swo *.swp *.o *~ *.gcov *.gcda *.gcno *.html *.htm;
+	@rm -vf $(RMSTR);
 	@/bin/echo -e "$(DEFAULT)"
 
 # Static checking.
@@ -93,12 +98,15 @@ splint:
 
 html:
 	@/bin/echo -e "Compiling markdown to html."
-	@for i in *.md; do /bin/echo "$$i > $$i.html"; markdown $$i > $$i.html; done
+	for i in doc/*.md; do\
+		/bin/echo "$$i > $$i.html";\
+		markdown $$i > $$i.html;\
+	done
 
 valgrind: forth
 	@/bin/echo "Running valgrind on ./forth"
 	@/bin/echo "  This command needs changing in the makefile"
-	-valgrind bin/./forth &> valgrind.log << EOF
+	-valgrind bin/./forth << EOF
 
 ctags:
 	@ctags -R .
@@ -106,5 +114,5 @@ ctags:
 gcov: CCOPTS:=$(CCOPTS) --coverage
 gcov: clean forth
 	@/bin/echo "Providing gcov statistics for forth program."
-	@./forth << EOF
-	@gcov forth.c main.c
+	@bin/./forth << EOF
+	@gcov lib/forth.c main.c

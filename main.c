@@ -9,6 +9,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include "lib/forth.h"
 
 #define MAX_REG 32
 #define MAX_DIC (1024*1024)

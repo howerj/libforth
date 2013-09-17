@@ -28,7 +28,26 @@ for now it will stay on the desktop computer.
 
 ### Directory structure
 
+#### bin/
 
+This contains the binary that *should* have built without any problems what so
+ever, it also contains a system link into the "fth/" directory.
+
+#### doc/
+
+The manual(s) written in markdown are in this directory. They can be compiled to
+HTML by typing "make html" which will create the documents in the same
+directory, "doc/".
+
+#### fth/
+
+The Forth source is contained in here! This is where most of the functionality
+is actually defined.
+
+#### lib/
+
+"lib/" contains the Howe Forth library which "main.c" is simply a wrapper
+around, it defines the Forth virtual machine and implements the core primitives.
 
 ### REQUIREMENTS
 
