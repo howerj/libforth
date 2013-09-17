@@ -61,6 +61,7 @@ help:
 
 forth: main.c forth.o
 	$(CC) $(CCOPTS) main.c forth.o -o forth
+	@mv forth bin/
 
 forth.o: forth.c forth.h
 	$(CC) $(CCOPTS) -c forth.c -o forth.o
@@ -75,14 +76,14 @@ pretty:
 	@/bin/echo "indent -v -linux -nut -i2 -l120 -lc120 *.h *.c";
 	@indent -v  -linux -nut -i2 -l120 -lc120 *.h *c;
 	@/bin/echo -e "$(RED)"
-	@rm -vf forth memory.txt *.log *.swo *.swp *.o *~ *.gcov *.gcda *.gcno *.html *.htm;
+	@rm -vf forth/bin memory.txt *.log *.swo *.swp *.o *~ *.gcov *.gcda *.gcno *.html *.htm;
 	@/bin/echo -e "$(DEFAULT)"
-	@wc *.c *.h *.4th makefile
+	@wc *.c *.h fth/*.4th makefile
 
 # Clean up directory.
 clean:
 	@/bin/echo -e "$(RED)"
-	@rm -vf forth memory.txt *.log *.swo *.swp *.o *~ *.gcov *.gcda *.gcno *.html *.htm;
+	@rm -vf bin/forth memory.txt *.log *.swo *.swp *.o *~ *.gcov *.gcda *.gcno *.html *.htm;
 	@/bin/echo -e "$(DEFAULT)"
 
 # Static checking.
@@ -97,7 +98,7 @@ html:
 valgrind: forth
 	@/bin/echo "Running valgrind on ./forth"
 	@/bin/echo "  This command needs changing in the makefile"
-	-valgrind ./forth &> valgrind.log << EOF
+	-valgrind bin/./forth &> valgrind.log << EOF
 
 ctags:
 	@ctags -R .

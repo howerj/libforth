@@ -28,6 +28,8 @@ for now it will stay on the desktop computer.
 
 ### Directory structure
 
+
+
 ### REQUIREMENTS
 
 * GCC
