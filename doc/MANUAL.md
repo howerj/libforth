@@ -1,7 +1,7 @@
 A Portable FORTH implementation: Howe Forth
 ===========================================
 
-![Howe Forth Logo](https://raw.github.com/howerj/c-forth/master/logo.png "By the power of HOWE FORTH!")
+![Howe Forth Logo](https://raw.github.com/howerj/c-forth/master/doc/logo.png "By the power of HOWE FORTH!")
 
 Author:             
 

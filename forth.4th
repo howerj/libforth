@@ -294,7 +294,6 @@ str @reg dup iobl @reg + str !reg constant filename
   here - ,
 ;
 
-
 : _show i@ @ prnn tab i@ 1+ i!  ;
 : show  ( from to -- ) ( Show dictionary storage )
   do
@@ -416,12 +415,12 @@ str @reg dup iobl @reg + str !reg constant filename
 ;
 
 ( =========================================================================== )
-( Shows the header of a word. )
-: header
+
+: header ( Shows the header of a word. )
   find 2- dup 40 + show
 ;
 
-\ ANSI terminal color codes
+( ANSI terminal color codes )
 : esc 'esc' emit ;
 : rst esc ." [2J" cr ;    \ Clear screen
 : clr esc ." [0;0H" cr ;  \ Set cursor to 0,0
@@ -430,12 +429,12 @@ str @reg dup iobl @reg + str !reg constant filename
 : blu esc ." [34;1m" ;    \ ...to blue.
 : nrm esc ." [0m" cr ;    \ ...to the default.
 
-: cursor esc ." [" prnn ." ;" prnn ." H" fflush kernel ;
+: cursor ( x y -- ) esc ." [" prnn ." ;" prnn ." H" fflush kernel ;
 
 \ : vocabulary create pwd @reg , does> @ pwd !reg ;
 \ vocabulary forth
 
-\ Welcome message.
+( Welcome message. )
 rst clr grn
 .( Howe Forth ) cr .( Base System Loaded ) cr
 .( @author         ) blu .( Richard James Howe. ) grn cr

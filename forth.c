@@ -378,7 +378,6 @@ static mw compile_word_prim(fobj_t * fo, char *prim)
 #define COMPILE_PRIM(X)  if(compile_word_prim(fo,(X))!=ERR_OK){ return ERR_FAILURE; }
 static mw forth_initialize(fobj_t * fo)
 {
-  /*copy pointers, removes level of indirection */
   mw *reg = fo->reg, *dic = fo->dic, *ret = fo->ret;
   fio_t *err_file = fo->err_file;
 
