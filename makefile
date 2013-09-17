@@ -128,5 +128,7 @@ gcov: CCOPTS:=$(CCOPTS) --coverage
 gcov: clean bin/forth
 	@/bin/echo "Providing gcov statistics for forth program."
 	@cd bin/; ./forth << EOF
-	@mv *.gcda *.gcno bin/*.gcda bin/*.gcno log/
-	@cd log/; gcov forth.c main.c
+	@mv bin/*.gcda bin/*.gcno .
+	@gcov forth.c hosted.c main.c
+	@if [ ! -d log/ ]; then mkdir log; fi
+	@mv *.gcda *.gcno *.gcov log/

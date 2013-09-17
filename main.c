@@ -7,10 +7,10 @@
  *
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include "lib/forth.h"
-#include "lib/hosted.h"
+#include <stdio.h>      /* required by hosted.h and forth.h */
+#include <stdlib.h>     /* required by hosted.h */
+#include "lib/forth.h"  /* forth_monitor, fobj_t */
+#include "lib/hosted.h" /* forth_obj_create, forth_obj_destroy */
 
 #define MAX_REG 32
 #define MAX_DIC (1024*1024)
