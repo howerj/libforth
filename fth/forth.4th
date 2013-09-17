@@ -33,7 +33,8 @@ find on_err exf !reg    \ Write the executable token for on_err into the diction
 \ change to compile mode
 : ] true state ;
 
-\ These words represent words with no name in the dictionary, the 'invisible' words.
+\ These words represent words with no name in the dictionary, 
+\ the 'invisible' words.
 : _push 0 ;
 : _compile 1 ;
 : _run 2 ;
@@ -67,7 +68,6 @@ find on_err exf !reg    \ Write the executable token for on_err into the diction
 
 : prnn 10 swap printnum ;
 : . prnn cr ;
-: # dup . ;
 
 : tuck swap over ;
 : nip swap drop ;
@@ -78,6 +78,7 @@ find on_err exf !reg    \ Write the executable token for on_err into the diction
 
 : 2drop drop drop ;
 : 2dup over over ;
+: 2swap rot >r rot r> ;
 
 : 2+ 1+ 1+ ;
 : 2- 1- 1- ;
@@ -104,6 +105,7 @@ find on_err exf !reg    \ Write the executable token for on_err into the diction
 : begin immediate
 	here
 ;
+
 : until immediate
 	' ?br ,
 	here - ,
@@ -240,26 +242,8 @@ str @reg dup iobl @reg + str !reg constant filename
     filename remove kernel
 ;
 
-: fcopy
-    foutput
-    finput
-    begin
-        key emit 0
-    until
-;
-
 : frewind
     output rewind kernel
-;
-
-: .s ( print out stack without altering it )
-  v @reg 1- dup 0= if exit then
-  begin
-    dup pick prnn space
-    1- dup 0= 
-  until
-  drop
-  cr
 ;
 
 0 variable i
@@ -294,50 +278,6 @@ str @reg dup iobl @reg + str !reg constant filename
   here - ,
 ;
 
-: _show i@ @ prnn tab i@ 1+ i!  ;
-: show  ( from to -- ) ( Show dictionary storage )
-  do
-        i@ prnn ." :" tab
-        _show _show _show _show i@ 1- i!
-        cr
-  loop
-;
-
-: _shstr
-    2dup - @str emit tab 1- 
-;
-: shstr  ( from to -- ) ( Show string storage contents )
-    tuck
-    swap -
-    begin
-        _shstr 
-        _shstr 
-        _shstr 
-        _shstr dup 0 <
-        cr
-    until
-    2drop
-;
-
-: regs  ( -- ) ( Print off register contents )
-    16 @reg 1- 0 \ register 16 holds the maximum number of registers
-    begin
-        dup prnn ." :" tab dup @reg . 1+
-        2dup =
-    until
-;
-
-: words
-    pwd @reg 
-    begin
-        dup 1+ @ prn
-        space
-        @ dup @ 0 =   
-    until
-    cr
-    drop
-;
-
 : gcd ( a b -- n ) ( greatest common divisor )
   begin
     dup
@@ -350,103 +290,11 @@ str @reg dup iobl @reg + str !reg constant filename
   drop
 ;
 
-: 2swap ( a b c d -- c d a b  ) rot >r rot r> ;
-
 ( =========================================================================== )
-( == Words for manipulating real types ====================================== )
-( =========================================================================== )
-
-: simplify ( a b -- a/gcd{a,b} b/gcd{a/b} )
-  2dup
-  gcd
-  tuck
-  /
-  -rot
-  /
-  swap \ ? check this
-;
-
-: crossmultiply ( a b c d -- a*d b*d c*b d*b )
-  rot   ( a c d b )
-  2dup  ( a c d b d b )
-  *     ( a c d b d*b )
-  >r    ( a c d b , d*b )
-  rot   ( a d b c , d*b )
-  *     ( a d b*c , d*b )
-  -rot  ( b*c a d , d*b )
-  *     ( b*c a*d , d*b )
-  r>    ( b*c a*d d*b )
-  tuck  ( b*c d*b a*d d*b )
-  2swap ( done! )
-;
-
-: realmul ( a/b c/d -- {a/b}*{c/d} )
-  rot
-  *
-  -rot
-  *
-  swap
-  simplify
-;
-
-: realdiv ( a/b c/d -- {a/b}/{c/d} )
-  swap
-  realmul
-;
-
-: realadd ( a/b c/d -- {a/b}+{c/d} )
-  crossmultiply
-  rot
-  drop ( or check if equal, if not there is an error )
-  -rot
-  +
-  swap
-  simplify
-;
-
-: realsub ( a/b c/d -- {a/b}-{c/d} )
-  crossmultiply
-  rot
-  drop ( or check if equal, if not there is an error )
-  -rot
-  -
-  swap
-  simplify
-;
-
-: realprint ( a/b -- )
-  swap
-  prnn ."  / " prnn cr
-;
-
-( =========================================================================== )
-
-: header ( Shows the header of a word. )
-  find 2- dup 40 + show
-;
-
-( ANSI terminal color codes )
-: esc 'esc' emit ;
-: rst esc ." [2J" cr ;    \ Clear screen
-: clr esc ." [0;0H" cr ;  \ Set cursor to 0,0
-: red esc ." [31;1m" ;    \ Change text color to red.
-: grn esc ." [32;1m" ;    \ ...to green.
-: blu esc ." [34;1m" ;    \ ...to blue.
-: nrm esc ." [0m" cr ;    \ ...to the default.
-
-: cursor ( x y -- ) esc ." [" prnn ." ;" prnn ." H" fflush kernel ;
 
 \ : vocabulary create pwd @reg , does> @ pwd !reg ;
 \ vocabulary forth
 
-( Welcome message. )
-rst clr grn
-.( Howe Forth ) cr .( Base System Loaded ) cr
-.( @author         ) blu .( Richard James Howe. ) grn cr
-.( @copyright      ) blu .( Copyright 2013 Richard James Howe. ) grn cr
-.( @license        ) blu .( LGPL ) grn cr
-.( @email          ) blu .( howe.r.j.89@gmail.com ) grn cr
-.( Memory Used: ) cr 
-.(   Dictionary:   ) blu here 4 * str @reg + . grn
-.(   Strings:      ) blu str @reg . grn
-red .( OK ) nrm
+finput ../fth/debug.4th
+finput ../fth/real.4th
+finput ../fth/welcome.4th
