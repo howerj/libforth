@@ -67,9 +67,15 @@ help:
 
 ## Main forth program
 
-bin/forth: main.c bin/forth.o
-	$(CC) $(CCOPTS) main.c bin/forth.o -o bin/forth
+# The Forth interpreter top level
+bin/forth: main.c bin/forth.o bin/hosted.o
+	$(CC) $(CCOPTS) main.c bin/hosted.o bin/forth.o -o bin/forth
 
+# Desktop interface
+bin/hosted.o: lib/hosted.c lib/hosted.h
+	$(CC) $(CCOPTS) -c lib/hosted.c -o bin/hosted.o
+
+# The forth interpreter library
 bin/forth.o: lib/forth.c lib/forth.h
 	$(CC) $(CCOPTS) -c lib/forth.c -o bin/forth.o
 
