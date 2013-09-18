@@ -510,6 +510,15 @@ static void on_err(fobj_t * fo)
   (fo->err_file)->fio = io_stderr;
 }
 
+/*
+ * mw (*forth_system_calls_handler)(fobj_t* fo, mw enum_syscall) = NULL;
+ *
+ * Using the above, it should be possible to define placeholders for
+ * all the system dependant stuff, for example the file I/O, even
+ * for getc and putc as well.
+ *
+ */
+
 /*System calls, all arguments are on the stack. You will need to
  *edit this for your particular system, for example a uC*/
 static mw forth_system_calls(fobj_t * fo, mw enum_syscall)

@@ -60,10 +60,8 @@ typedef enum {
 /*forth_interpreter() return calls*/
 typedef enum {
   SYS_RESET,
-  SYS_FOPEN, SYS_FCLOSE, SYS_FLUSH,
-  SYS_REMOVE, SYS_RENAME, SYS_REWIND,
-  SYS_SYSTEM,
-      /* remove() rename() tmpfile() tmpnam() ... other stdio.h functions */
+  SYS_FOPEN, SYS_FCLOSE, SYS_FLUSH,SYS_REMOVE, SYS_RENAME, SYS_REWIND,/*stdio.h*/
+  SYS_SYSTEM, /*stdlib.h*/
   LAST_ERROR_CALL
 } forth_syscall_e;
 
@@ -224,4 +222,5 @@ typedef struct forth_obj fobj_t;
 /* Function prototypes for external API */
 mw forth_interpreter(fobj_t * fo);
 mw forth_monitor(fobj_t * fo);
+
 #endif                          /*end header guard for forth.h */
