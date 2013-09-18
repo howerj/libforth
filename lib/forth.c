@@ -11,7 +11,8 @@
  *
  */
 
-#include <stdio.h>
+#include <stdio.h>  /* FILE, putc(), getc(), fopen, fclose, rename... */
+#include <stdlib.h> /* system() */
 #include "forth.h"
 
 /*internal function prototypes*/
@@ -472,7 +473,7 @@ static mw forth_initialize(fobj_t * fo)
   COMPILE_PRIM("'");
   COMPILE_PRIM(",");
   COMPILE_PRIM("printnum");
-  COMPILE_PRIM("get_word");
+  COMPILE_PRIM("getword");
   COMPILE_PRIM("strlen");
   COMPILE_PRIM("isnumber");
   COMPILE_PRIM("strnequ");
@@ -509,7 +510,8 @@ static void on_err(fobj_t * fo)
   (fo->err_file)->fio = io_stderr;
 }
 
-/*System calls, all arguments are on the stack.*/
+/*System calls, all arguments are on the stack. You will need to
+ *edit this for your particular system, for example a uC*/
 static mw forth_system_calls(fobj_t * fo, mw enum_syscall)
 {
   mw *reg = fo->reg, *var = fo->var;
@@ -656,6 +658,12 @@ static mw forth_system_calls(fobj_t * fo, mw enum_syscall)
       ERR_LN_PRN(err_file);
       return ERR_SYSCALL_OPTIONS;
     }
+  case SYS_SYSTEM:
+    system(str+TOS);
+    ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
+    TOS = var[VAR];
+    VAR--;
+    return ERR_OK;
   default:
     return ERR_NOTSYSCALL;
   }
@@ -1164,8 +1172,8 @@ mw forth_monitor(fobj_t * fo)
   /* I should check that EXF is potentially valid, ie. Not zero */
  RESTART:
   fo_returned_val = forth_interpreter(fo);
-  if (fo_returned_val >= LAST_SYS) {
-    print_string(forth_error_str[LAST_SYS], MAX_ERR_STR, fo->err_file);
+  if (fo_returned_val >= LAST_ERROR) {
+    print_string(forth_error_str[LAST_ERROR], MAX_ERR_STR, fo->err_file);
     return fo_returned_val;
   } else if (onerr_goto_restart_e == f_error_action[fo_returned_val]) {
     print_string(forth_error_str[fo_returned_val], MAX_ERR_STR, fo->err_file);

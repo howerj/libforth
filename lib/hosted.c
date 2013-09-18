@@ -16,6 +16,9 @@
 #include "forth.h"
 #include "hosted.h"
 
+#define DICTIONARY_OFFSET_M (4)
+#define IOBUFFER_LENGTH_M   (256)
+
 /*Define me via the command line.*/
 #ifdef DEBUG_PRN
 /*print out a table of integers*/
@@ -138,8 +141,8 @@ fobj_t *forth_obj_create(mw reg_l, mw dic_l, mw var_l, mw ret_l, mw str_l)
   fo->reg[ENUM_maxVar] = var_l;
   fo->reg[ENUM_maxRet] = ret_l;
   fo->reg[ENUM_maxStr] = str_l;
-  fo->reg[ENUM_inputBufLen] = 32;
-  fo->reg[ENUM_dictionaryOffset] = 4;
+  fo->reg[ENUM_inputBufLen] = IOBUFFER_LENGTH_M;
+  fo->reg[ENUM_dictionaryOffset] = DICTIONARY_OFFSET_M;
   fo->reg[ENUM_sizeOfMW] = (mw) sizeof(mw);
   fo->reg[ENUM_INI] = (mw) true;
   fo->reg[ENUM_cycles] = (mw) false;    /*Run for X amount of cycles turned off by default. */

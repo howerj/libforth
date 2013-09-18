@@ -47,6 +47,7 @@ find on_err exf !reg    \ Write the executable token for on_err into the diction
 : remove 4 ;
 : rename 5 ;
 : rewind 6 ;
+: system 7 ;
 
 \ Constants for system call arguments
 : input 0 ;
@@ -226,24 +227,48 @@ find on_err exf !reg    \ Write the executable token for on_err into the diction
 ( Store temporary filenames temporary here. )
 str @reg dup iobl @reg + str !reg constant filename
 
+0 variable strvar
+: getstr"
+  0 strvar !
+  begin
+    key dup '"' 
+    = 
+    if
+      0 strvar @ filename + !str
+      drop 1
+    else
+      strvar @ filename + !str 
+      strvar @ 1+ strvar !
+      0 
+    then
+  until
+  filename
+;
+
 ( file i/o )
 : foutput
-    filename get_word
+    filename getword
     filename output fopen kernel 
 ;
 
 : finput
-    filename get_word
+    filename getword
     filename input fopen kernel 
+    drop
 ;
 
 : fremove
-    filename get_word
+    filename getword
     filename remove kernel
 ;
 
 : frewind
     output rewind kernel
+;
+
+: system"
+  getstr"
+  system kernel
 ;
 
 0 variable i

@@ -61,8 +61,10 @@ typedef enum {
 typedef enum {
   SYS_RESET,
   SYS_FOPEN, SYS_FCLOSE, SYS_FLUSH,
-  SYS_REMOVE, SYS_RENAME, SYS_REWIND
+  SYS_REMOVE, SYS_RENAME, SYS_REWIND,
+  SYS_SYSTEM,
       /* remove() rename() tmpfile() tmpnam() ... other stdio.h functions */
+  LAST_ERROR_CALL
 } forth_syscall_e;
 
 /*Options passed to system call*/
@@ -114,7 +116,7 @@ typedef enum {
   X(ERR_NEXT_STRM,        "EOF -> Next Stream.\n",                            onerr_special_e),\
   X(ERR_NULL,             "(Internal), Null not expected\n",                  onerr_break_e),\
   X(ERR_SPECIAL_ERROR,    "(Internal), Special error handler not defined!\n", onerr_break_e),\
-  X(LAST_SYS,             "Fatal Err: Incorrect error code or call!\n",       onerr_return_e)
+  X(LAST_ERROR,             "Fatal Err: Incorrect error code or call!\n",       onerr_return_e)
 
 #define X(a, b, c) a
 typedef enum {
