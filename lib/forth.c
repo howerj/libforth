@@ -1111,48 +1111,25 @@ static void report_error(forth_errors_e e)
 }
 
 /*Error and IO handler for the Forth interpreter*/
+#define NULLCHK_M(X)  if(NULL == (X)){ report_error(ERR_NULL); return ERR_FAILURE; }
 mw forth_monitor(fobj_t * fo)
 {
   mw fo_returned_val;
   mw *reg;
 
-  if (NULL == fo) {
-    report_error(ERR_NULL);
-    return ERR_FAILURE;
-  }
+  /*pointer checks*/
+  NULLCHK_M(fo);
 
   reg = fo->reg;
 
-  if (NULL == fo->err_file) {
-    report_error(ERR_NULL);
-    return ERR_FAILURE;
-  }
+  NULLCHK_M(fo->reg);
+  NULLCHK_M(fo->dic);
+  NULLCHK_M(fo->var);
+  NULLCHK_M(fo->ret);
+  NULLCHK_M(fo->str);
+  NULLCHK_M(fo->err_file);
 
-  if (NULL == fo->reg) {
-    report_error(ERR_NULL);
-    return ERR_FAILURE;
-  }
-
-  if (NULL == fo->dic) {
-    report_error(ERR_NULL);
-    return ERR_FAILURE;
-  }
-
-  if (NULL == fo->var) {
-    report_error(ERR_NULL);
-    return ERR_FAILURE;
-  }
-
-  if (NULL == fo->ret) {
-    report_error(ERR_NULL);
-    return ERR_FAILURE;
-  }
-
-  if (NULL == fo->str) {
-    report_error(ERR_NULL);
-    return ERR_FAILURE;
-  }
-
+  /*point and sanity checks of the in and output files*/
   if (NULL == fo->in_file) {
     report_error(ERR_NULL);
     return ERR_FAILURE;
@@ -1199,10 +1176,9 @@ mw forth_monitor(fobj_t * fo)
             (void)fclose(fo->in_file[IN_STRM]->iou.f);
             fo->in_file[IN_STRM]->iou.f = NULL;
           }
-        }
+        } 
         IN_STRM--;
         print_string(forth_error_str[ERR_NEXT_STRM], MAX_ERR_STR, fo->err_file);
-
         goto RESTART;
       }
       print_string(forth_error_str[ERR_EOF], MAX_ERR_STR, fo->err_file);
@@ -1220,3 +1196,4 @@ mw forth_monitor(fobj_t * fo)
   }
   return ERR_ABNORMAL_END;
 }
+#undef NULLCHK_M

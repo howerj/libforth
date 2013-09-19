@@ -9,6 +9,7 @@
 
 #include <stdio.h>      /* required by hosted.h and forth.h */
 #include <stdlib.h>     /* required by hosted.h */
+#include <string.h>     /* strcmp */
 #include "lib/forth.h"  /* forth_monitor, fobj_t */
 #include "lib/hosted.h" /* forth_obj_create, forth_obj_destroy */
 
@@ -18,25 +19,44 @@
 #define MAX_RET 8192
 #define MAX_STR (1024*1024)
 
-/*#define DEBUG_PRN*/
+static const char versionmsg[] =
+"Howe Forth, version: " __DATE__ " " __TIME__ "\n";
 
-int main(void)
+static const char helpmsg[] =
+"\
+Usage: forth [OPTION/FILE]\n\
+Run the Howe Forth interpreter.\n\
+  -h, --help      Display this help message and exit.\n\
+  -V, --version   Display the version number and exit.\n\
+\n\
+With no OPTION or FILE given Howe Forth will attempt to read the\n\
+input file \"forth.4th\", otherwise if a valid file name is given\n\
+that will be read in. Once it has it finished it will continue\n\
+reading from stdin.\n\
+";
+
+int main(int argc, char *argv[])
 {
+  mw forth_return;
   fobj_t *fo;
 
-#ifdef DEBUG_PRN
-  fprintf(stderr, "HOWE FORTH [%s:%s]:\n\tSTARTING.\n", __DATE__, __TIME__);
-#endif
+  if(argc > 1){ /*process command line arguments*/
+    if((!strcmp("-h",argv[1]))||(!strcmp("--help",argv[1]))){
+      fprintf(stdout,"%s\n%s\n",versionmsg,helpmsg);
+      return 0;
+    }
+
+    if((!strcmp("-V",argv[1]))||(!strcmp("--version",argv[1]))){
+      fprintf(stdout,versionmsg);
+      return 0;
+    }
+
+  }
+
   fo = forth_obj_create(MAX_REG, MAX_DIC, MAX_VAR, MAX_RET, MAX_STR);
   CALLOC_FAIL(fo, -1);          /*memory might not be free()'d on error. */
-#ifdef DEBUG_PRN
-  fprintf(stderr, "\tRUNNING.\n");
-  fprintf(stderr, "\t[RETURNED:%X]\n", (unsigned int)forth_monitor(fo));
-  fprintf(stderr, "\tDEBUG PRINT RUNNING\n");
-  debug_print(fo);
-#else
-  fprintf(stderr, "[%X]\n", (unsigned int)forth_monitor(fo));
-#endif
+  forth_return = forth_monitor(fo);
+  fprintf(stderr, "(returned %X)\n", (unsigned int)forth_return);
   forth_obj_destroy(fo);
   return 0;
 }
