@@ -149,7 +149,9 @@ typedef enum {
   ENUM_sizeOfMW,
   ENUM_cycles,
   ENUM_ccount,
-  ENUM_inStrm
+  ENUM_inStrm,
+  ENUM_wordCount,
+  ENUM_wordIndex
 } forth_registers_e;
 
 /*vm macros*/
@@ -187,6 +189,8 @@ typedef enum {
 #define CCOUNT  reg[ENUM_ccount]
 
 #define IN_STRM reg[ENUM_inStrm]
+#define WORDCNT reg[ENUM_wordCount]
+#define WORDINX reg[ENUM_wordIndex]
 
 typedef signed int mw;
 

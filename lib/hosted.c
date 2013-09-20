@@ -89,7 +89,7 @@ void debug_print(fobj_t * fo)
 }
 #endif
 
-fobj_t *forth_obj_create(mw reg_l, mw dic_l, mw var_l, mw ret_l, mw str_l)
+fobj_t *forth_obj_create(mw reg_l, mw dic_l, mw var_l, mw ret_l, mw str_l, FILE *input)
 {
   /*the vm forth object */
   int i = 0;
@@ -130,7 +130,10 @@ fobj_t *forth_obj_create(mw reg_l, mw dic_l, mw var_l, mw ret_l, mw str_l)
 
   /*initialize input file, fclose is handled elsewhere */
   fo->in_file[1]->fio = io_rd_file;
-  if ((fo->in_file[1]->iou.f = fopen("forth.4th", "r")) == NULL) {
+  if (NULL != input){
+    fo->in_file[1]->iou.f = input;
+  }
+  else if ((fo->in_file[1]->iou.f = fopen("forth.4th", "r")) == NULL) {
     fprintf(stderr, "Unable to open initial input file!\n");
     return NULL;
   }
@@ -148,6 +151,8 @@ fobj_t *forth_obj_create(mw reg_l, mw dic_l, mw var_l, mw ret_l, mw str_l)
   fo->reg[ENUM_cycles] = (mw) false;    /*Run for X amount of cycles turned off by default. */
   fo->reg[ENUM_ccount] = 0;     /*Run for X amount of cycles turned off by default. */
   fo->reg[ENUM_inStrm] = 1;
+  fo->reg[ENUM_wordCount] = 0;
+  fo->reg[ENUM_wordIndex] = 0;
 
 #ifdef DEBUG_PRN
   fprintf(stderr, "\tOBJECT INITIALIZED.\n");

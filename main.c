@@ -37,6 +37,7 @@ reading from stdin.\n\
 
 int main(int argc, char *argv[])
 {
+  FILE *input=NULL;
   mw forth_return;
   fobj_t *fo;
 
@@ -51,9 +52,16 @@ int main(int argc, char *argv[])
       return 0;
     }
 
+    /*
+    if((!strcmp("-",argv[1]))||(!strcmp("--stdin",argv[1]))){
+    }*/
+    if(NULL == (input = fopen(argv[1], "r"))){
+      fprintf(stderr,"Could not open \"%s\" for reading.\n",argv[1]);
+      return 1;
+    }
   }
 
-  fo = forth_obj_create(MAX_REG, MAX_DIC, MAX_VAR, MAX_RET, MAX_STR);
+  fo = forth_obj_create(MAX_REG, MAX_DIC, MAX_VAR, MAX_RET, MAX_STR, input);
   CALLOC_FAIL(fo, -1);          /*memory might not be free()'d on error. */
   forth_return = forth_monitor(fo);
   fprintf(stderr, "(returned %X)\n", (unsigned int)forth_return);

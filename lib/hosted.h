@@ -20,7 +20,7 @@
       }
 
 void debug_print(fobj_t * fo);
-fobj_t *forth_obj_create(mw reg_l, mw dic_l, mw var_l, mw ret_l, mw str_l);
+fobj_t *forth_obj_create(mw reg_l, mw dic_l, mw var_l, mw ret_l, mw str_l, FILE *input);
 void forth_obj_destroy(fobj_t * fo);
 
 #endif                          /*end header guard for hosted.h */

@@ -318,6 +318,7 @@ static mw find_word(fobj_t * fo)
   ECUZ(SM_maxDic, OP0 + 1, ERR_OP0, err_file);
   ECUZ(SM_maxStr, dic[OP0 + 1], ERR_DIC, err_file);
 
+  WORDINX = 0;
   while ((OP1 = strnequ(str, &str[dic[OP0 + 1]], SM_inputBufLen, SM_maxStr)) != 0) {
     if (OP1 == 2) {             /*2 signifies string limited exceeded. */
       ERR_LN_PRN(err_file);
@@ -326,11 +327,13 @@ static mw find_word(fobj_t * fo)
     ECUZ(SM_maxDic, OP0, ERR_OP0, err_file);
 
     /* Sanity check, prevents loops */
-    if ((OP0 == dic[OP0]) || (OP0 < dic[OP0])) {
+    if(WORDINX>WORDCNT){
       ERR_LN_PRN(err_file);
       return ERR_PWD;
     }
+
     OP0 = dic[OP0];
+    WORDINX++;
   }
 
   return ERR_OK;
@@ -338,7 +341,7 @@ static mw find_word(fobj_t * fo)
 
 static void my_strcpy(char *destination, char *source)
 {
-  while (*source != '\0')
+  while ('\0' != *source)
     *destination++ = *source++;
 }
 
@@ -361,6 +364,7 @@ static mw compile_word(forth_primitives_e fp, fobj_t * fo, enum bool flag, char 
   else if (ERR_OK != get_word(str + STR, SM_inputBufLen, in_file))
     return ERR_FAILURE;
   STR += my_strlen(str + STR, MAX_STRLEN) + 1;
+  WORDCNT++;
   return ERR_OK;
 }
 
