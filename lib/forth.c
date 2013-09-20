@@ -331,7 +331,6 @@ static mw find_word(fobj_t * fo)
       ERR_LN_PRN(err_file);
       return ERR_PWD;
     }
-
     OP0 = dic[OP0];
     WORDINX++;
   }

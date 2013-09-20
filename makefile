@@ -18,12 +18,12 @@ DEFAULT=\e[0m
 ## Compiler options
 
 CC=gcc
-CCOPTS=-ansi -g -Wall -Wno-write-strings -Wshadow -Wextra -pedantic -O2
+CCOPTS=-ansi -g -Wall -Wno-write-strings -Wshadow -Wextra -pedantic -O2 -save-temps
 #CCOPTS=-ansi --coverage -g -Wall -Wno-write-strings -Wshadow -Wextra -pedantic -O2
 
 ## Long strings passed to commands
 
-RMSTR=bin/forth bin/*.o memory.txt *.log *.swo *.swp *.o lib/*~ *~ *.gcov *.gcda *.gcno doc/*.html doc/*.htm log/*
+RMSTR=bin/forth bin/*.o memory.txt *.log *.swo *.swp *.o lib/*~ *~ *.gcov *.gcda *.gcno doc/*.html doc/*.htm log/* *.i *.s log/*.i log/*.s
 
 INDENTSTR=-v -linux -nut -i2 -l120 -lc120 lib/*.h lib/*.c main.c
 SPLINTSTR=-forcehint main.c lib/*.h lib/*.c
@@ -70,6 +70,7 @@ help:
 # The Forth interpreter top level
 bin/forth: main.c bin/forth.o bin/hosted.o
 	$(CC) $(CCOPTS) main.c bin/hosted.o bin/forth.o -o bin/forth
+	@mv *.i *.s log/
 
 # Desktop interface
 bin/hosted.o: lib/hosted.c lib/hosted.h

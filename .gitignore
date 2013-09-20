@@ -17,3 +17,5 @@ gcov.vim
 ctags
 tags
 log/
+*.i
+*.s
