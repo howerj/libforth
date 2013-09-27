@@ -62,6 +62,8 @@ find on_err exf !reg    \ Write the executable token for on_err into the diction
 : ')' 41 ;
 
 : 0= 0 = ;
+: 0< 0 < ;
+: 0> 0 > ;
 
 : space 32 emit ;
 : cr 10 emit ;
@@ -322,4 +324,5 @@ str @reg dup iobl @reg + str !reg constant filename
 
 finput ../fth/debug.4th
 finput ../fth/real.4th
+finput ../fth/math.4th
 finput ../fth/welcome.4th
