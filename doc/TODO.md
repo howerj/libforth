@@ -18,6 +18,8 @@ These are some notes for myself:
 
 ## General
 
+* Doxygen!
+
 * do...loop should be able to be nested.
 
 * print "ok" after each loop?
