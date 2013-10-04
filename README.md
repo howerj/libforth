@@ -15,7 +15,7 @@ License:
 
 * LGPL
 
-Email(s):              
+Email:              
 
 * howe.r.j.89@googlemail.com
 
@@ -26,11 +26,11 @@ be customizable to your needs, modular and fairly fast. Eventually it is
 intended that this will be ported to an embedded system (Most likely ARM based),
 for now it will stay on the desktop computer.
 
-### Directory structure
+## Directory structure
 
 Projects directory structure:
 
-#### bin/
+### bin/
 
 This contains the binary that *should* have built without any problems what so
 ever, it also contains a system link into the "fth/" directory.
@@ -39,26 +39,31 @@ To this forth once it has been built change directories to "bin/" and type:
 
   ./forth
 
+Alternatively type:
+
+  make run
+
 It will look for a file called "forth.4th" in the same directory which is the
 first thing it will execute.
 
-#### doc/
+### doc/
 
 The manual(s) written in markdown are in this directory. They can be compiled to
-HTML by typing "make html" which will create the documents in the same
-directory, "doc/".
+HTML by typing **make html** which will create the documents in the same
+directory, "doc/". Alternatively you can type **make doxygen** which will both
+do that *and* create a beautiful web page for the project.
 
-#### fth/
+### fth/
 
 The Forth source is contained in here! This is where most of the functionality
 is actually defined.
 
-#### lib/
+### lib/
 
 "lib/" contains the Howe Forth library which "main.c" is simply a wrapper
 around, it defines the Forth virtual machine and implements the core primitives.
 
-### Requirements
+## Requirements
 
 * GCC
 
@@ -71,23 +76,23 @@ Used for the build system.
 There are some optional dependencies that are more to do with debugging the
 system then anything else and are probably not relevant. 
 
-### Optional requirements
+## Optional requirements
 
 These are extra tools that can be used in conjunction with the project. In the
 make file there are commands that you can run that will act as wrappers around
 these tools.
 
-#### markdown
+### markdown
 
 Typing **make html** will create html files of all \*.md in the directory. 
 
-#### gcov
+### gcov
 
 **make gcov** will compile the forth interpreter and run it with the initial
 configuration file. "gcov" is then run showing what lines are executed most
 frequently.
 
-#### valgrind
+### valgrind
 
 **make valgrind**
 
@@ -95,14 +100,21 @@ This compiles the program and runs it in valgrind, outputting everything to a
 file called *valgrind.log*. The program halts after the initial configuration
 file is given as with **make gcov**.
 
-#### GNU indent
+### GNU indent
 
 This will format the files in standard way, if you do not like the way my code
 looks (formatting wise!) you can change the command passed to indent in the make
 file and rerun **make pretty**. This command will also clean up the directory
 structure like **make clean** does as well as run "wc" over the sources files.
 
-### Notes
+### Doxygen
+
+**make doxygen** will produce some pretty awesome documentation automatically
+and store it in "doc/doxygen". The output is in both HTML and LaTeX format (in
+"doc/doxygen/html" and "doc/doxygen/latex" respectively. This also requires
+Graphviz to be installed as well.
+
+## Notes
 
 To compile type **make** and then to run type **./forth**. The makefile has more
 options in it which can be displayed with the command **make help**.
