@@ -23,7 +23,7 @@ CCOPTS=-ansi -g -Wall -Wno-write-strings -Wshadow -Wextra -pedantic -O2 -save-te
 
 ## Long strings passed to commands
 
-RMSTR=bin/forth bin/*.o memory.txt *.log *.swo *.swp *.o lib/*~ *~ *.gcov *.gcda *.gcno doc/*.html doc/*.htm log/* *.i *.s log/*.i log/*.s html/* latex/*
+RMSTR=bin/forth bin/*.o memory.txt *.log *.swo *.swp *.o lib/*~ *~ *.gcov *.gcda *.gcno doc/*.html doc/*.htm log/* *.i *.s log/*.i log/*.s doc/doxygen/html/* doc/doxygen/latex/*
 
 INDENTSTR=-v -linux -nut -i2 -l120 -lc120 lib/*.h lib/*.c main.c
 SPLINTSTR=-forcehint main.c lib/*.h lib/*.c

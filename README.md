@@ -1,4 +1,5 @@
-## A Portable FORTH implementation: Howe Forth
+A Portable FORTH implementation: Howe Forth     {#mainpage}
+===========================================
 
 ![Howe Forth Logo](https://raw.github.com/howerj/c-forth/master/doc/logo.png "By the power of HOWE FORTH!")
 

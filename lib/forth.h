@@ -1,5 +1,4 @@
-/* 
- * Richard James Howe
+/** @file forth.h
  * Howe Forth.
  *
  * Configuration file and interface API

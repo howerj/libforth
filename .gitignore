@@ -23,3 +23,7 @@ doxygen/
 doxygen/*
 doxygen/html/*
 doxygen/latex/*
+doc/doxygen/
+doc/doxygen/*
+doc/doxygen/html/*
+doc/doxygen/latex/*

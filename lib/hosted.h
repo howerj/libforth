@@ -1,5 +1,4 @@
-/* 
- * Richard James Howe
+/** @file hosted.h 
  * Howe Forth.
  *
  * Desktop Interface, header
