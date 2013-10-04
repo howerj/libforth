@@ -12,6 +12,7 @@
 #ifndef hosted_h_header_guard    /* begin header guard for hosted.h */
 #define hosted_h_header_guard
 
+/**This macro is meant to be used within a large function for error handling*/
 #define CALLOC_FAIL(X,RET)\
       if((X)==NULL){\
           fprintf(stderr,"calloc() failed <%s:%d>\n", __FILE__,__LINE__);\
