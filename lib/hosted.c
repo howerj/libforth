@@ -1,8 +1,8 @@
-/** @file hosted.c 
- * Howe Forth.
+/** Howe Forth.
+ * @file hosted.c 
+ * @brief Hosted Interface.
  *
- * Hosted Interface.
- *
+ * 
  * @author         Richard James Howe.
  * @copyright      Copyright 2013 Richard James Howe.
  * @license        LGPL      

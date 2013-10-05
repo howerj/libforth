@@ -1,8 +1,7 @@
-/** @file forth.c 
- *
- * Howe Forth.
- *
- * A portable forth interpreter written in C. It can be used as a library
+/** Howe Forth.
+ * 
+ * @file forth.c 
+ * @brief A portable forth interpreter written in C. It can be used as a library
  * and is *very* easy to port to different platforms being written in
  * ANSI C.
  *

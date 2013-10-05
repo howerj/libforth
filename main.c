@@ -1,5 +1,7 @@
-/** @file main.c
- * Howe Forth: Wrapper/Top Level.
+/** Howe Forth
+ *
+ * @file main.c
+ * @brief Wrapper/Top Level.
  *
  * @author         Richard James Howe.
  * @copyright      Copyright 2013 Richard James Howe.

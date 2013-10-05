@@ -1,7 +1,7 @@
-/** @file hosted.h 
- * Howe Forth.
- *
- * Desktop Interface, header
+/** Howe Forth.
+ * 
+ * @file hosted.h 
+ * @brief Desktop Interface, header
  *
  * @author         Richard James Howe.
  * @copyright      Copyright 2013 Richard James Howe.
