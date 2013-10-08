@@ -15,19 +15,19 @@
 #ifndef forth_h_header_guard    /* begin header guard for forth.h */
 #define forth_h_header_guard
 
-#define MAX_PRN_STR    64
-#define MAX_ERR_STR    64
-#define MAX_STRLEN     32
-#define MAX_INSTRM     32
+#define MAX_PRN_STR    (64)
+#define MAX_ERR_STR    (64)
+#define MAX_STRLEN     (32)
+#define MAX_INSTRM     (32)
 
 /*minimum memory requirements*/
-#define MIN_REG        32
-#define MIN_DIC        512
-#define MIN_RET        32
-#define MIN_VAR        32
-#define MIN_STR        512
-#define MIN_INBUF      16
-#define MIN_DIC_OFF    4
+#define MIN_REG        (32)
+#define MIN_DIC        (512)
+#define MIN_RET        (32)
+#define MIN_VAR        (32)
+#define MIN_STR        (512)
+#define MIN_INBUF      (16)
+#define MIN_DIC_OFF    (4)
 
 /* Enums */
 enum bool { false, true };
@@ -44,9 +44,9 @@ typedef enum {
 
 /********************************************************************************/
 #define FORTH_PRIMITIVE_XMACRO_M \
-  X(PUSH_INT,       ""),\
-  X(COMPILE,        ""),\
-  X(RUN,            ""),\
+  X(PUSH_INT,       "_push_int"),\
+  X(COMPILE,        "_compile"),\
+  X(RUN,            "_run"),\
   X(DEFINE,         ":"),\
   X(IMMEDIATE,      "immediate"),\
   X(READ,           "read"),\
@@ -108,13 +108,25 @@ typedef enum {
 
 /********************************************************************************/
 
-/*forth_interpreter() return calls*/
+#define FORTH_SYSTEM_CALLS_XMACRO_M \
+  X(SYS_RESET,        "reset"),\
+  X(SYS_FOPEN,        "fopen"),\
+  X(SYS_FCLOSE,       "fclose"),\
+  X(SYS_FLUSH,        "fflush"),\
+  X(SYS_REMOVE,       "remove"),\
+  X(SYS_RENAME,       "rename"),\
+  X(SYS_REWIND,       "rewind"),\
+  X(SYS_SYSTEM,       "system"),\
+  X(LAST_ERROR_CALL,  "NOT A SYSTEM CALL")
+
+
+
+/**forth_interpreter() return calls*/
+#define X(a, b) a
 typedef enum {
-  SYS_RESET,
-  SYS_FOPEN, SYS_FCLOSE, SYS_FLUSH,SYS_REMOVE, SYS_RENAME, SYS_REWIND,/*stdio.h*/
-  SYS_SYSTEM, /*stdlib.h*/
-  LAST_ERROR_CALL
+  FORTH_SYSTEM_CALLS_XMACRO_M
 } forth_syscall_e;
+#undef X
 
 /*Options passed to system call*/
 typedef enum {
@@ -166,7 +178,7 @@ typedef enum {
   X(ERR_NEXT_STRM,        "EOF -> Next Stream.\n",                            onerr_special_e),\
   X(ERR_NULL,             "(Internal), Null not expected\n",                  onerr_break_e),\
   X(ERR_SPECIAL_ERROR,    "(Internal), Special error handler not defined!\n", onerr_break_e),\
-  X(LAST_ERROR,             "Fatal Err: Incorrect error code or call!\n",     onerr_return_e)
+  X(LAST_ERROR,           "Fatal Err: Incorrect error code or call!\n",       onerr_return_e)
 
 #define X(a, b, c) a
 typedef enum {
@@ -176,7 +188,7 @@ typedef enum {
 
 /********************************************************************************/
 /** X Macro, This one is optional apart from the ENUM (ie. For debugging)*/ 
-#define REGISTER_ENUM_XMACRO_M \
+#define FORTH_REGISTER_ENUM_XMACRO_M \
     X(ENUM_NEXT,              "ENUM_NEXT"),\
     X(ENUM_PC,                "ENUM_PC"),\
     X(ENUM_TOS,               "ENUM_TOS"),\
@@ -210,7 +222,7 @@ typedef enum {
 
 #define X(a, b) a
 typedef enum {
-  REGISTER_ENUM_XMACRO_M
+  FORTH_REGISTER_ENUM_XMACRO_M
 } forth_registers_e;
 #undef X
 

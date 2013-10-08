@@ -16,13 +16,13 @@
 #include "lib/forth.h"  /* forth_monitor, fobj_t */
 #include "lib/hosted.h" /* forth_obj_create, forth_obj_destroy */
 
-#define MAX_REG 32
+#define MAX_REG (32)
 #define MAX_DIC (1024*1024)
-#define MAX_VAR 8192
-#define MAX_RET 8192
+#define MAX_VAR (8192)
+#define MAX_RET (8192)
 #define MAX_STR (1024*1024)
 
-static void print_enums(void);
+static void print_enums(FILE *output);
 
 /** versionmsg, used for a primitive version control */
 static const char versionmsg[] =
@@ -35,6 +35,7 @@ Usage: forth [OPTION/FILE]\n\
 Run the Howe Forth interpreter.\n\
   -h, --help      Display this help message and exit.\n\
   -V, --version   Display the version number and exit.\n\
+  -E, --enum      Print out a list of all enums and exit.\n\
 \n\
 With no OPTION or FILE given Howe Forth will attempt to read the\n\
 input file \"forth.4th\", otherwise if a valid file name is given\n\
@@ -42,10 +43,47 @@ that will be read in. Once it has it finished it will continue\n\
 reading from stdin.\n\
 ";
 
+/**only for printing out*/
+#define X(a, b) b
+static const char *forth_primitives_str_print_me[] = {
+  FORTH_PRIMITIVE_XMACRO_M
+};
+#undef X
+
+/**only for printing out*/
+#define X(a, b) b
+static const char *forth_system_calls_str_print_me[] = {
+  FORTH_SYSTEM_CALLS_XMACRO_M
+};
+#undef X
+
+/**only for printing out*/
+#define X(a, b) b
+static const char *forth_register_str_print_me[] = {
+  FORTH_REGISTER_ENUM_XMACRO_M
+};
+#undef X
+
 /**Print out all of the defined enumerations that might be
  * useful for the interpreter when it is running to have*/
-static void print_enums(void){
-  /** This will require making lots of X-macros */
+static void print_enums(FILE *output){
+  int i;
+  /**print out registers*/
+  fprintf(output, "\\ Auto generated file");
+  for(i = 0; i < ENUM_LAST_REGISTER; i++){
+    fprintf(output, "%d constant %s\n", i, forth_register_str_print_me[i]);
+  }
+
+  /**print out system calls*/
+  for(i = 0; i < LAST_ERROR_CALL ; i++){
+    fprintf(output, "%d constant %s\n", i, forth_system_calls_str_print_me[i]);
+  }
+
+  /**print out defined primitives, note that they are stringified*/
+  for(i = 0; i < LAST_PRIMITIVE; i++){
+    fprintf(output, "%d constant \"%s\"\n", i, forth_primitives_str_print_me[i]);
+  }
+
   return;
 }
 
@@ -67,6 +105,10 @@ int main(int argc, char *argv[])
       return 0;
     }
 
+    if((!strcmp("-E",argv[1]))||(!strcmp("--enum",argv[1]))){
+      print_enums(stdout);
+      return 0;
+    }
     /*
     if((!strcmp("-",argv[1]))||(!strcmp("--stdin",argv[1]))){
     }*/

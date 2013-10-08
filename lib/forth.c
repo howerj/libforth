@@ -55,7 +55,7 @@ static const forth_error_action_e f_error_action[] = {
 
 /**X-Macro definition of the names of primitives*/
 #define X(a, b) b
-const char *forth_primitives_str[] = {
+static const char *forth_primitives_str[] = {
   FORTH_PRIMITIVE_XMACRO_M
 };
 #undef X
