@@ -68,20 +68,26 @@ static const char *forth_register_str_print_me[] = {
  * useful for the interpreter when it is running to have*/
 static void print_enums(FILE *output){
   int i;
+
+  fprintf(output, "\\ Auto generated file, do not edit \n");
+  fprintf(output, "\\ This file contains a list of useful constants\n\n");
+
   /**print out registers*/
-  fprintf(output, "\\ Auto generated file");
+  fprintf(output, "\\ register locations\n");
   for(i = 0; i < ENUM_LAST_REGISTER; i++){
-    fprintf(output, "%d constant %s\n", i, forth_register_str_print_me[i]);
+    fprintf(output, "%d constant R_%s\n", i, forth_register_str_print_me[i]);
   }
 
   /**print out system calls*/
+  fprintf(output, "\\ system calls for kernel keyword\n");
   for(i = 0; i < LAST_ERROR_CALL ; i++){
-    fprintf(output, "%d constant %s\n", i, forth_system_calls_str_print_me[i]);
+    fprintf(output, "%d constant S_%s\n", i, forth_system_calls_str_print_me[i]);
   }
 
-  /**print out defined primitives, note that they are stringified*/
+  /**print out defined primitives*/
+  fprintf(output, "\\ primitives\n");
   for(i = 0; i < LAST_PRIMITIVE; i++){
-    fprintf(output, "%d constant \"%s\"\n", i, forth_primitives_str_print_me[i]);
+    fprintf(output, "%d constant P_%s\n", i, forth_primitives_str_print_me[i]);
   }
 
   return;

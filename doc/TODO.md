@@ -19,9 +19,11 @@ These are some notes for myself:
 
 ## General
 
-* Malloc/Free
+* Naming convention:
+  - Come up with a naming convention for the project and stick to it,
+  document it as well.
 
-* Print out a list of enums 
+* Malloc/Free
 
 * Doxygen!
 

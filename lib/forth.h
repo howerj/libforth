@@ -189,35 +189,35 @@ typedef enum {
 /********************************************************************************/
 /** X Macro, This one is optional apart from the ENUM (ie. For debugging)*/ 
 #define FORTH_REGISTER_ENUM_XMACRO_M \
-    X(ENUM_NEXT,              "ENUM_NEXT"),\
-    X(ENUM_PC,                "ENUM_PC"),\
-    X(ENUM_TOS,               "ENUM_TOS"),\
-    X(ENUM_RET,               "ENUM_RET"),\
-    X(ENUM_VAR,               "ENUM_VAR"),\
-    X(ENUM_DIC,               "ENUM_DIC"),\
-    X(ENUM_STR,               "ENUM_STR"),\
-    X(ENUM_PWD,               "ENUM_PWD"),\
-    X(ENUM_OP0,               "ENUM_OP0"),\
-    X(ENUM_OP1,               "ENUM_OP1"),\
-    X(ENUM_A,                 "ENUM_A"),\
-    X(ENUM_B,                 "ENUM_B"),\
-    X(ENUM_C,                 "ENUM_C"),\
-    X(ENUM_CPF,               "ENUM_CPF"),\
-    X(ENUM_EXF,               "ENUM_EXF"),\
-    X(ENUM_INI,               "ENUM_INI"),\
-    X(ENUM_maxReg,            "ENUM_maxReg"),\
-    X(ENUM_maxDic,            "ENUM_maxDic"),\
-    X(ENUM_maxRet,            "ENUM_maxRet"),\
-    X(ENUM_maxVar,            "ENUM_maxVar"),\
-    X(ENUM_maxStr,            "ENUM_maxStr"),\
-    X(ENUM_inputBufLen,       "ENUM_inputBufLen"),\
-    X(ENUM_dictionaryOffset,  "ENUM_dictionaryOffset"),\
-    X(ENUM_sizeOfMW,          "ENUM_sizeOfMW"),\
-    X(ENUM_cycles,            "ENUM_cycles"),\
-    X(ENUM_ccount,            "ENUM_ccount"),\
-    X(ENUM_inStrm,            "ENUM_inStrm"),\
-    X(ENUM_wordCount,         "ENUM_wordCount"),\
-    X(ENUM_wordIndex,         "ENUM_wordIndex"),\
+    X(ENUM_NEXT,              "NEXT"),\
+    X(ENUM_PC,                "PC"),\
+    X(ENUM_TOS,               "TOS"),\
+    X(ENUM_RET,               "RET"),\
+    X(ENUM_VAR,               "VAR"),\
+    X(ENUM_DIC,               "DIC"),\
+    X(ENUM_STR,               "STR"),\
+    X(ENUM_PWD,               "PWD"),\
+    X(ENUM_OP0,               "OP0"),\
+    X(ENUM_OP1,               "OP1"),\
+    X(ENUM_A,                 "A"),\
+    X(ENUM_B,                 "B"),\
+    X(ENUM_C,                 "C"),\
+    X(ENUM_CPF,               "CPF"),\
+    X(ENUM_EXF,               "EXF"),\
+    X(ENUM_INI,               "INI"),\
+    X(ENUM_maxReg,            "maxReg"),\
+    X(ENUM_maxDic,            "maxDic"),\
+    X(ENUM_maxRet,            "maxRet"),\
+    X(ENUM_maxVar,            "maxVar"),\
+    X(ENUM_maxStr,            "maxStr"),\
+    X(ENUM_inputBufLen,       "inputBufLen"),\
+    X(ENUM_dictionaryOffset,  "dictionaryOffset"),\
+    X(ENUM_sizeOfMW,          "sizeOfMW"),\
+    X(ENUM_cycles,            "cycles"),\
+    X(ENUM_ccount,            "ccount"),\
+    X(ENUM_inStrm,            "inStrm"),\
+    X(ENUM_wordCount,         "wordCount"),\
+    X(ENUM_wordIndex,         "wordIndex"),\
     X(ENUM_LAST_REGISTER,     "THIS IS NOT A REGISTER")
 
 #define X(a, b) a

@@ -32,7 +32,7 @@ DOXYFILE=doxygen.conf
 
 ## Help
 
-all: banner bin/forth
+all: banner bin/forth fth/auto.4th
 
 banner:
 	@/bin/echo -e "Howe Forth, GNU Makefile\n"
@@ -68,6 +68,12 @@ help:
 	@/bin/echo "     Run program with valgrind on start up forth file only."
 
 ## Main forth program
+
+fth/auto.4th: bin/forth
+	@/bin/echo "Automatically generating a list of constants using:"
+	@/bin/echo "  bin/./forth -E > fth/auto.4th"
+	@bin/./forth -E > fth/auto.4th
+	@/bin/echo "Autogen done!"
 
 # The Forth interpreter top level
 bin/forth: main.c bin/forth.o bin/hosted.o
