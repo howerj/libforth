@@ -30,20 +30,20 @@ static char *my_itoa(mw value, int base);
 static void print_string(const char *s, const mw max, fio_t * out_file);
 static void print_line_file(int line, const char *file, fio_t * err_file);
 static mw find_word(fobj_t * fo);
-static void my_strcpy(char *destination, char *source);
-static mw compile_word(forth_primitives_e fp, fobj_t * fo, enum bool flag, char *prim);
-static mw compile_word_prim(fobj_t * fo, char *prim);
+static void my_strcpy(char *destination, const char *source);
+static mw compile_word(forth_primitives_e fp, fobj_t * fo, enum bool flag, const char *prim);
+static mw compile_word_prim(fobj_t * fo, const char *prim);
 static mw forth_initialize(fobj_t * fo);
 static void on_err(fobj_t * fo);
 static mw forth_system_calls(fobj_t * fo, mw enum_syscall);
 static void report_error(forth_errors_e e);
 
+/*****************************************************************************/
 /*X-Macro definition of error strings*/
 #define X(a, b, c) b
 static const char *forth_error_str[] = {
   FORTH_ERROR_XMACRO
 };
-
 #undef X
 
 /**X-Macro definition of actions to take on error*/
@@ -51,8 +51,17 @@ static const char *forth_error_str[] = {
 static const forth_error_action_e f_error_action[] = {
   FORTH_ERROR_XMACRO
 };
-
 #undef X
+
+/**X-Macro definition of the names of primitives*/
+#define X(a, b) b
+const char *forth_primitives_str[] = {
+  FORTH_PRIMITIVE_XMACRO_M
+};
+#undef X
+
+/*****************************************************************************/
+
 
 /* IO wrappers*/
 
@@ -343,13 +352,16 @@ static mw find_word(fobj_t * fo)
   return ERR_OK;
 }
 
-static void my_strcpy(char *destination, char *source)
+/**my_strcpy, so I would not have to import all of string.h
+ * in an embedded system
+ */
+static void my_strcpy(char *destination, const char *source)
 {
   while ('\0' != *source)
     *destination++ = *source++;
 }
 
-static mw compile_word(forth_primitives_e fp, fobj_t * fo, enum bool flag, char *prim)
+static mw compile_word(forth_primitives_e fp, fobj_t * fo, enum bool flag, const char *prim)
 {
   mw *reg = fo->reg, *dic = fo->dic;
   char *str = fo->str;
@@ -373,7 +385,7 @@ static mw compile_word(forth_primitives_e fp, fobj_t * fo, enum bool flag, char 
 }
 
 /*should add error checking.*/
-static mw compile_word_prim(fobj_t * fo, char *prim)
+static mw compile_word_prim(fobj_t * fo, const char *prim)
 {
   mw *reg = fo->reg, *dic = fo->dic, ret;
   ret = compile_word(COMPILE, fo, true, prim);
@@ -389,6 +401,7 @@ static mw forth_initialize(fobj_t * fo)
 {
   mw *reg = fo->reg, *dic = fo->dic, *ret = fo->ret;
   fio_t *err_file = fo->err_file;
+  unsigned int i; 
 
   if (SM_maxReg < MIN_REG)
     return ERR_MINIMUM_MEM;
@@ -442,53 +455,10 @@ static mw forth_initialize(fobj_t * fo)
     return ERR_FAILURE;
   }
   OP0 = EXIT;
-  COMPILE_PRIM("exit");
-  COMPILE_PRIM("br");
-  COMPILE_PRIM("?br");
-  COMPILE_PRIM("+");
-  COMPILE_PRIM("-");
-  COMPILE_PRIM("*");
-  COMPILE_PRIM("mod");
-  COMPILE_PRIM("/");
-  COMPILE_PRIM("lshift");
-  COMPILE_PRIM("rshift");
-  COMPILE_PRIM("and");
-  COMPILE_PRIM("or");
-  COMPILE_PRIM("invert");
-  COMPILE_PRIM("xor");
-  COMPILE_PRIM("1+");
-  COMPILE_PRIM("1-");
-  COMPILE_PRIM("=");
-  COMPILE_PRIM("<");
-  COMPILE_PRIM(">");
-  COMPILE_PRIM("@reg");
-  COMPILE_PRIM("@");
-  COMPILE_PRIM("pick");
-  COMPILE_PRIM("@str");
-  COMPILE_PRIM("!reg");
-  COMPILE_PRIM("!");
-  COMPILE_PRIM("!var");
-  COMPILE_PRIM("!str");
-  COMPILE_PRIM("key");
-  COMPILE_PRIM("emit");
-  COMPILE_PRIM("dup");
-  COMPILE_PRIM("drop");
-  COMPILE_PRIM("swap");
-  COMPILE_PRIM("over");
-  COMPILE_PRIM(">r");
-  COMPILE_PRIM("r>");
-  COMPILE_PRIM("tail");
-  COMPILE_PRIM("'");
-  COMPILE_PRIM(",");
-  COMPILE_PRIM("printnum");
-  COMPILE_PRIM("getword");
-  COMPILE_PRIM("strlen");
-  COMPILE_PRIM("isnumber");
-  COMPILE_PRIM("strnequ");
-  COMPILE_PRIM("find");
-  COMPILE_PRIM("execute");
-  COMPILE_PRIM("kernel");
-  COMPILE_PRIM("error");
+
+  for(i = EXIT ; i < LAST_PRIMITIVE; i++){
+    COMPILE_PRIM(forth_primitives_str[i]);
+  }
 
   ECUZ(SM_maxRet, RET, ERR_RET, err_file);
   RET++;

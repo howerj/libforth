@@ -97,8 +97,8 @@ typedef enum {
   X(FIND,           "find"),\
   X(EXECUTE,        "execute"),\
   X(KERNEL,         "kernel"),\
-  X(ERROR,          ""),\
-  X(LAST_PRIMITIVE, "")
+  X(ERROR,          "error"),\
+  X(LAST_PRIMITIVE, "THIS IS NOT A PRIMITIVE")
 
 #define X(a, b) a
 typedef enum {
