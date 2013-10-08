@@ -42,19 +42,71 @@ typedef enum {
   io_rd_str                     /*read from a string (null terminated!) */
 } forth_io_e;
 
+/********************************************************************************/
+#define FORTH_PRIMITIVE_XMACRO_M \
+  X(PUSH_INT,       ""),\
+  X(COMPILE,        ""),\
+  X(RUN,            ""),\
+  X(DEFINE,         ":"),\
+  X(IMMEDIATE,      "immediate"),\
+  X(READ,           "read"),\
+  X(COMMENT,        "\\"),\
+  X(EXIT,           "exit"),\
+  X(BRANCH,         "br"),\
+  X(NBRANCH,        "?br"),\
+  X(PLUS,           "+"),\
+  X(MINUS,          "-"),\
+  X(MUL,            "*"),\
+  X(MOD,            "mod"),\
+  X(DIV,            "/"),\
+  X(LS,             "lshift"),\
+  X(RS,             "rshift"),\
+  X(AND,            "and"),\
+  X(OR,             "or"),\
+  X(INV,            "invert"),\
+  X(XOR,            "xor"),\
+  X(INC,            "1+"),\
+  X(DEC,            "1-"),\
+  X(EQ,             "="),\
+  X(LESS,           "<"),\
+  X(MORE,           ">"),\
+  X(FETCH_REG,      "@reg"),\
+  X(FETCH_DIC,      "@"),\
+  X(PICK,           "pick"),\
+  X(FETCH_STR,      "@str"),\
+  X(STORE_REG,      "!reg"),\
+  X(STORE_DIC,      "!"),\
+  X(STORE_VAR,      "!var"),\
+  X(STORE_STR,      "!str"),\
+  X(KEY,            "key"),\
+  X(EMIT,           "emit"),\
+  X(DUP,            "dup"),\
+  X(DROP,           "drop"),\
+  X(SWAP,           "swap"),\
+  X(OVER,           "over"),\
+  X(TOR,            ">r"),\
+  X(FROMR,          "r>"),\
+  X(TAIL,           "tail"),\
+  X(QUOTE,          "'"),\
+  X(COMMA,          ","),\
+  X(PRINTNUM,       "printnum"),\
+  X(GET_WORD,       "getword"),\
+  X(STRLEN,         "strlen"),\
+  X(ISNUMBER,       "isnumber"),\
+  X(STRNEQU,        "strnequ"),\
+  X(FIND,           "find"),\
+  X(EXECUTE,        "execute"),\
+  X(KERNEL,         "kernel"),\
+  X(ERROR,          ""),\
+  X(LAST_PRIMITIVE, "")
+
+#define X(a, b) a
 typedef enum {
-  PUSH_INT, COMPILE, RUN, DEFINE, IMMEDIATE, READ, COMMENT, EXIT,
-  BRANCH, NBRANCH, PLUS, MINUS, MUL, MOD, DIV,
-  LS, RS, AND, OR, INV, XOR, INC, DEC, EQ, LESS, MORE,
-  FETCH_REG, FETCH_DIC, PICK, FETCH_STR,
-  STORE_REG, STORE_DIC, STORE_VAR, STORE_STR,
-  KEY, EMIT, DUP, DROP, SWAP, OVER, TOR, FROMR,
-  TAIL, QUOTE, COMMA, PRINTNUM, GET_WORD, STRLEN, ISNUMBER, STRNEQU, FIND,
-  EXECUTE,
-  KERNEL,
-  ERROR,
-  LAST_PRIMITIVE
+  FORTH_PRIMITIVE_XMACRO_M 
 } forth_primitives_e;
+#undef X
+
+/********************************************************************************/
 
 /*forth_interpreter() return calls*/
 typedef enum {
@@ -76,7 +128,8 @@ typedef enum {
   onerr_return_e
 } forth_error_action_e;
 
-/* X macro X(The error code, the error string, which action to take)*/
+/********************************************************************************/
+/** X macro X(The error code, the error string, which action to take)*/
 #define FORTH_ERROR_XMACRO \
   X(ERR_OK,               "OK!\n",                                            onerr_goto_restart_e),\
   X(ERR_FAILURE,          "General Failure? Unknown cause.\n",                onerr_goto_restart_e),\
@@ -121,37 +174,45 @@ typedef enum {
 } forth_errors_e;
 #undef X
 
+/********************************************************************************/
+/** X Macro, This one is optional apart from the ENUM (ie. For debugging)*/ 
+#define REGISTER_ENUM_XMACRO_M \
+    X(ENUM_NEXT,              "ENUM_NEXT"),\
+    X(ENUM_PC,                "ENUM_PC"),\
+    X(ENUM_TOS,               "ENUM_TOS"),\
+    X(ENUM_RET,               "ENUM_RET"),\
+    X(ENUM_VAR,               "ENUM_VAR"),\
+    X(ENUM_DIC,               "ENUM_DIC"),\
+    X(ENUM_STR,               "ENUM_STR"),\
+    X(ENUM_PWD,               "ENUM_PWD"),\
+    X(ENUM_OP0,               "ENUM_OP0"),\
+    X(ENUM_OP1,               "ENUM_OP1"),\
+    X(ENUM_A,                 "ENUM_A"),\
+    X(ENUM_B,                 "ENUM_B"),\
+    X(ENUM_C,                 "ENUM_C"),\
+    X(ENUM_CPF,               "ENUM_CPF"),\
+    X(ENUM_EXF,               "ENUM_EXF"),\
+    X(ENUM_INI,               "ENUM_INI"),\
+    X(ENUM_maxReg,            "ENUM_maxReg"),\
+    X(ENUM_maxDic,            "ENUM_maxDic"),\
+    X(ENUM_maxRet,            "ENUM_maxRet"),\
+    X(ENUM_maxVar,            "ENUM_maxVar"),\
+    X(ENUM_maxStr,            "ENUM_maxStr"),\
+    X(ENUM_inputBufLen,       "ENUM_inputBufLen"),\
+    X(ENUM_dictionaryOffset,  "ENUM_dictionaryOffset"),\
+    X(ENUM_sizeOfMW,          "ENUM_sizeOfMW"),\
+    X(ENUM_cycles,            "ENUM_cycles"),\
+    X(ENUM_ccount,            "ENUM_ccount"),\
+    X(ENUM_inStrm,            "ENUM_inStrm"),\
+    X(ENUM_wordCount,         "ENUM_wordCount"),\
+    X(ENUM_wordIndex,         "ENUM_wordIndex"),\
+    X(ENUM_LAST_REGISTER,     "THIS IS NOT A REGISTER")
+
+#define X(a, b) a
 typedef enum {
-  ENUM_NEXT,
-  ENUM_PC,
-  ENUM_TOS,
-  ENUM_RET,
-  ENUM_VAR,
-  ENUM_DIC,
-  ENUM_STR,
-  ENUM_PWD,
-  ENUM_OP0,
-  ENUM_OP1,
-  ENUM_A,
-  ENUM_B,
-  ENUM_C,
-  ENUM_CPF,
-  ENUM_EXF,
-  ENUM_INI,
-  ENUM_maxReg,
-  ENUM_maxDic,
-  ENUM_maxRet,
-  ENUM_maxVar,
-  ENUM_maxStr,
-  ENUM_inputBufLen,
-  ENUM_dictionaryOffset,
-  ENUM_sizeOfMW,
-  ENUM_cycles,
-  ENUM_ccount,
-  ENUM_inStrm,
-  ENUM_wordCount,
-  ENUM_wordIndex
+  REGISTER_ENUM_XMACRO_M
 } forth_registers_e;
+#undef X
 
 /*vm macros*/
 #define NEXT    reg[ENUM_NEXT]
@@ -190,6 +251,7 @@ typedef enum {
 #define IN_STRM reg[ENUM_inStrm]
 #define WORDCNT reg[ENUM_wordCount]
 #define WORDINX reg[ENUM_wordIndex]
+/********************************************************************************/
 
 typedef signed int mw;
 
