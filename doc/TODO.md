@@ -16,7 +16,12 @@ These are some notes for myself:
 
 * Remove all fprintfs?
 
+
 ## General
+
+* Malloc/Free
+
+* Print out a list of enums 
 
 * Doxygen!
 

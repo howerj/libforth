@@ -22,6 +22,8 @@
 #define MAX_RET 8192
 #define MAX_STR (1024*1024)
 
+static void print_enums(void);
+
 /** versionmsg, used for a primitive version control */
 static const char versionmsg[] =
 "Howe Forth, version: " __DATE__ " " __TIME__ "\n";
@@ -39,6 +41,13 @@ input file \"forth.4th\", otherwise if a valid file name is given\n\
 that will be read in. Once it has it finished it will continue\n\
 reading from stdin.\n\
 ";
+
+/**Print out all of the defined enumerations that might be
+ * useful for the interpreter when it is running to have*/
+static void print_enums(void){
+  /** This will require making lots of X-macros */
+  return;
+}
 
 /**main, where the magic happens, well is called from.*/
 int main(int argc, char *argv[])
@@ -66,7 +75,6 @@ int main(int argc, char *argv[])
       return 1;
     }
   }
-
   fo = forth_obj_create(MAX_REG, MAX_DIC, MAX_VAR, MAX_RET, MAX_STR, input);
   CALLOC_FAIL(fo, -1);          /*memory might not be free()'d on error. */
   forth_return = forth_monitor(fo);

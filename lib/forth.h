@@ -113,7 +113,7 @@ typedef enum {
   X(ERR_NEXT_STRM,        "EOF -> Next Stream.\n",                            onerr_special_e),\
   X(ERR_NULL,             "(Internal), Null not expected\n",                  onerr_break_e),\
   X(ERR_SPECIAL_ERROR,    "(Internal), Special error handler not defined!\n", onerr_break_e),\
-  X(LAST_ERROR,             "Fatal Err: Incorrect error code or call!\n",       onerr_return_e)
+  X(LAST_ERROR,             "Fatal Err: Incorrect error code or call!\n",     onerr_return_e)
 
 #define X(a, b, c) a
 typedef enum {

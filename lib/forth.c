@@ -1174,7 +1174,7 @@ mw forth_monitor(fobj_t * fo)
     on_err(fo);
     goto RESTART;
   } else if (onerr_break_e == f_error_action[fo_returned_val]) {
-    print_string(forth_error_str[ERR_IO], MAX_ERR_STR, fo->err_file);
+    print_string(forth_error_str[fo_returned_val], MAX_ERR_STR, fo->err_file);
     return fo_returned_val;
   } else if (onerr_special_e == f_error_action[fo_returned_val]) {
     if (fo_returned_val == ERR_EOF) {   /*Some EOF situations might not be handled correctly */
