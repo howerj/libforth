@@ -53,6 +53,8 @@ BLKSZ BLKCNT *  array HEAP    ( the heap! )
 : free ( ptr -- ) ;
 : memcpy ( ptr ptr -- ) ;
 : memset ( ptr val count -- ) ;
+: calcfrag \ 1 - ( largest block of free memory / total free memory )
+;
 : defrag ( -- ) ; 
 
 INIT_HEAP

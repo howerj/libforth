@@ -83,6 +83,8 @@ find on_err exf !reg    \ Write the executable token for on_err into the diction
 : 2dup over over ;
 : 2swap rot >r rot r> ;
 
+
+
 : 2+ 1+ 1+ ;
 : 2* 2 * ;
 : 2/ 2 / ; 
@@ -118,6 +120,9 @@ find on_err exf !reg    \ Write the executable token for on_err into the diction
 
 : ?dup dup if dup then ;
 : abs dup 0 < if negate then ;
+
+: min 2dup < if drop else swap drop then  ; 
+: max 2dup > if drop else swap drop then  ; 
 
 : allot here + h !reg ;
 : :noname immediate here _run , ] ;
@@ -307,7 +312,7 @@ str @reg dup iobl @reg + str !reg constant filename
   here - ,
 ;
 
-: break
+: break ( break out of a do ... loop )
   j@ i!
 ;
 
