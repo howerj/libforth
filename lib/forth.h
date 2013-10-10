@@ -1,7 +1,8 @@
 /** Howe Forth.
  *
  * @file forth.h
- * @brief Configuration file and interface API
+ * @brief Configuration file and interface API, it requires
+ * stdio.h and stdint.h to be included before it is..
  *
  * @author         Richard James Howe.
  * @copyright      Copyright 2013 Richard James Howe.
@@ -10,17 +11,6 @@
  *
  */
 
-/*#define RUN4X*/
-
-
-/*
- * This header requires:
- *
- * stdio.h
- * stdint.h
- * limits.h
- *
- */
 #include <stdint.h>
 
 #ifndef forth_h_header_guard    /* begin header guard for forth.h */

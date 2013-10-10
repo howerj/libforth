@@ -537,10 +537,8 @@ static mw forth_system_calls(fobj_t * fo, mw enum_syscall)
   case SYS_FOPEN:
     switch (TOS) {
     case SYS_OPT_IN:
-      if ((IN_STRM < 0) || (IN_STRM > MAX_INSTRM)) {
-        ERR_LN_PRN(err_file);
-        return ERR_SYSCALL;
-      }
+
+      ECUZ(MAX_INSTRM, IN_STRM, ERR_SYSCALL, err_file);
       ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
       TOS = var[VAR];
       VAR--;
@@ -584,10 +582,9 @@ static mw forth_system_calls(fobj_t * fo, mw enum_syscall)
   case SYS_FCLOSE:
     switch (TOS) {
     case SYS_OPT_IN:
-      if ((IN_STRM < 1) || (IN_STRM > MAX_INSTRM)) {
-        ERR_LN_PRN(err_file);
-        return ERR_SYSCALL;
-      }
+
+      ECB(1, MAX_INSTRM, IN_STRM, ERR_SYSCALL, err_file);
+
       if (fo->in_file[IN_STRM]->fio != io_rd_file) {
         ERR_LN_PRN(err_file);
         return ERR_SYSCALL;

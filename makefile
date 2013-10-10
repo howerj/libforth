@@ -17,7 +17,7 @@ DEFAULT=\e[0m
 ## Compiler options
 
 CC=gcc
-CCOPTS=-ansi -Wall -g -Wno-write-strings -Wshadow -Wextra -pedantic -O2 -save-temps
+CCOPTS=-ansi -Wall -g -Wno-write-strings -Wshadow -Wextra -pedantic -O2 -save-temps 
 #CCOPTS=-ansi --coverage -g -Wall -Wno-write-strings -Wshadow -Wextra -pedantic -O2
 
 ## Options for clang (catch undefined behavior and trap on signed overflow)
@@ -48,6 +48,7 @@ banner:
 	@/bin/echo -e "To compile with debug flags enable type $(BLUE)\"-DDEBUG_PRN\".$(DEFAULT)";
 	@/bin/echo -e "To compile with debug cycle counter enabled $(BLUE)\"-DRUN4X\".$(DEFAULT)";
 	@/bin/echo -e "To compile $(RED)without$(DEFAULT) bounds checking:$(BLUE) \"-DUNCHECK\".$(DEFAULT)";
+	@/bin/echo -e "-DWORD_TYPE defaults to 2 (use int32_t as default).$(DEFAULT)";
 	@/bin/echo -e "\n"
 
 help:

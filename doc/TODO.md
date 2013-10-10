@@ -19,6 +19,13 @@ These are some notes for myself:
 
 ## General
 
+* uint64\_t does not work when selected as an option. I should
+  find out why as it could uncover some subtle bugs in my program
+  that I do not know about.
+
+* Signed integer over flow is not defined, what checks and safe
+  guards can I come up with to help.
+
 * Looking into GCC makefile generation options such as:
   gcc -MM files..., gcc -MMD files...
 
@@ -50,8 +57,6 @@ where I can.
 as the this program might be used as a library where only the header is
 available. Also expand the file "MANUAL.md", which should contain the main
 manual.
-
-Rename "\!var".
 
 * On an error (on\_err) all the input streams that have not been closed properly
 should be. They currently are not, be careful not to close file pointers twice.
