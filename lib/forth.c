@@ -12,8 +12,8 @@
  *
  */
 
-#include <stdio.h>  /* FILE, putc(), getc(), fopen, fclose, rename... */
-#include <stdlib.h> /* system() */
+#include <stdio.h>              /* FILE, putc(), getc(), fopen, fclose, rename... */
+#include <stdlib.h>             /* system() */
 #include <stdint.h>
 #include "forth.h"
 
@@ -45,6 +45,7 @@ static void report_error(forth_errors_e e);
 static const char *forth_error_str[] = {
   FORTH_ERROR_XMACRO
 };
+
 #undef X
 
 /**X-Macro definition of actions to take on error*/
@@ -52,6 +53,7 @@ static const char *forth_error_str[] = {
 static const forth_error_action_e f_error_action[] = {
   FORTH_ERROR_XMACRO
 };
+
 #undef X
 
 /**X-Macro definition of the names of primitives*/
@@ -59,10 +61,10 @@ static const forth_error_action_e f_error_action[] = {
 static const char *forth_primitives_str[] = {
   FORTH_PRIMITIVE_XMACRO_M
 };
+
 #undef X
 
 /*****************************************************************************/
-
 
 /* IO wrappers*/
 
@@ -362,7 +364,7 @@ static mw find_word(fobj_t * fo)
     ECUZ(SM_maxDic, OP0, ERR_OP0, err_file);
 
     /* Sanity check, prevents loops */
-    if(WORDINX>WORDCNT){
+    if (WORDINX > WORDCNT) {
       ERR_LN_PRN(err_file);
       return ERR_PWD;
     }
@@ -422,7 +424,7 @@ static mw forth_initialize(fobj_t * fo)
 {
   mw *reg = fo->reg, *dic = fo->dic, *ret = fo->ret;
   fio_t *err_file = fo->err_file;
-  unsigned int i; 
+  unsigned int i;
 
   if (SM_maxReg < MIN_REG)
     return ERR_MINIMUM_MEM;
@@ -477,7 +479,7 @@ static mw forth_initialize(fobj_t * fo)
   }
   OP0 = EXIT;
 
-  for(i = EXIT ; i < LAST_PRIMITIVE; i++){
+  for (i = EXIT; i < LAST_PRIMITIVE; i++) {
     COMPILE_PRIM(forth_primitives_str[i]);
   }
 
@@ -664,7 +666,7 @@ static mw forth_system_calls(fobj_t * fo, mw enum_syscall)
       return ERR_SYSCALL_OPTIONS;
     }
   case SYS_SYSTEM:
-    system(str+TOS);
+    system(str + TOS);
     ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
     TOS = var[VAR];
     VAR--;
@@ -691,7 +693,7 @@ mw forth_interpreter(fobj_t * fo)
   }
 
   /*VM*/ while (true) {
-    ECUZ( SM_maxDic, PC, ERR_PC, err_file);
+    ECUZ(SM_maxDic, PC, ERR_PC, err_file);
     NEXT = dic[PC];
     PC++;
 
@@ -710,10 +712,10 @@ mw forth_interpreter(fobj_t * fo)
     ECUZ(SM_maxDic, NEXT, ERR_NEXT, err_file);
     switch (dic[NEXT]) {
     case PUSH_INT:
-      ECUZ( SM_maxVar, VAR, ERR_VAR, err_file);
+      ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
       VAR++;
       var[VAR] = TOS;
-      ECUZ( SM_maxDic, PC, ERR_PC, err_file);
+      ECUZ(SM_maxDic, PC, ERR_PC, err_file);
       TOS = dic[PC];
       PC++;
       break;
@@ -801,7 +803,7 @@ mw forth_interpreter(fobj_t * fo)
       break;
     case NBRANCH:
       if (0 == TOS) {
-        ECUZ( SM_maxDic, PC, ERR_PC, err_file);
+        ECUZ(SM_maxDic, PC, ERR_PC, err_file);
         PC += dic[PC];
       } else {
         PC++;
@@ -828,7 +830,7 @@ mw forth_interpreter(fobj_t * fo)
       break;
     case MOD:
       ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
-      if ((0 == TOS)||SIGNED_DIVIDE_CHECK(TOS,var[VAR])) {
+      if ((0 == TOS) || SIGNED_DIVIDE_CHECK(TOS, var[VAR])) {
         ERR_LN_PRN(err_file);
         return ERR_MOD0;
       } else {
@@ -838,7 +840,7 @@ mw forth_interpreter(fobj_t * fo)
       }
     case DIV:
       ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
-      if ((0 == TOS)||SIGNED_DIVIDE_CHECK(TOS,var[VAR])) {
+      if ((0 == TOS) || SIGNED_DIVIDE_CHECK(TOS, var[VAR])) {
         ERR_LN_PRN(err_file);
         return ERR_DIV0;
       } else {
@@ -1010,7 +1012,7 @@ mw forth_interpreter(fobj_t * fo)
       ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
       VAR++;
       var[VAR] = TOS;
-      ECUZ( SM_maxDic, PC, ERR_PC, err_file);
+      ECUZ(SM_maxDic, PC, ERR_PC, err_file);
       TOS = dic[PC];
       PC++;
       break;
@@ -1069,8 +1071,8 @@ mw forth_interpreter(fobj_t * fo)
         ERR_LN_PRN(err_file);
         return ERR_WORD;
       }
-      ECUZ( SM_maxVar, VAR, ERR_VAR, err_file);
-      ECUZ( SM_maxDic - 3, VAR, ERR_OP0, err_file);
+      ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
+      ECUZ(SM_maxDic - 3, VAR, ERR_OP0, err_file);
       OP0 += 2;                 /*advance over pointers */
       if (COMPILE == dic[OP0]) {
         ++OP0;
@@ -1115,7 +1117,7 @@ mw forth_monitor(fobj_t * fo)
   mw fo_returned_val;
   mw *reg;
 
-  /*pointer checks*/
+  /*pointer checks */
   NULLCHK_M(fo);
 
   reg = fo->reg;
@@ -1127,7 +1129,7 @@ mw forth_monitor(fobj_t * fo)
   NULLCHK_M(fo->str);
   NULLCHK_M(fo->err_file);
 
-  /*point and sanity checks of the in and output files*/
+  /*point and sanity checks of the in and output files */
   if (NULL == fo->in_file) {
     report_error(ERR_NULL);
     return ERR_FAILURE;
@@ -1174,7 +1176,7 @@ mw forth_monitor(fobj_t * fo)
             (void)fclose(fo->in_file[IN_STRM]->iou.f);
             fo->in_file[IN_STRM]->iou.f = NULL;
           }
-        } 
+        }
         IN_STRM--;
         print_string(forth_error_str[ERR_NEXT_STRM], MAX_ERR_STR, fo->err_file);
         goto RESTART;
@@ -1194,4 +1196,5 @@ mw forth_monitor(fobj_t * fo)
   }
   return ERR_ABNORMAL_END;
 }
+
 #undef NULLCHK_M
