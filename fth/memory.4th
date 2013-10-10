@@ -12,17 +12,17 @@
 5   constant MAL_MID    ( ... allocated contigous section )
 6   constant MAL_END    ( ... end of an allocated contigous section )
 
-RCDSZ BLKSZ *   array HEAPPTR ( pointers to blocks and their flags )
+RCDSZ BLKSZ *   array FREELIST ( pointers to blocks and their flags )
 BLKSZ BLKCNT *  array HEAP    ( the heap! )
 
 0 HEAP constant HEAP_BEGIN    ( the beginning of the heap )
 
 : G_RCD ( record_number -- pointer flag )
-  2* HEAPPTR dup 1+ @ swap @ swap
+  2* FREELIST dup 1+ @ swap @ swap
 ;
 
 : S_RCD ( pointer flag record_number -- )
-  2* HEAPPTR dup 1+  -rot ! !
+  2* FREELIST dup 1+  -rot ! !
 ;
 
 ( Initialize the heap )
@@ -51,8 +51,22 @@ BLKSZ BLKCNT *  array HEAP    ( the heap! )
 
 : malloc ( count -- ptr ) BLKSZ mod ;
 : free ( ptr -- ) ;
-: memcpy ( ptr ptr -- ) ;
-: memset ( ptr val count -- ) ;
+
+: memcpy ( des_ptr src_ptr count -- )
+  over +
+  do
+    dup i@ @ swap ! 1+
+  loop
+  drop
+;
+
+: memset ( ptr val count -- )
+  rot dup rot +
+  do
+    dup i@ !
+  loop
+;
+
 : calcfrag \ 1 - ( largest block of free memory / total free memory )
 ;
 : defrag ( -- ) ; 

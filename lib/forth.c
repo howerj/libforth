@@ -14,6 +14,7 @@
 
 #include <stdio.h>  /* FILE, putc(), getc(), fopen, fclose, rename... */
 #include <stdlib.h> /* system() */
+#include <stdint.h>
 #include "forth.h"
 
 /*internal function prototypes*/
@@ -291,26 +292,46 @@ static void print_line_file(int line, const char *file, fio_t * err_file)
   (void)wrap_put(err_file, '\n');
 }
 
-#ifndef UNCHECK
+#ifndef UNCHECK /** define UNCHECK to stop bounds being checked */
 
 /*Error Check Bounds*/
 #define ECB(MIN,MAX,TEST,ERR,ERR_STRM)    if((TEST>(MAX-2))||(TEST<MIN)){ \
     print_line_file(__LINE__,__FILE__,ERR_STRM);                          \
     return ERR;                                                           \
 }
+
+#if (1 == SIGNED_WORD) /** Signed type, check against upper bound and < 0 */
 /*Error Check Upper (Bound) (and) Zero (Lower bound)*/
 #define ECUZ(MAX,VT,ERR,ERR_STRM) if((VT>(MAX-2))||(VT<0)){  \
     print_line_file(__LINE__,__FILE__,ERR_STRM);             \
     return ERR;                                              \
 }
+
+#else /** Do not check against less than zero as we are using and unsigned type */
+
+#define ECUZ(MAX,VT,ERR,ERR_STRM) if(VT>(MAX-2)){            \
+    print_line_file(__LINE__,__FILE__,ERR_STRM);             \
+    return ERR;                                              \
+}
+
+#endif
+
 #define ERR_LN_PRN(ERR_STRM) print_line_file(__LINE__,__FILE__,ERR_STRM);
 
-#else
+#else /** No bounds checking */
 
 #define ECB(MIN,MAX,TEST,ERR,ERR_STRM)
 #define ECUZ(MAX,VT,ERR,ERR_STRM)
 #define ERR_LN_PRN(ERR_STRM)
 
+#endif /** End bounds ifdef */
+
+/** INT_MAX / -1 is an error, we need to check for this condition
+ * if and only if the data type we are using is signed */
+#if   (1 == SIGNED_WORD)
+#define SIGNED_DIVIDE_CHECK(DIVIDEND,DIVISOR) ((WORD_MIN == (DIVISOR)) && (-1 == (DIVIDEND)))
+#else
+#define SIGNED_DIVIDE_CHECK(DIVIDEND,DIVISOR) (0)
 #endif
 
 /*****************************************************************************/
@@ -673,7 +694,7 @@ mw forth_interpreter(fobj_t * fo)
   }
 
   /*VM*/ while (true) {
-    ECB(0, SM_maxDic, PC, ERR_PC, err_file);
+    ECUZ( SM_maxDic, PC, ERR_PC, err_file);
     NEXT = dic[PC];
     PC++;
 
@@ -692,10 +713,10 @@ mw forth_interpreter(fobj_t * fo)
     ECUZ(SM_maxDic, NEXT, ERR_NEXT, err_file);
     switch (dic[NEXT]) {
     case PUSH_INT:
-      ECB(0, SM_maxVar, VAR, ERR_VAR, err_file);
+      ECUZ( SM_maxVar, VAR, ERR_VAR, err_file);
       VAR++;
       var[VAR] = TOS;
-      ECB(0, SM_maxDic, PC, ERR_PC, err_file);
+      ECUZ( SM_maxDic, PC, ERR_PC, err_file);
       TOS = dic[PC];
       PC++;
       break;
@@ -783,7 +804,7 @@ mw forth_interpreter(fobj_t * fo)
       break;
     case NBRANCH:
       if (0 == TOS) {
-        ECB(0, SM_maxDic, PC, ERR_PC, err_file);
+        ECUZ( SM_maxDic, PC, ERR_PC, err_file);
         PC += dic[PC];
       } else {
         PC++;
@@ -809,23 +830,25 @@ mw forth_interpreter(fobj_t * fo)
       VAR--;
       break;
     case MOD:
-      if (0 != TOS) {
-        ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
+      ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
+      if ((0 == TOS)||SIGNED_DIVIDE_CHECK(TOS,var[VAR])) {
+        ERR_LN_PRN(err_file);
+        return ERR_MOD0;
+      } else {
         TOS = var[VAR] % TOS;
         VAR--;
         break;
       }
-      ERR_LN_PRN(err_file);
-      return ERR_MOD0;
     case DIV:
-      if (0 != TOS) {
-        ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
+      ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
+      if ((0 == TOS)||SIGNED_DIVIDE_CHECK(TOS,var[VAR])) {
+        ERR_LN_PRN(err_file);
+        return ERR_DIV0;
+      } else {
         TOS = var[VAR] / TOS;
         VAR--;
         break;
       }
-      ERR_LN_PRN(err_file);
-      return ERR_DIV0;
     case LS:
       ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
       TOS = (mw) ((unsigned)var[VAR] << (unsigned)TOS);
@@ -990,7 +1013,7 @@ mw forth_interpreter(fobj_t * fo)
       ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
       VAR++;
       var[VAR] = TOS;
-      ECB(0, SM_maxDic, PC, ERR_PC, err_file);
+      ECUZ( SM_maxDic, PC, ERR_PC, err_file);
       TOS = dic[PC];
       PC++;
       break;
@@ -1049,8 +1072,8 @@ mw forth_interpreter(fobj_t * fo)
         ERR_LN_PRN(err_file);
         return ERR_WORD;
       }
-      ECB(0, SM_maxVar, VAR, ERR_VAR, err_file);
-      ECB(0, SM_maxDic - 3, VAR, ERR_OP0, err_file);
+      ECUZ( SM_maxVar, VAR, ERR_VAR, err_file);
+      ECUZ( SM_maxDic - 3, VAR, ERR_OP0, err_file);
       OP0 += 2;                 /*advance over pointers */
       if (COMPILE == dic[OP0]) {
         ++OP0;

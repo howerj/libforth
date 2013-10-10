@@ -13,6 +13,7 @@
 #include <stdio.h>      /* required by hosted.h and forth.h */
 #include <stdlib.h>     /* required by hosted.h */
 #include <string.h>     /* strcmp */
+#include <stdint.h>     /* required by forth.h */
 #include "lib/forth.h"  /* forth_monitor, fobj_t */
 #include "lib/hosted.h" /* forth_obj_create, forth_obj_destroy */
 
@@ -102,12 +103,12 @@ int main(int argc, char *argv[])
 
   if(argc > 1){ /**process command line arguments*/
     if((!strcmp("-h",argv[1]))||(!strcmp("--help",argv[1]))){
-      fprintf(stdout,"%s\n%s\n",versionmsg,helpmsg);
+      fprintf(stdout,"%s using: %s\n%s\n",versionmsg,WORD_STRING,helpmsg);
       return 0;
     }
 
     if((!strcmp("-V",argv[1]))||(!strcmp("--version",argv[1]))){
-      fprintf(stdout,versionmsg);
+      fprintf(stdout,"%s using: %s\n",versionmsg,WORD_STRING);
       return 0;
     }
 

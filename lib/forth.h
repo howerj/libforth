@@ -12,8 +12,23 @@
 
 /*#define RUN4X*/
 
+
+/*
+ * This header requires:
+ *
+ * stdio.h
+ * stdint.h
+ * limits.h
+ *
+ */
+#include <stdint.h>
+
 #ifndef forth_h_header_guard    /* begin header guard for forth.h */
 #define forth_h_header_guard
+
+#ifndef WORD_TYPE     /** Used to select what type of integer VM uses as default */
+#define WORD_TYPE (2) /** Default: Signed 32 bit */
+#endif
 
 #define MAX_PRN_STR    (64)
 #define MAX_ERR_STR    (64)
@@ -265,7 +280,61 @@ typedef enum {
 #define WORDINX reg[ENUM_wordIndex]
 /********************************************************************************/
 
-typedef signed int mw;
+#if   (0 == WORD_TYPE) /* signed 16 bit */
+
+typedef int16_t mw;
+#define SIGNED_WORD (1)
+#define BIT_SIZE    (16)
+#define WORD_MIN    (INT16_MIN)
+#define WORD_MAX    (INT16_MAX)
+#define WORD_STRING "int16_t"
+
+#elif (1 == WORD_TYPE) /* unsigned 16 bit */
+
+typedef uint16_t mw;
+#define SIGNED_WORD (0)
+#define BIT_SIZE    (16)
+#define WORD_MIN    (0)
+#define WORD_MAX    (UINT16_MAX)
+#define WORD_STRING "uint16_t"
+
+#elif (2 == WORD_TYPE) /* signed 32 bit, default */
+
+typedef int32_t mw;
+#define SIGNED_WORD (1)
+#define BIT_SIZE    (32)
+#define WORD_MIN    (INT32_MIN)
+#define WORD_MAX    (INT32_MAX)
+#define WORD_STRING "int32_t"
+
+#elif (3 == WORD_TYPE) /* unsigned 32 bit */
+
+typedef uint32_t mw;
+#define SIGNED_WORD (0)
+#define BIT_SIZE    (32)
+#define WORD_MIN    (0)
+#define WORD_MAX    (UINT32_MAX)
+#define WORD_STRING "uint32_t"
+
+#elif (4 == WORD_TYPE) /* signed 64 bit */
+
+typedef int64_t mw;
+#define SIGNED_WORD (1)
+#define BIT_SIZE    (64)
+#define WORD_MIN    (INT64_MIN)
+#define WORD_MAX    (INT64_MAX)
+#define WORD_STRING "int64_t"
+
+#elif (5 == WORD_TYPE) /* unsigned 64 bit */
+
+typedef uint64_t mw;
+#define SIGNED_WORD (0)
+#define BIT_SIZE    (64)
+#define WORD_MIN    (0)
+#define WORD_MAX    (UINT64_MAX)
+#define WORD_STRING "uint64_t"
+
+#endif
 
 /*if input or output is a file or string, store point to it*/
 union io_u {

@@ -19,11 +19,16 @@ These are some notes for myself:
 
 ## General
 
+* Looking into GCC makefile generation options such as:
+  gcc -MM files..., gcc -MMD files...
+
+* Scheduler:
+  * Make a scheduler based on number of cycles run. 
+  * Round robin with Watch dog?
+
 * Naming convention:
   - Come up with a naming convention for the project and stick to it,
   document it as well.
-
-* Malloc/Free
 
 * Doxygen!
 
@@ -55,10 +60,6 @@ should be. They currently are not, be careful not to close file pointers twice.
 
 strnequ should have an absolute address which it can not pass instead of a
 maximum length as should a few other words.
-
-* SIGFPE on ( minimal value of int / -1 ). Needs checking.
-  try:
-  1 31 lshift -1 /
 
 * Special text encoding for strings and help messages.
   Space, e, t, a, o, i, n, ... (Encoding based on word frequency, Huffman).

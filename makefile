@@ -7,7 +7,6 @@
 #
 #
 
-
 ## Colors
 
 BLUE=\e[1;34m
@@ -20,6 +19,11 @@ DEFAULT=\e[0m
 CC=gcc
 CCOPTS=-ansi -Wall -g -Wno-write-strings -Wshadow -Wextra -pedantic -O2 -save-temps
 #CCOPTS=-ansi --coverage -g -Wall -Wno-write-strings -Wshadow -Wextra -pedantic -O2
+
+## Options for clang (catch undefined behavior and trap on signed overflow)
+#CC=clang
+#CCOPTS=-ansi -Wall -g -Wno-write-strings -Wshadow -Wextra -pedantic -O2 -save-temps -ftrapv -fcatch-undefined-behavior
+
 
 ## Long strings passed to commands
 
@@ -130,7 +134,7 @@ html:
 valgrind: bin/forth
 	@/bin/echo "Running valgrind on ./forth"
 	@/bin/echo "  This command needs changing in the makefile"
-	-valgrind bin/./forth << EOF
+	-cd bin/; valgrind ./forth << EOF
 
 ctags:
 	@ctags -R .
