@@ -26,7 +26,7 @@
   2swap ( done! )
 ;
 
-: realmul ( a/b c/d -- {a/b}*{c/d} )
+: ratmul ( a/b c/d -- {a/b}*{c/d} )
   rot
   *
   -rot
@@ -35,12 +35,12 @@
   simplify
 ;
 
-: realdiv ( a/b c/d -- {a/b}/{c/d} )
+: ratdiv ( a/b c/d -- {a/b}/{c/d} )
   swap
-  realmul
+  ratmul
 ;
 
-: realadd ( a/b c/d -- {a/b}+{c/d} )
+: ratadd ( a/b c/d -- {a/b}+{c/d} )
   crossmultiply
   rot
   drop ( or check if equal, if not there is an error )
@@ -50,7 +50,7 @@
   simplify
 ;
 
-: realsub ( a/b c/d -- {a/b}-{c/d} )
+: ratsub ( a/b c/d -- {a/b}-{c/d} )
   crossmultiply
   rot
   drop ( or check if equal, if not there is an error )
@@ -60,7 +60,24 @@
   simplify
 ;
 
-: realprint ( a/b -- )
+: ratprint ( a/b -- )
   swap
   prnn ."  / " prnn cr
+;
+
+: ratequal ( a/b c/d -- bool )
+  rot = 
+  -rot
+  + 2 = 
+;
+
+: ratgreater ( a/b c/d -- bool )
+  crossmultiply \ lazy way of doing things...
+  rot
+  2drop
+  >
+;
+
+: ratless ( a/b c/d -- bool )
+  ratgreater not
 ;

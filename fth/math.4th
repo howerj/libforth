@@ -52,3 +52,14 @@
     then
   until
 ;
+
+: logical ( number -- bool )
+  not not
+;
+
+: signum ( number -- signum )
+  dup dup
+  0> if 2drop  1 exit then
+  0= if drop   0 exit then
+  0< if       -1 exit then
+;
