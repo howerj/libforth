@@ -850,12 +850,16 @@ mw forth_interpreter(fobj_t * fo)
       }
     case LS:
       ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
-      TOS = (mw) ((unsigned)var[VAR] << (unsigned)TOS);
+      /** Unsigned shifts only and only by BIT_SIZE - 1 to avoid
+       * undefined behavior */
+      TOS = (mw) ((unsigned)var[VAR] << ((unsigned)TOS & (BIT_SIZE - 1)));
       VAR--;
       break;
     case RS:
       ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
-      TOS = (mw) ((unsigned)var[VAR] >> (unsigned)TOS);
+      /** Unsigned shifts only and only by BIT_SIZE - 1 to avoid
+       * undefined behavior */
+      TOS = (mw) ((unsigned)var[VAR] >> (unsigned)TOS & (BIT_SIZE - 1));
       VAR--;
       break;
     case AND:
@@ -1156,42 +1160,43 @@ mw forth_monitor(fobj_t * fo)
   }
 
   /* I should check that EXF is potentially valid, ie. Not zero */
- RESTART:
-  fo_returned_val = forth_interpreter(fo);
-  if (fo_returned_val >= LAST_ERROR) {
-    print_string(forth_error_str[LAST_ERROR], MAX_ERR_STR, fo->err_file);
-    return fo_returned_val;
-  } else if (onerr_goto_restart_e == f_error_action[fo_returned_val]) {
-    print_string(forth_error_str[fo_returned_val], MAX_ERR_STR, fo->err_file);
-    on_err(fo);
-    goto RESTART;
-  } else if (onerr_break_e == f_error_action[fo_returned_val]) {
-    print_string(forth_error_str[fo_returned_val], MAX_ERR_STR, fo->err_file);
-    return fo_returned_val;
-  } else if (onerr_special_e == f_error_action[fo_returned_val]) {
-    if (fo_returned_val == ERR_EOF) {   /*Some EOF situations might not be handled correctly */
-      if ((IN_STRM > 0) && (IN_STRM < MAX_INSTRM)) {
-        if (io_rd_file == fo->in_file[IN_STRM]->fio) {
-          if (NULL != fo->in_file[IN_STRM]->iou.f) {
-            (void)fclose(fo->in_file[IN_STRM]->iou.f);
-            fo->in_file[IN_STRM]->iou.f = NULL;
-          }
-        }
-        IN_STRM--;
-        print_string(forth_error_str[ERR_NEXT_STRM], MAX_ERR_STR, fo->err_file);
-        goto RESTART;
-      }
-      print_string(forth_error_str[ERR_EOF], MAX_ERR_STR, fo->err_file);
-      return ERR_EOF;
-    } else if (ERR_WORD == fo_returned_val) {   /*Special action: Print out word */
-      print_string(fo->str, MAX_ERR_STR, fo->err_file);
-      (void)wrap_put(fo->err_file, '\n');
-      print_string(forth_error_str[ERR_WORD], MAX_ERR_STR, fo->err_file);
+  while(true){
+    fo_returned_val = forth_interpreter(fo);
+    if (fo_returned_val >= LAST_ERROR) {
+      print_string(forth_error_str[LAST_ERROR], MAX_ERR_STR, fo->err_file);
+      return fo_returned_val;
+    } else if (onerr_goto_restart_e == f_error_action[fo_returned_val]) {
+      print_string(forth_error_str[fo_returned_val], MAX_ERR_STR, fo->err_file);
       on_err(fo);
-      goto RESTART;
-    } else {                    /*No special action defined */
-      print_string(forth_error_str[ERR_SPECIAL_ERROR], MAX_ERR_STR, fo->err_file);
-      return ERR_SPECIAL_ERROR;
+      continue;
+    } else if (onerr_break_e == f_error_action[fo_returned_val]) {
+      print_string(forth_error_str[fo_returned_val], MAX_ERR_STR, fo->err_file);
+      return fo_returned_val;
+    } else if (onerr_special_e == f_error_action[fo_returned_val]) {
+      if (fo_returned_val == ERR_EOF) {   /*Some EOF situations might not be handled correctly */
+        if ((0 < IN_STRM) && (MAX_INSTRM > IN_STRM)) {
+          if (io_rd_file == fo->in_file[IN_STRM]->fio) {
+            if (NULL != fo->in_file[IN_STRM]->iou.f) {
+              (void)fclose(fo->in_file[IN_STRM]->iou.f);
+              fo->in_file[IN_STRM]->iou.f = NULL;
+            }
+          }
+          IN_STRM--;
+          print_string(forth_error_str[ERR_NEXT_STRM], MAX_ERR_STR, fo->err_file);
+          continue;
+        }
+        print_string(forth_error_str[ERR_EOF], MAX_ERR_STR, fo->err_file);
+        return ERR_EOF;
+      } else if (ERR_WORD == fo_returned_val) {   /*Special action: Print out word */
+        print_string(fo->str, MAX_ERR_STR, fo->err_file);
+        (void)wrap_put(fo->err_file, '\n');
+        print_string(forth_error_str[ERR_WORD], MAX_ERR_STR, fo->err_file);
+        on_err(fo);
+        continue;
+      } else {                    /*No special action defined */
+        print_string(forth_error_str[ERR_SPECIAL_ERROR], MAX_ERR_STR, fo->err_file);
+        return ERR_SPECIAL_ERROR;
+      }
     }
   }
   return ERR_ABNORMAL_END;

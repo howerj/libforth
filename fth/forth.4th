@@ -333,9 +333,9 @@ str @reg dup iobl @reg + str !reg constant filename
 \ : vocabulary create pwd @reg , does> @ pwd !reg ;
 \ vocabulary forth
 
-finput ../fth/debug.4th   ( Debugging operations )
-finput ../fth/real.4th    ( Real type )
-finput ../fth/math.4th    ( Math functions )
-\ finput ../fth/auto.4th  ( Auto generated constants )
-finput ../fth/memory.4th  ( Memory allocation and manipulation )
-finput ../fth/welcome.4th ( Welcome and cursor control )
+finput ../fth/debug.4th    ( Debugging operations )
+finput ../fth/rational.4th ( Real type )
+finput ../fth/math.4th     ( Math functions )
+finput ../fth/auto.4th     ( Auto generated constants )
+finput ../fth/memory.4th   ( Memory allocation and manipulation )
+finput ../fth/welcome.4th  ( Welcome and cursor control )

@@ -16,6 +16,7 @@ These are some notes for myself:
 
 * Remove all fprintfs?
 
+* Add a watch dog?
 
 ## General
 
