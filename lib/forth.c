@@ -154,7 +154,7 @@ static int wrap_put(fio_t * out_file, char c)
     } else {
       return EOF;
     }
-    return ERR_OK;
+    return FAIL_OK;
   default:
     return EOF;
   }
@@ -175,22 +175,22 @@ static mw get_word(char *str, const mw str_len, fio_t * io_file)
   /*discard spaces */
   for (c = wrap_get(io_file); my_isspace((char)c); c = wrap_get(io_file))
     if (EOF == c)
-      return ERR_FAILURE;
+      return FAIL_FAILURE;
 
   /*copy word */
   for (i = 0; (i < str_len) && (!my_isspace((char)c)); i++, c = wrap_get(io_file)) {
     str[i] = (char)c;
     if (EOF == c)
-      return ERR_FAILURE;
+      return FAIL_FAILURE;
   }
 
   /*fail if word is too long */
   if (i >= str_len)
-    return ERR_FAILURE;
+    return FAIL_FAILURE;
 
   /*null terminate */
   str[++i] = '\0';
-  return ERR_OK;                /*success! */
+  return FAIL_OK;                /*success! */
 }
 
 /**Basic Utils*/
@@ -347,32 +347,32 @@ static mw find_word(fobj_t * fo)
   char *str = fo->str;
   fio_t *in_file = fo->in_file[IN_STRM], *err_file = fo->err_file;
 
-  if (ERR_FAILURE == get_word(str, SM_inputBufLen, in_file)) {
+  if (FAIL_FAILURE == get_word(str, SM_inputBufLen, in_file)) {
     ERR_LN_PRN(err_file);
-    return ERR_EOF;
+    return FAIL_EOF;
   }
   OP0 = PWD;
-  ECUZ(SM_maxDic, OP0 + 1, ERR_OP0, err_file);
-  ECUZ(SM_maxStr, dic[OP0 + 1], ERR_DIC, err_file);
+  ECUZ(SM_maxDic, OP0 + 1, FAIL_OP0, err_file);
+  ECUZ(SM_maxStr, dic[OP0 + 1], FAIL_DIC, err_file);
 
   WORDINX = 0;
   while ((OP1 = strnequ(str, &str[dic[OP0 + 1]], SM_inputBufLen, SM_maxStr)) != 0) {
     if (OP1 == 2) {             /*2 signifies string limited exceeded. */
       ERR_LN_PRN(err_file);
-      return ERR_IO;
+      return FAIL_IO;
     }
-    ECUZ(SM_maxDic, OP0, ERR_OP0, err_file);
+    ECUZ(SM_maxDic, OP0, FAIL_OP0, err_file);
 
     /* Sanity check, prevents loops */
     if (WORDINX > WORDCNT) {
       ERR_LN_PRN(err_file);
-      return ERR_PWD;
+      return FAIL_PWD;
     }
     OP0 = dic[OP0];
     WORDINX++;
   }
 
-  return ERR_OK;
+  return FAIL_OK;
 }
 
 /**my_strcpy, so I would not have to import all of string.h
@@ -390,7 +390,7 @@ static mw compile_word(forth_primitives_e fp, fobj_t * fo, enum bool flag, const
   char *str = fo->str;
   fio_t *in_file = fo->in_file[IN_STRM], *err_file = fo->err_file;
 
-  ECUZ(SM_maxDic - 3, DIC, ERR_DIC, err_file);
+  ECUZ(SM_maxDic - 3, DIC, FAIL_DIC, err_file);
   dic[DIC] = PWD;
   DIC++;
   PWD = DIC - 1;
@@ -400,11 +400,11 @@ static mw compile_word(forth_primitives_e fp, fobj_t * fo, enum bool flag, const
   DIC++;
   if (flag)
     my_strcpy(str + STR, prim);
-  else if (ERR_OK != get_word(str + STR, SM_inputBufLen, in_file))
-    return ERR_FAILURE;
+  else if (FAIL_OK != get_word(str + STR, SM_inputBufLen, in_file))
+    return FAIL_FAILURE;
   STR += my_strlen(str + STR, MAX_STRLEN) + 1;
   WORDCNT++;
-  return ERR_OK;
+  return FAIL_OK;
 }
 
 /*should add error checking.*/
@@ -419,7 +419,7 @@ static mw compile_word_prim(fobj_t * fo, const char *prim)
   return ret;
 }
 
-#define COMPILE_PRIM(X)  if(compile_word_prim(fo,(X))!=ERR_OK){ return ERR_FAILURE; }
+#define COMPILE_PRIM(X)  if(compile_word_prim(fo,(X))!=FAIL_OK){ return FAIL_FAILURE; }
 static mw forth_initialize(fobj_t * fo)
 {
   mw *reg = fo->reg, *dic = fo->dic, *ret = fo->ret;
@@ -427,19 +427,19 @@ static mw forth_initialize(fobj_t * fo)
   unsigned int i;
 
   if (SM_maxReg < MIN_REG)
-    return ERR_MINIMUM_MEM;
+    return FAIL_MINIMUM_MEM;
   if (SM_maxDic < MIN_DIC)
-    return ERR_MINIMUM_MEM;
+    return FAIL_MINIMUM_MEM;
   if (SM_maxRet < MIN_RET)
-    return ERR_MINIMUM_MEM;
+    return FAIL_MINIMUM_MEM;
   if (SM_maxVar < MIN_VAR)
-    return ERR_MINIMUM_MEM;
+    return FAIL_MINIMUM_MEM;
   if (SM_maxStr < MIN_STR)
-    return ERR_MINIMUM_MEM;
+    return FAIL_MINIMUM_MEM;
   if (SM_inputBufLen < MIN_INBUF)
-    return ERR_MINIMUM_MEM;
+    return FAIL_MINIMUM_MEM;
   if (SM_dictionaryOffset < MIN_DIC_OFF)
-    return ERR_MINIMUM_MEM;
+    return FAIL_MINIMUM_MEM;
 
   /*Set up the dictionary */
   DIC = SM_dictionaryOffset;
@@ -448,25 +448,25 @@ static mw forth_initialize(fobj_t * fo)
   PWD = 1;
 
   /*immediate words */
-  if (compile_word(DEFINE, fo, true, ":") != ERR_OK) {
-    return ERR_FAILURE;
+  if (compile_word(DEFINE, fo, true, ":") != FAIL_OK) {
+    return FAIL_FAILURE;
   }
-  if (compile_word(IMMEDIATE, fo, true, "immediate") != ERR_OK) {
-    return ERR_FAILURE;
+  if (compile_word(IMMEDIATE, fo, true, "immediate") != FAIL_OK) {
+    return FAIL_FAILURE;
   }
 
   /*define a special word (read) */
-  if (compile_word(COMPILE, fo, true, "read") != ERR_OK) {
-    return ERR_FAILURE;
+  if (compile_word(COMPILE, fo, true, "read") != FAIL_OK) {
+    return FAIL_FAILURE;
   }
   OP0 = DIC;
-  ECUZ(SM_maxDic - 2, DIC, ERR_DIC, err_file);
+  ECUZ(SM_maxDic - 2, DIC, FAIL_DIC, err_file);
   dic[DIC] = READ;
   DIC++;
   dic[DIC] = RUN;
   DIC++;
   PC = DIC;
-  ECUZ(SM_maxDic - 2, DIC, ERR_DIC, err_file);
+  ECUZ(SM_maxDic - 2, DIC, FAIL_DIC, err_file);
   dic[DIC] = OP0;
   DIC++;
   dic[DIC] = PC - 1;
@@ -474,8 +474,8 @@ static mw forth_initialize(fobj_t * fo)
   /*...end special word definition */
 
   /*more immediate words */
-  if (compile_word(COMMENT, fo, true, "\\") != ERR_OK) {
-    return ERR_FAILURE;
+  if (compile_word(COMMENT, fo, true, "\\") != FAIL_OK) {
+    return FAIL_FAILURE;
   }
   OP0 = EXIT;
 
@@ -483,13 +483,13 @@ static mw forth_initialize(fobj_t * fo)
     COMPILE_PRIM(forth_primitives_str[i]);
   }
 
-  ECUZ(SM_maxRet, RET, ERR_RET, err_file);
+  ECUZ(SM_maxRet, RET, FAIL_RET, err_file);
   RET++;
   ret[RET] = DIC;
   CPF = (mw) true;
   INI = (mw) false;
 
-  return ERR_OK;
+  return FAIL_OK;
 }
 
 /* on_err();
@@ -528,20 +528,20 @@ static mw forth_system_calls(fobj_t * fo, mw enum_syscall)
   char *str = fo->str;
   fio_t *out_file = fo->out_file, *err_file = fo->err_file;
 
-  ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
+  ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
   TOS = var[VAR];               /* Get rid of top of stack, it's just been used. */
   VAR--;
 
   switch (enum_syscall) {
   case SYS_RESET:
     on_err(fo);
-    return ERR_OK;
+    return FAIL_OK;
   case SYS_FOPEN:
     switch (TOS) {
     case SYS_OPT_IN:
 
-      ECUZ(MAX_INSTRM, IN_STRM, ERR_SYSCALL, err_file);
-      ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
+      ECUZ(MAX_INSTRM, IN_STRM, FAIL_SYSCALL, err_file);
+      ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       TOS = var[VAR];
       VAR--;
 
@@ -549,56 +549,56 @@ static mw forth_system_calls(fobj_t * fo, mw enum_syscall)
       if (NULL == (fo->in_file[IN_STRM]->iou.f = fopen(str + TOS, "r"))) {
         IN_STRM--;
         ERR_LN_PRN(err_file);
-        return ERR_SYSCALL;
+        return FAIL_SYSCALL;
       } else {
         fo->in_file[IN_STRM]->fio = io_rd_file;
       }
-      return ERR_OK;
+      return FAIL_OK;
     case SYS_OPT_OUT:
       if (out_file->fio == io_stdin || out_file->fio == io_rd_str || out_file->fio == io_rd_file) {
         ERR_LN_PRN(err_file);
-        return ERR_SYSCALL;
+        return FAIL_SYSCALL;
       }
       if (out_file->fio != io_stdout) {
         (void)fflush(out_file->iou.f);
         (void)fclose(out_file->iou.f);
       }
-      ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
+      ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       TOS = var[VAR];
       VAR--;
       if (NULL == (out_file->iou.f = fopen(str + TOS, "w"))) {
         ERR_LN_PRN(err_file);
         out_file->fio = io_stdout;
-        return ERR_SYSCALL;
+        return FAIL_SYSCALL;
       } else {
         out_file->fio = io_wr_file;
       }
-      return ERR_OK;
+      return FAIL_OK;
     case SYS_OPT_ERR:
       ERR_LN_PRN(err_file);
-      return ERR_SYSCALL_OPTIONS;
+      return FAIL_SYSCALL_OPTIONS;
     default:
       ERR_LN_PRN(err_file);
-      return ERR_SYSCALL_OPTIONS;
+      return FAIL_SYSCALL_OPTIONS;
     }
   case SYS_FCLOSE:
     switch (TOS) {
     case SYS_OPT_IN:
 
-      ECB(1, MAX_INSTRM, IN_STRM, ERR_SYSCALL, err_file);
+      ECB(1, MAX_INSTRM, IN_STRM, FAIL_SYSCALL, err_file);
 
       if (fo->in_file[IN_STRM]->fio != io_rd_file) {
         ERR_LN_PRN(err_file);
-        return ERR_SYSCALL;
+        return FAIL_SYSCALL;
       }
       fo->in_file[IN_STRM]->fio = io_stdin;
       (void)fclose(fo->in_file[IN_STRM]->iou.f);
       IN_STRM--;
-      return ERR_OK;
+      return FAIL_OK;
     case SYS_OPT_OUT:
       if (out_file->fio == io_stdin || out_file->fio == io_rd_str || out_file->fio == io_rd_file) {
         ERR_LN_PRN(err_file);
-        return ERR_SYSCALL;
+        return FAIL_SYSCALL;
       }
       if (NULL != out_file->iou.f)
         if (io_stdout != out_file->fio) {
@@ -606,26 +606,26 @@ static mw forth_system_calls(fobj_t * fo, mw enum_syscall)
           out_file->iou.f = NULL;
         }
       out_file->fio = io_stdout;
-      return ERR_OK;
+      return FAIL_OK;
     case SYS_OPT_ERR:
       ERR_LN_PRN(err_file);
-      return ERR_SYSCALL_OPTIONS;
+      return FAIL_SYSCALL_OPTIONS;
     default:
       ERR_LN_PRN(err_file);
-      return ERR_SYSCALL_OPTIONS;
+      return FAIL_SYSCALL_OPTIONS;
     }
   case SYS_FLUSH:
     (void)fflush(NULL);         /* Flush all streams for ease of use. */
-    return ERR_OK;
+    return FAIL_OK;
   case SYS_REMOVE:
     if (0 != remove(str + TOS)) {
       ERR_LN_PRN(err_file);
       print_string("Could not remove file.\n", MAX_ERR_STR, fo->err_file);
     }
-    ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
+    ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
     TOS = var[VAR];
     VAR--;
-    return ERR_OK;
+    return FAIL_OK;
   case SYS_RENAME:
     if (0 != rename(str + TOS, str + var[VAR])) {
       VAR--;
@@ -635,7 +635,7 @@ static mw forth_system_calls(fobj_t * fo, mw enum_syscall)
     VAR--;
     TOS = var[VAR];
     VAR--;
-    return ERR_OK;
+    return FAIL_OK;
   case SYS_REWIND:
     switch (TOS) {
     case SYS_OPT_IN:
@@ -648,7 +648,7 @@ static mw forth_system_calls(fobj_t * fo, mw enum_syscall)
           fo->in_file[IN_STRM]->str_index = 0;
         }
       }
-      return ERR_OK;
+      return FAIL_OK;
     case SYS_OPT_OUT:
       if (NULL != out_file->iou.f) {
         if (io_wr_file == out_file->fio) {
@@ -659,20 +659,20 @@ static mw forth_system_calls(fobj_t * fo, mw enum_syscall)
           out_file->str_index = 0;
         }
       }
-      return ERR_OK;
+      return FAIL_OK;
     case SYS_OPT_ERR:
     default:
       ERR_LN_PRN(err_file);
-      return ERR_SYSCALL_OPTIONS;
+      return FAIL_SYSCALL_OPTIONS;
     }
   case SYS_SYSTEM:
     system(str + TOS);
-    ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
+    ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
     TOS = var[VAR];
     VAR--;
-    return ERR_OK;
+    return FAIL_OK;
   default:
-    return ERR_NOTSYSCALL;
+    return FAIL_NOTSYSCALL;
   }
 }
 
@@ -687,13 +687,13 @@ mw forth_interpreter(fobj_t * fo)
 
   /*Initialization */
   if (INI == (mw) true) {
-    if ((OP0 = forth_initialize(fo)) != ERR_OK) {
+    if ((OP0 = forth_initialize(fo)) != FAIL_OK) {
       return OP0;
     }
   }
 
   /*VM*/ while (true) {
-    ECUZ(SM_maxDic, PC, ERR_PC, err_file);
+    ECUZ(SM_maxDic, PC, FAIL_PC, err_file);
     NEXT = dic[PC];
     PC++;
 
@@ -703,45 +703,45 @@ mw forth_interpreter(fobj_t * fo)
       if (CCOUNT > 0) {
         CCOUNT--;
       } else {
-        return ERR_CYCLES;
+        return FAIL_CYCLES;
       }
     }
 #endif
 
     /*simple trace macros */
-    ECUZ(SM_maxDic, NEXT, ERR_NEXT, err_file);
+    ECUZ(SM_maxDic, NEXT, FAIL_NEXT, err_file);
     switch (dic[NEXT]) {
     case PUSH_INT:
-      ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
+      ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       VAR++;
       var[VAR] = TOS;
-      ECUZ(SM_maxDic, PC, ERR_PC, err_file);
+      ECUZ(SM_maxDic, PC, FAIL_PC, err_file);
       TOS = dic[PC];
       PC++;
       break;
     case COMPILE:
-      ECUZ(SM_maxDic, DIC, ERR_DIC, err_file);
+      ECUZ(SM_maxDic, DIC, FAIL_DIC, err_file);
       dic[DIC] = NEXT + 1;
       DIC++;
       break;
     case RUN:
-      ECUZ(SM_maxRet, RET, ERR_RET, err_file);
+      ECUZ(SM_maxRet, RET, FAIL_RET, err_file);
       RET++;
       ret[RET] = PC;
       PC = NEXT + 1;
       break;
     case DEFINE:
       CPF = (mw) true;
-      if (compile_word(COMPILE, fo, false, NULL) != ERR_OK) {
-        return ERR_FAILURE;
+      if (compile_word(COMPILE, fo, false, NULL) != FAIL_OK) {
+        return FAIL_FAILURE;
       }
-      ECUZ(SM_maxDic, DIC, ERR_DIC, err_file);
+      ECUZ(SM_maxDic, DIC, FAIL_DIC, err_file);
       dic[DIC] = RUN;
       DIC++;
       break;
     case IMMEDIATE:
       DIC -= 2;
-      ECUZ(SM_maxDic, DIC, ERR_DIC, err_file);
+      ECUZ(SM_maxDic, DIC, FAIL_DIC, err_file);
       dic[DIC] = RUN;
       DIC++;
       break;
@@ -750,12 +750,12 @@ mw forth_interpreter(fobj_t * fo)
        * simpler functions, these simpler functions
        * could be used by the VM as extra primitives */
       RET--;
-      if (ERR_OK != (OP1 = find_word(fo)))      /*fo contains OP0 */
+      if (FAIL_OK != (OP1 = find_word(fo)))      /*fo contains OP0 */
         return OP1;
       if (0 != (OP0 - 1)) {
         NEXT = OP0 + 2;         /*Advance over pointers */
         if (0 == CPF) {
-          ECUZ(SM_maxDic, NEXT, ERR_NEXT, err_file);
+          ECUZ(SM_maxDic, NEXT, FAIL_NEXT, err_file);
           if (COMPILE == dic[NEXT]) {
             NEXT++;
           }
@@ -764,20 +764,20 @@ mw forth_interpreter(fobj_t * fo)
       }
       if (0 != isnumber(str)) {
         if (0 != CPF) {
-          ECUZ(SM_maxDic - 1, DIC, ERR_DIC, err_file);
+          ECUZ(SM_maxDic - 1, DIC, FAIL_DIC, err_file);
           dic[DIC] = PUSH_INT;
           DIC++;
           dic[DIC] = kr_atoi(str);
           DIC++;
         } else {
-          ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
+          ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
           VAR++;
           var[VAR] = TOS;
           TOS = kr_atoi(str);
         }
       } else {
         ERR_LN_PRN(err_file);
-        return ERR_WORD;
+        return FAIL_WORD;
       }
       break;
     case COMMENT:
@@ -788,87 +788,87 @@ mw forth_interpreter(fobj_t * fo)
           break;
         } else if (OP0 == (mw) EOF) {
           ERR_LN_PRN(err_file);
-          return ERR_EOF;
+          return FAIL_EOF;
         }
       }
       break;
     case EXIT:
-      ECUZ(SM_maxRet, RET, ERR_RET, err_file);
+      ECUZ(SM_maxRet, RET, FAIL_RET, err_file);
       PC = ret[RET];
       RET--;
       break;
     case BRANCH:
-      ECUZ(SM_maxDic, PC, ERR_PC, err_file);
+      ECUZ(SM_maxDic, PC, FAIL_PC, err_file);
       PC += dic[PC];
       break;
     case NBRANCH:
       if (0 == TOS) {
-        ECUZ(SM_maxDic, PC, ERR_PC, err_file);
+        ECUZ(SM_maxDic, PC, FAIL_PC, err_file);
         PC += dic[PC];
       } else {
         PC++;
       }
-      /*ECUZ(SM_maxDic, PC, ERR_PC); */
-      ECUZ(SM_maxVar, VAR, ERR_PC, err_file);
+      /*ECUZ(SM_maxDic, PC, FAIL_PC); */
+      ECUZ(SM_maxVar, VAR, FAIL_PC, err_file);
       TOS = var[VAR];
       VAR--;
       break;
     case PLUS:
-      ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
+      ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       TOS = var[VAR] + TOS;
       VAR--;
       break;
     case MINUS:
-      ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
+      ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       TOS = var[VAR] - TOS;
       VAR--;
       break;
     case MUL:
-      ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
+      ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       TOS = var[VAR] * TOS;
       VAR--;
       break;
     case MOD:
-      ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
+      ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       if ((0 == TOS) || SIGNED_DIVIDE_CHECK(TOS, var[VAR])) {
         ERR_LN_PRN(err_file);
-        return ERR_MOD0;
+        return FAIL_MOD0;
       } else {
         TOS = var[VAR] % TOS;
         VAR--;
         break;
       }
     case DIV:
-      ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
+      ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       if ((0 == TOS) || SIGNED_DIVIDE_CHECK(TOS, var[VAR])) {
         ERR_LN_PRN(err_file);
-        return ERR_DIV0;
+        return FAIL_DIV0;
       } else {
         TOS = var[VAR] / TOS;
         VAR--;
         break;
       }
     case LS:
-      ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
+      ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       /** Unsigned shifts only and only by BIT_SIZE - 1 to avoid
        * undefined behavior */
       TOS = (mw) ((unsigned)var[VAR] << ((unsigned)TOS & (BIT_SIZE - 1)));
       VAR--;
       break;
     case RS:
-      ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
+      ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       /** Unsigned shifts only and only by BIT_SIZE - 1 to avoid
        * undefined behavior */
       TOS = (mw) ((unsigned)var[VAR] >> (unsigned)TOS & (BIT_SIZE - 1));
       VAR--;
       break;
     case AND:
-      ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
+      ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       TOS = var[VAR] & TOS;
       VAR--;
       break;
     case OR:
-      ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
+      ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       TOS = var[VAR] | TOS;
       VAR--;
       break;
@@ -876,7 +876,7 @@ mw forth_interpreter(fobj_t * fo)
       TOS = ~TOS;
       break;
     case XOR:
-      ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
+      ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       TOS = var[VAR] ^ TOS;
       VAR--;
       break;
@@ -887,152 +887,152 @@ mw forth_interpreter(fobj_t * fo)
       TOS--;
       break;
     case EQ:
-      ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
+      ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       TOS = (mw) (var[VAR] == TOS);
       VAR--;
       break;
     case LESS:
-      ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
+      ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       TOS = (mw) (var[VAR] < TOS);
       VAR--;
       break;
     case MORE:
-      ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
+      ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       TOS = (mw) (var[VAR] > TOS);
       VAR--;
       break;
     case FETCH_REG:
-      ECUZ(SM_maxReg, TOS, ERR_TOS_REG, err_file);
+      ECUZ(SM_maxReg, TOS, FAIL_TOS_REG, err_file);
       TOS = reg[TOS];
       break;
     case FETCH_DIC:
-      ECUZ(SM_maxDic, TOS, ERR_TOS_DIC, err_file);
+      ECUZ(SM_maxDic, TOS, FAIL_TOS_DIC, err_file);
       TOS = dic[TOS];
       break;
     case FETCH_STR:
-      ECUZ(SM_maxStr, TOS, ERR_TOS_STR, err_file);
+      ECUZ(SM_maxStr, TOS, FAIL_TOS_STR, err_file);
       TOS = (mw) str[TOS];
       break;
     case PICK:
-      ECUZ(SM_maxVar, VAR - TOS, ERR_TOS_VAR, err_file);
+      ECUZ(SM_maxVar, VAR - TOS, FAIL_TOS_VAR, err_file);
       TOS = var[VAR - TOS];
       break;
     case STORE_REG:
-      ECUZ(SM_maxReg, TOS, ERR_TOS_REG, err_file);
-      ECB(1, SM_maxVar, VAR, ERR_VAR, err_file);
+      ECUZ(SM_maxReg, TOS, FAIL_TOS_REG, err_file);
+      ECB(1, SM_maxVar, VAR, FAIL_VAR, err_file);
       reg[TOS] = var[VAR];
       VAR--;
       TOS = var[VAR];
       VAR--;
       break;
     case STORE_DIC:
-      ECUZ(SM_maxDic, TOS, ERR_TOS_DIC, err_file);
-      ECB(1, SM_maxVar, VAR, ERR_VAR, err_file);
+      ECUZ(SM_maxDic, TOS, FAIL_TOS_DIC, err_file);
+      ECB(1, SM_maxVar, VAR, FAIL_VAR, err_file);
       dic[TOS] = var[VAR];
       VAR--;
       TOS = var[VAR];
       VAR--;
       break;
     case STORE_STR:
-      ECUZ(SM_maxStr, TOS, ERR_TOS_STR, err_file);
-      ECB(1, SM_maxVar, VAR, ERR_VAR, err_file);
+      ECUZ(SM_maxStr, TOS, FAIL_TOS_STR, err_file);
+      ECB(1, SM_maxVar, VAR, FAIL_VAR, err_file);
       str[TOS] = (char)var[VAR];
       VAR--;
       TOS = var[VAR];
       VAR--;
       break;
     case STORE_VAR:
-      ECUZ(SM_maxVar, TOS, ERR_TOS_VAR, err_file);
-      ECB(1, SM_maxVar, VAR, ERR_VAR, err_file);
+      ECUZ(SM_maxVar, TOS, FAIL_TOS_VAR, err_file);
+      ECB(1, SM_maxVar, VAR, FAIL_VAR, err_file);
       var[TOS] = var[VAR];
       VAR--;
       TOS = var[VAR];
       VAR--;
       break;
     case KEY:
-      ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
+      ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       VAR++;
       var[VAR] = TOS;
       TOS = wrap_get(fo->in_file[IN_STRM]);
       if ((mw) EOF == TOS) {
         ERR_LN_PRN(err_file);
-        return ERR_EOF;
+        return FAIL_EOF;
       }
       break;
     case EMIT:
       /*need to check if putchar is winning or not */
       if (EOF == wrap_put(out_file, (char)TOS)) {
         ERR_LN_PRN(err_file);
-        return ERR_EOF;
+        return FAIL_EOF;
       }
-      ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
+      ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       TOS = var[VAR];
       VAR--;
       break;
     case DROP:
-      ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
+      ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       TOS = var[VAR];
       VAR--;
       break;
     case DUP:
-      ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
+      ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       VAR++;
       var[VAR] = TOS;
       break;
     case SWAP:
       OP0 = TOS;
-      ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
+      ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       TOS = var[VAR];
       var[VAR] = OP0;
       break;
     case OVER:
-      ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
+      ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       VAR++;
       var[VAR] = TOS;
       TOS = var[VAR - 1];
       break;
     case TOR:
-      ECUZ(SM_maxRet - 1, RET, ERR_RET, err_file);
+      ECUZ(SM_maxRet - 1, RET, FAIL_RET, err_file);
       ret[RET + 1] = ret[RET];
       RET++;
       ret[RET] = TOS;
-      ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
+      ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       TOS = var[VAR];
       VAR--;
       break;
     case FROMR:
-      ECUZ(SM_maxVar - 1, VAR, ERR_VAR, err_file);
+      ECUZ(SM_maxVar - 1, VAR, FAIL_VAR, err_file);
       VAR++;
       var[VAR] = TOS;
-      ECUZ(SM_maxRet, RET, ERR_RET, err_file);
+      ECUZ(SM_maxRet, RET, FAIL_RET, err_file);
       TOS = ret[RET];
       RET--;
       break;
     case TAIL:
-      ECUZ(SM_maxRet, VAR, ERR_RET, err_file);
+      ECUZ(SM_maxRet, VAR, FAIL_RET, err_file);
       RET--;
       break;
     case QUOTE:
-      ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
+      ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       VAR++;
       var[VAR] = TOS;
-      ECUZ(SM_maxDic, PC, ERR_PC, err_file);
+      ECUZ(SM_maxDic, PC, FAIL_PC, err_file);
       TOS = dic[PC];
       PC++;
       break;
     case COMMA:
-      ECUZ(SM_maxDic, DIC, ERR_DIC, err_file);
+      ECUZ(SM_maxDic, DIC, FAIL_DIC, err_file);
       dic[DIC] = TOS;
       DIC++;
-      ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
+      ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       TOS = var[VAR];
       VAR--;
       break;
     case PRINTNUM:
-      ECB(2, SM_maxVar, VAR, ERR_VAR, err_file);
+      ECB(2, SM_maxVar, VAR, FAIL_VAR, err_file);
       if (MAX_BASE < var[VAR]) {
         ERR_LN_PRN(err_file);
-        return ERR_BASE;
+        return FAIL_BASE;
       }
       OP0 = TOS;
       OP1 = var[VAR];
@@ -1042,41 +1042,41 @@ mw forth_interpreter(fobj_t * fo)
       VAR--;
       break;
     case GET_WORD:
-      ECB(1, SM_maxVar, VAR, ERR_VAR, err_file);
-      ECUZ(SM_maxStr, VAR, ERR_TOS_STR, err_file);
-      if (get_word(str + TOS, SM_inputBufLen, fo->in_file[IN_STRM]) == ERR_FAILURE) {
+      ECB(1, SM_maxVar, VAR, FAIL_VAR, err_file);
+      ECUZ(SM_maxStr, VAR, FAIL_TOS_STR, err_file);
+      if (get_word(str + TOS, SM_inputBufLen, fo->in_file[IN_STRM]) == FAIL_FAILURE) {
         ERR_LN_PRN(err_file);
-        return ERR_EOF;
+        return FAIL_EOF;
       }
       TOS = var[VAR];
       VAR--;
       break;
     case STRLEN:
-      ECUZ(SM_maxStr, TOS, ERR_TOS_STR, err_file);
+      ECUZ(SM_maxStr, TOS, FAIL_TOS_STR, err_file);
       TOS = my_strlen(TOS + str, MAX_STRLEN);
       break;
     case ISNUMBER:
-      ECUZ(SM_maxStr, TOS, ERR_TOS_STR, err_file);
+      ECUZ(SM_maxStr, TOS, FAIL_TOS_STR, err_file);
       TOS = isnumber(TOS + str);
       break;
     case STRNEQU:
-      ECB(1, SM_maxVar, VAR, ERR_VAR, err_file);
-      ECUZ(SM_maxStr, TOS, ERR_TOS_STR, err_file);
-      ECUZ(SM_maxStr, var[VAR], ERR_TOS_STR, err_file);
+      ECB(1, SM_maxVar, VAR, FAIL_VAR, err_file);
+      ECUZ(SM_maxStr, TOS, FAIL_TOS_STR, err_file);
+      ECUZ(SM_maxStr, var[VAR], FAIL_TOS_STR, err_file);
       TOS = strnequ(str + TOS, str + var[VAR], MAX_STRLEN, MAX_STRLEN);
       VAR--;
       break;
     case FIND:
       /*fo contains OP0 */
-      if (ERR_OK != (OP1 = find_word(fo)))
+      if (FAIL_OK != (OP1 = find_word(fo)))
         return OP1;
       /*Check if word found */
       if (0 == (OP0 - 1)) {
         ERR_LN_PRN(err_file);
-        return ERR_WORD;
+        return FAIL_WORD;
       }
-      ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
-      ECUZ(SM_maxDic - 3, VAR, ERR_OP0, err_file);
+      ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
+      ECUZ(SM_maxDic - 3, VAR, FAIL_OP0, err_file);
       OP0 += 2;                 /*advance over pointers */
       if (COMPILE == dic[OP0]) {
         ++OP0;
@@ -1086,13 +1086,13 @@ mw forth_interpreter(fobj_t * fo)
       TOS = OP0;
       break;
     case EXECUTE:
-      ECUZ(SM_maxVar, VAR, ERR_VAR, err_file);
+      ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       NEXT = TOS;
       TOS = var[VAR];
       VAR--;
       goto TAIL_RECURSE;
     case KERNEL:
-      if (ERR_OK != (OP0 = forth_system_calls(fo, TOS))) {
+      if (FAIL_OK != (OP0 = forth_system_calls(fo, TOS))) {
         ERR_LN_PRN(err_file);
         return OP0;
       }
@@ -1101,7 +1101,7 @@ mw forth_interpreter(fobj_t * fo)
       return TOS;
     default:
       ERR_LN_PRN(err_file);
-      return ERR_INSTRUCTION;
+      return FAIL_INSTRUCTION;
     }
   }
 }
@@ -1115,7 +1115,7 @@ static void report_error(forth_errors_e e)
 }
 
 /*Error and IO handler for the Forth interpreter*/
-#define NULLCHK_M(X)  if(NULL == (X)){ report_error(ERR_NULL); return ERR_FAILURE; }
+#define NULLCHK_M(X)  if(NULL == (X)){ report_error(FAIL_NULL); return FAIL_FAILURE; }
 mw forth_monitor(fobj_t * fo)
 {
   mw fo_returned_val;
@@ -1135,26 +1135,26 @@ mw forth_monitor(fobj_t * fo)
 
   /*point and sanity checks of the in and output files */
   if (NULL == fo->in_file) {
-    report_error(ERR_NULL);
-    return ERR_FAILURE;
+    report_error(FAIL_NULL);
+    return FAIL_FAILURE;
   } else {
     if (io_stdin != fo->in_file[IN_STRM]->fio) {
       if (NULL == fo->in_file[IN_STRM]->iou.f) {
-        report_error(ERR_NULL);
-        return ERR_FAILURE;
+        report_error(FAIL_NULL);
+        return FAIL_FAILURE;
       }
     }
   }
 
   if (NULL == fo->out_file) {
-    report_error(ERR_NULL);
-    return ERR_FAILURE;
+    report_error(FAIL_NULL);
+    return FAIL_FAILURE;
   } else {
     if ((io_stdout != fo->out_file->fio)
         && (io_stderr != fo->out_file->fio)) {
       if (NULL == fo->out_file->iou.f) {
-        report_error(ERR_NULL);
-        return ERR_FAILURE;
+        report_error(FAIL_NULL);
+        return FAIL_FAILURE;
       }
     }
   }
@@ -1162,8 +1162,8 @@ mw forth_monitor(fobj_t * fo)
   /* I should check that EXF is potentially valid, ie. Not zero */
   while(true){
     fo_returned_val = forth_interpreter(fo);
-    if (fo_returned_val >= LAST_ERROR) {
-      print_string(forth_error_str[LAST_ERROR], MAX_ERR_STR, fo->err_file);
+    if (fo_returned_val >= FAIL_LAST_ERROR) {
+      print_string(forth_error_str[FAIL_LAST_ERROR], MAX_ERR_STR, fo->err_file);
       return fo_returned_val;
     } else if (onerr_goto_restart_e == f_error_action[fo_returned_val]) {
       print_string(forth_error_str[fo_returned_val], MAX_ERR_STR, fo->err_file);
@@ -1173,7 +1173,7 @@ mw forth_monitor(fobj_t * fo)
       print_string(forth_error_str[fo_returned_val], MAX_ERR_STR, fo->err_file);
       return fo_returned_val;
     } else if (onerr_special_e == f_error_action[fo_returned_val]) {
-      if (fo_returned_val == ERR_EOF) {   /*Some EOF situations might not be handled correctly */
+      if (fo_returned_val == FAIL_EOF) {   /*Some EOF situations might not be handled correctly */
         if ((0 < IN_STRM) && (MAX_INSTRM > IN_STRM)) {
           if (io_rd_file == fo->in_file[IN_STRM]->fio) {
             if (NULL != fo->in_file[IN_STRM]->iou.f) {
@@ -1182,24 +1182,24 @@ mw forth_monitor(fobj_t * fo)
             }
           }
           IN_STRM--;
-          print_string(forth_error_str[ERR_NEXT_STRM], MAX_ERR_STR, fo->err_file);
+          print_string(forth_error_str[FAIL_NEXT_STRM], MAX_ERR_STR, fo->err_file);
           continue;
         }
-        print_string(forth_error_str[ERR_EOF], MAX_ERR_STR, fo->err_file);
-        return ERR_EOF;
-      } else if (ERR_WORD == fo_returned_val) {   /*Special action: Print out word */
+        print_string(forth_error_str[FAIL_EOF], MAX_ERR_STR, fo->err_file);
+        return FAIL_EOF;
+      } else if (FAIL_WORD == fo_returned_val) {   /*Special action: Print out word */
         print_string(fo->str, MAX_ERR_STR, fo->err_file);
         (void)wrap_put(fo->err_file, '\n');
-        print_string(forth_error_str[ERR_WORD], MAX_ERR_STR, fo->err_file);
+        print_string(forth_error_str[FAIL_WORD], MAX_ERR_STR, fo->err_file);
         on_err(fo);
         continue;
       } else {                    /*No special action defined */
-        print_string(forth_error_str[ERR_SPECIAL_ERROR], MAX_ERR_STR, fo->err_file);
-        return ERR_SPECIAL_ERROR;
+        print_string(forth_error_str[FAIL_SPECIAL_ERROR], MAX_ERR_STR, fo->err_file);
+        return FAIL_SPECIAL_ERROR;
       }
     }
   }
-  return ERR_ABNORMAL_END;
+  return FAIL_ABNORMAL_END;
 }
 
 #undef NULLCHK_M
