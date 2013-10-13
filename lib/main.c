@@ -74,7 +74,7 @@ static void print_enums(FILE * output)
 
   /**print out registers*/
   fprintf(output, "\\ register locations\n");
-  for (i = 0; i < ENUM_LAST_REGISTER; i++) {
+  for (i = 0; i < REG_LAST_REGISTER; i++) {
     fprintf(output, "%d constant R_%s\n", i, forth_register_str_print_me[i]);
   }
 

@@ -190,38 +190,38 @@ typedef enum {
 #undef X
 
 /********************************************************************************/
-/** X Macro, This one is optional apart from the ENUM (ie. For debugging)*/
+/** X Macro, This one is optional apart from the REG (ie. For debugging)*/
 #define FORTH_REGISTER_ENUM_XMACRO_M \
-    X(ENUM_NEXT,              "NEXT"),\
-    X(ENUM_PC,                "PC"),\
-    X(ENUM_TOS,               "TOS"),\
-    X(ENUM_RET,               "RET"),\
-    X(ENUM_VAR,               "VAR"),\
-    X(ENUM_DIC,               "DIC"),\
-    X(ENUM_STR,               "STR"),\
-    X(ENUM_PWD,               "PWD"),\
-    X(ENUM_OP0,               "OP0"),\
-    X(ENUM_OP1,               "OP1"),\
-    X(ENUM_A,                 "A"),\
-    X(ENUM_B,                 "B"),\
-    X(ENUM_C,                 "C"),\
-    X(ENUM_CPF,               "CPF"),\
-    X(ENUM_EXF,               "EXF"),\
-    X(ENUM_INI,               "INI"),\
-    X(ENUM_maxReg,            "maxReg"),\
-    X(ENUM_maxDic,            "maxDic"),\
-    X(ENUM_maxRet,            "maxRet"),\
-    X(ENUM_maxVar,            "maxVar"),\
-    X(ENUM_maxStr,            "maxStr"),\
-    X(ENUM_inputBufLen,       "inputBufLen"),\
-    X(ENUM_dictionaryOffset,  "dictionaryOffset"),\
-    X(ENUM_sizeOfMW,          "sizeOfMW"),\
-    X(ENUM_cycles,            "cycles"),\
-    X(ENUM_ccount,            "ccount"),\
-    X(ENUM_inStrm,            "inStrm"),\
-    X(ENUM_wordCount,         "wordCount"),\
-    X(ENUM_wordIndex,         "wordIndex"),\
-    X(ENUM_LAST_REGISTER,     "THIS IS NOT A REGISTER")
+    X(REG_NEXT,              "NEXT"),\
+    X(REG_PC,                "PC"),\
+    X(REG_TOS,               "TOS"),\
+    X(REG_RET,               "RET"),\
+    X(REG_VAR,               "VAR"),\
+    X(REG_DIC,               "DIC"),\
+    X(REG_STR,               "STR"),\
+    X(REG_PWD,               "PWD"),\
+    X(REG_OP0,               "OP0"),\
+    X(REG_OP1,               "OP1"),\
+    X(REG_A,                 "A"),\
+    X(REG_B,                 "B"),\
+    X(REG_C,                 "C"),\
+    X(REG_CPF,               "CPF"),\
+    X(REG_EXF,               "EXF"),\
+    X(REG_INI,               "INI"),\
+    X(REG_maxReg,            "maxReg"),\
+    X(REG_maxDic,            "maxDic"),\
+    X(REG_maxRet,            "maxRet"),\
+    X(REG_maxVar,            "maxVar"),\
+    X(REG_maxStr,            "maxStr"),\
+    X(REG_inputBufLen,       "inputBufLen"),\
+    X(REG_dictionaryOffset,  "dictionaryOffset"),\
+    X(REG_sizeOfMW,          "sizeOfMW"),\
+    X(REG_cycles,            "cycles"),\
+    X(REG_ccount,            "ccount"),\
+    X(REG_inStrm,            "inStrm"),\
+    X(REG_wordCount,         "wordCount"),\
+    X(REG_wordIndex,         "wordIndex"),\
+    X(REG_LAST_REGISTER,     "THIS IS NOT A REGISTER")
 
 #define X(a, b) a
 typedef enum {
@@ -230,42 +230,42 @@ typedef enum {
 #undef X
 
 /*vm macros*/
-#define NEXT    reg[ENUM_NEXT]
-#define PC      reg[ENUM_PC]
-#define TOS     reg[ENUM_TOS]
-#define RET     reg[ENUM_RET]
+#define NEXT    reg[REG_NEXT]
+#define PC      reg[REG_PC]
+#define TOS     reg[REG_TOS]
+#define RET     reg[REG_RET]
 
-#define VAR     reg[ENUM_VAR]
-#define DIC     reg[ENUM_DIC]
-#define STR     reg[ENUM_STR]
-#define PWD     reg[ENUM_PWD]
+#define VAR     reg[REG_VAR]
+#define DIC     reg[REG_DIC]
+#define STR     reg[REG_STR]
+#define PWD     reg[REG_PWD]
 
-#define OP0     reg[ENUM_OP0]
-#define OP1     reg[ENUM_OP1]
-#define A       reg[ENUM_A]
-#define B       reg[ENUM_B]
+#define OP0     reg[REG_OP0]
+#define OP1     reg[REG_OP1]
+#define A       reg[REG_A]
+#define B       reg[REG_B]
 
-#define C       reg[ENUM_C]
-#define CPF     reg[ENUM_CPF]
-#define EXF     reg[ENUM_EXF]
-#define INI     reg[ENUM_INI]
+#define C       reg[REG_C]
+#define CPF     reg[REG_CPF]
+#define EXF     reg[REG_EXF]
+#define INI     reg[REG_INI]
 
-#define SM_maxReg  reg[ENUM_maxReg]
-#define SM_maxDic  reg[ENUM_maxDic]
-#define SM_maxRet  reg[ENUM_maxRet]
-#define SM_maxVar  reg[ENUM_maxVar]
+#define SM_maxReg  reg[REG_maxReg]
+#define SM_maxDic  reg[REG_maxDic]
+#define SM_maxRet  reg[REG_maxRet]
+#define SM_maxVar  reg[REG_maxVar]
 
-#define SM_maxStr  reg[ENUM_maxStr]
-#define SM_inputBufLen  reg[ENUM_inputBufLen]
-#define SM_dictionaryOffset  reg[ENUM_dictionaryOffset]
-#define SM_sizeOfMW  reg[ENUM_sizeOfMW]
+#define SM_maxStr  reg[REG_maxStr]
+#define SM_inputBufLen  reg[REG_inputBufLen]
+#define SM_dictionaryOffset  reg[REG_dictionaryOffset]
+#define SM_sizeOfMW  reg[REG_sizeOfMW]
 
-#define CYCLES  reg[ENUM_cycles]
-#define CCOUNT  reg[ENUM_ccount]
+#define CYCLES  reg[REG_cycles]
+#define CCOUNT  reg[REG_ccount]
 
-#define IN_STRM reg[ENUM_inStrm]
-#define WORDCNT reg[ENUM_wordCount]
-#define WORDINX reg[ENUM_wordIndex]
+#define IN_STRM reg[REG_inStrm]
+#define WORDCNT reg[REG_wordCount]
+#define WORDINX reg[REG_wordIndex]
 /********************************************************************************/
 
 #if   (0 == WORD_TYPE)          /* signed 16 bit */
