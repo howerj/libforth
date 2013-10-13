@@ -411,7 +411,7 @@ static mw compile_word(forth_primitives_e fp, fobj_t * fo, enum bool flag, const
 static mw compile_word_prim(fobj_t * fo, const char *prim)
 {
   mw *reg = fo->reg, *dic = fo->dic, ret;
-  ret = compile_word(COMPILE, fo, true, prim);
+  ret = compile_word(P_COMPILE, fo, true, prim);
   dic[DIC] = OP0;
   DIC++;
   OP0++;
@@ -448,22 +448,22 @@ static mw forth_initialize(fobj_t * fo)
   PWD = 1;
 
   /*immediate words */
-  if (compile_word(DEFINE, fo, true, ":") != FAIL_OK) {
+  if (compile_word(P_DEFINE, fo, true, ":") != FAIL_OK) {
     return FAIL_FAILURE;
   }
-  if (compile_word(IMMEDIATE, fo, true, "immediate") != FAIL_OK) {
+  if (compile_word(P_IMMEDIATE, fo, true, "immediate") != FAIL_OK) {
     return FAIL_FAILURE;
   }
 
   /*define a special word (read) */
-  if (compile_word(COMPILE, fo, true, "read") != FAIL_OK) {
+  if (compile_word(P_COMPILE, fo, true, "read") != FAIL_OK) {
     return FAIL_FAILURE;
   }
   OP0 = DIC;
   ECUZ(SM_maxDic - 2, DIC, FAIL_DIC, err_file);
-  dic[DIC] = READ;
+  dic[DIC] = P_READ;
   DIC++;
-  dic[DIC] = RUN;
+  dic[DIC] = P_RUN;
   DIC++;
   PC = DIC;
   ECUZ(SM_maxDic - 2, DIC, FAIL_DIC, err_file);
@@ -474,12 +474,12 @@ static mw forth_initialize(fobj_t * fo)
   /*...end special word definition */
 
   /*more immediate words */
-  if (compile_word(COMMENT, fo, true, "\\") != FAIL_OK) {
+  if (compile_word(P_COMMENT, fo, true, "\\") != FAIL_OK) {
     return FAIL_FAILURE;
   }
-  OP0 = EXIT;
+  OP0 = P_EXIT;
 
-  for (i = EXIT; i < LAST_PRIMITIVE; i++) {
+  for (i = P_EXIT; i < P_LAST_PRIMITIVE; i++) {
     COMPILE_PRIM(forth_primitives_str[i]);
   }
 
@@ -711,7 +711,7 @@ mw forth_interpreter(fobj_t * fo)
     /*simple trace macros */
     ECUZ(SM_maxDic, NEXT, FAIL_NEXT, err_file);
     switch (dic[NEXT]) {
-    case PUSH_INT:
+    case P_PUSH_INT:
       ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       VAR++;
       var[VAR] = TOS;
@@ -719,33 +719,33 @@ mw forth_interpreter(fobj_t * fo)
       TOS = dic[PC];
       PC++;
       break;
-    case COMPILE:
+    case P_COMPILE:
       ECUZ(SM_maxDic, DIC, FAIL_DIC, err_file);
       dic[DIC] = NEXT + 1;
       DIC++;
       break;
-    case RUN:
+    case P_RUN:
       ECUZ(SM_maxRet, RET, FAIL_RET, err_file);
       RET++;
       ret[RET] = PC;
       PC = NEXT + 1;
       break;
-    case DEFINE:
+    case P_DEFINE:
       CPF = (mw) true;
-      if (compile_word(COMPILE, fo, false, NULL) != FAIL_OK) {
+      if (compile_word(P_COMPILE, fo, false, NULL) != FAIL_OK) {
         return FAIL_FAILURE;
       }
       ECUZ(SM_maxDic, DIC, FAIL_DIC, err_file);
-      dic[DIC] = RUN;
+      dic[DIC] = P_RUN;
       DIC++;
       break;
-    case IMMEDIATE:
+    case P_IMMEDIATE:
       DIC -= 2;
       ECUZ(SM_maxDic, DIC, FAIL_DIC, err_file);
-      dic[DIC] = RUN;
+      dic[DIC] = P_RUN;
       DIC++;
       break;
-    case READ:
+    case P_READ:
       /* I should split this read case into several
        * simpler functions, these simpler functions
        * could be used by the VM as extra primitives */
@@ -756,7 +756,7 @@ mw forth_interpreter(fobj_t * fo)
         NEXT = OP0 + 2;         /*Advance over pointers */
         if (0 == CPF) {
           ECUZ(SM_maxDic, NEXT, FAIL_NEXT, err_file);
-          if (COMPILE == dic[NEXT]) {
+          if (P_COMPILE == dic[NEXT]) {
             NEXT++;
           }
         }
@@ -765,7 +765,7 @@ mw forth_interpreter(fobj_t * fo)
       if (0 != isnumber(str)) {
         if (0 != CPF) {
           ECUZ(SM_maxDic - 1, DIC, FAIL_DIC, err_file);
-          dic[DIC] = PUSH_INT;
+          dic[DIC] = P_PUSH_INT;
           DIC++;
           dic[DIC] = kr_atoi(str);
           DIC++;
@@ -780,7 +780,7 @@ mw forth_interpreter(fobj_t * fo)
         return FAIL_WORD;
       }
       break;
-    case COMMENT:
+    case P_COMMENT:
       OP0 = 0;
       while (true) {
         OP0 = wrap_get(fo->in_file[IN_STRM]);
@@ -792,16 +792,16 @@ mw forth_interpreter(fobj_t * fo)
         }
       }
       break;
-    case EXIT:
+    case P_EXIT:
       ECUZ(SM_maxRet, RET, FAIL_RET, err_file);
       PC = ret[RET];
       RET--;
       break;
-    case BRANCH:
+    case P_BRANCH:
       ECUZ(SM_maxDic, PC, FAIL_PC, err_file);
       PC += dic[PC];
       break;
-    case NBRANCH:
+    case P_NBRANCH:
       if (0 == TOS) {
         ECUZ(SM_maxDic, PC, FAIL_PC, err_file);
         PC += dic[PC];
@@ -813,22 +813,22 @@ mw forth_interpreter(fobj_t * fo)
       TOS = var[VAR];
       VAR--;
       break;
-    case PLUS:
+    case P_PLUS:
       ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       TOS = var[VAR] + TOS;
       VAR--;
       break;
-    case MINUS:
+    case P_MINUS:
       ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       TOS = var[VAR] - TOS;
       VAR--;
       break;
-    case MUL:
+    case P_MUL:
       ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       TOS = var[VAR] * TOS;
       VAR--;
       break;
-    case MOD:
+    case P_MOD:
       ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       if ((0 == TOS) || SIGNED_DIVIDE_CHECK(TOS, var[VAR])) {
         ERR_LN_PRN(err_file);
@@ -838,7 +838,7 @@ mw forth_interpreter(fobj_t * fo)
         VAR--;
         break;
       }
-    case DIV:
+    case P_DIV:
       ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       if ((0 == TOS) || SIGNED_DIVIDE_CHECK(TOS, var[VAR])) {
         ERR_LN_PRN(err_file);
@@ -848,76 +848,76 @@ mw forth_interpreter(fobj_t * fo)
         VAR--;
         break;
       }
-    case LS:
+    case P_LS:
       ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       /** Unsigned shifts only and only by BIT_SIZE - 1 to avoid
        * undefined behavior */
       TOS = (mw) ((unsigned)var[VAR] << ((unsigned)TOS & (BIT_SIZE - 1)));
       VAR--;
       break;
-    case RS:
+    case P_RS:
       ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       /** Unsigned shifts only and only by BIT_SIZE - 1 to avoid
        * undefined behavior */
       TOS = (mw) ((unsigned)var[VAR] >> (unsigned)TOS & (BIT_SIZE - 1));
       VAR--;
       break;
-    case AND:
+    case P_AND:
       ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       TOS = var[VAR] & TOS;
       VAR--;
       break;
-    case OR:
+    case P_OR:
       ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       TOS = var[VAR] | TOS;
       VAR--;
       break;
-    case INV:
+    case P_INV:
       TOS = ~TOS;
       break;
-    case XOR:
+    case P_XOR:
       ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       TOS = var[VAR] ^ TOS;
       VAR--;
       break;
-    case INC:
+    case P_INC:
       TOS++;
       break;
-    case DEC:
+    case P_DEC:
       TOS--;
       break;
-    case EQ:
+    case P_EQ:
       ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       TOS = (mw) (var[VAR] == TOS);
       VAR--;
       break;
-    case LESS:
+    case P_LESS:
       ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       TOS = (mw) (var[VAR] < TOS);
       VAR--;
       break;
-    case MORE:
+    case P_MORE:
       ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       TOS = (mw) (var[VAR] > TOS);
       VAR--;
       break;
-    case FETCH_REG:
+    case P_FETCH_REG:
       ECUZ(SM_maxReg, TOS, FAIL_TOS_REG, err_file);
       TOS = reg[TOS];
       break;
-    case FETCH_DIC:
+    case P_FETCH_DIC:
       ECUZ(SM_maxDic, TOS, FAIL_TOS_DIC, err_file);
       TOS = dic[TOS];
       break;
-    case FETCH_STR:
+    case P_FETCH_STR:
       ECUZ(SM_maxStr, TOS, FAIL_TOS_STR, err_file);
       TOS = (mw) str[TOS];
       break;
-    case PICK:
+    case P_PICK:
       ECUZ(SM_maxVar, VAR - TOS, FAIL_TOS_VAR, err_file);
       TOS = var[VAR - TOS];
       break;
-    case STORE_REG:
+    case P_STORE_REG:
       ECUZ(SM_maxReg, TOS, FAIL_TOS_REG, err_file);
       ECB(1, SM_maxVar, VAR, FAIL_VAR, err_file);
       reg[TOS] = var[VAR];
@@ -925,7 +925,7 @@ mw forth_interpreter(fobj_t * fo)
       TOS = var[VAR];
       VAR--;
       break;
-    case STORE_DIC:
+    case P_STORE_DIC:
       ECUZ(SM_maxDic, TOS, FAIL_TOS_DIC, err_file);
       ECB(1, SM_maxVar, VAR, FAIL_VAR, err_file);
       dic[TOS] = var[VAR];
@@ -933,7 +933,7 @@ mw forth_interpreter(fobj_t * fo)
       TOS = var[VAR];
       VAR--;
       break;
-    case STORE_STR:
+    case P_STORE_STR:
       ECUZ(SM_maxStr, TOS, FAIL_TOS_STR, err_file);
       ECB(1, SM_maxVar, VAR, FAIL_VAR, err_file);
       str[TOS] = (char)var[VAR];
@@ -941,7 +941,7 @@ mw forth_interpreter(fobj_t * fo)
       TOS = var[VAR];
       VAR--;
       break;
-    case STORE_VAR:
+    case P_STORE_VAR:
       ECUZ(SM_maxVar, TOS, FAIL_TOS_VAR, err_file);
       ECB(1, SM_maxVar, VAR, FAIL_VAR, err_file);
       var[TOS] = var[VAR];
@@ -949,7 +949,7 @@ mw forth_interpreter(fobj_t * fo)
       TOS = var[VAR];
       VAR--;
       break;
-    case KEY:
+    case P_KEY:
       ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       VAR++;
       var[VAR] = TOS;
@@ -959,7 +959,7 @@ mw forth_interpreter(fobj_t * fo)
         return FAIL_EOF;
       }
       break;
-    case EMIT:
+    case P_EMIT:
       /*need to check if putchar is winning or not */
       if (EOF == wrap_put(out_file, (char)TOS)) {
         ERR_LN_PRN(err_file);
@@ -969,29 +969,29 @@ mw forth_interpreter(fobj_t * fo)
       TOS = var[VAR];
       VAR--;
       break;
-    case DROP:
+    case P_DROP:
       ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       TOS = var[VAR];
       VAR--;
       break;
-    case DUP:
+    case P_DUP:
       ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       VAR++;
       var[VAR] = TOS;
       break;
-    case SWAP:
+    case P_SWAP:
       OP0 = TOS;
       ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       TOS = var[VAR];
       var[VAR] = OP0;
       break;
-    case OVER:
+    case P_OVER:
       ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       VAR++;
       var[VAR] = TOS;
       TOS = var[VAR - 1];
       break;
-    case TOR:
+    case P_TOR:
       ECUZ(SM_maxRet - 1, RET, FAIL_RET, err_file);
       ret[RET + 1] = ret[RET];
       RET++;
@@ -1000,7 +1000,7 @@ mw forth_interpreter(fobj_t * fo)
       TOS = var[VAR];
       VAR--;
       break;
-    case FROMR:
+    case P_FROMR:
       ECUZ(SM_maxVar - 1, VAR, FAIL_VAR, err_file);
       VAR++;
       var[VAR] = TOS;
@@ -1008,11 +1008,11 @@ mw forth_interpreter(fobj_t * fo)
       TOS = ret[RET];
       RET--;
       break;
-    case TAIL:
+    case P_TAIL:
       ECUZ(SM_maxRet, VAR, FAIL_RET, err_file);
       RET--;
       break;
-    case QUOTE:
+    case P_QUOTE:
       ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       VAR++;
       var[VAR] = TOS;
@@ -1020,7 +1020,7 @@ mw forth_interpreter(fobj_t * fo)
       TOS = dic[PC];
       PC++;
       break;
-    case COMMA:
+    case P_COMMA:
       ECUZ(SM_maxDic, DIC, FAIL_DIC, err_file);
       dic[DIC] = TOS;
       DIC++;
@@ -1028,7 +1028,7 @@ mw forth_interpreter(fobj_t * fo)
       TOS = var[VAR];
       VAR--;
       break;
-    case PRINTNUM:
+    case P_PRINTNUM:
       ECB(2, SM_maxVar, VAR, FAIL_VAR, err_file);
       if (MAX_BASE < var[VAR]) {
         ERR_LN_PRN(err_file);
@@ -1041,7 +1041,7 @@ mw forth_interpreter(fobj_t * fo)
       TOS = var[VAR];
       VAR--;
       break;
-    case GET_WORD:
+    case P_GET_WORD:
       ECB(1, SM_maxVar, VAR, FAIL_VAR, err_file);
       ECUZ(SM_maxStr, VAR, FAIL_TOS_STR, err_file);
       if (get_word(str + TOS, SM_inputBufLen, fo->in_file[IN_STRM]) == FAIL_FAILURE) {
@@ -1051,22 +1051,22 @@ mw forth_interpreter(fobj_t * fo)
       TOS = var[VAR];
       VAR--;
       break;
-    case STRLEN:
+    case P_STRLEN:
       ECUZ(SM_maxStr, TOS, FAIL_TOS_STR, err_file);
       TOS = my_strlen(TOS + str, MAX_STRLEN);
       break;
-    case ISNUMBER:
+    case P_ISNUMBER:
       ECUZ(SM_maxStr, TOS, FAIL_TOS_STR, err_file);
       TOS = isnumber(TOS + str);
       break;
-    case STRNEQU:
+    case P_STRNEQU:
       ECB(1, SM_maxVar, VAR, FAIL_VAR, err_file);
       ECUZ(SM_maxStr, TOS, FAIL_TOS_STR, err_file);
       ECUZ(SM_maxStr, var[VAR], FAIL_TOS_STR, err_file);
       TOS = strnequ(str + TOS, str + var[VAR], MAX_STRLEN, MAX_STRLEN);
       VAR--;
       break;
-    case FIND:
+    case P_FIND:
       /*fo contains OP0 */
       if (FAIL_OK != (OP1 = find_word(fo)))
         return OP1;
@@ -1078,26 +1078,26 @@ mw forth_interpreter(fobj_t * fo)
       ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       ECUZ(SM_maxDic - 3, VAR, FAIL_OP0, err_file);
       OP0 += 2;                 /*advance over pointers */
-      if (COMPILE == dic[OP0]) {
+      if (P_COMPILE == dic[OP0]) {
         ++OP0;
       }
       VAR++;
       var[VAR] = TOS;
       TOS = OP0;
       break;
-    case EXECUTE:
+    case P_EXECUTE:
       ECUZ(SM_maxVar, VAR, FAIL_VAR, err_file);
       NEXT = TOS;
       TOS = var[VAR];
       VAR--;
       goto TAIL_RECURSE;
-    case KERNEL:
+    case P_KERNEL:
       if (FAIL_OK != (OP0 = forth_system_calls(fo, TOS))) {
         ERR_LN_PRN(err_file);
         return OP0;
       }
       break;
-    case ERROR:
+    case P_ERROR:
       return TOS;
     default:
       ERR_LN_PRN(err_file);

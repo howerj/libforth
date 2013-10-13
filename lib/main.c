@@ -80,13 +80,13 @@ static void print_enums(FILE * output)
 
   /**print out system calls*/
   fprintf(output, "\\ system calls for kernel keyword\n");
-  for (i = 0; i < LAST_ERROR_CALL; i++) {
+  for (i = 0; i < SYS_LAST_ERROR_CALL; i++) {
     fprintf(output, "%d constant S_%s\n", i, forth_system_calls_str_print_me[i]);
   }
 
   /**print out defined primitives*/
   fprintf(output, "\\ primitives\n");
-  for (i = 0; i < LAST_PRIMITIVE; i++) {
+  for (i = 0; i < P_LAST_PRIMITIVE; i++) {
     fprintf(output, "%d constant P_%s\n", i, forth_primitives_str_print_me[i]);
   }
 

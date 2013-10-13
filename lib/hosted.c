@@ -143,20 +143,20 @@ fobj_t *forth_obj_create(mw reg_l, mw dic_l, mw var_l, mw ret_l, mw str_l, FILE 
   }
 
   /**initializing memory */
-  fo->reg[ENUM_maxReg] = reg_l;
-  fo->reg[ENUM_maxDic] = dic_l;
-  fo->reg[ENUM_maxVar] = var_l;
-  fo->reg[ENUM_maxRet] = ret_l;
-  fo->reg[ENUM_maxStr] = str_l;
-  fo->reg[ENUM_inputBufLen] = IOBUFFER_LENGTH_M;
-  fo->reg[ENUM_dictionaryOffset] = DICTIONARY_OFFSET_M;
-  fo->reg[ENUM_sizeOfMW] = (mw) sizeof(mw);
-  fo->reg[ENUM_INI] = (mw) true;
-  fo->reg[ENUM_cycles] = (mw) false;    /*Run for X amount of cycles turned off by default. */
-  fo->reg[ENUM_ccount] = 0;     /*Run for X amount of cycles turned off by default. */
-  fo->reg[ENUM_inStrm] = 1;
-  fo->reg[ENUM_wordCount] = 0;
-  fo->reg[ENUM_wordIndex] = 0;
+  fo->reg[REG_maxReg] = reg_l;
+  fo->reg[REG_maxDic] = dic_l;
+  fo->reg[REG_maxVar] = var_l;
+  fo->reg[REG_maxRet] = ret_l;
+  fo->reg[REG_maxStr] = str_l;
+  fo->reg[REG_inputBufLen] = IOBUFFER_LENGTH_M;
+  fo->reg[REG_dictionaryOffset] = DICTIONARY_OFFSET_M;
+  fo->reg[REG_sizeOfMW] = (mw) sizeof(mw);
+  fo->reg[REG_INI] = (mw) true;
+  fo->reg[REG_cycles] = (mw) false;    /*Run for X amount of cycles turned off by default. */
+  fo->reg[REG_ccount] = 0;     /*Run for X amount of cycles turned off by default. */
+  fo->reg[REG_inStrm] = 1;
+  fo->reg[REG_wordCount] = 0;
+  fo->reg[REG_wordIndex] = 0;
 
 #ifdef DEBUG_PRN
   fprintf(stderr, "\tOBJECT INITIALIZED.\n");

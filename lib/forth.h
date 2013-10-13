@@ -49,61 +49,61 @@ typedef enum {
 
 /********************************************************************************/
 #define FORTH_PRIMITIVE_XMACRO_M \
-  X(PUSH_INT,       "_push_int"),\
-  X(COMPILE,        "_compile"),\
-  X(RUN,            "_run"),\
-  X(DEFINE,         ":"),\
-  X(IMMEDIATE,      "immediate"),\
-  X(READ,           "read"),\
-  X(COMMENT,        "\\"),\
-  X(EXIT,           "exit"),\
-  X(BRANCH,         "br"),\
-  X(NBRANCH,        "?br"),\
-  X(PLUS,           "+"),\
-  X(MINUS,          "-"),\
-  X(MUL,            "*"),\
-  X(MOD,            "mod"),\
-  X(DIV,            "/"),\
-  X(LS,             "lshift"),\
-  X(RS,             "rshift"),\
-  X(AND,            "and"),\
-  X(OR,             "or"),\
-  X(INV,            "invert"),\
-  X(XOR,            "xor"),\
-  X(INC,            "1+"),\
-  X(DEC,            "1-"),\
-  X(EQ,             "="),\
-  X(LESS,           "<"),\
-  X(MORE,           ">"),\
-  X(FETCH_REG,      "@reg"),\
-  X(FETCH_DIC,      "@"),\
-  X(PICK,           "pick"),\
-  X(FETCH_STR,      "@str"),\
-  X(STORE_REG,      "!reg"),\
-  X(STORE_DIC,      "!"),\
-  X(STORE_VAR,      "!var"),\
-  X(STORE_STR,      "!str"),\
-  X(KEY,            "key"),\
-  X(EMIT,           "emit"),\
-  X(DUP,            "dup"),\
-  X(DROP,           "drop"),\
-  X(SWAP,           "swap"),\
-  X(OVER,           "over"),\
-  X(TOR,            ">r"),\
-  X(FROMR,          "r>"),\
-  X(TAIL,           "tail"),\
-  X(QUOTE,          "'"),\
-  X(COMMA,          ","),\
-  X(PRINTNUM,       "printnum"),\
-  X(GET_WORD,       "getword"),\
-  X(STRLEN,         "strlen"),\
-  X(ISNUMBER,       "isnumber"),\
-  X(STRNEQU,        "strnequ"),\
-  X(FIND,           "find"),\
-  X(EXECUTE,        "execute"),\
-  X(KERNEL,         "kernel"),\
-  X(ERROR,          "error"),\
-  X(LAST_PRIMITIVE, "THIS IS NOT A PRIMITIVE")
+  X(P_PUSH_INT,       "_push_int"),\
+  X(P_COMPILE,        "_compile"),\
+  X(P_RUN,            "_run"),\
+  X(P_DEFINE,         ":"),\
+  X(P_IMMEDIATE,      "immediate"),\
+  X(P_READ,           "read"),\
+  X(P_COMMENT,        "\\"),\
+  X(P_EXIT,           "exit"),\
+  X(P_BRANCH,         "br"),\
+  X(P_NBRANCH,        "?br"),\
+  X(P_PLUS,           "+"),\
+  X(P_MINUS,          "-"),\
+  X(P_MUL,            "*"),\
+  X(P_MOD,            "mod"),\
+  X(P_DIV,            "/"),\
+  X(P_LS,             "lshift"),\
+  X(P_RS,             "rshift"),\
+  X(P_AND,            "and"),\
+  X(P_OR,             "or"),\
+  X(P_INV,            "invert"),\
+  X(P_XOR,            "xor"),\
+  X(P_INC,            "1+"),\
+  X(P_DEC,            "1-"),\
+  X(P_EQ,             "="),\
+  X(P_LESS,           "<"),\
+  X(P_MORE,           ">"),\
+  X(P_FETCH_REG,      "@reg"),\
+  X(P_FETCH_DIC,      "@"),\
+  X(P_PICK,           "pick"),\
+  X(P_FETCH_STR,      "@str"),\
+  X(P_STORE_REG,      "!reg"),\
+  X(P_STORE_DIC,      "!"),\
+  X(P_STORE_VAR,      "!var"),\
+  X(P_STORE_STR,      "!str"),\
+  X(P_KEY,            "key"),\
+  X(P_EMIT,           "emit"),\
+  X(P_DUP,            "dup"),\
+  X(P_DROP,           "drop"),\
+  X(P_SWAP,           "swap"),\
+  X(P_OVER,           "over"),\
+  X(P_TOR,            ">r"),\
+  X(P_FROMR,          "r>"),\
+  X(P_TAIL,           "tail"),\
+  X(P_QUOTE,          "'"),\
+  X(P_COMMA,          ","),\
+  X(P_PRINTNUM,       "printnum"),\
+  X(P_GET_WORD,       "getword"),\
+  X(P_STRLEN,         "strlen"),\
+  X(P_ISNUMBER,       "isnumber"),\
+  X(P_STRNEQU,        "strnequ"),\
+  X(P_FIND,           "find"),\
+  X(P_EXECUTE,        "execute"),\
+  X(P_KERNEL,         "kernel"),\
+  X(P_ERROR,          "error"),\
+  X(P_LAST_PRIMITIVE, "THIS IS NOT A PRIMITIVE")
 
 #define X(a, b) a
 typedef enum {
@@ -114,15 +114,15 @@ typedef enum {
 /********************************************************************************/
 
 #define FORTH_SYSTEM_CALLS_XMACRO_M \
-  X(SYS_RESET,        "reset"),\
-  X(SYS_FOPEN,        "fopen"),\
-  X(SYS_FCLOSE,       "fclose"),\
-  X(SYS_FLUSH,        "fflush"),\
-  X(SYS_REMOVE,       "remove"),\
-  X(SYS_RENAME,       "rename"),\
-  X(SYS_REWIND,       "rewind"),\
-  X(SYS_SYSTEM,       "system"),\
-  X(LAST_ERROR_CALL,  "NOT A SYSTEM CALL")
+  X(SYS_RESET,            "reset"),\
+  X(SYS_FOPEN,            "fopen"),\
+  X(SYS_FCLOSE,           "fclose"),\
+  X(SYS_FLUSH,            "fflush"),\
+  X(SYS_REMOVE,           "remove"),\
+  X(SYS_RENAME,           "rename"),\
+  X(SYS_REWIND,           "rewind"),\
+  X(SYS_SYSTEM,           "system"),\
+  X(SYS_LAST_ERROR_CALL,  "NOT A SYSTEM CALL")
 
 /**forth_interpreter() return calls*/
 #define X(a, b) a
