@@ -83,8 +83,6 @@ find on_err exf !reg    \ Write the executable token for on_err into the diction
 : 2dup over over ;
 : 2swap rot >r rot r> ;
 
-
-
 : 2+ 1+ 1+ ;
 : 2* 2 * ;
 : 2/ 2 / ; 

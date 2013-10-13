@@ -79,5 +79,8 @@
 ;
 
 : ratless ( a/b c/d -- bool )
-  ratgreater not
+  crossmultiply \ lazy way of doing things...
+  rot
+  2drop
+  <
 ;

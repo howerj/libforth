@@ -2,6 +2,8 @@
 ( === Welcome Banner and banner words ======================================= )
 ( =========================================================================== )
 
+( TODO : Add more screen manipulation words )
+
 ( ANSI terminal color codes )
 : esc 'esc' emit ;
 : rst esc ." [2J" cr ;    \ Clear screen

@@ -29,10 +29,10 @@ CCOPTS=-ansi -Wall -g -Wno-write-strings -Wshadow -Wextra -pedantic -O2 -save-te
 
 RMSTR=bin/forth bin/*.o memory.txt *.log *.swo *.swp *.o lib/*~ *~ *.gcov *.gcda *.gcno doc/*.html doc/*.htm log/* *.i *.s log/*.i log/*.s tags
 
-INDENTSTR=-v -linux -nut -i2 -l120 -lc120 lib/*.h lib/*.c main.c
-SPLINTSTR=-forcehint main.c lib/*.h lib/*.c
+INDENTSTR=-v -linux -nut -i2 -l120 -lc120 lib/*.h lib/*.c lib/main.c
+SPLINTSTR=-forcehint lib/*.h lib/*.c
 
-DOXYFILE=doxygen.conf
+DOXYFILE=doc/doxygen.conf
 
 ## Help
 
@@ -81,9 +81,10 @@ fth/auto.4th: bin/forth
 	@/bin/echo "Autogen done!"
 
 # The Forth interpreter top level
-bin/forth: main.c bin/forth.o bin/hosted.o
-	$(CC) $(CCOPTS) main.c bin/hosted.o bin/forth.o -o bin/forth
+bin/forth: lib/main.c bin/forth.o bin/hosted.o
+	$(CC) $(CCOPTS) lib/main.c bin/hosted.o bin/forth.o -o bin/forth
 	@mv *.i *.s log/
+	@mv main.o bin/
 
 # Desktop interface
 bin/hosted.o: lib/hosted.c lib/hosted.h

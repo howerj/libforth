@@ -14,8 +14,8 @@
 #include <stdlib.h>             /* required by hosted.h */
 #include <string.h>             /* strcmp */
 #include <stdint.h>             /* required by forth.h */
-#include "lib/forth.h"          /* forth_monitor, fobj_t */
-#include "lib/hosted.h"         /* forth_obj_create, forth_obj_destroy */
+#include "forth.h"              /* forth_monitor, fobj_t */
+#include "hosted.h"             /* forth_obj_create, forth_obj_destroy */
 
 #define MAX_REG (32)
 #define MAX_DIC (1024*1024)
@@ -47,7 +47,6 @@ reading from stdin.\n\
 static const char *forth_primitives_str_print_me[] = {
   FORTH_PRIMITIVE_XMACRO_M
 };
-
 #undef X
 
 /**only for printing out*/
@@ -55,7 +54,6 @@ static const char *forth_primitives_str_print_me[] = {
 static const char *forth_system_calls_str_print_me[] = {
   FORTH_SYSTEM_CALLS_XMACRO_M
 };
-
 #undef X
 
 /**only for printing out*/
@@ -63,7 +61,6 @@ static const char *forth_system_calls_str_print_me[] = {
 static const char *forth_register_str_print_me[] = {
   FORTH_REGISTER_ENUM_XMACRO_M
 };
-
 #undef X
 
 /**Print out all of the defined enumerations that might be

@@ -63,3 +63,35 @@
   0= if drop   0 exit then
   0< if       -1 exit then
 ;
+
+
+\ 0 variable anon 
+\ : map ( num ... 0 xt -- num ... 0 )
+\   anon !            ( store filter function )
+\   v @reg 1- 0 swap  ( 0 to number of items in the stack )
+\   do  
+\     j@ i@ -  pick anon @ execute i@ 1+ !var
+\   loop
+\   anon @ execute
+\ ; ( example> 1 2 3 :noname 2 + ; map .s )
+
+: range   ( nX nY -- nX nX+1 ... nY ) 1+ do i@ loop ;
+: repeat  ( n0 X -- n0 ... nX ) 0 swap 1- do dup loop ;
+: sum 0   ( n0 ... nX X -- sum<0..X> ) swap 1- do + loop ;
+: mul 0   ( n0 ... nX X -- mul<0..X> ) swap 1- do * loop ;
+: average ( n0 ... nX X -- sum<0..X>/X ) dup >r sum r> / ;
+: auto    ( -- stkp ) v @reg 1- ;
+
+: <= > not ;
+: >= < not ;
+
+: factorial ( n -- n! ) 
+  abs dup 1 
+  <= if 
+    1 
+  else 
+    dup >r 1 swap range r> mul 
+  then 
+;
+
+( TODO : Reverse, filter, reduce )
