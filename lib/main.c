@@ -42,13 +42,7 @@
 /*****************************************************************************/
 
 static void print_enums(FILE * output);
-
-static void handle_sigabrt(int signal);
-static void handle_sigfpe(int signal);
-static void handle_sigill(int signal);
-static void handle_sigint(int signal);
-static void handle_sigsegv(int signal);
-static void handle_sigterm(int signal);
+static void handle_signals(int signal);
 
 /*****************************************************************************/
 /*** Strings, constant *******************************************************/
@@ -70,6 +64,11 @@ input file \"forth.4th\", otherwise if a valid file name is given\n\
 that will be read in. Once it has it finished it will continue\n\
 reading from stdin.\n\
 ";
+
+static const char bugmsg[] = "\
+The program should not be in this state, please file a bug report to:\n\
+    <howe.r.j.89@gmail.com>\n\
+Calling \"exit(1)\"...";
 
 /*****************************************************************************/
 /*** X-macro magic ***********************************************************/
@@ -129,28 +128,29 @@ static void print_enums(FILE * output)
 
   return;
 }
-/** Action to take on SIGABRT signal */
-static void handle_sigabrt(int signal){}
-/** Action to take on SIGFPE signal */
-static void handle_sigfpe(int signal){
-  /** This should never happen, please file a bug report to <email> */
-}
-/** Action to take on SIGILL signal */
-static void handle_sigill(int signal){
-  /** This should never happen, please file a bug report to <email> */
-}
-}
-/** Action to take on SIGINT signal */
-static void handle_sigint(int signal){
-  /** ignore? */
-}
-/** Action to take on SIGSEGV signal */
-static void handle_sigsegv(int signal){
-  /** This should never happen, please file a bug report to <email> */
-}
-/** Action to take on SIGTERM signal */
-static void handle_sigterm(int signal){
-  /** Flush and close all file streams, free all memory */
+
+/** handle all standard c signals, I should not be
+ * using printf here, but I will until I find a better
+ * way that is *also* portable  */
+static void handle_signals(int signal){
+  switch(signal){
+    case SIGABRT: /** abort!*/
+      break;
+    case SIGSEGV: /** bug*/
+      fprintf(stderr,"SIGSEGV:%s:%d:\n%s\n", __FILE__, __LINE__, bugmsg);
+      exit(1);
+    case SIGTERM: /** clean up, exit */
+      exit(1);
+    case SIGFPE:  /** bug*/
+      fprintf(stderr,"SIGFPE:%s:%d:\n%s\n", __FILE__, __LINE__, bugmsg);
+      exit(1);
+    case SIGILL:  /** bug*/
+      fprintf(stderr,"SIGILL:%s:%d:\n%s\n", __FILE__, __LINE__, bugmsg);
+      exit(1);
+    case SIGINT: /** ignore?*/
+    default:
+      break;
+  }
 }
 
 
@@ -194,12 +194,12 @@ int main(int argc, char *argv[])
 
   /** register signal handlers */
 
-  SET_SIGNAL(SIGABRT,handle_sigabrt);
-  SET_SIGNAL(SIGFPE,handle_sigfpe);
-  SET_SIGNAL(SIGILL,handle_sigill);
-  SET_SIGNAL(SIGINT,handle_sigint);
-  SET_SIGNAL(SIGSEGV,handle_sigsegv);
-  SET_SIGNAL(SIGTERM,handle_sigterm);
+  SET_SIGNAL(SIGABRT,handle_signals);
+  SET_SIGNAL(SIGSEGV,handle_signals);
+  SET_SIGNAL(SIGTERM,handle_signals);
+  SET_SIGNAL(SIGFPE,handle_signals);
+  SET_SIGNAL(SIGILL,handle_signals);
+  SET_SIGNAL(SIGINT,handle_signals);
 
   /** call the forth monitor, which monitors the forth virtual machine for
    * errors and handles them */
