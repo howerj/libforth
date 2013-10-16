@@ -10,12 +10,17 @@
  *
  */
 
-#include <stdio.h>              /* required by hosted.h and forth.h */
-#include <stdlib.h>             /* required by hosted.h */
-#include <string.h>             /* strcmp */
-#include <stdint.h>             /* required by forth.h */
-#include "forth.h"              /* forth_monitor, fobj_t */
-#include "hosted.h"             /* forth_obj_create, forth_obj_destroy */
+#include <stdio.h>              /** required by hosted.h and forth.h */
+#include <stdlib.h>             /** required by hosted.h */
+#include <string.h>             /** strcmp */
+#include <stdint.h>             /** required by forth.h */
+#include <signal.h>             /** required by main.c, for handling signals...*/
+#include "forth.h"              /** forth_monitor, fobj_t */
+#include "hosted.h"             /** forth_obj_create, forth_obj_destroy */
+
+/*****************************************************************************/
+/*** Macros; parameters ******************************************************/
+/*****************************************************************************/
 
 #define MAX_REG (32)
 #define MAX_DIC (1024*1024)
@@ -23,7 +28,31 @@
 #define MAX_RET (8192)
 #define MAX_STR (1024*1024)
 
+/*****************************************************************************/
+/*** Macros; Function like ***************************************************/
+/*****************************************************************************/
+
+#define SET_SIGNAL(SIGNAL,HANDLER) if(signal((SIGNAL),(HANDLER)) == SIG_ERR){\
+    fprintf(stderr,#SIGNAL ":" #HANDLER " failed <%s:%d>\n", __FILE__,__LINE__);\
+    return 1;\
+  }
+
+/*****************************************************************************/
+/*** Function prototypes *****************************************************/
+/*****************************************************************************/
+
 static void print_enums(FILE * output);
+
+static void handle_sigabrt(int signal);
+static void handle_sigfpe(int signal);
+static void handle_sigill(int signal);
+static void handle_sigint(int signal);
+static void handle_sigsegv(int signal);
+static void handle_sigterm(int signal);
+
+/*****************************************************************************/
+/*** Strings, constant *******************************************************/
+/*****************************************************************************/
 
 /** versionmsg, used for a primitive version control */
 static const char versionmsg[] = "Howe Forth, version: " __DATE__ " " __TIME__ "\n";
@@ -41,6 +70,10 @@ input file \"forth.4th\", otherwise if a valid file name is given\n\
 that will be read in. Once it has it finished it will continue\n\
 reading from stdin.\n\
 ";
+
+/*****************************************************************************/
+/*** X-macro magic ***********************************************************/
+/*****************************************************************************/
 
 /**only for printing out*/
 #define X(a, b) b
@@ -62,6 +95,10 @@ static const char *forth_register_str_print_me[] = {
   FORTH_REGISTER_ENUM_XMACRO_M
 };
 #undef X
+
+/*****************************************************************************/
+/*** Function definitions ****************************************************/
+/*****************************************************************************/
 
 /**Print out all of the defined enumerations that might be
  * useful for the interpreter when it is running to have*/
@@ -92,6 +129,34 @@ static void print_enums(FILE * output)
 
   return;
 }
+/** Action to take on SIGABRT signal */
+static void handle_sigabrt(int signal){}
+/** Action to take on SIGFPE signal */
+static void handle_sigfpe(int signal){
+  /** This should never happen, please file a bug report to <email> */
+}
+/** Action to take on SIGILL signal */
+static void handle_sigill(int signal){
+  /** This should never happen, please file a bug report to <email> */
+}
+}
+/** Action to take on SIGINT signal */
+static void handle_sigint(int signal){
+  /** ignore? */
+}
+/** Action to take on SIGSEGV signal */
+static void handle_sigsegv(int signal){
+  /** This should never happen, please file a bug report to <email> */
+}
+/** Action to take on SIGTERM signal */
+static void handle_sigterm(int signal){
+  /** Flush and close all file streams, free all memory */
+}
+
+
+/*****************************************************************************/
+/*** main() ******************************************************************/
+/*****************************************************************************/
 
 /**main, where the magic happens, well is called from.*/
 int main(int argc, char *argv[])
@@ -126,8 +191,25 @@ int main(int argc, char *argv[])
   }
   fo = forth_obj_create(MAX_REG, MAX_DIC, MAX_VAR, MAX_RET, MAX_STR, input);
   CALLOC_FAIL(fo, -1);          /*memory might not be free()'d on error. */
+
+  /** register signal handlers */
+
+  SET_SIGNAL(SIGABRT,handle_sigabrt);
+  SET_SIGNAL(SIGFPE,handle_sigfpe);
+  SET_SIGNAL(SIGILL,handle_sigill);
+  SET_SIGNAL(SIGINT,handle_sigint);
+  SET_SIGNAL(SIGSEGV,handle_sigsegv);
+  SET_SIGNAL(SIGTERM,handle_sigterm);
+
+  /** call the forth monitor, which monitors the forth virtual machine for
+   * errors and handles them */
   forth_return = forth_monitor(fo);
+
   fprintf(stderr, "(returned %X)\n", (unsigned int)forth_return);
   forth_obj_destroy(fo);
   return 0;
 }
+
+/*****************************************************************************/
+/*** EOF *********************************************************************/
+/*****************************************************************************/

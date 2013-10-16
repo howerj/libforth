@@ -18,6 +18,8 @@ These are some notes for myself:
 
 * Add a watch dog?
 
+* Signal Handling!
+
 ## General
 
 * uint64\_t does not work when selected as an option. I should
