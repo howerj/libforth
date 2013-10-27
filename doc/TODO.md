@@ -22,9 +22,8 @@ These are some notes for myself:
 
 ## General
 
-* uint64\_t does not work when selected as an option. I should
-  find out why as it could uncover some subtle bugs in my program
-  that I do not know about.
+* Add regex capability and better string handling, more automatic memory
+management and improve interpreter as a scripting language.
 
 * Signed integer over flow is not defined, what checks and safe
   guards can I come up with to help.

@@ -132,9 +132,10 @@ static void print_enums(FILE * output)
 /** handle all standard c signals, I should not be
  * using printf here, but I will until I find a better
  * way that is *also* portable  */
-static void handle_signals(int signal){
-  switch(signal){
+static void handle_signals(int sig){
+  switch(sig){
     case SIGABRT: /** abort!*/
+      abort();
       break;
     case SIGSEGV: /** bug*/
       fprintf(stderr,"SIGSEGV:%s:%d:\n%s\n", __FILE__, __LINE__, bugmsg);
@@ -148,7 +149,9 @@ static void handle_signals(int signal){
       fprintf(stderr,"SIGILL:%s:%d:\n%s\n", __FILE__, __LINE__, bugmsg);
       exit(1);
     case SIGINT: /** ignore?*/
+      break;
     default:
+      fprintf(stderr,"%d:%s:%d:\n%s\n",sig,__FILE__, __LINE__, bugmsg);
       break;
   }
 }
