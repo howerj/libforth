@@ -326,6 +326,21 @@ str @reg dup iobl @reg + str !reg constant filename
   drop
 ;
 
+: fpwdf \ Find the previous words data field
+  pwd @reg 2 + 
+  dup @ 1 = if
+    2+
+  else
+    1+
+  then 
+;
+
+: recurse immediate
+  ' br ,
+  fpwdf 
+  here - ,
+;
+
 ( =========================================================================== )
 
 \ : vocabulary create pwd @reg , does> @ pwd !reg ;
@@ -337,3 +352,10 @@ finput ../fth/math.4th     ( Math functions )
 finput ../fth/auto.4th     ( Auto generated constants )
 finput ../fth/memory.4th   ( Memory allocation and manipulation )
 finput ../fth/welcome.4th  ( Welcome and cursor control )
+
+.( : hello ; ) cr
+: hello ." hello, world " cr ; find hello dup 20 + show 
+fpwdf .
+.( : ihello ; ) cr
+: ihello immediate ." hello, world " cr ; find ihello dup 20 + show 
+fpwdf .
