@@ -353,9 +353,9 @@ finput ../fth/auto.4th     ( Auto generated constants )
 finput ../fth/memory.4th   ( Memory allocation and manipulation )
 finput ../fth/welcome.4th  ( Welcome and cursor control )
 
-.( : hello ; ) cr
-: hello ." hello, world " cr ; find hello dup 20 + show 
-fpwdf .
-.( : ihello ; ) cr
-: ihello immediate ." hello, world " cr ; find ihello dup 20 + show 
-fpwdf .
+\ .( : hello ; ) cr
+\ : hello ." hello, world " cr ; find hello dup 20 + show 
+\ fpwdf .
+\ .( : ihello ; ) cr
+\ : ihello immediate ." hello, world " cr ; find ihello dup 20 + show 
+\ fpwdf .

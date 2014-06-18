@@ -69,7 +69,8 @@ static const char *forth_primitives_str[] = {
 /* IO wrappers*/
 
 /** my_isspace, here so we can customize what is treated as a space or not*/
-static enum bool my_isspace(char x)
+static enum bool 
+my_isspace(char x)
 {
   switch (x) {
   case '\n':
@@ -86,7 +87,8 @@ static enum bool my_isspace(char x)
 
 /**Like my_isspace, my_isspace is here so we can customize what is
  * treated as a digit.*/
-static enum bool my_isdigit(char x)
+static enum bool 
+my_isdigit(char x)
 {
   switch (x) {
   case '0':
@@ -106,7 +108,8 @@ static enum bool my_isdigit(char x)
 }
 
 /**Either get input from stdin, a string or a file*/
-static int wrap_get(fio_t * in_file)
+static int 
+wrap_get(fio_t * in_file)
 {
   char tmp;
   switch (in_file->fio) {
@@ -134,7 +137,8 @@ static int wrap_get(fio_t * in_file)
 }
 
 /**Either put output to a stdout, stderr, a string or a file*/
-static int wrap_put(fio_t * out_file, char c)
+static int 
+wrap_put(fio_t * out_file, char c)
 {
   switch (out_file->fio) {
   case io_stdout:
@@ -163,7 +167,8 @@ static int wrap_put(fio_t * out_file, char c)
 /*Basic IO functions*/
 
 /**This gets a space delimited FORTH word*/
-static mw get_word(char *str, const mw str_len, fio_t * io_file)
+static mw 
+get_word(char *str, const mw str_len, fio_t * io_file)
 {
   mw i;
   int c;
@@ -194,7 +199,8 @@ static mw get_word(char *str, const mw str_len, fio_t * io_file)
 }
 
 /**Basic Utils*/
-static mw isnumber(const char s[])
+static mw 
+isnumber(const char s[])
 {
   mw x = 0;
   if ((('-' == s[x]) || ('+' == s[x])) && my_isdigit(s[x + 1]))
@@ -208,7 +214,8 @@ static mw isnumber(const char s[])
 }
 
 /** 1 if not equal, 0 if equal, 2 means string limit exceeded*/
-static mw strnequ(const char str1[], const char str2[], const mw lim1, const mw lim2)
+static mw 
+strnequ(const char str1[], const char str2[], const mw lim1, const mw lim2)
 {
 
   char *s1 = (char *)str1, *s2 = (char *)str2;
@@ -223,7 +230,8 @@ static mw strnequ(const char str1[], const char str2[], const mw lim1, const mw 
   return 1;
 }
 
-static mw my_strlen(const char s[], const int maxlen)
+static mw 
+my_strlen(const char s[], const int maxlen)
 {
   int i = 0;
   char *p = (char *)s;
@@ -233,7 +241,8 @@ static mw my_strlen(const char s[], const int maxlen)
 }
 
 /**K&R atoi, slighty modified*/
-static mw kr_atoi(const char s[])
+static mw 
+kr_atoi(const char s[])
 {
   mw i, n, sign;
   for (i = 0; my_isspace(s[i]); i++) ;
@@ -250,7 +259,8 @@ static mw kr_atoi(const char s[])
 /**TODO buf needs replacing with an external pointer
  * Refactor code*/
 #define MAX_BASE 16
-static char *my_itoa(mw value, int base)
+static char *
+my_itoa(mw value, int base)
 {
   mw v = value, i = 0;
   static char buf[MAX_ERR_STR];
@@ -277,7 +287,8 @@ static char *my_itoa(mw value, int base)
 }
 
 /**print a string, nothing special, Error handling needed!*/
-static void print_string(const char *s, const mw max, fio_t * out_file)
+static void 
+print_string(const char *s, const mw max, fio_t * out_file)
 {
   mw i;
   for (i = 0; (i < max) && ('\0' != s[i]); i++) {
@@ -286,7 +297,8 @@ static void print_string(const char *s, const mw max, fio_t * out_file)
 }
 
 /**print a line and a file*/
-static void print_line_file(int line, const char *file, fio_t * err_file)
+static void 
+print_line_file(int line, const char *file, fio_t * err_file)
 {
   print_string(my_itoa(line, 10), MAX_ERR_STR, err_file);
   (void)wrap_put(err_file, '\t');
@@ -341,7 +353,8 @@ static void print_line_file(int line, const char *file, fio_t * err_file)
 /*****************************************************************************/
 
 /*Set OP0 to found word, if found, return error otherwise.*/
-static mw find_word(fobj_t * fo)
+static mw 
+find_word(fobj_t * fo)
 {
   mw *reg = fo->reg, *dic = fo->dic;
   char *str = fo->str;
@@ -378,13 +391,15 @@ static mw find_word(fobj_t * fo)
 /**my_strcpy, so I would not have to import all of string.h
  * in an embedded system
  */
-static void my_strcpy(char *destination, const char *source)
+static void 
+my_strcpy(char *destination, const char *source)
 {
   while ('\0' != *source)
     *destination++ = *source++;
 }
 
-static mw compile_word(forth_primitives_e fp, fobj_t * fo, enum bool flag, const char *prim)
+static mw 
+compile_word(forth_primitives_e fp, fobj_t * fo, enum bool flag, const char *prim)
 {
   mw *reg = fo->reg, *dic = fo->dic;
   char *str = fo->str;
@@ -408,7 +423,8 @@ static mw compile_word(forth_primitives_e fp, fobj_t * fo, enum bool flag, const
 }
 
 /*should add error checking.*/
-static mw compile_word_prim(fobj_t * fo, const char *prim)
+static mw 
+compile_word_prim(fobj_t * fo, const char *prim)
 {
   mw *reg = fo->reg, *dic = fo->dic, ret;
   ret = compile_word(P_COMPILE, fo, true, prim);
@@ -420,7 +436,8 @@ static mw compile_word_prim(fobj_t * fo, const char *prim)
 }
 
 #define COMPILE_PRIM(X)  if(compile_word_prim(fo,(X))!=FAIL_OK){ return FAIL_FAILURE; }
-static mw forth_initialize(fobj_t * fo)
+static mw 
+forth_initialize(fobj_t * fo)
 {
   mw *reg = fo->reg, *dic = fo->dic, *ret = fo->ret;
   fio_t *err_file = fo->err_file;
@@ -497,7 +514,8 @@ static mw forth_initialize(fobj_t * fo)
  * an error occurs and reset the VM into a workable
  * state.
  */
-static void on_err(fobj_t * fo)
+static void 
+on_err(fobj_t * fo)
 {
   (void)fflush(NULL);
   fo->CPF = (mw) false;
@@ -522,7 +540,8 @@ static void on_err(fobj_t * fo)
 
 /*System calls, all arguments are on the stack. You will need to
  *edit this for your particular system, for example a uC*/
-static mw forth_system_calls(fobj_t * fo, mw enum_syscall)
+static mw 
+forth_system_calls(fobj_t * fo, mw enum_syscall)
 {
   mw *reg = fo->reg, *var = fo->var;
   char *str = fo->str;
@@ -677,7 +696,8 @@ static mw forth_system_calls(fobj_t * fo, mw enum_syscall)
 }
 
 /*Forth interpreter*/
-mw forth_interpreter(fobj_t * fo)
+mw 
+forth_interpreter(fobj_t * fo)
 {
 
   /*copy pointers, removes level of indirection */
@@ -1106,7 +1126,8 @@ mw forth_interpreter(fobj_t * fo)
   }
 }
 
-static void report_error(forth_errors_e e)
+static void 
+report_error(forth_errors_e e)
 {
   fio_t err_file_local;
   err_file_local.fio = io_stderr;
@@ -1116,7 +1137,8 @@ static void report_error(forth_errors_e e)
 
 /*Error and IO handler for the Forth interpreter*/
 #define NULLCHK_M(X)  if(NULL == (X)){ report_error(FAIL_NULL); return FAIL_FAILURE; }
-mw forth_monitor(fobj_t * fo)
+mw 
+forth_monitor(fobj_t * fo)
 {
   mw fo_returned_val;
   mw *reg;

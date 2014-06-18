@@ -30,7 +30,8 @@ static void forth_obj_destroy(fobj_t * fo);
 
 /**Used to print out the contents of the Forth VMs memory if the
  * debug option is set*/
-static void print_table(mw * p, int len, FILE * f)
+static void 
+print_table(mw * p, int len, FILE * f)
 {
   int i;
   for (i = 0; i < len; i++)
@@ -43,7 +44,8 @@ static void print_table(mw * p, int len, FILE * f)
 }
 
 /**print out a character table from the Forth VMs string storage*/
-static void print_char_table(char *p, int len, FILE * f)
+static void 
+print_char_table(char *p, int len, FILE * f)
 {
   int i;
   for (i = 0; i < len; i++)
@@ -62,7 +64,8 @@ static void print_char_table(char *p, int len, FILE * f)
 }
 
 /**print out main memory.*/
-void debug_print(fobj_t * fo)
+void 
+debug_print(fobj_t * fo)
 {
 
   FILE *table_out;
@@ -94,7 +97,8 @@ void debug_print(fobj_t * fo)
  * This function sets up memory and opens the initial input files, it
  * also performs some basic sanity checks as well.
  */
-fobj_t *forth_obj_create(mw reg_l, mw dic_l, mw var_l, mw ret_l, mw str_l, FILE * input)
+fobj_t *
+forth_obj_create(mw reg_l, mw dic_l, mw var_l, mw ret_l, mw str_l, FILE * input)
 {
   /*the vm forth object */
   int i = 0;
@@ -168,7 +172,8 @@ fobj_t *forth_obj_create(mw reg_l, mw dic_l, mw var_l, mw ret_l, mw str_l, FILE 
  * This frees up any memory allocated (or assigned from a static pool) and
  * closes any open files.
  */
-void forth_obj_destroy(fobj_t * fo)
+void 
+forth_obj_destroy(fobj_t * fo)
 {
   int i = 0;
   if (NULL != fo) {

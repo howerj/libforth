@@ -101,7 +101,8 @@ static const char *forth_register_str_print_me[] = {
 
 /**Print out all of the defined enumerations that might be
  * useful for the interpreter when it is running to have*/
-static void print_enums(FILE * output)
+static void 
+print_enums(FILE * output)
 {
   int i;
 
@@ -132,7 +133,8 @@ static void print_enums(FILE * output)
 /** handle all standard c signals, I should not be
  * using printf here, but I will until I find a better
  * way that is *also* portable  */
-static void handle_signals(int sig){
+static void 
+handle_signals(int sig){
   switch(sig){
     case SIGABRT: /** abort!*/
       abort();
@@ -162,7 +164,8 @@ static void handle_signals(int sig){
 /*****************************************************************************/
 
 /**main, where the magic happens, well is called from.*/
-int main(int argc, char *argv[])
+int 
+main(int argc, char *argv[])
 {
   FILE *input = NULL;
   mw forth_return;
