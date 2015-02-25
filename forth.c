@@ -169,7 +169,7 @@ int forth_run(forth_obj_t * tobj)
                                 goto INNER;
                         } else {
                                 if(strspn((char*)tobj->s,"0123456789") != strlen((char*)tobj->s)){
-                                        fprintf(stderr,"(error \"%s: not a word or number)\n", tobj->s);
+                                        fprintf(stderr,"(error \"%s: not a word or number\")\n", tobj->s);
                                         break;
                                 }
 
