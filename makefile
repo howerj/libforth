@@ -8,4 +8,4 @@ forth: main.c forth.o
 run: forth forth.4th
 	./forth
 clean:
-	rm -f forth *.o *.blk
+	rm -f forth *.o *.blk *.core

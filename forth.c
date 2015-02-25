@@ -38,7 +38,9 @@ static char *names[] = { "@", "!", "-", "+", "*", "/", "<", "exit", "emit",
 
 static void compile_word(forth_obj_t * tobj, unsigned code, bool flag, char *str)
 {
-        uint16_t *m = tobj->m;
+        uint16_t *m;
+        assert(tobj && (!flag || str));
+        m = tobj->m;
         m[m[0]++] = tobj->L;
         tobj->L = *m - 1;
         m[m[0]++] = t;
@@ -72,12 +74,6 @@ static int blockio(void *p, uint16_t poffset, uint16_t id, char rw){
         return r;
 }
 
-static int bounds(forth_obj_t *tobj, uint16_t *S){
-        if(S > tobj->m + CORESZ || S < tobj->m) return -1;
-        if((tobj->s + t) > ((uint8_t*)tobj->m + CORESZ)) return -1;
-        return 0;
-}
-
 void forth_setin(forth_obj_t * tobj, FILE * input){
         assert(tobj && input);
         tobj->input = input;
@@ -88,17 +84,19 @@ void forth_setout(forth_obj_t * tobj, FILE * output){
         tobj->output = output;
 }
 
-int forth_save(forth_obj_t * tobj, FILE * output){
+int forth_save(forth_obj_t * tobj, FILE * output){ /*XXX: Does not work yet*/
         if(!tobj || !output) return -1;
-        return 0;
+        return sizeof(*tobj) == fwrite(tobj, 1, sizeof(*tobj), output);
 }
 
-forth_obj_t *forth_load(FILE * input){
+forth_obj_t *forth_load(FILE * input){ /*XXX: Does not work yet*/
         forth_obj_t *tobj;
         if(!input) return NULL;
         if(NULL == (tobj = calloc(1, sizeof(*tobj))))
                 return NULL;
-        return tobj;
+        if(sizeof(*tobj) == fread(tobj, 1, sizeof(*tobj), input))
+                return tobj;
+        return NULL;
 }
 
 forth_obj_t *forth_init(FILE * input, FILE * output)
@@ -149,10 +147,6 @@ int forth_run(forth_obj_t * tobj)
         while (true) { /*add in bounds checking here for all indexes, be conservative*/
                 x = m[I++];
         INNER:
-                if(bounds(tobj, S) < 0){ 
-                        WARN("bounds check failed");
-                        return -(tobj->invalidated = 1);
-                }
                 switch (m[x++]) {
                 case PUSH:    *++S = f;     f = m[I++]; break;
                 case COMPILE: m[m[0]++] = x;            break;
@@ -174,6 +168,11 @@ int forth_run(forth_obj_t * tobj)
                                         x++;
                                 goto INNER;
                         } else {
+                                if(strspn((char*)tobj->s,"0123456789") != strlen((char*)tobj->s)){
+                                        fprintf(stderr,"(error \"%s: not a word or number)\n", tobj->s);
+                                        break;
+                                }
+
                                 if (m[8] != 0) {
                                         m[m[0]++] = 2;
                                         m[m[0]++] = strtol((char*)tobj->s, NULL, 0);
@@ -188,7 +187,10 @@ int forth_run(forth_obj_t * tobj)
                 case SUB:   f = *S-- - f;  break;
                 case ADD:   f = *S-- + f;  break;
                 case MUL:   f *= *S--;     break;
-                case DIV:   f = *S-- / f;  break; /*XXX: check f>0*/
+                case DIV:
+                        if(f) f = *S-- / f;  
+                        else  f = *S--, WARN("div 0");
+                        break;
                 case LESS:  f = *S-- > f;  break;
                 case EXIT:  I = m[m[1]--]; break;
                 case EMIT:  /*what should we do if fputc fails?*/

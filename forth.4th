@@ -1,5 +1,5 @@
 : state 8 ! exit
-: ; immediate ' exit , false state exit
+: ; immediate ' exit , 0 state exit
 : r 1 ;
 : h 0 ;
 : here h @ ;
