@@ -17,6 +17,8 @@ struct forth_obj {
         FILE *input, *output;
         uint8_t *s;
         uint16_t m[CORESZ], *S, L, I, t, w, f, x;
+        unsigned initialized :1;
+        unsigned invalidated :1;
 };
 
 #define t tobj->t
@@ -25,9 +27,8 @@ struct forth_obj {
 
 enum primitives {
         PUSH, COMPILE, RUN, DEFINE, IMMEDIATE, READ, LOAD, STORE, SUB, ADD,
-        MUL, DIV, LESS, EXIT, EMIT, KEY, FROMR, TOR, JMP, JMPZ,
-        PRINTNUM, QUOTE, COMMA, NOT, EQUAL, SWAP, DUP, DROP, TAIL, BLOAD,
-        BSAVE, LAST
+        MUL, DIV, LESS, EXIT, EMIT, KEY, FROMR, TOR, JMP, JMPZ, PRINTNUM, 
+        QUOTE, COMMA, NOT, EQUAL, SWAP, DUP, DROP, TAIL, BLOAD, BSAVE, LAST
 }; 
 
 static char *names[] = { "@", "!", "-", "+", "*", "/", "<", "exit", "emit",
@@ -70,6 +71,29 @@ static int blockio(void *p, uint16_t poffset, uint16_t id, char rw){
         return r;
 }
 
+void forth_setin(forth_obj_t * tobj, FILE * input){
+        assert(tobj && input);
+        tobj->input = input;
+}
+
+void forth_setout(forth_obj_t * tobj, FILE * output){
+        assert(tobj && output);
+        tobj->output = output;
+}
+
+int forth_save(forth_obj_t * tobj, FILE * output){
+        if(!tobj || !output) return -1;
+        return 0;
+}
+
+forth_obj_t *forth_load(FILE * input){
+        forth_obj_t *tobj;
+        if(!input) return NULL;
+        if(NULL == (tobj = calloc(1, sizeof(*tobj))))
+                return NULL;
+        return tobj;
+}
+
 forth_obj_t *forth_init(FILE * input, FILE * output)
 {
         uint16_t *m, i;
@@ -98,10 +122,8 @@ forth_obj_t *forth_init(FILE * input, FILE * output)
         m[m[0]++] = tobj->I - 1;
         w = LOAD;
 
-        for(i = 0; names[i]; i++){
-                compile_word(tobj, COMPILE, true, names[i]);
-                m[m[0]++] = w++;
-        }
+        for(i = 0; names[i]; i++)
+                compile_word(tobj, COMPILE, true, names[i]), m[m[0]++] = w++;
 
         m[1] = *m;                /*setup return stack after compiled words*/
         tobj->S = m + *m + STKSZ; /*var stack after that*/
@@ -109,20 +131,28 @@ forth_obj_t *forth_init(FILE * input, FILE * output)
         return tobj;
 }
 
+static void save_registers(forth_obj_t * tobj, uint16_t x, uint16_t *S, uint16_t I){
+        assert(tobj);
+        tobj->x = x;
+        tobj->S = S;
+        tobj->I = I;
+}
+
 int forth_run(forth_obj_t * tobj)
 {
-        uint16_t *m, *x, *S, I;
+        uint16_t *m, x, *S, I;
 
-        if(NULL == tobj) return -1;
-        m = tobj->m, x = &tobj->x, S = tobj->S, I = tobj->I;
+        if(NULL == tobj || tobj->invalidated) return tobj->invalidated = 1;
+        m = tobj->m, x = tobj->x, S = tobj->S, I = tobj->I;
+        tobj->initialized = 1;
 
         while (true) { /*add in bounds checking here for all indexes, be conservative*/
-                *x = m[I++];
+                x = m[I++];
         INNER:
-                switch (m[(*x)++]) {
+                switch (m[x++]) {
                 case PUSH:    *++S = f;      f = m[I++]; break;
-                case COMPILE: m[m[0]++] = *x;            break;
-                case RUN:     m[++m[1]] = I; I = *x;     break;
+                case COMPILE: m[m[0]++] = x;            break;
+                case RUN:     m[++m[1]] = I; I = x;     break;
                 case DEFINE:
                         m[8] = 1;
                         compile_word(tobj, COMPILE, false, NULL);
@@ -131,13 +161,15 @@ int forth_run(forth_obj_t * tobj)
                 case IMMEDIATE: *m -= 2; m[m[0]++] = RUN; break;
                 case READ: /*should check if it is number, else fail*/
                         m[1]--;
-                        if(fscanf(tobj->input, "%31s", tobj->s) < 1)
+                        if(fscanf(tobj->input, "%31s", tobj->s) < 1) {
+                                save_registers(tobj, x, S, I);
                                 return 0;
+                        }
                         for (w = tobj->L; strcmp((char*)tobj->s, (char*)&tobj->s[m[w + 1]]); w = m[w]) ;
                         if (w - 1) {
-                                *x = w + 2;
-                                if (m[8] == 0 && m[*x] == COMPILE)
-                                        (*x)++;
+                                x = w + 2;
+                                if (m[8] == 0 && m[x] == COMPILE)
+                                        x++;
                                 goto INNER;
                         } else {
                                 if (m[8] != 0) {
@@ -185,9 +217,9 @@ int forth_run(forth_obj_t * tobj)
                 case BSAVE: f = blockio(m,*S--,f,'w');    break;
                 default:
                             fputs("(error unknown instruction)\n", stderr);
-                            return -1;
+                            return tobj->invalidated = 1;
                 }
         }
-        return -1; /*should not get here*/
+        return tobj->invalidated = 1; /*should not get here*/
 }
 
