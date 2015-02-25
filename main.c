@@ -4,11 +4,17 @@
 
 int main(void)
 {
-	int r;
         forth_obj_t *tobj;
-        r = forth_run(tobj = forth_init(fopen("forth.4th","rb"), stdout));
-        forth_setin(tobj,stdin);
-        forth_run(tobj);
+        FILE *input;
+        if(NULL == (input = fopen("forth.4th", "rb"))){
+                perror("forth.4th");
+                return -1;
+        }
+        if(forth_run(tobj = forth_init(input, stdout)) < 0)
+                return -1;
+        forth_setin(tobj, stdin);
+        if(forth_run(tobj) < 0)
+                return -1;
         free(tobj);
-        return r;
+        return 0;
 }

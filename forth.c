@@ -8,10 +8,11 @@
 #include <stdint.h>
 #include "forth.h"
 
-#define CORESZ  ((UINT16_MAX + 1) / 2)
-#define STROFF  (CORESZ/2)
-#define STKSZ   (512u)
-#define BLKSZ   (1024u)
+#define WARN(MSG) fprintf(stderr,"(error \"%s\" %s %d)\n", (MSG), __FILE__, __LINE__)
+#define CORESZ    ((UINT16_MAX + 1) / 2)
+#define STROFF    (CORESZ/2)
+#define STKSZ     (512u)
+#define BLKSZ     (1024u)
 
 struct forth_obj {
         FILE *input, *output;
@@ -69,6 +70,12 @@ static int blockio(void *p, uint16_t poffset, uint16_t id, char rw){
         r = n == BLKSZ ? 0 : -1;
         fclose(file);
         return r;
+}
+
+static int bounds(forth_obj_t *tobj, uint16_t *S){
+        if(S > tobj->m + CORESZ || S < tobj->m) return -1;
+        if((tobj->s + t) > ((uint8_t*)tobj->m + CORESZ)) return -1;
+        return 0;
 }
 
 void forth_setin(forth_obj_t * tobj, FILE * input){
@@ -131,26 +138,23 @@ forth_obj_t *forth_init(FILE * input, FILE * output)
         return tobj;
 }
 
-static void save_registers(forth_obj_t * tobj, uint16_t x, uint16_t *S, uint16_t I){
-        assert(tobj);
-        tobj->x = x;
-        tobj->S = S;
-        tobj->I = I;
-}
-
 int forth_run(forth_obj_t * tobj)
 {
         uint16_t *m, x, *S, I;
 
-        if(NULL == tobj || tobj->invalidated) return tobj->invalidated = 1;
+        if(NULL == tobj || tobj->invalidated) return -(tobj->invalidated = 1);
         m = tobj->m, x = tobj->x, S = tobj->S, I = tobj->I;
         tobj->initialized = 1;
 
         while (true) { /*add in bounds checking here for all indexes, be conservative*/
                 x = m[I++];
         INNER:
+                if(bounds(tobj, S) < 0){ 
+                        WARN("bounds check failed");
+                        return -(tobj->invalidated = 1);
+                }
                 switch (m[x++]) {
-                case PUSH:    *++S = f;      f = m[I++]; break;
+                case PUSH:    *++S = f;     f = m[I++]; break;
                 case COMPILE: m[m[0]++] = x;            break;
                 case RUN:     m[++m[1]] = I; I = x;     break;
                 case DEFINE:
@@ -161,10 +165,8 @@ int forth_run(forth_obj_t * tobj)
                 case IMMEDIATE: *m -= 2; m[m[0]++] = RUN; break;
                 case READ: /*should check if it is number, else fail*/
                         m[1]--;
-                        if(fscanf(tobj->input, "%31s", tobj->s) < 1) {
-                                save_registers(tobj, x, S, I);
+                        if(fscanf(tobj->input, "%31s", tobj->s) < 1)
                                 return 0;
-                        }
                         for (w = tobj->L; strcmp((char*)tobj->s, (char*)&tobj->s[m[w + 1]]); w = m[w]) ;
                         if (w - 1) {
                                 x = w + 2;
@@ -216,10 +218,11 @@ int forth_run(forth_obj_t * tobj)
                 case BLOAD: f = blockio(m,*S--,f,'r');    break;
                 case BSAVE: f = blockio(m,*S--,f,'w');    break;
                 default:
-                            fputs("(error unknown instruction)\n", stderr);
-                            return tobj->invalidated = 1;
+                            WARN("unknown instruction");
+                            return -(tobj->invalidated = 1);
                 }
         }
-        return tobj->invalidated = 1; /*should not get here*/
+        WARN("reached the unreachable");
+        return -(tobj->invalidated = 1); /*should not get here*/
 }
 

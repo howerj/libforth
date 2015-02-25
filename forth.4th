@@ -26,9 +26,5 @@
 : .( key drop _.( ;
 .(
   Welcome to Forth.
-  TODO:
-    - The intepreter should be able to read from multiple files
-      without freaking out between after multiple calls to forth_run
-    - See forth.c for more
   Ok.
 )
