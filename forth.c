@@ -1,6 +1,22 @@
-/*TODO: eval string (generic i/o struct), character addressing, bounds check,
- documentation (including memory layout and registers, move registers to core,
- immediate should be set by a flag (and the code word a bitfield)*/
+/* FORTH LIBRARY
+ TODO: 
+    * Constructs to allow evaluation of a string.
+    * Optional bounds check.
+    * Documentation.
+    * Restructure interpreter.
+
+ Plan: 
+   Merge word names into the word definition, creating a new header that
+   my look something like this:
+
+   <previous word> <word header> <name...> <padding>? <code field> <data field>
+
+   With the word header:
+
+   <1bit: immediate?> <1bit: hidden?> <9bit: padding> <5bit: name len>
+
+   This would save space, ease reading data dumps and be more logical.
+*/
 #include "forth.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -92,7 +108,7 @@ forth_obj_t *forth_init(FILE * input, FILE * output)
 
         m[0] = 32;   /*initial dictionary offset, skip registers*/
         o->L = 1; 
-        t = 32;      /*offset into str storage defines maxium word length*/
+        t = 32;      /*offset into str storage defines maximum word length*/
 
         compile_word(o, DEFINE,    ":");
         compile_word(o, IMMEDIATE, "immediate");

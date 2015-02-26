@@ -25,7 +25,5 @@
 : " immediate key drop ' imprint , find-" ;
 : _.( key dup ')' = if drop exit then emit tail _.( ;
 : .( key drop _.( ;
-.(
-  Welcome to Forth.
-  Ok.
-)
+: coredump 32 begin 1 - dup dup 1024 * swap save drop dup 0= until ; 
+.( OK. ) here . cr
