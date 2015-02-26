@@ -123,9 +123,8 @@ forth_obj_t *forth_init(FILE * input, FILE * output)
 
         for(i = 0; names[i]; i++) /*compile the rest of the dictionary*/
                 compile_word(o, COMPILE, names[i]), m[m[0]++] = w++;
-        m[1] = *m + 1;            /*setup return stack after compiled words*/
-        o->S = m + *m + STKSZ;    /*var stack after that*/
-        *m += (2*STKSZ);          /*continue the dictionary after that*/
+        m[1] = CORESZ - STKSZ;            
+        o->S = m + CORESZ - (2*STKSZ); 
         return o;
 }
 
