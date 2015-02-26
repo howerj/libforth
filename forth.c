@@ -13,9 +13,12 @@
 
    With the word header:
 
-   <1bit: immediate?> <1bit: hidden?> <9bit: padding> <5bit: name len>
+   <1bit: immediate?> <1bit: hidden?> <10bit: padding> <4bit: name len>
 
-   This would save space, ease reading data dumps and be more logical.
+   This would save space, ease reading data dumps and be more logical. It
+   would also allow me to hide words from being searched for. The name
+   length would be given in WORDS not bytes as it would need to preserve
+   alignment.
 */
 #include "forth.h"
 #include <stdio.h>
@@ -44,10 +47,10 @@ struct forth_obj {
 
 enum codes { PUSH, COMPILE, RUN, DEFINE, IMMEDIATE, READ, LOAD, STORE, SUB, 
 ADD, MUL, DIV, LESS, EXIT, EMIT, KEY, FROMR, TOR, JMP, JMPZ, PNUM, QUOTE,
-COMMA, NOT, EQUAL, SWAP, DUP, DROP, TAIL, BSAVE, BLOAD, LAST }; 
+COMMA, EQUAL, SWAP, DUP, DROP, TAIL, BSAVE, BLOAD, LAST }; 
 
 static char *names[] = { "@", "!", "-", "+", "*", "/", "<", "exit", "emit",
-"key", "r>", ">r", "jmp",  "jmpz", ".", "'", ",", "not", "=", "swap", "dup",
+"key", "r>", ">r", "jmp",  "jmpz", ".", "'", ",", "=", "swap", "dup",
 "drop", "tail", "save", "load", NULL }; 
 
 static int compile_word(forth_obj_t * o, uint16_t code, char *str)
@@ -194,7 +197,6 @@ int forth_run(forth_obj_t * o)
                             break; /*should report i/o err*/
                 case QUOTE: *++S = f;      f = m[I++];      break;
                 case COMMA: m[m[0]++] = f; f = *S--;        break;
-                case NOT:   f = !f;                         break;
                 case EQUAL: f = *S-- == f;                  break;
                 case SWAP:  w = f;  f = *S--;   *++S = w;   break;
                 case DUP:   *++S = f;                       break;
