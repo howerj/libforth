@@ -3,14 +3,18 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+#include <stdio.h>
 struct forth_obj;
 typedef struct forth_obj forth_obj_t;
+
 forth_obj_t *forth_init(FILE * input, FILE * output);
-int forth_save(forth_obj_t * tobj, FILE * output);
+int forth_run(forth_obj_t * o);
+
+int forth_save(forth_obj_t * o, FILE * output);
 forth_obj_t *forth_load(FILE * input);
-void forth_setin(forth_obj_t * tobj, FILE * input);
-void forth_setout(forth_obj_t * tobj, FILE * output);
-int forth_run(forth_obj_t * tobj);
+
+void forth_seti(forth_obj_t * o, FILE * in);
+void forth_seto(forth_obj_t * o, FILE * out);
 #ifdef __cplusplus
 }
 #endif

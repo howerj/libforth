@@ -2,31 +2,39 @@
 #include <stdio.h>
 #include "forth.h"
 
-static const char *corefile = "forth.core";
-static const char *startfile = "forth.4th";
+static const char *coref = "forth.core", *startf = "forth.4th";
 
-static FILE *fopen_or_fail(const char *name, char *mode){
+static FILE *fopen_or_fail(const char *name, char *mode)
+{
         FILE *file;
-        if(NULL == (file = fopen(name, mode))){
-                perror(name);
-                exit(EXIT_FAILURE);
-        }
+        if(!(file = fopen(name, mode)))
+                perror(name), exit(1);
         return file;
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
-        forth_obj_t *tobj;
-        FILE *input, *core;
-        input = fopen_or_fail(startfile, "rb");
-        if(forth_run(tobj = forth_init(input, stdout)) < 0)
-                return EXIT_FAILURE;
-        forth_setin(tobj, stdin);
-        if(forth_run(tobj) < 0)
-                return EXIT_FAILURE;
-        core = fopen_or_fail(corefile, "wb");
-        if(forth_save(tobj, core) < 0)
-                return EXIT_FAILURE;
-        free(tobj);
-        return EXIT_SUCCESS;
+        forth_obj_t *o;
+        FILE *in, *coreo;
+        in = fopen_or_fail(startf, "rb");
+        if(forth_run(o = forth_init(in, stdout)) < 0)
+                return 1;
+        fclose(in);
+        if(argc > 1) {
+                while(++argv, --argc) {
+                        forth_seti(o, in = fopen_or_fail(argv[0], "rb"));
+                        if(forth_run(o) < 0)
+                                return 1;
+                        fclose(in);
+                }
+        } else {
+                forth_seti(o, stdin);
+                if(forth_run(o) < 0)
+                        return 1;
+        }
+        if(forth_save(o, (coreo = fopen_or_fail(coref, "wb"))) < 0)
+                return 1;
+        fclose(coreo);
+        free(o);
+        return 0;
 }

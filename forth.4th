@@ -10,6 +10,7 @@
 : then immediate dup here swap - swap ! ;
 : begin immediate here ;
 : until immediate ' jmpz , here - , ;
+: halt 0 >r ;
 : 0= 0 = ;
 : '\n' 10 ;
 : '"' 34 ;
