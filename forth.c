@@ -29,12 +29,12 @@ struct forth_obj {
 enum primitives {
         PUSH, COMPILE, RUN, DEFINE, IMMEDIATE, READ, LOAD, STORE, SUB, ADD,
         MUL, DIV, LESS, EXIT, EMIT, KEY, FROMR, TOR, JMP, JMPZ, PRINTNUM, 
-        QUOTE, COMMA, NOT, EQUAL, SWAP, DUP, DROP, TAIL, BLOAD, BSAVE, LAST
+        QUOTE, COMMA, NOT, EQUAL, SWAP, DUP, DROP, TAIL, BSAVE, BLOAD, LAST
 }; 
 
 static char *names[] = { "@", "!", "-", "+", "*", "/", "<", "exit", "emit",
 "key", "r>", ">r", "jmp",  "jmpz", ".", "'", ",", "not", "=", "swap", "dup",
-"drop", "tail", "load", "save", NULL }; 
+"drop", "tail", "save", "load", NULL }; 
 
 static void compile_word(forth_obj_t * tobj, unsigned code, bool flag, char *str)
 {
@@ -59,12 +59,14 @@ static int blockio(void *p, uint16_t poffset, uint16_t id, char rw){
         int r = 0;
         size_t n;
         if(poffset > (CORESZ - BLKSZ) /*|| !(rw == 'w' || rw == 'r')*/){
-                puts("failed");
+                WARN("invalid memory access");
                 return -1;
         }
         sprintf(name, "%04x.blk", id);
-        if(NULL == (file = fopen(name, rw == 'r' ? "rb" : "wb")))
+        if(NULL == (file = fopen(name, rw == 'r' ? "rb" : "wb"))){
+                WARN("could not open file");
                 return -1;
+        }
         if (rw == 'w')
                 n = fwrite(p+poffset, 1, BLKSZ, file);
         else 
@@ -129,7 +131,7 @@ forth_obj_t *forth_init(FILE * input, FILE * output)
 
         for(i = 0; names[i]; i++)
                 compile_word(tobj, COMPILE, true, names[i]), m[m[0]++] = w++;
-
+        /*XXX: I think something here is causing that last defined word to fail*/
         m[1] = *m;                /*setup return stack after compiled words*/
         tobj->S = m + *m + STKSZ; /*var stack after that*/
         *m += (2*STKSZ);          /*continue the dictionary after that*/
@@ -217,8 +219,8 @@ int forth_run(forth_obj_t * tobj)
                 case DUP:   *++S = f;                     break;
                 case DROP:  f = *S--;                     break;
                 case TAIL:  m[1]--;                       break;
-                case BLOAD: f = blockio(m,*S--,f,'r');    break;
                 case BSAVE: f = blockio(m,*S--,f,'w');    break;
+                case BLOAD: f = blockio(m,*S--,f,'r');    break;
                 default:
                             WARN("unknown instruction");
                             return -(tobj->invalidated = 1);
