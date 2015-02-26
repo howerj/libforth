@@ -7,7 +7,8 @@
 #include <string.h>
 #include <stdint.h>
 
-#define WARN(MSG) fprintf(stderr,"(error \"%s\" %s %d)\n", (MSG), __FILE__, __LINE__)
+#define WARN(MSG) \
+        fprintf(stderr,"( error \"%s\" %s %d )\n", (MSG), __FILE__, __LINE__)
 #define CORESZ    ((UINT16_MAX + 1) / 2)
 #define STROFF    (CORESZ/2)
 #define STKSZ     (512u)
@@ -17,13 +18,12 @@
 struct forth_obj {
         FILE *input, *output;
         uint8_t *s; /*string store pointer*/
-        uint16_t m[CORESZ], *S, L, I, t, w, f, x;
-        unsigned initialized :1; /*run through the interpreter once?*/
-        unsigned invalidated :1; /*invalidate this object if true*/
+        uint16_t *S, L, I, t, w, f, x, m[CORESZ];
+        unsigned invalid :1; /*invalidate this object if true*/
 };
 
-#define t o->t
 #define w o->w
+#define t o->t
 #define f o->f
 
 enum codes { PUSH, COMPILE, RUN, DEFINE, IMMEDIATE, READ, LOAD, STORE, SUB, 
@@ -34,20 +34,19 @@ static char *names[] = { "@", "!", "-", "+", "*", "/", "<", "exit", "emit",
 "key", "r>", ">r", "jmp",  "jmpz", ".", "'", ",", "not", "=", "swap", "dup",
 "drop", "tail", "save", "load", NULL }; 
 
-static void compile_word(forth_obj_t * o, uint16_t code, char *str)
-{ /*XXX: should return error code if fscanf fails*/
+static int compile_word(forth_obj_t * o, uint16_t code, char *str)
+{
         uint16_t *m;
+        int r = 0;
         m = o->m;
         m[m[0]++] = o->L;
         o->L = *m - 1;
         m[m[0]++] = t;
         m[m[0]++] = code;
-        if (str)
-                strcpy((char *)o->s + t, str);
-        else
-                fscanf(o->input, "%31s", o->s + t);
+        if (str) strcpy((char *)o->s + t, str);
+        else     r = fscanf(o->input, "%31s", o->s + t);
         t += strlen((char*)o->s + t) + 1;
-        return;
+        return r;
 }
 
 static int blockio(void *p, uint16_t poffset, uint16_t id, char rw)
@@ -68,28 +67,15 @@ static int blockio(void *p, uint16_t poffset, uint16_t id, char rw)
 }
 
 static int isnum(char *s) 
-{ 
-        s += *s == '-'? 1: 0; 
-        return s[strspn(s,"0123456789")] == '\0'; 
-}
+{ s += *s == '-'? 1: 0; return s[strspn(s,"0123456789")] == '\0'; }
 
 void forth_seti(forth_obj_t * o, FILE * in) { o->input = in; }
 void forth_seto(forth_obj_t * o, FILE * out) { o->output = out; }
 
-int forth_save(forth_obj_t * o, FILE * output)
-{ /*XXX: Does not work yet*/
-        if(!o || !output) return -1;
-        return sizeof(*o) == fwrite(o, 1, sizeof(*o), output);
-}
-
-forth_obj_t *forth_load(FILE * input)
-{ /*XXX: Really does not work yet!*/
-        forth_obj_t *o;
-        if(!input || !(o = calloc(1, sizeof(*o))))
-                return NULL;
-        if(sizeof(*o) == fread(o, 1, sizeof(*o), input))
-                return o;
-        return NULL;
+int forth_coredump(forth_obj_t * o, FILE * dump)
+{ 
+        if(!o || !dump) return -1;
+        return sizeof(*o) == fwrite(o, 1, sizeof(*o), dump);
 }
 
 forth_obj_t *forth_init(FILE * input, FILE * output)
@@ -131,18 +117,18 @@ int forth_run(forth_obj_t * o)
 {
         uint16_t *m, x, *S, I;
 
-        if(!o || o->invalidated) 
-		return WARN("invalid obj"), -(o->invalidated = 1);
-        m = o->m, x = o->x, S = o->S, I = o->I, o->initialized = 1;
+        if(!o || o->invalid) 
+		return WARN("invalid obj"), -(o->invalid = 1);
+        m = o->m, x = o->x, S = o->S, I = o->I;
 
         for(;(x = m[I++]);) { 
-                /*if(S<m || (S>(m+CORESZ))) return -(o->invalidated = 1);*/
-        INNER:  switch (m[x++]) { /*TODO: add in bounds checking here*/
+        INNER:  switch (m[x++]) { 
                 case PUSH:    *++S = f;     f = m[I++]; break;
                 case COMPILE: m[m[0]++] = x;            break;
                 case RUN:     m[++m[1]] = I; I = x;     break;
                 case DEFINE:  m[8] = 1;
-                              compile_word(o, COMPILE, NULL);
+                              if(compile_word(o, COMPILE, NULL) < 0)
+                                      return -(o->invalid = 1);
                               m[m[0]++] = RUN;
                               break;
                 case IMMEDIATE: *m -= 2; m[m[0]++] = RUN; break;
@@ -150,7 +136,7 @@ int forth_run(forth_obj_t * o)
                         m[1]--;
                         if(fscanf(o->input, "%31s", o->s) < 1)
                                 return 0;
-                        for (w = o->L; strcmp((char*)o->s, (char*)&o->s[m[w + 1]]); w = m[w]) ;
+                        for (w = o->L; strcmp((char*)o->s, (char*)&o->s[m[w + 1]]); w = m[w]);
                         if (w - 1) {
                                 x = w + 2;
                                 if (!m[8] && m[x] == COMPILE)
@@ -202,7 +188,7 @@ int forth_run(forth_obj_t * o)
                 case BSAVE: f = blockio(m,*S--,f,'w');      break;
                 case BLOAD: f = blockio(m,*S--,f,'r');      break;
                 default:    WARN("unknown instruction");
-                            return -(o->invalidated = 1);
+                            return -(o->invalid = 1);
                 }
         }
         return 0; /*is 'o' still valid?*/

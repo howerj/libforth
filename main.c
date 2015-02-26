@@ -32,7 +32,7 @@ int main(int argc, char **argv)
                 if(forth_run(o) < 0)
                         return 1;
         }
-        if(forth_save(o, (coreo = fopen_or_fail(coref, "wb"))) < 0)
+        if(forth_coredump(o, (coreo = fopen_or_fail(coref, "wb"))) < 0)
                 return 1;
         fclose(coreo);
         free(o);

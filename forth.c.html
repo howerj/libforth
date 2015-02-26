@@ -1,0 +1,238 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<title>~/documents/forthlib/forth.c.html</title>
+<meta name="Generator" content="Vim/7.3">
+<meta name="plugin-version" content="vim7.3_v10">
+<meta name="syntax" content="c">
+<meta name="settings" content="use_css,expand_tabs">
+<style type="text/css">
+<!--
+pre { font-family: monospace; color: #000000; background-color: #ffffff; }
+body { font-family: monospace; color: #000000; background-color: #ffffff; }
+.Statement { color: #af5f00; }
+.Type { color: #008000; }
+.Special { color: #c000c0; }
+.Constant { color: #c00000; }
+.PreProc { color: #c000c0; }
+.Todo { color: #000000; background-color: #ffff00; }
+.Comment { color: #0000c0; }
+-->
+</style>
+</head>
+<body>
+<pre>
+<span class="Comment">/*</span><span class="Todo">TODO</span><span class="Comment">: eval string (generic i/o struct), character addressing, bounds check,</span>
+<span class="Comment"> documentation (including memory layout and registers, move registers to core,</span>
+<span class="Comment"> immediate should be set by a flag (and the code word a bitfield)</span><span class="Comment">*/</span>
+<span class="PreProc">#include </span><span class="Constant">&quot;forth.h&quot;</span>
+<span class="PreProc">#include </span><span class="Constant">&lt;stdio.h&gt;</span>
+<span class="PreProc">#include </span><span class="Constant">&lt;stdlib.h&gt;</span>
+<span class="PreProc">#include </span><span class="Constant">&lt;string.h&gt;</span>
+<span class="PreProc">#include </span><span class="Constant">&lt;stdint.h&gt;</span>
+
+<span class="PreProc">#define WARN(MSG) fprintf(</span><span class="Constant">stderr</span><span class="PreProc">,</span><span class="Constant">&quot;(error </span><span class="Special">\&quot;</span><span class="Special">%s</span><span class="Special">\&quot;</span><span class="Constant"> </span><span class="Special">%s</span><span class="Constant"> </span><span class="Special">%d</span><span class="Constant">)</span><span class="Special">\n</span><span class="Constant">&quot;</span><span class="PreProc">, (MSG), </span><span class="Constant">__FILE__</span><span class="PreProc">, </span><span class="Constant">__LINE__</span><span class="PreProc">)</span>
+<span class="PreProc">#define CORESZ    ((</span><span class="Constant">UINT16_MAX</span><span class="PreProc"> + </span><span class="Constant">1</span><span class="PreProc">) / </span><span class="Constant">2</span><span class="PreProc">)</span>
+<span class="PreProc">#define STROFF    (CORESZ/</span><span class="Constant">2</span><span class="PreProc">)</span>
+<span class="PreProc">#define STKSZ     (</span><span class="Constant">512u</span><span class="PreProc">)</span>
+<span class="PreProc">#define BLKSZ     (</span><span class="Constant">1024u</span><span class="PreProc">)</span>
+<span class="PreProc">#define CK(X)     ((X) &amp; </span><span class="Constant">0x7fff</span><span class="PreProc">)</span>
+
+<span class="Type">struct</span> forth_obj {
+        <span class="Type">FILE</span> *input, *output;
+        <span class="Type">uint8_t</span> *s; <span class="Comment">/*</span><span class="Comment">string store pointer</span><span class="Comment">*/</span>
+        <span class="Type">uint16_t</span> m[CORESZ], *S, L, I, t, w, f, x;
+        <span class="Type">unsigned</span> initialized :<span class="Constant">1</span>; <span class="Comment">/*</span><span class="Comment">run through the interpreter once?</span><span class="Comment">*/</span>
+        <span class="Type">unsigned</span> invalidated :<span class="Constant">1</span>; <span class="Comment">/*</span><span class="Comment">invalidate this object if true</span><span class="Comment">*/</span>
+};
+
+<span class="PreProc">#define t o-&gt;t</span>
+<span class="PreProc">#define w o-&gt;w</span>
+<span class="PreProc">#define f o-&gt;f</span>
+
+<span class="Type">enum</span> codes { PUSH, COMPILE, RUN, DEFINE, IMMEDIATE, READ, LOAD, STORE, SUB,
+ADD, MUL, DIV, LESS, EXIT, EMIT, KEY, FROMR, TOR, JMP, JMPZ, PNUM, QUOTE,
+COMMA, NOT, EQUAL, SWAP, DUP, DROP, TAIL, BSAVE, BLOAD, LAST };
+
+<span class="Type">static</span> <span class="Type">char</span> *names[] = { <span class="Constant">&quot;@&quot;</span>, <span class="Constant">&quot;!&quot;</span>, <span class="Constant">&quot;-&quot;</span>, <span class="Constant">&quot;+&quot;</span>, <span class="Constant">&quot;*&quot;</span>, <span class="Constant">&quot;/&quot;</span>, <span class="Constant">&quot;&lt;&quot;</span>, <span class="Constant">&quot;exit&quot;</span>, <span class="Constant">&quot;emit&quot;</span>,
+<span class="Constant">&quot;key&quot;</span>, <span class="Constant">&quot;r&gt;&quot;</span>, <span class="Constant">&quot;&gt;r&quot;</span>, <span class="Constant">&quot;jmp&quot;</span>,  <span class="Constant">&quot;jmpz&quot;</span>, <span class="Constant">&quot;.&quot;</span>, <span class="Constant">&quot;'&quot;</span>, <span class="Constant">&quot;,&quot;</span>, <span class="Constant">&quot;not&quot;</span>, <span class="Constant">&quot;=&quot;</span>, <span class="Constant">&quot;swap&quot;</span>, <span class="Constant">&quot;dup&quot;</span>,
+<span class="Constant">&quot;drop&quot;</span>, <span class="Constant">&quot;tail&quot;</span>, <span class="Constant">&quot;save&quot;</span>, <span class="Constant">&quot;load&quot;</span>, <span class="Constant">NULL</span> };
+
+<span class="Type">static</span> <span class="Type">void</span> compile_word(forth_obj_t * o, <span class="Type">uint16_t</span> code, <span class="Type">char</span> *str)
+{ <span class="Comment">/*</span><span class="Todo">XXX</span><span class="Comment">: should return error code if fscanf fails</span><span class="Comment">*/</span>
+        <span class="Type">uint16_t</span> *m;
+        m = o-&gt;m;
+        m[m[<span class="Constant">0</span>]++] = o-&gt;L;
+        o-&gt;L = *m - <span class="Constant">1</span>;
+        m[m[<span class="Constant">0</span>]++] = t;
+        m[m[<span class="Constant">0</span>]++] = code;
+        <span class="Statement">if</span> (str)
+                strcpy((<span class="Type">char</span> *)o-&gt;s + t, str);
+        <span class="Statement">else</span>
+                fscanf(o-&gt;input, <span class="Constant">&quot;</span><span class="Special">%31s</span><span class="Constant">&quot;</span>, o-&gt;s + t);
+        t += strlen((<span class="Type">char</span>*)o-&gt;s + t) + <span class="Constant">1</span>;
+        <span class="Statement">return</span>;
+}
+
+<span class="Type">static</span> <span class="Type">int</span> blockio(<span class="Type">void</span> *p, <span class="Type">uint16_t</span> poffset, <span class="Type">uint16_t</span> id, <span class="Type">char</span> rw)
+{
+        <span class="Type">char</span> name[<span class="Constant">16</span>]; <span class="Comment">/*</span><span class="Comment"> XXXX + &quot;.blk&quot; + '\0' + a little spare change </span><span class="Comment">*/</span>
+        <span class="Type">FILE</span> *file;
+        <span class="Type">size_t</span> n;
+        <span class="Statement">if</span>((poffset &gt; (CORESZ - BLKSZ)) || !(rw == <span class="Constant">'w'</span> || rw == <span class="Constant">'r'</span>))
+                <span class="Statement">return</span> WARN(<span class="Constant">&quot;invalid address or mode&quot;</span>), -<span class="Constant">1</span>;
+        sprintf(name, <span class="Constant">&quot;</span><span class="Special">%04x</span><span class="Constant">.blk&quot;</span>, (<span class="Type">int</span>)id);
+        <span class="Statement">if</span>(!(file = fopen(name, rw == <span class="Constant">'r'</span> ? <span class="Constant">&quot;rb&quot;</span> : <span class="Constant">&quot;wb&quot;</span>)))
+                <span class="Statement">return</span> WARN(<span class="Constant">&quot;could not open file&quot;</span>), -<span class="Constant">1</span>;
+        n = rw == <span class="Constant">'w'</span> ?
+                fwrite(p+poffset, <span class="Constant">1</span>, BLKSZ, file) :
+                fread(p+poffset, <span class="Constant">1</span>, BLKSZ, file);
+        fclose(file);
+        <span class="Statement">return</span> n == BLKSZ ? <span class="Constant">0</span> : -<span class="Constant">1</span>;
+}
+
+<span class="Type">static</span> <span class="Type">int</span> isnum(<span class="Type">char</span> *s)
+{
+        s += *s == <span class="Constant">'-'</span>? <span class="Constant">1</span>: <span class="Constant">0</span>;
+        <span class="Statement">return</span> s[strspn(s,<span class="Constant">&quot;0123456789&quot;</span>)] == <span class="Special">'\0'</span>;
+}
+
+<span class="Type">void</span> forth_seti(forth_obj_t * o, <span class="Type">FILE</span> * in) { o-&gt;input = in; }
+<span class="Type">void</span> forth_seto(forth_obj_t * o, <span class="Type">FILE</span> * out) { o-&gt;output = out; }
+
+<span class="Type">int</span> forth_save(forth_obj_t * o, <span class="Type">FILE</span> * output)
+{ <span class="Comment">/*</span><span class="Todo">XXX</span><span class="Comment">: Does not work yet</span><span class="Comment">*/</span>
+        <span class="Statement">if</span>(!o || !output) <span class="Statement">return</span> -<span class="Constant">1</span>;
+        <span class="Statement">return</span> <span class="Statement">sizeof</span>(*o) == fwrite(o, <span class="Constant">1</span>, <span class="Statement">sizeof</span>(*o), output);
+}
+
+forth_obj_t *forth_load(<span class="Type">FILE</span> * input)
+{ <span class="Comment">/*</span><span class="Todo">XXX</span><span class="Comment">: Really does not work yet!</span><span class="Comment">*/</span>
+        forth_obj_t *o;
+        <span class="Statement">if</span>(!input || !(o = calloc(<span class="Constant">1</span>, <span class="Statement">sizeof</span>(*o))))
+                <span class="Statement">return</span> <span class="Constant">NULL</span>;
+        <span class="Statement">if</span>(<span class="Statement">sizeof</span>(*o) == fread(o, <span class="Constant">1</span>, <span class="Statement">sizeof</span>(*o), input))
+                <span class="Statement">return</span> o;
+        <span class="Statement">return</span> <span class="Constant">NULL</span>;
+}
+
+forth_obj_t *forth_init(<span class="Type">FILE</span> * input, <span class="Type">FILE</span> * output)
+{
+        <span class="Type">uint16_t</span> *m, i;
+        forth_obj_t *o;
+
+        <span class="Statement">if</span>(!input || !output || !(o = calloc(<span class="Constant">1</span>, <span class="Statement">sizeof</span>(*o))))
+                <span class="Statement">return</span> <span class="Constant">NULL</span>;
+        m = o-&gt;m;
+        o-&gt;s = (<span class="Type">uint8_t</span>*) m + STROFF; <span class="Comment">/*</span><span class="Comment">string store offset into CORE</span><span class="Comment">*/</span>
+        o-&gt;input = input;
+        o-&gt;output = output;
+
+        m[<span class="Constant">0</span>] = <span class="Constant">32</span>;   <span class="Comment">/*</span><span class="Comment">initial dictionary offset, skip registers</span><span class="Comment">*/</span>
+        o-&gt;L = <span class="Constant">1</span>;
+        t = <span class="Constant">32</span>;      <span class="Comment">/*</span><span class="Comment">offset into str storage defines maxium word length</span><span class="Comment">*/</span>
+
+        compile_word(o, DEFINE,    <span class="Constant">&quot;:&quot;</span>);
+        compile_word(o, IMMEDIATE, <span class="Constant">&quot;immediate&quot;</span>);
+        compile_word(o, COMPILE,   <span class="Constant">&quot;read&quot;</span>);
+        w = *m;
+        m[m[<span class="Constant">0</span>]++] = READ; <span class="Comment">/*</span><span class="Comment">create a special word that reads input</span><span class="Comment">*/</span>
+        m[m[<span class="Constant">0</span>]++] = RUN;  <span class="Comment">/*</span><span class="Comment">call the special word recursively</span><span class="Comment">*/</span>
+        o-&gt;I = *m;
+        m[m[<span class="Constant">0</span>]++] = w;
+        m[m[<span class="Constant">0</span>]++] = o-&gt;I - <span class="Constant">1</span>;
+        w = LOAD;
+
+        <span class="Statement">for</span>(i = <span class="Constant">0</span>; names[i]; i++) <span class="Comment">/*</span><span class="Comment">compile the rest of the dictionary</span><span class="Comment">*/</span>
+                compile_word(o, COMPILE, names[i]), m[m[<span class="Constant">0</span>]++] = w++;
+        m[<span class="Constant">1</span>] = *m + <span class="Constant">1</span>;            <span class="Comment">/*</span><span class="Comment">setup return stack after compiled words</span><span class="Comment">*/</span>
+        o-&gt;S = m + *m + STKSZ;    <span class="Comment">/*</span><span class="Comment">var stack after that</span><span class="Comment">*/</span>
+        *m += (<span class="Constant">2</span>*STKSZ);          <span class="Comment">/*</span><span class="Comment">continue the dictionary after that</span><span class="Comment">*/</span>
+        <span class="Statement">return</span> o;
+}
+
+<span class="Type">int</span> forth_run(forth_obj_t * o)
+{
+        <span class="Type">uint16_t</span> *m, x, *S, I;
+
+        <span class="Statement">if</span>(!o || o-&gt;invalidated)
+                <span class="Statement">return</span> WARN(<span class="Constant">&quot;invalid obj&quot;</span>), -(o-&gt;invalidated = <span class="Constant">1</span>);
+        m = o-&gt;m, x = o-&gt;x, S = o-&gt;S, I = o-&gt;I, o-&gt;initialized = <span class="Constant">1</span>;
+
+        <span class="Statement">for</span>(;(x = m[I++]);) {
+                <span class="Comment">/*</span><span class="Comment">if(S&lt;m || (S&gt;(m+CORESZ))) return -(o-&gt;invalidated = 1);</span><span class="Comment">*/</span>
+        <span class="Statement">INNER</span>:  <span class="Statement">switch</span> (m[x++]) { <span class="Comment">/*</span><span class="Todo">TODO</span><span class="Comment">: add in bounds checking here</span><span class="Comment">*/</span>
+                <span class="Statement">case</span> PUSH:    *++S = f;     f = m[I++]; <span class="Statement">break</span>;
+                <span class="Statement">case</span> COMPILE: m[m[<span class="Constant">0</span>]++] = x;            <span class="Statement">break</span>;
+                <span class="Statement">case</span> RUN:     m[++m[<span class="Constant">1</span>]] = I; I = x;     <span class="Statement">break</span>;
+                <span class="Statement">case</span> DEFINE:  m[<span class="Constant">8</span>] = <span class="Constant">1</span>;
+                              compile_word(o, COMPILE, <span class="Constant">NULL</span>);
+                              m[m[<span class="Constant">0</span>]++] = RUN;
+                              <span class="Statement">break</span>;
+                <span class="Statement">case</span> IMMEDIATE: *m -= <span class="Constant">2</span>; m[m[<span class="Constant">0</span>]++] = RUN; <span class="Statement">break</span>;
+                <span class="Statement">case</span> READ:
+                        m[<span class="Constant">1</span>]--;
+                        <span class="Statement">if</span>(fscanf(o-&gt;input, <span class="Constant">&quot;</span><span class="Special">%31s</span><span class="Constant">&quot;</span>, o-&gt;s) &lt; <span class="Constant">1</span>)
+                                <span class="Statement">return</span> <span class="Constant">0</span>;
+                        <span class="Statement">for</span> (w = o-&gt;L; strcmp((<span class="Type">char</span>*)o-&gt;s, (<span class="Type">char</span>*)&amp;o-&gt;s[m[w + <span class="Constant">1</span>]]); w = m[w]) ;
+                        <span class="Statement">if</span> (w - <span class="Constant">1</span>) {
+                                x = w + <span class="Constant">2</span>;
+                                <span class="Statement">if</span> (!m[<span class="Constant">8</span>] &amp;&amp; m[x] == COMPILE)
+                                        x++;
+                                <span class="Statement">goto</span> INNER;
+                        } <span class="Statement">else</span> <span class="Statement">if</span>(!isnum((<span class="Type">char</span>*)o-&gt;s)) {
+                                WARN(<span class="Constant">&quot;not a word or number&quot;</span>);
+                                <span class="Statement">break</span>;
+                        }
+                        <span class="Statement">if</span> (m[<span class="Constant">8</span>]) { <span class="Comment">/*</span><span class="Comment">must be a number then</span><span class="Comment">*/</span>
+                                m[m[<span class="Constant">0</span>]++] = <span class="Constant">2</span>;
+                                m[m[<span class="Constant">0</span>]++] = strtol((<span class="Type">char</span>*)o-&gt;s, <span class="Constant">NULL</span>, <span class="Constant">0</span>);
+                        } <span class="Statement">else</span> {
+                                *++S = f;
+                                f = strtol((<span class="Type">char</span>*)o-&gt;s, <span class="Constant">NULL</span>, <span class="Constant">0</span>);
+                        }
+                        <span class="Statement">break</span>;
+                <span class="Statement">case</span> LOAD:  f = m[CK(f)];                   <span class="Statement">break</span>;
+                <span class="Statement">case</span> STORE: m[CK(f)] = *S--; f = *S--;      <span class="Statement">break</span>;
+                <span class="Statement">case</span> SUB:   f = *S-- - f;                   <span class="Statement">break</span>;
+                <span class="Statement">case</span> ADD:   f = *S-- + f;                   <span class="Statement">break</span>;
+                <span class="Statement">case</span> MUL:   f *= *S--;                      <span class="Statement">break</span>;
+                <span class="Statement">case</span> DIV:   <span class="Statement">if</span>(f) f = *S-- / f;
+                            <span class="Statement">else</span>  f = *S--, WARN(<span class="Constant">&quot;div 0&quot;</span>);
+                            <span class="Statement">break</span>;
+                <span class="Statement">case</span> LESS:  f = *S-- &gt; f;                   <span class="Statement">break</span>;
+                <span class="Statement">case</span> EXIT:  I = m[m[<span class="Constant">1</span>]--];                  <span class="Statement">break</span>;
+                <span class="Statement">case</span> EMIT:  fputc(f, o-&gt;output);
+                            f = *S--;
+                            <span class="Statement">break</span>; <span class="Comment">/*</span><span class="Comment">should report output err</span><span class="Comment">*/</span>
+                <span class="Statement">case</span> KEY:   *++S = f;
+                            f = fgetc(o-&gt;input);
+                            <span class="Statement">break</span>;
+                <span class="Statement">case</span> FROMR: *++S = f;      f = m[m[<span class="Constant">1</span>]--];   <span class="Statement">break</span>;
+                <span class="Statement">case</span> TOR:   m[++m[<span class="Constant">1</span>]] = f; f = *S--;        <span class="Statement">break</span>;
+                <span class="Statement">case</span> JMP:   I += m[I];                      <span class="Statement">break</span>;
+                <span class="Statement">case</span> JMPZ:  I += f == <span class="Constant">0</span> ? m[I] : <span class="Constant">1</span>; f = *S--; <span class="Statement">break</span>;
+                <span class="Statement">case</span> PNUM:  fprintf(o-&gt;output, <span class="Constant">&quot;</span><span class="Special">%u</span><span class="Constant">&quot;</span>, f);
+                            f = *S--;
+                            <span class="Statement">break</span>; <span class="Comment">/*</span><span class="Comment">should report i/o err</span><span class="Comment">*/</span>
+                <span class="Statement">case</span> QUOTE: *++S = f;      f = m[I++];      <span class="Statement">break</span>;
+                <span class="Statement">case</span> COMMA: m[m[<span class="Constant">0</span>]++] = f; f = *S--;        <span class="Statement">break</span>;
+                <span class="Statement">case</span> NOT:   f = !f;                         <span class="Statement">break</span>;
+                <span class="Statement">case</span> EQUAL: f = *S-- == f;                  <span class="Statement">break</span>;
+                <span class="Statement">case</span> SWAP:  w = f;  f = *S--;   *++S = w;   <span class="Statement">break</span>;
+                <span class="Statement">case</span> DUP:   *++S = f;                       <span class="Statement">break</span>;
+                <span class="Statement">case</span> DROP:  f = *S--;                       <span class="Statement">break</span>;
+                <span class="Statement">case</span> TAIL:  m[<span class="Constant">1</span>]--;                         <span class="Statement">break</span>;
+                <span class="Statement">case</span> BSAVE: f = blockio(m,*S--,f,<span class="Constant">'w'</span>);      <span class="Statement">break</span>;
+                <span class="Statement">case</span> BLOAD: f = blockio(m,*S--,f,<span class="Constant">'r'</span>);      <span class="Statement">break</span>;
+                <span class="Statement">default</span>:    WARN(<span class="Constant">&quot;unknown instruction&quot;</span>);
+                            <span class="Statement">return</span> -(o-&gt;invalidated = <span class="Constant">1</span>);
+                }
+        }
+        <span class="Statement">return</span> <span class="Constant">0</span>; <span class="Comment">/*</span><span class="Comment">is 'o' still valid?</span><span class="Comment">*/</span>
+}
+
+</pre>
+</body>
+</html>
