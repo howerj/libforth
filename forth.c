@@ -113,17 +113,18 @@ forth_obj_t *forth_init(FILE * input, FILE * output)
 
         m[0] = 32;   /*initial dictionary offset, skip registers*/
         o->L = 1; 
-        o->t = 32;      /*offset into str storage defines maximum word length*/
+        o->t = 32;   /*offset into str storage defines maximum word length*/
 
-        compile_word(o, DEFINE,    ":");
-        compile_word(o, IMMEDIATE, "immediate");
-        compile_word(o, COMPILE,   "read");
         w = *m;
         m[m[0]++] = READ; /*create a special word that reads input*/
         m[m[0]++] = RUN;  /*call the special word recursively*/
         o->I = *m;
         m[m[0]++] = w;
         m[m[0]++] = o->I - 1;
+
+        compile_word(o, DEFINE,    ":"); 
+        compile_word(o, IMMEDIATE, "immediate"); 
+        compile_word(o, COMPILE,   "read");
         for(i = 0, w = LOAD; names[i]; i++) /*compile the rest */
                 compile_word(o, COMPILE, names[i]), m[m[0]++] = w++;
         m[1] = CORESZ - STKSZ;            
