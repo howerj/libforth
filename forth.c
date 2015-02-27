@@ -13,7 +13,7 @@
 
    With the word header:
 
-   <1bit: immediate?> <1bit: hidden?> <10bit: padding> <4bit: name len>
+   <1bit: immediate?> <1bit: hidden?> <4bit: name len> <padding> <code word>
 
    This would save space, ease reading data dumps and be more logical. It
    would also allow me to hide words from being searched for. The name
@@ -30,7 +30,7 @@
         fprintf(stderr,"( error \"%s\" %s %d )\n", (MSG), __FILE__, __LINE__)
 #define CORESZ    ((UINT16_MAX + 1) / 2)
 #define STROFF    (CORESZ/2)
-#define STKSZ     (512u)
+#define STKSZ     (CORESZ/64)
 #define BLKSZ     (1024u)
 #define CK(X)     ((X) & 0x7fff)
 
@@ -40,10 +40,6 @@ struct forth_obj {
         uint16_t *S, L, I, t, w, f, x, m[CORESZ];
         unsigned invalid :1; /*invalidate this object if true*/
 };
-
-#define w o->w
-#define t o->t
-#define f o->f
 
 enum codes { PUSH, COMPILE, RUN, DEFINE, IMMEDIATE, READ, LOAD, STORE, SUB, 
 ADD, MUL, DIV, LESS, EXIT, EMIT, KEY, FROMR, TOR, JMP, JMPZ, PNUM, QUOTE,
@@ -60,11 +56,11 @@ static int compile_word(forth_obj_t * o, uint16_t code, char *str)
         m = o->m;
         m[m[0]++] = o->L;
         o->L = *m - 1;
-        m[m[0]++] = t;
+        m[m[0]++] = o->t;
         m[m[0]++] = code;
-        if (str) strcpy((char *)o->s + t, str);
-        else     r = fscanf(o->input, "%31s", o->s + t);
-        t += strlen((char*)o->s + t) + 1;
+        if (str) strcpy((char *)o->s + o->t, str);
+        else     r = fscanf(o->input, "%31s", o->s + o->t);
+        o->t += strlen((char*)o->s + o->t) + 1;
         return r;
 }
 
@@ -88,7 +84,13 @@ static int blockio(void *p, uint16_t poffset, uint16_t id, char rw)
 static int isnum(char *s) 
 { s += *s == '-'? 1: 0; return s[strspn(s,"0123456789")] == '\0'; }
 
-void forth_seti(forth_obj_t * o, FILE * in) { o->input = in; }
+static uint16_t find(forth_obj_t * o) {
+        uint16_t *m = o->m, w;
+        for (w = o->L; strcmp((char*)o->s, (char*)&o->s[m[w + 1]]); w = m[w]);
+        return w;
+}
+
+void forth_seti(forth_obj_t * o, FILE * in)  { o->input  = in;  }
 void forth_seto(forth_obj_t * o, FILE * out) { o->output = out; }
 
 int forth_coredump(forth_obj_t * o, FILE * dump)
@@ -99,7 +101,7 @@ int forth_coredump(forth_obj_t * o, FILE * dump)
 
 forth_obj_t *forth_init(FILE * input, FILE * output)
 {
-        uint16_t *m, i;
+        uint16_t *m, i, w;
         forth_obj_t *o;
 
         if(!input || !output || !(o = calloc(1, sizeof(*o))))
@@ -111,7 +113,7 @@ forth_obj_t *forth_init(FILE * input, FILE * output)
 
         m[0] = 32;   /*initial dictionary offset, skip registers*/
         o->L = 1; 
-        t = 32;      /*offset into str storage defines maximum word length*/
+        o->t = 32;      /*offset into str storage defines maximum word length*/
 
         compile_word(o, DEFINE,    ":");
         compile_word(o, IMMEDIATE, "immediate");
@@ -122,9 +124,7 @@ forth_obj_t *forth_init(FILE * input, FILE * output)
         o->I = *m;
         m[m[0]++] = w;
         m[m[0]++] = o->I - 1;
-        w = LOAD;
-
-        for(i = 0; names[i]; i++) /*compile the rest of the dictionary*/
+        for(i = 0, w = LOAD; names[i]; i++) /*compile the rest */
                 compile_word(o, COMPILE, names[i]), m[m[0]++] = w++;
         m[1] = CORESZ - STKSZ;            
         o->S = m + CORESZ - (2*STKSZ); 
@@ -133,11 +133,11 @@ forth_obj_t *forth_init(FILE * input, FILE * output)
 
 int forth_run(forth_obj_t * o)
 {
-        uint16_t *m, x, *S, I;
+        uint16_t *m, x, *S, I, f, w;
 
         if(!o || o->invalid) 
 		return WARN("invalid obj"), -(o->invalid = 1);
-        m = o->m, x = o->x, S = o->S, I = o->I;
+        m = o->m, x = o->x, S = o->S, I = o->I, f = o->f;
 
         for(;(x = m[I++]);) { 
         INNER:  switch (m[x++]) { 
@@ -154,7 +154,7 @@ int forth_run(forth_obj_t * o)
                         m[1]--;
                         if(fscanf(o->input, "%31s", o->s) < 1)
                                 return 0;
-                        for (w = o->L; strcmp((char*)o->s, (char*)&o->s[m[w + 1]]); w = m[w]);
+                        w = find(o);
                         if (w - 1) {
                                 x = w + 2;
                                 if (!m[8] && m[x] == COMPILE)
@@ -177,21 +177,15 @@ int forth_run(forth_obj_t * o)
                 case SUB:   f = *S-- - f;                   break;
                 case ADD:   f = *S-- + f;                   break;
                 case MUL:   f *= *S--;                      break;
-                case DIV:   if(f) f = *S-- / f;  
-                            else  f = *S--, WARN("div 0");
-                            break;
+                case DIV:   f = f ? *S--/f:WARN("div 0"),0; break;
                 case LESS:  f = *S-- > f;                   break;
                 case EXIT:  I = m[m[1]--];                  break;
-                case EMIT:  fputc(f, o->output); 
-                            f = *S--;
-                            break; /*should report output err*/
-                case KEY:   *++S = f;
-                            f = fgetc(o->input); 
-                            break;
-                case FROMR: *++S = f;      f = m[m[1]--];   break;
+                case EMIT:  fputc(f, o->output); f = *S--;  break; 
+                case KEY:   *++S = f; f = fgetc(o->input);  break;
+                case FROMR: *++S = f; f = m[m[1]--];        break;
                 case TOR:   m[++m[1]] = f; f = *S--;        break;
                 case JMP:   I += m[I];                      break;
-                case JMPZ:  I += f == 0 ? m[I] : 1; f = *S--; break;
+                case JMPZ:  I += f == 0 ? m[I]:1; f = *S--; break;
                 case PNUM:  fprintf(o->output, "%u", f); 
                             f = *S--;
                             break; /*should report i/o err*/

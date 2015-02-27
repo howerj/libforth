@@ -23,4 +23,13 @@
 : " immediate key drop ' imprint , find-" ;
 : .( key drop begin key dup ')' = if drop exit then emit 0 until ;
 : dump 32 begin 1 - dup dup 1024 * swap save drop dup 0= until ;
+
+: tab 9 emit ;
+: # . cr ;
+: 2dup dup >r >r dup r> swap r> ;
+: 2drop drop drop ;
+: line dup . tab dup 4 + swap begin dup @ . tab 1 + 2dup = until drop ;
+: list swap begin line cr 2dup < 0= until ;
+
+
 .( OK. ) here . cr
