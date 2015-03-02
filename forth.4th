@@ -1,6 +1,10 @@
+# @todo create, does>, execute, words, .s
+# @todo change how dump works
+# @todo move this into main.c
 : state 8 ! exit
 : ; immediate ' exit , 0 state exit
 : hex 9 ! ;
+: pwd 10 ;
 : r 1 ;
 : h 0 ;
 : here h @ ;
@@ -27,4 +31,6 @@
 : 2dup dup >r >r dup r> swap r> ;
 : line dup . tab dup 4 + swap begin dup @ . tab 1+ 2dup = until drop ;
 : list swap begin line cr 2dup < until ;
+: words pwd @ begin dup . cr @ dup 32 < until ;
+: hide   find 1 - dup @ 32768 | swap ! ;
 .( OK. ) here . cr

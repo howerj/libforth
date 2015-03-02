@@ -7,10 +7,10 @@
  *  @email          howe.r.j.89@gmail.com
  *
  *  @todo           Documentation of the internals.
- *  @todo           Rewrite word header to be more compact, include the
- *                  word name in the header and not a separate place and
- *                  to have a 'hide' field.
+ *  @todo           Rewrite word header to be more compact, 
  *  @todo           Allow input from a string for an eval() function.
+ *  @todo           Dump registers on error for debugging?
+ *  @todo           Experiment with hashing words instead of using names.
  */
 #include "forth.h"
 #include <stdio.h>
@@ -18,13 +18,14 @@
 #include <string.h>
 #include <stdint.h>
 
-#define WARN(MSG) \
-        fprintf(stderr,"( error \"%s\" %s %d )\n", (MSG), __FILE__, __LINE__)
+static const char *errorfmt = "( error \"%s\" %s %u )\n";
+#define WARN(MSG) fprintf(stderr, errorfmt, (MSG), __FILE__, __LINE__)
 #define CORESZ    ((UINT16_MAX + 1) / 2)
 #define STROFF    (CORESZ/2)
 #define STKSZ     (CORESZ/64)
 #define BLKSZ     (1024u)
 #define CK(X)     ((X) & 0x7fff)
+#define HIDE      (0x8000)
 
 struct forth_obj {
         FILE *in, *out;
@@ -36,12 +37,13 @@ struct forth_obj {
 enum registers { DIC = 0/*or m[0]*/, RSTK = 1, STATE = 8, HEX = 9, PWD = 10 };
 
 enum codes { PUSH, COMPILE, RUN, DEFINE, IMMEDIATE, COMMENT, READ, LOAD, 
-STORE, SUB, ADD, MUL, DIV, LESS, EXIT, EMIT, KEY, FROMR, TOR, JMP, JMPZ, 
-PNUM, QUOTE, COMMA, EQUAL, SWAP, DUP, DROP, TAIL, BSAVE, BLOAD, LAST }; 
+STORE, SUB, ADD, AND, OR, XOR, INV, MUL, DIV, LESS, EXIT, EMIT, KEY, FROMR, 
+TOR, JMP, JMPZ, PNUM, QUOTE, COMMA, EQUAL, SWAP, DUP, DROP, TAIL, BSAVE, 
+BLOAD, FIND, LAST }; 
 
-static char *names[] = { "read", "@", "!", "-", "+", "*", "/", "<", "exit", 
-"emit", "key", "r>", ">r", "j",  "jz", ".", "'", ",", "=", "swap", "dup",
-"drop", "tail", "save", "load", NULL }; 
+static char *names[] = { "read", "@", "!", "-", "+", "&", "|", "^", "~", "*", 
+"/", "<", "exit",  "emit", "key", "r>", ">r", "j",  "jz", ".", "'", ",", "=", 
+"swap", "dup", "drop", "tail", "save", "load", "find", NULL }; 
 
 static int compile_word(forth_obj_t * o, uint16_t code, char *str)
 {
@@ -84,7 +86,7 @@ static int isnum(char *s)
 static uint16_t find(forth_obj_t * o) 
 {
         uint16_t *m = o->m, w;
-        for (w=m[PWD]; strcmp((char*)o->s, (char*)&o->s[m[w + 1]]); w=m[w]);
+        for (w=m[PWD]; (w & HIDE) || strcmp((char*)o->s, (char*)&o->s[m[(w & ~HIDE) + 1]]); w=m[w & ~HIDE]);
         return w;
 }
 
@@ -135,8 +137,7 @@ int forth_run(forth_obj_t * o)
         int c;
         uint16_t *m, pc, *S, I, f, w;
 
-        if(!o || o->invalid) 
-		return WARN("invalid obj"), -(o->invalid = 1);
+        if(!o || o->invalid) return WARN("invalid obj"), -1;
         m = o->m, S = o->S, I = o->I;
 
         for(;(pc = m[I++]);) { 
@@ -150,9 +151,7 @@ int forth_run(forth_obj_t * o)
                               m[m[0]++] = RUN;
                               break;
                 case IMMEDIATE: *m -= 2; m[m[0]++] = RUN;   break;
-                case COMMENT: while((c=fgetc(o->in)) > 0)
-                                      if(c == '\n')
-                                              break;
+                case COMMENT: while (((c=fgetc(o->in)) > 0) && (c != '\n'));
                               break;
                 case READ:
                         m[RSTK]--;
@@ -169,7 +168,7 @@ int forth_run(forth_obj_t * o)
                                 break;
                         }
                         if (m[STATE]) { /*must be a number then*/
-                                m[m[0]++] = 2; /*fake word push at m[2]*/
+                                m[m[0]++] = 2; /*fake word 'push' at m[2]*/
                                 m[m[0]++] = strtol((char*)o->s, NULL, 0);
                         } else {
                                 *++S = f;
@@ -180,6 +179,10 @@ int forth_run(forth_obj_t * o)
                 case STORE: m[CK(f)] = *S--; f = *S--;      break; 
                 case SUB:   f = *S-- - f;                   break;
                 case ADD:   f = *S-- + f;                   break;
+                case AND:   f = *S-- & f;                   break;
+                case OR:    f = *S-- | f;                   break;
+                case XOR:   f = *S-- ^ f;                   break;
+                case INV:   f = ~f;                         break;
                 case MUL:   f *= *S--;                      break;
                 case DIV:   f = f ? *S--/f:WARN("div 0"),0; break;
                 case LESS:  f = *S-- < f;                   break;
@@ -202,6 +205,14 @@ int forth_run(forth_obj_t * o)
                 case TAIL:  m[RSTK]--;                      break;
                 case BSAVE: f = blockio(m,*S--,f,'w');      break;
                 case BLOAD: f = blockio(m,*S--,f,'r');      break;
+                case FIND:  *++S = f;
+                            if(fscanf(o->in, "%31s", o->s) < 1)
+                                    return 0;
+                            f = find(o) + 2;
+                            /*if (!m[STATE] && m[f] == COMPILE)
+                                    f++;*/
+                            f = f < 32 ? 0 : f; /*return 0 if not found*/
+                            break;
                 default:    WARN("unknown instruction");
                             return -(o->invalid = 1);
                 }
