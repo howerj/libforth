@@ -29,11 +29,11 @@
 struct forth_obj {
         FILE *in, *out;
         uint8_t *s; /*string store pointer*/
-        uint16_t *S, L, I, t, w, f, x, m[CORESZ];
+        uint16_t *S, I, t, m[CORESZ];
         unsigned invalid :1; /*invalidate this object if true*/
 };
 
-enum registers { DICTIONARY = 0, RSTK = 1, STATE = 8, HEX = 9 };
+enum registers { DIC = 0/*or m[0]*/, RSTK = 1, STATE = 8, HEX = 9, PWD = 10 };
 
 enum codes { PUSH, COMPILE, RUN, DEFINE, IMMEDIATE, COMMENT, READ, LOAD, 
 STORE, SUB, ADD, MUL, DIV, LESS, EXIT, EMIT, KEY, FROMR, TOR, JMP, JMPZ, 
@@ -48,8 +48,8 @@ static int compile_word(forth_obj_t * o, uint16_t code, char *str)
         uint16_t *m;
         int r = 0;
         m = o->m;
-        m[m[0]++] = o->L;
-        o->L = *m - 1;
+        m[m[0]++] = m[PWD];
+        m[PWD] = *m - 1;
         m[m[0]++] = o->t;
         m[m[0]++] = code;
         if (str) strcpy((char *)o->s + o->t, str);
@@ -84,7 +84,7 @@ static int isnum(char *s)
 static uint16_t find(forth_obj_t * o) 
 {
         uint16_t *m = o->m, w;
-        for (w = o->L; strcmp((char*)o->s, (char*)&o->s[m[w + 1]]); w = m[w]);
+        for (w=m[PWD]; strcmp((char*)o->s, (char*)&o->s[m[w + 1]]); w=m[w]);
         return w;
 }
 
@@ -110,7 +110,7 @@ forth_obj_t *forth_init(FILE * in, FILE * out)
         o->out = out;
 
         m[0] = 32;   /*initial dictionary offset, skip registers*/
-        o->L = 1; 
+        m[PWD] = 1; 
         o->t = 32;   /*offset into str storage defines maximum word length*/
 
         w = *m;
@@ -133,17 +133,17 @@ forth_obj_t *forth_init(FILE * in, FILE * out)
 int forth_run(forth_obj_t * o)
 {
         int c;
-        uint16_t *m, x, *S, I, f, w;
+        uint16_t *m, pc, *S, I, f, w;
 
         if(!o || o->invalid) 
 		return WARN("invalid obj"), -(o->invalid = 1);
-        m = o->m, x = o->x, S = o->S, I = o->I, f = o->f;
+        m = o->m, S = o->S, I = o->I;
 
-        for(;(x = m[I++]);) { 
-        INNER:  switch (m[x++]) { 
+        for(;(pc = m[I++]);) { 
+        INNER:  switch (m[pc++]) { 
                 case PUSH:    *++S = f;     f = m[I++];     break;
-                case COMPILE: m[m[0]++] = x;                break;
-                case RUN:     m[++m[RSTK]] = I; I = x;      break;
+                case COMPILE: m[m[0]++] = pc;               break;
+                case RUN:     m[++m[RSTK]] = I; I = pc;     break;
                 case DEFINE:  m[STATE] = 1;
                               if(compile_word(o, COMPILE, NULL) < 0)
                                       return -(o->invalid = 1);
@@ -160,9 +160,9 @@ int forth_run(forth_obj_t * o)
                                 return 0;
                         w = find(o);
                         if (w - 1) {
-                                x = w + 2;
-                                if (!m[STATE] && m[x] == COMPILE)
-                                        x++;
+                                pc = w + 2;
+                                if (!m[STATE] && m[pc] == COMPILE)
+                                        pc++;
                                 goto INNER;
                         } else if(!isnum((char*)o->s)) {
                                 WARN("not a word or number");
@@ -182,7 +182,7 @@ int forth_run(forth_obj_t * o)
                 case ADD:   f = *S-- + f;                   break;
                 case MUL:   f *= *S--;                      break;
                 case DIV:   f = f ? *S--/f:WARN("div 0"),0; break;
-                case LESS:  f = *S-- > f;                   break;
+                case LESS:  f = *S-- < f;                   break;
                 case EXIT:  I = m[m[RSTK]--];               break;
                 case EMIT:  fputc(f, o->out); f = *S--;     break; 
                 case KEY:   *++S = f; f = fgetc(o->in);     break;

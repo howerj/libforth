@@ -26,5 +26,5 @@
 : dump 32 begin 1 - dup dup 1024 * swap save drop dup 0= until ;
 : 2dup dup >r >r dup r> swap r> ;
 : line dup . tab dup 4 + swap begin dup @ . tab 1+ 2dup = until drop ;
-: list swap begin line cr 2dup < 0= until ;
+: list swap begin line cr 2dup < until ;
 .( OK. ) here . cr
