@@ -1,5 +1,6 @@
 : state 8 ! exit
 : ; immediate ' exit , 0 state exit
+: hex 9 ! ;
 : r 1 ;
 : h 0 ;
 : here h @ ;

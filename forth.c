@@ -1,5 +1,17 @@
-/** FORTH LIBRARY
-*/
+/** @file           forth.c
+ *  @brief          A small FORTH interpreter library based on a previous
+ *                  IOCCC winner circa 1992, 'buzzard.2.c'.
+ *  @author         Richard James Howe.
+ *  @copyright      Copyright 2015 Richard James Howe.
+ *  @license        LGPL v2.1 or later version
+ *  @email          howe.r.j.89@gmail.com
+ *
+ *  @todo           Documentation of the internals.
+ *  @todo           Rewrite word header to be more compact, include the
+ *                  word name in the header and not a separate place and
+ *                  to have a 'hide' field.
+ *  @todo           Allow input from a string for an eval() function.
+ */
 #include "forth.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,6 +32,8 @@ struct forth_obj {
         uint16_t *S, L, I, t, w, f, x, m[CORESZ];
         unsigned invalid :1; /*invalidate this object if true*/
 };
+
+enum registers { DICTIONARY = 0, RSTK = 1, STATE = 8, HEX = 9 };
 
 enum codes { PUSH, COMPILE, RUN, DEFINE, IMMEDIATE, COMMENT, READ, LOAD, 
 STORE, SUB, ADD, MUL, DIV, LESS, EXIT, EMIT, KEY, FROMR, TOR, JMP, JMPZ, 
@@ -111,7 +125,7 @@ forth_obj_t *forth_init(FILE * in, FILE * out)
         compile_word(o, COMMENT,   "#"); 
         for(i = 0, w = READ; names[i]; i++) /*compile the rest */
                 compile_word(o, COMPILE, names[i]), m[m[0]++] = w++;
-        m[1] = CORESZ - STKSZ;            
+        m[RSTK] = CORESZ - STKSZ;            
         o->S = m + CORESZ - (2*STKSZ); 
         return o;
 }
@@ -129,8 +143,8 @@ int forth_run(forth_obj_t * o)
         INNER:  switch (m[x++]) { 
                 case PUSH:    *++S = f;     f = m[I++];     break;
                 case COMPILE: m[m[0]++] = x;                break;
-                case RUN:     m[++m[1]] = I; I = x;         break;
-                case DEFINE:  m[8] = 1;
+                case RUN:     m[++m[RSTK]] = I; I = x;      break;
+                case DEFINE:  m[STATE] = 1;
                               if(compile_word(o, COMPILE, NULL) < 0)
                                       return -(o->invalid = 1);
                               m[m[0]++] = RUN;
@@ -141,21 +155,21 @@ int forth_run(forth_obj_t * o)
                                               break;
                               break;
                 case READ:
-                        m[1]--;
+                        m[RSTK]--;
                         if(fscanf(o->in, "%31s", o->s) < 1)
                                 return 0;
                         w = find(o);
                         if (w - 1) {
                                 x = w + 2;
-                                if (!m[8] && m[x] == COMPILE)
+                                if (!m[STATE] && m[x] == COMPILE)
                                         x++;
                                 goto INNER;
                         } else if(!isnum((char*)o->s)) {
                                 WARN("not a word or number");
                                 break;
                         }
-                        if (m[8]) { /*must be a number then*/
-                                m[m[0]++] = 2;
+                        if (m[STATE]) { /*must be a number then*/
+                                m[m[0]++] = 2; /*fake word push at m[2]*/
                                 m[m[0]++] = strtol((char*)o->s, NULL, 0);
                         } else {
                                 *++S = f;
@@ -169,14 +183,14 @@ int forth_run(forth_obj_t * o)
                 case MUL:   f *= *S--;                      break;
                 case DIV:   f = f ? *S--/f:WARN("div 0"),0; break;
                 case LESS:  f = *S-- > f;                   break;
-                case EXIT:  I = m[m[1]--];                  break;
+                case EXIT:  I = m[m[RSTK]--];               break;
                 case EMIT:  fputc(f, o->out); f = *S--;     break; 
                 case KEY:   *++S = f; f = fgetc(o->in);     break;
-                case FROMR: *++S = f; f = m[m[1]--];        break;
-                case TOR:   m[++m[1]] = f; f = *S--;        break;
+                case FROMR: *++S = f; f = m[m[RSTK]--];     break;
+                case TOR:   m[++m[RSTK]] = f; f = *S--;     break;
                 case JMP:   I += m[I];                      break;
                 case JMPZ:  I += f == 0 ? m[I]:1; f = *S--; break;
-                case PNUM:  fprintf(o->out, "%u", f); 
+                case PNUM:  fprintf(o->out, m[HEX]? "%X":"%u", f); 
                             f = *S--;
                             break; /*should report i/o err*/
                 case QUOTE: *++S = f;      f = m[I++];      break;
@@ -185,7 +199,7 @@ int forth_run(forth_obj_t * o)
                 case SWAP:  w = f;  f = *S--;   *++S = w;   break;
                 case DUP:   *++S = f;                       break;
                 case DROP:  f = *S--;                       break;
-                case TAIL:  m[1]--;                         break;
+                case TAIL:  m[RSTK]--;                      break;
                 case BSAVE: f = blockio(m,*S--,f,'w');      break;
                 case BLOAD: f = blockio(m,*S--,f,'r');      break;
                 default:    WARN("unknown instruction");
