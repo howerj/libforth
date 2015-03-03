@@ -6,12 +6,10 @@
  *  @license        LGPL v2.1 or later version
  *  @email          howe.r.j.89@gmail.com
  *
- *  @todo           Documentation of the internals.
  *  @todo           Rewrite word header to be more compact, 
  *  @todo           Allow input from a string for an eval() function.
  *  @todo           Dump registers on error for debugging?
- *  @todo           Experiment with hashing words instead of using names.
- */
+ *  @todo           Experiment with hashing words instead of using names.*/
 #include "forth.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -45,7 +43,7 @@ static char *names[] = { "read", "@", "!", "-", "+", "&", "|", "^", "~", "*",
 "/", "<", "exit",  "emit", "key", "r>", ">r", "j",  "jz", ".", "'", ",", "=", 
 "swap", "dup", "drop", "tail", "save", "load", "find", NULL }; 
 
-static int compile_word(forth_obj_t * o, uint16_t code, char *str)
+static int compile(forth_obj_t * o, uint16_t code, char *str)
 {
         uint16_t *m;
         int r = 0;
@@ -78,10 +76,7 @@ static int blockio(void *p, uint16_t poffset, uint16_t id, char rw)
 }
 
 static int isnum(char *s) 
-{ 
-        s += *s == '-' ? 1 : 0; 
-        return s[strspn(s,"0123456789")] == '\0'; 
-}
+{ s += *s == '-' ? 1 : 0; return s[strspn(s,"0123456789")] == '\0'; }
 
 static uint16_t find(forth_obj_t * o) 
 {
@@ -122,11 +117,11 @@ forth_obj_t *forth_init(FILE * in, FILE * out)
         m[m[0]++] = w;
         m[m[0]++] = o->I - 1;
 
-        compile_word(o, DEFINE,    ":"); 
-        compile_word(o, IMMEDIATE, "immediate"); 
-        compile_word(o, COMMENT,   "#"); 
-        for(i = 0, w = READ; names[i]; i++) /*compile the rest */
-                compile_word(o, COMPILE, names[i]), m[m[0]++] = w++;
+        compile(o, DEFINE,    ":"); 
+        compile(o, IMMEDIATE, "immediate"); 
+        compile(o, COMMENT,   "#"); 
+        for(i = 0, w = READ; names[i]; i++) 
+                compile(o, COMPILE, names[i]), m[m[0]++] = w++;
         m[RSTK] = CORESZ - STKSZ;            
         o->S = m + CORESZ - (2*STKSZ); 
         return o;
@@ -146,75 +141,67 @@ int forth_run(forth_obj_t * o)
                 case COMPILE: m[m[0]++] = pc;               break;
                 case RUN:     m[++m[RSTK]] = I; I = pc;     break;
                 case DEFINE:  m[STATE] = 1;
-                              if(compile_word(o, COMPILE, NULL) < 0)
+                              if(compile(o, COMPILE, NULL) < 0)
                                       return -(o->invalid = 1);
-                              m[m[0]++] = RUN;
-                              break;
+                              m[m[0]++] = RUN;              break;
                 case IMMEDIATE: *m -= 2; m[m[0]++] = RUN;   break;
                 case COMMENT: while (((c=fgetc(o->in)) > 0) && (c != '\n'));
+                                                            break;
+                case READ:    m[RSTK]--;
+                              if(fscanf(o->in, "%31s", o->s) < 1)
+                                      return 0;
+                              if ((w = find(o)) > 1) {
+                                      pc = w + 2;
+                                      if (!m[STATE] && m[pc] == COMPILE)
+                                              pc++;
+                                      goto INNER;
+                              } else if(!isnum((char*)o->s)) {
+                                      WARN("not a word or number");
+                                      break;
+                              }
+                              if (m[STATE]) { /*must be a number then*/
+                                      m[m[0]++] = 2; /*fake word push at m[2]*/
+                                      m[m[0]++] = strtol((char*)o->s, NULL, 0);
+                              } else {
+                                      *++S = f;
+                                      f = strtol((char*)o->s, NULL, 0);
+                              }
                               break;
-                case READ:
-                        m[RSTK]--;
-                        if(fscanf(o->in, "%31s", o->s) < 1)
-                                return 0;
-                        w = find(o);
-                        if (w - 1) {
-                                pc = w + 2;
-                                if (!m[STATE] && m[pc] == COMPILE)
-                                        pc++;
-                                goto INNER;
-                        } else if(!isnum((char*)o->s)) {
-                                WARN("not a word or number");
-                                break;
-                        }
-                        if (m[STATE]) { /*must be a number then*/
-                                m[m[0]++] = 2; /*fake word 'push' at m[2]*/
-                                m[m[0]++] = strtol((char*)o->s, NULL, 0);
-                        } else {
-                                *++S = f;
-                                f = strtol((char*)o->s, NULL, 0);
-                        }
-                        break;
-                case LOAD:  f = m[CK(f)];                   break; 
-                case STORE: m[CK(f)] = *S--; f = *S--;      break; 
-                case SUB:   f = *S-- - f;                   break;
-                case ADD:   f = *S-- + f;                   break;
-                case AND:   f = *S-- & f;                   break;
-                case OR:    f = *S-- | f;                   break;
-                case XOR:   f = *S-- ^ f;                   break;
-                case INV:   f = ~f;                         break;
-                case MUL:   f *= *S--;                      break;
-                case DIV:   f = f ? *S--/f:WARN("div 0"),0; break;
-                case LESS:  f = *S-- < f;                   break;
-                case EXIT:  I = m[m[RSTK]--];               break;
-                case EMIT:  fputc(f, o->out); f = *S--;     break; 
-                case KEY:   *++S = f; f = fgetc(o->in);     break;
-                case FROMR: *++S = f; f = m[m[RSTK]--];     break;
-                case TOR:   m[++m[RSTK]] = f; f = *S--;     break;
-                case JMP:   I += m[I];                      break;
-                case JMPZ:  I += f == 0 ? m[I]:1; f = *S--; break;
-                case PNUM:  fprintf(o->out, m[HEX]? "%X":"%u", f); 
-                            f = *S--;
-                            break; /*should report i/o err*/
-                case QUOTE: *++S = f;      f = m[I++];      break;
-                case COMMA: m[m[0]++] = f; f = *S--;        break;
-                case EQUAL: f = *S-- == f;                  break;
-                case SWAP:  w = f;  f = *S--;   *++S = w;   break;
-                case DUP:   *++S = f;                       break;
-                case DROP:  f = *S--;                       break;
-                case TAIL:  m[RSTK]--;                      break;
-                case BSAVE: f = blockio(m,*S--,f,'w');      break;
-                case BLOAD: f = blockio(m,*S--,f,'r');      break;
-                case FIND:  *++S = f;
-                            if(fscanf(o->in, "%31s", o->s) < 1)
+                case LOAD:    f = m[CK(f)];                   break; 
+                case STORE:   m[CK(f)] = *S--; f = *S--;      break; 
+                case SUB:     f = *S-- - f;                   break;
+                case ADD:     f = *S-- + f;                   break;
+                case AND:     f = *S-- & f;                   break;
+                case OR:      f = *S-- | f;                   break;
+                case XOR:     f = *S-- ^ f;                   break;
+                case INV:     f = ~f;                         break;
+                case MUL:     f *= *S--;                      break;
+                case DIV:     f = f ? *S--/f:WARN("div 0"),0; break;
+                case LESS:    f = *S-- < f;                   break;
+                case EXIT:    I = m[m[RSTK]--];               break;
+                case EMIT:    fputc(f, o->out); f = *S--;     break; 
+                case KEY:     *++S = f; f = fgetc(o->in);     break;
+                case FROMR:   *++S = f; f = m[m[RSTK]--];     break;
+                case TOR:     m[++m[RSTK]] = f; f = *S--;     break;
+                case JMP:     I += m[I];                      break;
+                case JMPZ:    I += f == 0 ? m[I]:1; f = *S--; break;
+                case PNUM:    fprintf(o->out, m[HEX]? "%X":"%u", f); 
+                              f = *S--;                       break; 
+                case QUOTE:   *++S = f;      f = m[I++];      break;
+                case COMMA:   m[m[0]++] = f; f = *S--;        break;
+                case EQUAL:   f = *S-- == f;                  break;
+                case SWAP:    w = f;  f = *S--;   *++S = w;   break;
+                case DUP:     *++S = f;                       break;
+                case DROP:    f = *S--;                       break;
+                case TAIL:    m[RSTK]--;                      break;
+                case BSAVE:   f = blockio(m,*S--,f,'w');      break;
+                case BLOAD:   f = blockio(m,*S--,f,'r');      break;
+                case FIND:    *++S = f;
+                              if(fscanf(o->in, "%31s", o->s) < 1)
                                     return 0;
-                            f = find(o) + 2;
-                            /*if (!m[STATE] && m[f] == COMPILE)
-                                    f++;*/
-                            f = f < 32 ? 0 : f; /*return 0 if not found*/
-                            break;
-                default:    WARN("unknown instruction");
-                            return -(o->invalid = 1);
+                              f = find(o) + 2;
+                              f = f < 32 ? 0 : f;             break;
+                default:      return WARN("illegal op"), -(o->invalid = 1);
                 }
         }
         return 0; /*is 'o' still valid?*/
