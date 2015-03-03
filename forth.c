@@ -98,7 +98,7 @@ static uint16_t find(forth_obj_t * o)
 
 void forth_seti(forth_obj_t *o, FILE *in)  { o->stringin = 0; o->in  = in;  }
 void forth_seto(forth_obj_t *o, FILE *out) { o->stringin = 0; o->out = out; }
-void forth_sets(forth_obj_t *o, char *s)
+void forth_sets(forth_obj_t *o, const char *s)
 {       o->sidx = 0;
         o->slen = strlen(s);
         o->stringin = 1;
@@ -172,6 +172,7 @@ int forth_run(forth_obj_t * o)
                                               pc++;
                                       goto INNER;
                               } else if(!isnum((char*)o->s)) {
+                                      WARN(o->s);
                                       WARN("not a word or number");
                                       break;
                               }
