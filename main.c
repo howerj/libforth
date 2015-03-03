@@ -5,16 +5,14 @@
 static const char *coref = "forth.core", *startf = "forth.4th";
 
 static FILE *fopen_or_fail(const char *name, char *mode)
-{
-        FILE *file;
+{       FILE *file;
         if(!(file = fopen(name, mode)))
                 perror(name), exit(1);
         return file;
 }
 
 int main(int argc, char **argv)
-{
-        forth_obj_t *o;
+{       forth_obj_t *o;
         FILE *in, *coreo;
         in = fopen_or_fail(startf, "rb");
         if(forth_run(o = forth_init(in, stdout)) < 0)
