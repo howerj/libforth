@@ -146,7 +146,7 @@ forth_obj_t *forth_init(FILE * in, FILE * out)
 
 int forth_run(forth_obj_t * o)
 {       int c;
-        uint16_t *m, pc, *S, I, f, w;
+        uint16_t *m, pc, *S, I, f = 0, w;
 
         if(!o || o->invalid) return WARN("invalid obj"), -1;
         m = o->m, S = o->S, I = o->I;
