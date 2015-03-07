@@ -1,4 +1,4 @@
-/** @file       forth.c
+/** @file       libforth.c
  *  @brief      A FORTH library, based on <www.ioccc.org/1992/buzzard.2.c>
  *  @author     Richard James Howe.
  *  @copyright  Copyright 2015 Richard James Howe.
@@ -38,7 +38,7 @@ static const char *forth_start = "\
 : list swap begin line cr 2dup < until ; \
 : allot here + h ! ; \
 : words pwd @ begin dup 1 + @ 32768 + print tab @ dup 32 < until ; \n\
-# : dump 32 begin 1 - dup dup 1024 * swap save drop dup 0= until ; \n\
+: dump 32 begin 1 - dup dup 1024 * swap save drop dup 0= until ; \n\
 # : hide find 1 - dup @ 32768 | swap ! ; \n\
 : :: [ find : , ] ; \
 : create :: 2 , here 2 + , ' exit , 0 state ;  \
@@ -50,14 +50,14 @@ static const char *errorfmt = "( error \"%s%s\" %s %u )\n";
 #define CORESZ     ((UINT16_MAX + 1) / 2)
 #define STROFF     (CORESZ/2)
 #define STKSZ      (CORESZ/64)
-#define BLKSZ      (1024u)
+#define BLKSZ      (1024)
 #define CK(X)      ((X) & 0x7fff)
 #define HIDE       (0x8000)
 
 struct forth_obj {
+        uint16_t m[CORESZ], *S, I;
         FILE *in, *out;
         uint8_t *s, *sin;
-        uint16_t *S, I, t, m[CORESZ];
         size_t slen, sidx;
         unsigned invalid :1, stringin :1;
 };
@@ -141,7 +141,7 @@ void forth_seti(forth_obj_t *o, FILE *in)  { o->stringin = 0; o->in  = in;  }
 void forth_seto(forth_obj_t *o, FILE *out) { o->stringin = 0; o->out = out; }
 void forth_sets(forth_obj_t *o, const char *s)
 {       o->sidx = 0;
-        o->slen = strlen(s);
+        o->slen = strlen(s) + 1;
         o->stringin = 1;
         o->sin = (uint8_t *)s;
 }
@@ -262,7 +262,7 @@ int forth_run(forth_obj_t *o)
         return 0;
 }
 
-int main_forth(int argc, char **argv)
+int main_forth(int argc, char **argv) /*an example REPL*/
 {       int dump = 0;
         FILE *in, *coreo; 
         forth_obj_t *o;
