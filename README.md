@@ -8,10 +8,8 @@ is simply a wrapper around the language. This is mainly a temporary
 repository, I will integrate this project into my multicall binary
 project (and other projects).
 
-The original files are in a folder called *original/*. Simply type
-**make** to get things working, this will compile the program and run
-it. Type **make run** to run the interpreter (and build if it has not
-been already.
+The original files are in a self extracting archive called *third.shar*,
+which includes some quite good documentation on how the interpreter works.
 
 # To-do
 

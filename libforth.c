@@ -37,7 +37,7 @@ static const char *forth_start = "\
 : line dup . tab dup 4 + swap begin dup @ . tab 1+ 2dup = until drop ; \
 : list swap begin line cr 2dup < until ; \
 : allot here + h ! ; \
-: words pwd @ begin dup 1 + @ 16384 + print tab @ dup 32 < until ; \n\
+: words pwd @ begin dup 1 + @ 32768 + print tab @ dup 32 < until ; \n\
 # : dump 32 begin 1 - dup dup 1024 * swap save drop dup 0= until ; \n\
 # : hide find 1 - dup @ 32768 | swap ! ; \n\
 : :: [ find : , ] ; \
@@ -76,6 +76,12 @@ static char *names[] = { "read", "@", "!", "-", "+", "&", "|", "^", "~", "*",
 static int ogetc(forth_obj_t * o)
 {       if(o->stringin) return o->sidx >= o->slen ? EOF : o->sin[o->sidx++];
         else return fgetc(o->in);
+}
+
+static FILE *_fopen_or_fail(const char *name, char *mode)
+{       FILE *file = fopen(name, mode);
+        if(!file) perror(name), exit(1);
+        return file;
 }
 
 static int ogetwrd(forth_obj_t * o, uint8_t *p)
@@ -139,7 +145,7 @@ void forth_sets(forth_obj_t *o, const char *s)
         o->stringin = 1;
         o->sin = (uint8_t *)s;
 }
-int forth_eval(forth_obj_t *o, char *s){ forth_sets(o,s); return forth_run(o);}
+int forth_eval(forth_obj_t *o, const char *s){ forth_sets(o,s); return forth_run(o);}
 
 int forth_coredump(forth_obj_t * o, FILE * dump)
 {       if(!o || !dump) return -1;
@@ -153,7 +159,6 @@ forth_obj_t *forth_init(FILE * in, FILE * out)
         if(!in || !out || !(o = calloc(1, sizeof(*o)))) return NULL;
         m = o->m;
         o->s = (uint8_t*)(m + STROFF); /*string store offset into CORE*/
-        o->in = in;
         o->out = out;
 
         m[0] = 32;      /*initial dictionary offset, skip registers*/
@@ -174,10 +179,12 @@ forth_obj_t *forth_init(FILE * in, FILE * out)
                 compile(o, COMPILE, names[i]), m[m[0]++] = w++;
         m[RSTK] = CORESZ - STKSZ;
         o->S = m + CORESZ - (2*STKSZ);
+        if(forth_eval(o, forth_start) < 0) return NULL;
+        forth_seti(o, in);
         return o;
 }
 
-int forth_run(forth_obj_t * o)
+int forth_run(forth_obj_t *o)
 {       int c;
         uint16_t *m, pc, *S, I, f = 0, w;
         if(!o || o->invalid) return WARN("invalid obj"), -1;
@@ -255,37 +262,27 @@ int forth_run(forth_obj_t * o)
         return 0;
 }
 
-static FILE *fopen_or_fail(const char *name, char *mode)
-{       FILE *file;
-        if(!(file = fopen(name, mode)))
-                perror(name), exit(1);
-        return file;
-}
-
 int main_forth(int argc, char **argv)
 {       int dump = 0;
         FILE *in, *coreo; 
         forth_obj_t *o;
         if(!(o = forth_init(stdin, stdout))) return -1;
-        forth_sets(o,forth_start);
-        if(forth_run(o) < 0) return -1;
-        forth_seti(o,stdin);
         if(argc > 1)
                 if(!strcmp(argv[1], "-d"))
                         argv++, argc--, dump = 1;
         if(argc > 1) {
                 while(++argv, --argc) {
-                        forth_seti(o, in = fopen_or_fail(argv[0], "rb"));
+                        forth_seti(o, in = _fopen_or_fail(argv[0], "rb"));
                         if(forth_run(o) < 0)
-                                return 1;
+                                return -1;
                         fclose(in);
                 }
         } else if (forth_run(o) < 0) {
-                        return 1;
+                        return -1;
         }
         if(dump) {
-                if(forth_coredump(o, (coreo = fopen_or_fail(coref, "wb"))) < 0)
-                        return 1;
+                if(forth_coredump(o, (coreo = _fopen_or_fail(coref, "wb"))) < 0)
+                        return -1;
                 fclose(coreo); 
         }
         free(o);
