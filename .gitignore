@@ -12,3 +12,6 @@ a.out
 *.so
 *.htm
 *.html
+*.log
+doxygen/*
+doxygen

@@ -1,7 +1,7 @@
 CC=gcc
 CFLAGS=-Wall -Wextra
 all: forth
-doc: forth.htm
+doc: forth.htm doxygen
 libforth.a: libforth.o
 	ar rcs $@ $<
 libforth.so: libforth.c libforth.h
@@ -14,7 +14,11 @@ forth: main.c libforth.a
 forth.htm: forth.md
 	rm -f $@
 	markdown $^ > $@
+doxygen: doxygen.conf *.c *.h
+	rm -rf doxygen
+	mkdir doxygen
+	doxygen doxygen.conf
 run: forth
 	./$^
 clean:
-	rm -f forth *.a *.so *.o *.blk *.core
+	rm -rf forth *.a *.so *.o *.blk *.core *.log doc/htm

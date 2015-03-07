@@ -1,0 +1,33 @@
+.\" Manpage for a small FORTH interpreter
+.\" Contact howe.r.j.89@gmail.com to correct errors or typos.
+.TH man 1 "07 Mar 2015" "1.0.0" "FORTH man page"
+.SH NAME
+forth \- A small FORTH interpreter.
+.SH SYNOPSIS
+forth (-d)? file*
+.SH DESCRIPTION
+This is a small FORTH interpreter for a very simple to implement version
+of FORTH based an IOCCC winner. Good luck!
+.SH OPTIONS
+
+.TP
+.B -d
+After the interpreter has finished running do a crude dump of the FORTH
+interpreters working memory, it will probably be dumped to a file called
+"forth.core".
+
+.TP
+.B  file*
+
+If a file, or list of files, is given, read from them one after another
+and execute those files contents. The dictionary and any stored FORTH
+blocks will persist between files but values on the stacks will not.
+
+If no file is given we read input from stdin(3).
+
+.SH SEE ALSO
+forth(3)
+.SH BUGS
+Yes, see forth(3) for a list.
+.SH AUTHOR
+Richard James Howe (howe.r.j.89@gmail.com)
