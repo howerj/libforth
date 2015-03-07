@@ -1,5 +1,6 @@
 CC=gcc
 CFLAGS=-Wall -Wextra
+.PHONY: doxygen all clean
 all: forth
 doc: forth.htm doxygen
 libforth.a: libforth.o
@@ -21,4 +22,4 @@ doxygen: doxygen.conf *.c *.h
 run: forth
 	./$^
 clean:
-	rm -rf forth *.a *.so *.o *.blk *.core *.log doc/htm
+	rm -rf forth *.a *.so *.o *.blk *.core *.log doxygen

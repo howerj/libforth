@@ -14,37 +14,26 @@ static const char *coref = "forth.core";
 static const char *forth_start = "\
 : state 8 ! exit \
 : ; immediate ' exit , 0 state exit \
-: hex 9 ! ; \
-: pwd 10 ; \
-: r 1 ; \
-: h 0 ; \
+: hex 9 ! ; : pwd 10 ; : h 0 ; : r 1 ; \
 : here h @ ; \
-: [ immediate 0 state ; \
-: ] 1 state ; \
+: [ immediate 0 state ; : ] 1 state ; \
 : :noname immediate here 2 , ] ; \
 : if immediate ' jz , here 0 , ; \
 : else immediate ' j , here 0 , swap dup here swap - swap ! ; \
 : then immediate dup here swap - swap ! ; \
 : begin immediate here ; \
 : until immediate ' jz , here - , ; \
-: 0= 0 = ; \
-: 1+ 1 + ; \
-: ')' 41 ; \
-: tab 9 emit ; \
-: cr 10 emit ; \
+: 0= 0 = ; : 1+ 1 + ; : ')' 41 ; : tab 9 emit ; : cr 10 emit ; \
 : .( key drop begin key dup ')' = if drop exit then emit 0 until ; \
 : 2dup dup >r >r dup r> swap r> ; \
 : line dup . tab dup 4 + swap begin dup @ . tab 1+ 2dup = until drop ; \
 : list swap begin line cr 2dup < until ; \
 : allot here + h ! ; \
 : words pwd @ begin dup 1 + @ 32768 + print tab @ dup 32 < until ; \n\
-: dump 32 begin 1 - dup dup 1024 * swap save drop dup 0= until ; \n\
-# : hide find 1 - dup @ 32768 | swap ! ; \n\
 : :: [ find : , ] ; \
-: create :: 2 , here 2 + , ' exit , 0 state ;  \
-# .( OK. ) here . cr \n"; /*Start up program for the interpreter*/
-static const char *errorfmt = "( error \"%s%s\" %s %u )\n";
+: create :: 2 , here 2 + , ' exit , 0 state ; ";
 
+static const char *errorfmt = "( error \"%s%s\" %s %u )\n";
 #define PWARN(P,M) fprintf(stderr, errorfmt, (P), (M), __FILE__, __LINE__)
 #define WARN(M)    PWARN("",(M))
 #define CORESZ     ((UINT16_MAX + 1) / 2)
@@ -149,7 +138,7 @@ int forth_eval(forth_obj_t *o, const char *s){ forth_sets(o,s); return forth_run
 
 int forth_coredump(forth_obj_t * o, FILE * dump)
 {       if(!o || !dump) return -1;
-        return sizeof(*o) == fwrite(o, 1, sizeof(*o), dump);
+        return sizeof(*o) == fwrite(o, 1, sizeof(*o), dump) ? 0 : -1;
 }
 
 forth_obj_t *forth_init(FILE * in, FILE * out)
@@ -262,9 +251,9 @@ int forth_run(forth_obj_t *o)
         return 0;
 }
 
-int main_forth(int argc, char **argv) /*an example REPL*/
-{       int dump = 0;
-        FILE *in, *coreo; 
+int main_forth(int argc, char **argv) 
+{       int dump = 0, rval = 0;
+        FILE *in = NULL, *coreo = NULL; 
         forth_obj_t *o;
         if(!(o = forth_init(stdin, stdout))) return -1;
         if(argc > 1)
@@ -273,18 +262,21 @@ int main_forth(int argc, char **argv) /*an example REPL*/
         if(argc > 1) {
                 while(++argv, --argc) {
                         forth_seti(o, in = _fopen_or_fail(argv[0], "rb"));
-                        if(forth_run(o) < 0)
-                                return -1;
-                        fclose(in);
+                        if(forth_run(o) < 0) {
+                                rval = -1;
+                                goto END;
+                        }
+                        fclose(in), in = NULL;
                 }
         } else if (forth_run(o) < 0) {
-                        return -1;
+                rval = -1;
         }
+END:    if(in) fclose(in);
         if(dump) {
                 if(forth_coredump(o, (coreo = _fopen_or_fail(coref, "wb"))) < 0)
                         return -1;
                 fclose(coreo); 
         }
         free(o);
-        return 0;
+        return rval;
 }

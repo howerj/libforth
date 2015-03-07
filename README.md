@@ -1,4 +1,4 @@
-# small forth library 
+# README.md {#mainpage}
 
 This small [FORTH][] interpreter is based on a de-obfuscated entrant
 into the [IOCCC][] by *buzzard*. The entry described a [FORTH][]

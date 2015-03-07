@@ -1,5 +1,5 @@
 # forth.md
-# A small forth library.
+# A Small Forth Library.
 ## Introduction
 
 [FORTH][] is an odd language that is a loyal following in certain groups, but it
@@ -68,6 +68,9 @@ And brackets are no longer needed.
 
 ## A Forth Word
 
+The FORTH execution model uses [Threaded Code][], the layout of a word
+header follows from this.
+
 A [FORTH][] word is defined in the dictionary and has a particular format that
 varies between implementations. A dictionary is simply a linked list of
 [FORTH][] words, the dictionary is usually contiguous and can only grow. The
@@ -107,6 +110,8 @@ And the dictionary looks like this:
          /|\
           |
         ~~~~~
+
+        ~~~~~
           |
        .----------------------------.
        | PWD | Rest of the word ... |
@@ -124,6 +129,7 @@ And the dictionary looks like this:
 
 Searching of the dictionary starts from the *Previous Word Register* and ends
 at a special 'fake' word.
+
 
 ## Memory Map and Special Registers
 
@@ -174,12 +180,26 @@ for each region, although currently the defined word region ends before
         Interpreter word  = Any named (not 'invisible' ones) interpreter word 
                             gets put here.
         Defined word      = A list of words that have been defined with ':'
+
 ### Word names
+
+The storage area for the names of the words is disjoint from the rest of
+the word definition, this is for simplicity of the implementation which
+might be corrected in future versions.
+
+The first 32 bytes are reserved for the storage of the current word that
+is being read in, only 31 characters are allowed in a word name as the 32nd
+character is reserved for the NUL character. 
+
+The rest of the dictionary contains NUL separated strings that words point
+into.
+
         .----------------------------------------------------------------.
         | 4000-401F              | 4020-7BFF                             |
         .----------------------------------------------------------------.
         | Currently read in word | List of null terminated defined words |
         .----------------------------------------------------------------.
+
 ## Glossary of FORTH words
 
 Each word is also given with its effect on the variable stack, any other effects
@@ -243,6 +263,7 @@ A comment, ignore everything until the end of the line.
 
 #### Compiling words
 * 'read' ( -- )
+
 *read* is a complex word that implements most of the user facing interpreter,
 it reads in a [FORTH][] *word* (up to 31 characters), if this *word* is in
 the *dictionary* it will either execute the word if we are in *command mode*
@@ -252,77 +273,137 @@ number, if it is then in *command mode* we push this value onto the *variable
 stack*, if in *compile mode* then we compile a *literal* into the *dictionary*.
 If it is none of these we print an error message and attempt to read in a
 new word.
+
 * '@' ( addr -- x )
+
 Pop an address and push the value at that address onto the stack.
+
 * '!' ( x addr -- )
+
 Given an address and a value, store that value at that address.
+
 * '-' ( x y -- z )
+
 Pop two values, subtract 'y' from 'x' and push the result onto the stack.
+
 * '+' ( x y -- z )
+
 Pop two values, add 'y' to 'x' and push the result onto the stack.
+
 * '&' ( x y -- z )
+
 Pop two values, compute the bitwise 'AND' of them and push the result on to
 the stack.
+
 * '|' ( x y -- z )
+
 Pop two values, compute the bitwise 'OR' of them and push the result on to
 the stack.
+
 * '^' ( x y -- z )
+
 Pop two values, compute the bitwise 'XOR' of them and push the result on to
 the stack.
+
 * '~' ( x y -- z )
+
 Perform a bitwise negation on the top of the stack.
+
 * '\*' ( x y -- z )
+
 Pop two values, multiply them and push the result onto the stack.
+
 * '/' ( x y -- z )
+
 Pop two values, divide 'x' by 'y' and push the result onto the stack.
+
 * '<' ( x y -- z )
+
 Pop two values, compare them (y < x) and push the result onto the stack.
+
 * 'exit'
+
 Pop the return stack and set the instruction stream pointer to that
 value.
+
 * 'emit' ( char -- )
+
 Pop a value and emit the character to the output.
+
 * 'key' ( -- char )
+
 Get a value from the input and put it onto the stack.
+
 * 'r>' ( -- x )
+
 Pop a value from the return stack and push it to the variable stack.
+
 * '>r' ( x -- )
+
 Pop a value from the variable stack and push it to the return stack.
+
 * 'j' ( -- )
+
 Jump unconditionally to the destination next in the instruction stream.
+
 * 'jz' ( x? -- )
+
 Pop a value from the variable stack, if it is zero the jump to the
 destination next in the instruction stream, otherwise skip over it.
+
 * '.' ( x -- )
+
 Pop a value from the variable stack and print it to the output either
 as a ASCII decimal or hexadecimal value depending on the HEX register.
+
 * ''' ( -- )
+
 Push the next value in the instruction stream onto the variable stack
 and advance the instruction stream pointer over it.
+
 * ',' ( x -- )
+
 Write a value into the dictionary, advancing the dictionary pointer.
+
 * '=' ( x y -- z )
+
 Pop two values, perform a test for equality and push the result.
+
 * 'swap' ( x y -- y z )
+
 Swap two values on the stack.
+
 * 'dup' ( x -- x x )
+
 Duplicate a value on the stack.
+
 * 'drop' ( x -- )
+
 Drop a value
+
 * 'tail' ( -- )
+
 A drop but for the return stack, it is used in lieu of a *recurse* word
 used in most FORTH implementations.
+
 * 'save' ( addr blocknum -- )
+
 Given an address, attempt to write out the values addr to addr+1023 values
 out to disk, the name of the block will be 'XXXX.blk' where the 'XXXX' is
 replaced by the hexadecimal representation of *blocknum*.
+
 * 'load' ( addr blocknum -- )
+
 Like *save*, but attempts to load a block of 1024 words into an address in
 memory of a likewise *blocknum* derived name as in *save*.
+
 * 'find' ( -- exe )
+
 Find a word in the dictionary pushing a pointer to that word onto the
 variable stack.
+
 * 'print' ( charptr -- )
+
 This prints a NUL terminate string at *charptr*. *charptr* is a character
 aligned pointer not a machine-word aligned pointer.
 
@@ -342,6 +423,8 @@ this meaning, a word in [FORTH][] is more analogous to a function, but there
 are different types of FORTH words; *immediate* and *compiling* words,
 *internal* and *defined* words and finally *visible* and *invisible* words.
 
+Suffice to say the distinction between a machine word and a FORTH word
+can lead to some confusion.
 
 * *The* dictionary
 
@@ -390,3 +473,4 @@ performed in this implementation and must be done 'manually'.
 [Jonesforth]: https://rwmj.wordpress.com/2010/08/07/jonesforth-git-repository/
 [Gforth]: https://www.gnu.org/software/gforth/
 [Reverse Polish Notation]: https://en.wikipedia.org/wiki/Reverse_Polish_notation
+[Threaded Code]: https://en.wikipedia.org/wiki/Threaded_code
