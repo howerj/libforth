@@ -8,3 +8,5 @@ a.out
 *.blk
 *.core
 *.html
+*.a
+*.so

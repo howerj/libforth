@@ -1,4 +1,4 @@
-# SMALL FORTH
+# small forth library 
 
 This small [FORTH][] interpreter is based on a de-obfuscated entrant
 into the [IOCCC][] by *buzzard*. The entry described a [FORTH][]
@@ -12,6 +12,12 @@ The original files are in a folder called *original/*. Simply type
 **make** to get things working, this will compile the program and run
 it. Type **make run** to run the interpreter (and build if it has not
 been already.
+
+# To-do
+
+* Rewrite the word header to be more compact.
+* Dump registers on error for debugging.
+* Experiment with hashing words instead of using names.
 
 [FORTH]: https://en.wikipedia.org/wiki/Forth_%28programming_language%29
 [IOCCC]: http://ioccc.org/winners.html
