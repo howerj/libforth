@@ -22,4 +22,4 @@ doxygen: doxygen.conf *.c *.h
 run: forth
 	./$^
 clean:
-	rm -rf forth *.a *.so *.o *.blk *.core *.log doxygen
+	rm -rf forth *.a *.so *.o *.blk *.core *.log *.htm doxygen

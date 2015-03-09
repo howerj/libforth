@@ -54,12 +54,12 @@ struct forth_obj {
 enum registers { DIC=0/*m[0]*/, RSTK=1, STATE=8, HEX=9, PWD=10, SSTORE=11 };
 
 enum codes { PUSH, COMPILE, RUN, DEFINE, IMMEDIATE, COMMENT, READ, LOAD,
-STORE, SUB, ADD, AND, OR, XOR, INV, MUL, DIV, LESS, EXIT, EMIT, KEY, FROMR,
+STORE, SUB, ADD, AND, OR, XOR, INV, SHL, SHR, LESS, EXIT, EMIT, KEY, FROMR,
 TOR, JMP, JMPZ, PNUM, QUOTE, COMMA, EQUAL, SWAP, DUP, DROP, TAIL, BSAVE,
 BLOAD, FIND, PRINT, LAST };
 
-static char *names[] = { "read", "@", "!", "-", "+", "&", "|", "^", "~", "*",
-"/", "<", "exit",  "emit", "key", "r>", ">r", "j",  "jz", ".", "'", ",", "=",
+static char *names[] = { "read", "@", "!", "-", "+", "&", "|", "^", "~", "<<",
+">>", "<", "exit",  "emit", "key", "r>", ">r", "j",  "jz", ".", "'", ",", "=",
 "swap", "dup", "drop", "tail", "save", "load", "find", "print", NULL };
 
 static int ogetc(forth_obj_t * o)
@@ -218,8 +218,8 @@ int forth_run(forth_obj_t *o)
                 case OR:      f = *S-- | f;                   break;
                 case XOR:     f = *S-- ^ f;                   break;
                 case INV:     f = ~f;                         break;
-                case MUL:     f *= *S--;                      break;
-                case DIV:     f = f ? *S--/f:WARN("div 0"),0; break;
+                case SHL:     f = *S-- << f;                  break;
+                case SHR:     f = *S-- >> f;                  break;
                 case LESS:    f = *S-- < f;                   break;
                 case EXIT:    I = m[m[RSTK]--];               break;
                 case EMIT:    fputc(f, o->out); f = *S--;     break;
