@@ -9,20 +9,19 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <setjmp.h>
+#include <assert.h>
 
 static const char *coref = "forth.core";
 static const char *forth_start = "\
-: state 8 ! exit \
-: ; immediate ' exit , 0 state exit \
+: state 8 ! exit : ; immediate ' exit , 0 state exit \
 : hex 9 ! ; : pwd 10 ; : h 0 ; : r 1 ; \
-: here h @ ; \
-: [ immediate 0 state ; : ] 1 state ; \
+: here h @ ; : [ immediate 0 state ; : ] 1 state ; \
 : :noname immediate here 2 , ] ; \
 : if immediate ' jz , here 0 , ; \
 : else immediate ' j , here 0 , swap dup here swap - swap ! ; \
 : then immediate dup here swap - swap ! ; \
-: begin immediate here ; \
-: until immediate ' jz , here - , ; \
+: begin immediate here ; : until immediate ' jz , here - , ; \
 : 0= 0 = ; : 1+ 1 + ; : ')' 41 ; : tab 9 emit ; : cr 10 emit ; \
 : .( key drop begin key dup ')' = if drop exit then emit 0 until ; \
 : 2dup dup >r >r dup r> swap r> ; \
@@ -30,8 +29,7 @@ static const char *forth_start = "\
 : list swap begin line cr 2dup < until ; \
 : allot here + h ! ; \
 : words pwd @ begin dup 1 + @ 32768 + print tab @ dup 32 < until ; \n\
-: :: [ find : , ] ; \
-: create :: 2 , here 2 + , ' exit , 0 state ; ";
+: :: [ find : , ] ; : create :: 2 , here 2 + , ' exit , 0 state ; ";
 
 static const char *errorfmt = "( error \"%s%s\" %s %u )\n";
 #define PWARN(P,M) fprintf(stderr, errorfmt, (P), (M), __FILE__, __LINE__)
@@ -40,16 +38,24 @@ static const char *errorfmt = "( error \"%s%s\" %s %u )\n";
 #define STROFF     (CORESZ/2)
 #define STKSZ      (CORESZ/64)
 #define BLKSZ      (1024)
-#define CK(X)      ((X) & 0x7fff)
+#ifdef UNSAFE
+#define CK(X)      (X)
+#else
+#define CK(X)      ck((X), o)
+#endif
 #define HIDE       (0x8000)
 
 struct forth_obj {
-        uint16_t m[CORESZ], *S, I;
+        uint16_t m[CORESZ], pad[16], I, *S;
         FILE *in, *out;
         uint8_t *s, *sin;
         size_t slen, sidx;
         unsigned invalid :1, stringin :1;
+	jmp_buf exception;
 };
+
+static uint16_t ck(uint16_t f, forth_obj_t *o)
+{ return f & 0x8000 ? WARN("bounds fail"), longjmp(o->exception, 1), 0 : f; }
 
 enum registers { DIC=0/*m[0]*/, RSTK=1, STATE=8, HEX=9, PWD=10, SSTORE=11 };
 
@@ -62,35 +68,33 @@ static char *names[] = { "read", "@", "!", "-", "+", "&", "|", "^", "~", "<<",
 ">>", "<", "exit",  "emit", "key", "r>", ">r", "j",  "jz", ".", "'", ",", "=",
 "swap", "dup", "drop", "tail", "save", "load", "find", "print", NULL };
 
-static int ogetc(forth_obj_t * o)
+static int ogetc(forth_obj_t *o)
 {       if(o->stringin) return o->sidx >= o->slen ? EOF : o->sin[o->sidx++];
         else return fgetc(o->in);
 }
 
-static FILE *_fopen_or_fail(const char *name, char *mode)
+static FILE *fopenj(const char *name, char *mode, jmp_buf *go)
 {       FILE *file = fopen(name, mode);
-        if(!file) perror(name), exit(1);
+        if(!file) perror(name), longjmp(*go,1);
         return file;
 }
 
-static int ogetwrd(forth_obj_t * o, uint8_t *p)
+static int ogetwrd(forth_obj_t *o, uint8_t *p)
 {       int n = 0;
         if(o->stringin){
                 if(sscanf((char *)&(o->sin[o->sidx]), "%31s%n", p, &n) < 0)
                         return EOF;
-                o->sidx += n;
-                return n;
+                return o->sidx += n, n;
         } else {
                 return fscanf(o->in, "%31s", p);
         }
 }
 
-static int compile(forth_obj_t * o, uint16_t code, char *str)
-{       uint16_t *m;
+static int compile(forth_obj_t *o, uint16_t code, char *str)
+{       uint16_t *m = o->m;
         int r = 0;
-        m = o->m;
         m[m[0]++] = m[PWD];
-        m[PWD] = *m - 1;
+        m[PWD] = m[0] - 1;
         m[m[0]++] = m[SSTORE];
         m[m[0]++] = code;
         if (str) strcpy((char *)o->s + m[SSTORE], str);
@@ -114,34 +118,35 @@ static int blockio(void *p, uint16_t poffset, uint16_t id, char rw)
         return n == BLKSZ ? 0 : -1;
 }
 
-static int isnum(char *s)
+static int isnum(const char *s)
 { s += *s == '-' ? 1 : 0; return s[strspn(s,"0123456789")] == '\0'; }
 
-static uint16_t find(forth_obj_t * o)
-{       uint16_t *m = o->m, w;
-        w = m[PWD];
+static uint16_t find(forth_obj_t *o)
+{       uint16_t *m = o->m, w = m[PWD];
         for (;(w & HIDE)||strcmp((char*)o->s, (char*)&o->s[m[(w & ~HIDE)+1]]);)
                 w = m[w & ~HIDE];
-
         return w;
 }
 
-void forth_seti(forth_obj_t *o, FILE *in)  { o->stringin = 0; o->in  = in;  }
-void forth_seto(forth_obj_t *o, FILE *out) { o->stringin = 0; o->out = out; }
+void forth_seti(forth_obj_t *o, FILE *in)  
+{ assert(o && in);  o->stringin = 0; o->in  = in;  }
+void forth_seto(forth_obj_t *o, FILE *out) 
+{ assert(o && out); o->stringin = 0; o->out = out; }
 void forth_sets(forth_obj_t *o, const char *s)
-{       o->sidx = 0;
+{       assert(o && s);
+ 	o->sidx = 0;
         o->slen = strlen(s) + 1;
         o->stringin = 1;
         o->sin = (uint8_t *)s;
 }
-int forth_eval(forth_obj_t *o, const char *s){ forth_sets(o,s); return forth_run(o);}
-
-int forth_coredump(forth_obj_t * o, FILE * dump)
+int forth_eval(forth_obj_t *o, const char *s)
+{ assert(o && s); forth_sets(o,s); return forth_run(o);}
+int forth_coredump(forth_obj_t *o, FILE *dump)
 {       if(!o || !dump) return -1;
         return sizeof(*o) == fwrite(o, 1, sizeof(*o), dump) ? 0 : -1;
 }
 
-forth_obj_t *forth_init(FILE * in, FILE * out)
+forth_obj_t *forth_init(FILE *in, FILE *out)
 {       uint16_t *m, i, w;
         forth_obj_t *o;
 
@@ -150,14 +155,13 @@ forth_obj_t *forth_init(FILE * in, FILE * out)
         o->s = (uint8_t*)(m + STROFF); /*string store offset into CORE*/
         o->out = out;
 
-        m[0] = 32;      /*initial dictionary offset, skip registers*/
+        w = m[0] = 32;  /*initial dictionary offset, skip registers*/
         m[PWD] = 1;
         m[SSTORE] = 32; /*offset into str storage defines maximum word length*/
 
-        w = *m;
         m[m[0]++] = READ; /*create a special word that reads in*/
         m[m[0]++] = RUN;  /*call the special word recursively*/
-        o->I = *m;
+        o->I = m[0];
         m[m[0]++] = w;
         m[m[0]++] = o->I - 1;
 
@@ -177,11 +181,12 @@ int forth_run(forth_obj_t *o)
 {       int c;
         uint16_t *m, pc, *S, I, f = 0, w;
         if(!o || o->invalid) return WARN("invalid obj"), -1;
+	if(setjmp(o->exception)) return -(o->invalid = 1);
         m = o->m, S = o->S, I = o->I;
 
         for(;(pc = m[CK(I++)]);) {
         INNER:  switch (m[CK(pc++)]) {
-                case PUSH:    *++S = f;     f = m[I++];       break;
+                case PUSH:    *++S = f;     f = m[CK(I++)];   break;
                 case COMPILE: m[CK(m[0]++)] = pc;             break;
                 case RUN:     m[CK(++m[RSTK])] = I; I = pc;   break;
                 case DEFINE:  m[STATE] = 1;
@@ -189,14 +194,14 @@ int forth_run(forth_obj_t *o)
                                       return -(o->invalid = 1);
                               m[CK(m[0]++)] = RUN;            break;
                 case IMMEDIATE: *m -= 2; m[m[0]++] = RUN;     break;
-                case COMMENT: while (((c=ogetc(o)) > 0) && (c != '\n'));
+                case COMMENT: while (((c=ogetc(o))>0) && (c!='\n'));
                                                               break;
-                case READ:    m[RSTK]--;
+                case READ:    m[CK(RSTK)]--;
                               if(ogetwrd(o, o->s) < 1)
                                       return 0;
                               if ((w = find(o)) > 1) {
                                       pc = w + 2;
-                                      if (!m[STATE] && m[pc] == COMPILE)
+                                      if (!m[STATE] && m[CK(pc)] == COMPILE)
                                               pc++;
                                       goto INNER;
                               } else if(!isnum((char*)o->s)) {
@@ -204,11 +209,11 @@ int forth_run(forth_obj_t *o)
                                       break;
                               }
                               if (m[STATE]) { /*must be a number then*/
-                                      m[m[0]++] = 2; /*fake word push at m[2]*/
-                                      m[m[0]++] = strtol((char*)o->s, NULL, 0);
+                                      m[m[0]++] = 2; /*word push at m[2]*/
+                                      m[CK(m[0]++)] = strtol((char*)o->s,0,0);
                               } else {
                                       *++S = f;
-                                      f = strtol((char*)o->s, NULL, 0);
+                                      f = strtol((char*)o->s, 0, 0);
                               }                               break;
                 case LOAD:    f = m[CK(f)];                   break;
                 case STORE:   m[CK(f)] = *S--; f = *S--;      break;
@@ -221,24 +226,24 @@ int forth_run(forth_obj_t *o)
                 case SHL:     f = *S-- << f;                  break;
                 case SHR:     f = *S-- >> f;                  break;
                 case LESS:    f = *S-- < f;                   break;
-                case EXIT:    I = m[m[RSTK]--];               break;
+                case EXIT:    I = m[CK(m[RSTK]--)];           break;
                 case EMIT:    fputc(f, o->out); f = *S--;     break;
                 case KEY:     *++S = f; f = ogetc(o);         break;
-                case FROMR:   *++S = f; f = m[m[RSTK]--];     break;
-                case TOR:     m[++m[RSTK]] = f; f = *S--;     break;
-                case JMP:     I += m[I];                      break;
+                case FROMR:   *++S = f; f = m[CK(m[RSTK]--)]; break;
+                case TOR:     m[CK(++m[RSTK])] = f; f = *S--; break;
+                case JMP:     I += m[CK(I)];                  break;
                 case JMPZ:    I += f == 0 ? m[I]:1; f = *S--; break;
                 case PNUM:    fprintf(o->out, m[HEX]? "%X":"%u", f);
                               f = *S--;                       break;
-                case QUOTE:   *++S = f;      f = m[I++];      break;
-                case COMMA:   m[m[0]++] = f; f = *S--;        break;
+                case QUOTE:   *++S = f;      f = m[CK(I++)];  break;
+                case COMMA:   m[CK(m[0]++)] = f; f = *S--;    break;
                 case EQUAL:   f = *S-- == f;                  break;
                 case SWAP:    w = f;  f = *S--;   *++S = w;   break;
                 case DUP:     *++S = f;                       break;
                 case DROP:    f = *S--;                       break;
                 case TAIL:    m[RSTK]--;                      break;
-                case BSAVE:   f = blockio(m,*S--,f,'w');      break;
-                case BLOAD:   f = blockio(m,*S--,f,'r');      break;
+                case BSAVE:   f = blockio(m, *S--, f, 'w');   break;
+                case BLOAD:   f = blockio(m, *S--, f, 'r');   break;
                 case FIND:    *++S = f;
                               if(ogetwrd(o, o->s) < 1) return 0;
                               f = find(o) + 2;
@@ -253,15 +258,16 @@ int forth_run(forth_obj_t *o)
 
 int main_forth(int argc, char **argv) 
 {       int dump = 0, rval = 0;
-        FILE *in = NULL, *coreo = NULL; 
+        FILE *in = NULL, *coreo = NULL;
+	jmp_buf go;
         forth_obj_t *o;
         if(!(o = forth_init(stdin, stdout))) return -1;
-        if(argc > 1)
-                if(!strcmp(argv[1], "-d"))
+	if(setjmp(go)) return free(o), -1;
+        if(argc > 1 && !strcmp(argv[1], "-d"))
                         argv++, argc--, dump = 1;
         if(argc > 1) {
                 while(++argv, --argc) {
-                        forth_seti(o, in = _fopen_or_fail(argv[0], "rb"));
+                        forth_seti(o, in = fopenj(argv[0], "rb", &go));
                         if(forth_run(o) < 0) {
                                 rval = -1;
                                 goto END;
@@ -273,7 +279,7 @@ int main_forth(int argc, char **argv)
         }
 END:    if(in) fclose(in);
         if(dump) {
-                if(forth_coredump(o, (coreo = _fopen_or_fail(coref, "wb"))) < 0)
+                if(forth_coredump(o, (coreo = fopenj(coref, "wb", &go))) < 0)
                         return -1;
                 fclose(coreo); 
         }

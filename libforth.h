@@ -19,7 +19,7 @@ typedef struct forth_obj forth_obj_t;
  *           on failure.
  *  @param   input       Read from this input file. Caller closes.
  *  @param   output      Output to this file. Caller closes.
- *  @return  forth_obj_t A fully initialized forth environment. **/
+ *  @return  forth_obj_t A fully initialized forth environment or NULL. **/
 forth_obj_t *forth_init(FILE *input, FILE *output); 
 /** @brief   Execute an initialized forth environment, this will read
  *           from input until there is no more or an error occurs. If
@@ -45,29 +45,31 @@ int forth_eval(forth_obj_t *o, const char *s);
  *           of the object and any pointers it may or may not have at
  *           the time of the dump. The contents of this dump are not
  *           guaranteed to have any specific format or structure.
- *  @param   o    The FORTH environment to dump. Caller frees.
- *  @param   dump A file to dump the memory contents to. Caller closes.
+ *  @param   o    The FORTH environment to dump. Caller frees. Asserted.
+ *  @param   dump Core dump file handle ("wb"). Caller closes. Asserted.
  *  @return  int  An error code, negative on error. **/
 int forth_coredump(forth_obj_t *o, FILE *dump);
 /** @brief Set the input of an environment 'o' to read from a file 'in'.
  *  @param o   An initialized FORTH environment. Caller frees.
- *  @param in  A open file handle for reading; "r" or "rb". Caller closes. **/
+ *  @param in  Open handle for reading; "r"/"rb". Caller closes. **/
 void forth_seti(forth_obj_t *o, FILE *in);
 /** @brief Set the output file of an environment 'o'.
- *  @param o   An initialized FORTH environment. Caller frees.
- *  @param out A open file handle for writing; "w" or "wb". Caller closes. **/
+ *  @param o   An initialized FORTH environment. Caller frees. Asserted.
+ *  @param out Open handle for writing; "w"/"wb". Caller closes. Asserted. **/
 void forth_seto(forth_obj_t *o, FILE *out);    
 /** @brief Set the input of an environment 'o' to read from a string 's'.
- *  @param o   An initialized FORTH environment. Caller frees.
- *  @param s   A NUL terminated string to act as input. **/
+ *  @param o   An initialized FORTH environment. Caller frees. Asserted.
+ *  @param s   A NUL terminated string to act as input. Asserted. **/
 void forth_sets(forth_obj_t *o, const char *s); 
-/** @brief  This implements a FORTH REPL whose behaviour is documented in
+/** @brief  This implements a FORTH REPL whose behavior is documented in
  *          the man pages for this library. You pass in the same format as
  *          is expected to main(). The only option possible to pass to argv
  *          is "-d" which automatically performs a forth_coredump() after
- *          it has read all the files passed in argv. Consult the man pages!
+ *          it has read all the files passed in argv. All other strings
+ *          are treated as file names to open and read input from. Consult
+ *          the man pages.
  *  @param  argc  An argument count, like in main().
- *  @param  argv  A number of string arguments, like in main().
+ *  @param  argv  argc strings, like in main(). Not checked for NULL.
  *  @return int   A error code. Anything non zero is an error. **/
 int main_forth(int argc, char **argv); 
 #ifdef __cplusplus

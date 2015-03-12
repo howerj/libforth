@@ -15,7 +15,7 @@ forth: main.c libforth.a
 forth.htm: forth.md
 	rm -f $@
 	markdown $^ > $@
-doxygen: doxygen.conf *.c *.h
+doxygen: doxygen *.c *.h
 	rm -rf doxygen
 	mkdir doxygen
 	doxygen doxygen.conf
