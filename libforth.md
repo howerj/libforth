@@ -1,4 +1,4 @@
-# forth.md
+# libforth.md
 # A Small Forth Library.
 ## Introduction
 
@@ -9,7 +9,7 @@ modularity and clarity. It is however possible to implement a fully working
 interpreter in a few kilobytes of assembly, those few kilobytes can make for a
 fairly decent programming environment giving a high utility to space used ratio.
 
-From the Wikipedia article we can neatly summarize the language:
+From the [Wikipedia][] article we can neatly summarize the language:
 
         "Forth is an imperative stack-based computer programming language 
         and programming environment. 
@@ -43,7 +43,7 @@ It has been said that an intermediate [FORTH][] user is one who has implemented
 a [FORTH][] interpreter, something which cannot be said about other languages
 nor is possible given their complexity. 
 
-The saying "if you have seen on FORTH implementation, you have seen one FORTH 
+The saying "if you have seen one FORTH implementation, you have seen one FORTH 
 implementation" applies, nearly every single [FORTH][] implementation has its 
 own idea of how to go about things despite standardization efforts - in keeping 
 with this library has its own idiosyncrasies (many in fact!).
@@ -64,7 +64,10 @@ Becomes:
 
         4 2 * 2 +
 
-And brackets are no longer needed.
+And brackets are no longer needed. Numbers of pushed on to the variable
+stack automatically and commands (such as '\*' and '+') take their operands
+off the stack and push the result. Juggling variables on the stack becomes
+easier over time.
 
 ## A Forth Word
 
@@ -214,6 +217,8 @@ describe the stack effects, this word expects one number to be one the stack,
 
 ### Internal words
 
+There are three types of words.
+
 #### 'Invisible' words
 
 These invisible words have no name but are used to implement the FORTH. They
@@ -239,11 +244,11 @@ the pointer instruction stream pointer to point to value after *run*.
 
 These words are named and are *immediate* words.
 
-* ':' ( -- )
+* ':'           ( -- )
 
 Read in a new word from the input stream and compile it into the dictionary.
 
-* 'immediate' ( -- )
+* 'immediate'   ( -- )
 
 Make the previously declared word immediate. Unlike in most FORTH
 implementations this is used after the words name is given not after the
@@ -257,12 +262,13 @@ Instead of:
 
         : word ... ; immediate
 
-* '#' ( -- )
+* '#'           ( -- )
 
 A comment, ignore everything until the end of the line.
 
 #### Compiling words
-* 'read' ( -- )
+
+* 'read'        ( -- )
 
 *read* is a complex word that implements most of the user facing interpreter,
 it reads in a [FORTH][] *word* (up to 31 characters), if this *word* is in
@@ -274,135 +280,135 @@ stack*, if in *compile mode* then we compile a *literal* into the *dictionary*.
 If it is none of these we print an error message and attempt to read in a
 new word.
 
-* '@' ( addr -- x )
+* '@'           ( address -- x )
 
 Pop an address and push the value at that address onto the stack.
 
-* '!' ( x addr -- )
+* '!'           ( x address -- )
 
 Given an address and a value, store that value at that address.
 
-* '-' ( x y -- z )
+* '-'           ( x y -- z )
 
 Pop two values, subtract 'y' from 'x' and push the result onto the stack.
 
-* '+' ( x y -- z )
+* '+'           ( x y -- z )
 
 Pop two values, add 'y' to 'x' and push the result onto the stack.
 
-* '&' ( x y -- z )
+* '&'           ( x y -- z )
 
 Pop two values, compute the bitwise 'AND' of them and push the result on to
 the stack.
 
-* '|' ( x y -- z )
+* '|'           ( x y -- z )
 
 Pop two values, compute the bitwise 'OR' of them and push the result on to
 the stack.
 
-* '^' ( x y -- z )
+* '^'           ( x y -- z )
 
 Pop two values, compute the bitwise 'XOR' of them and push the result on to
 the stack.
 
-* '~' ( x y -- z )
+* '~'           ( x y -- z )
 
 Perform a bitwise negation on the top of the stack.
 
-* '\*' ( x y -- z )
+* '\*'          ( x y -- z )
 
 Pop two values, multiply them and push the result onto the stack.
 
-* '/' ( x y -- z )
+* '/'           ( x y -- z )
 
 Pop two values, divide 'x' by 'y' and push the result onto the stack.
 
-* '<' ( x y -- z )
+* '\<'          ( x y -- z )
 
 Pop two values, compare them (y < x) and push the result onto the stack.
 
-* 'exit'
+* 'exit'        ( -- )
 
 Pop the return stack and set the instruction stream pointer to that
 value.
 
-* 'emit' ( char -- )
+* 'emit'        ( char -- )
 
 Pop a value and emit the character to the output.
 
-* 'key' ( -- char )
+* 'key'         ( -- char )
 
 Get a value from the input and put it onto the stack.
 
-* 'r>' ( -- x )
-
+* 'r>'          ( -- x )
+        
 Pop a value from the return stack and push it to the variable stack.
 
-* '>r' ( x -- )
+* '>r'          ( x -- )
 
 Pop a value from the variable stack and push it to the return stack.
 
-* 'j' ( -- )
+* 'j'           ( -- )
 
 Jump unconditionally to the destination next in the instruction stream.
 
-* 'jz' ( x? -- )
+* 'jz'          ( bool -- )
 
 Pop a value from the variable stack, if it is zero the jump to the
 destination next in the instruction stream, otherwise skip over it.
 
-* '.' ( x -- )
+* '.'           ( x -- )
 
 Pop a value from the variable stack and print it to the output either
 as a ASCII decimal or hexadecimal value depending on the HEX register.
 
-* ''' ( -- )
+* '''           ( -- )
 
 Push the next value in the instruction stream onto the variable stack
 and advance the instruction stream pointer over it.
 
-* ',' ( x -- )
+* ','           ( x -- )
 
 Write a value into the dictionary, advancing the dictionary pointer.
 
-* '=' ( x y -- z )
+* '='           ( x y -- z )
 
 Pop two values, perform a test for equality and push the result.
 
-* 'swap' ( x y -- y z )
+* 'swap'        ( x y -- y z )
 
 Swap two values on the stack.
 
-* 'dup' ( x -- x x )
+* 'dup'         ( x -- x x )
 
 Duplicate a value on the stack.
 
-* 'drop' ( x -- )
+* 'drop'        ( x -- )
 
 Drop a value
 
-* 'tail' ( -- )
+* 'tail'        ( -- )
 
 A drop but for the return stack, it is used in lieu of a *recurse* word
 used in most FORTH implementations.
 
-* 'save' ( addr blocknum -- )
+* 'save'        ( address block-number -- )
 
 Given an address, attempt to write out the values addr to addr+1023 values
 out to disk, the name of the block will be 'XXXX.blk' where the 'XXXX' is
 replaced by the hexadecimal representation of *blocknum*.
 
-* 'load' ( addr blocknum -- )
+* 'load'        ( address block-number -- )
 
 Like *save*, but attempts to load a block of 1024 words into an address in
 memory of a likewise *blocknum* derived name as in *save*.
 
-* 'find' ( -- exe )
+* 'find'        ( -- execution-token )
 
 Find a word in the dictionary pushing a pointer to that word onto the
 variable stack.
 
-* 'print' ( charptr -- )
+* 'print'       ( char-address -- )
 
 This prints a NUL terminate string at *charptr*. *charptr* is a character
 aligned pointer not a machine-word aligned pointer.
@@ -412,6 +418,92 @@ aligned pointer not a machine-word aligned pointer.
 Defined words are ones which have been created with the ':' word, some words
 get defined before the user has a chance to define their own to make their
 life easier.
+
+* 'state'       ( bool -- )
+
+Change the interpreter state, turning the mode from 'compile' to 'immediate'.
+
+* ';'           ( -- )
+* 'hex'         ( bool -- )
+
+Change the state of the output of number printing, 0 for decimal which is the
+default, anything else and it prints hexadecimal.
+
+* 'pwd'         ( -- pointer )
+* 'h'           ( -- pointer )
+
+Push a pointer to the dictionary pointer register.
+
+* 'r'           ( -- pointer )
+
+Push a pointer to the register pointer register.
+
+* 'here'        ( -- dictionary-pointer )
+
+Push the current dictionary pointer (equivalent to "h @").
+
+* '\['          ( -- )
+
+Immediately switch into command mode.
+
+* ':noname'     ( -- execution-token )
+* 'if'          ( bool -- )
+* 'else'        ( -- )
+* 'then'        ( -- )
+* 'begin'       ( -- )
+* 'until'       ( bool -- )
+* '0='          ( x -- bool )
+* "')'"         ( -- char )
+
+Push the number representing the ')' character onto the stack.
+
+* 1+            ( x -- x )
+* tab           ( -- )
+
+Print a tab.
+
+* cr            ( -- )
+
+Prints a newline.
+
+* '.('          ( -- )
+
+Print out the characters in the input stream, until a ')' is encountered.
+
+        .( Hello, World)
+
+Will print:
+
+        Hello, World
+
+* '2dup'        ( x y -- x y x y )
+
+Duplicate two items on the stack.
+
+* 'line'        ( address -- address )
+
+Given an address print out the address and the contents of the four
+consecutive addresses and push the original address plus four. This is
+a helper word for 'list'.
+
+* 'list'        ( address-1 address-2 -- )
+
+Given two memory address, address-2 being the larger address, print out
+the contents of memory between those two addresses.
+
+* 'allot'       ( amount -- )
+
+Allocate a number of cells in the dictionary.
+
+* 'words'       ( -- )
+
+Print out a list of all the words in the dictionary that are reachable.
+
+* '::'          ( -- )
+
+Unlike ':' this is a compiling word, but performs the same function.
+
+* 'create'      ( -- address )
 
 ## Glossary of FORTH terminology 
 
@@ -440,6 +532,10 @@ stack, holds the result of recent operations such as addition or subtraction.
 
 * The return stack
 
+Forth implementations are two (or more) stack machines. The second stack
+is the return stack which holds the usual function call return values as 
+well as temporary variables. 
+
 * Defined Words
 
 A defined word is one that is not implement directly by the interpreter but
@@ -465,6 +561,7 @@ they can be written or read from disk. Flushing of dirty blocks is not
 performed in this implementation and must be done 'manually'.
 
 [FORTH]: https://en.wikipedia.org/wiki/Forth_%28programming_language%29
+[Wikipedia]: https://en.wikipedia.org/wiki/Forth_%28programming_language%29
 [IOCCC]: http://ioccc.org/winners.html
 [buzzard.2.c]: http://www.ioccc.org/1992/buzzard.2.c
 [REPL]: https://en.wikipedia.org/wiki/Read%E2%80%93eval%E2%80%93print_loop
