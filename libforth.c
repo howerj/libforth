@@ -12,25 +12,21 @@
 #include <setjmp.h>
 #include <assert.h>
 
-static const char *coref="forth.core", *initprg="\
-: state 8 ! exit : ; immediate ' exit , 0 state exit \
-: hex 9 ! ; : pwd 10 ; : h 0 ; : r 1 ; \
-: here h @ ; : [ immediate 0 state ; : ] 1 state ; \
-: :noname immediate here 2 , ] ; \
-: if immediate ' jz , here 0 , ; \
-: else immediate ' j , here 0 , swap dup here swap - swap ! ; \
-: then immediate dup here swap - swap ! ; \
-: begin immediate here ; : until immediate ' jz , here - , ; \
-: 0= 0 = ; : 1+ 1 + ; : ')' 41 ; : tab 9 emit ; : cr 10 emit ; \
-: .( key drop begin key dup ')' = if drop exit then emit 0 until ; \
-: 2dup dup >r >r dup r> swap r> ; \
-: line dup . tab dup 4 + swap begin dup @ . tab 1+ 2dup = until drop ; \
-: list swap begin line cr 2dup < until ; \
-: allot here + h ! ; \
-: words pwd @ begin dup 1 + @ 32768 + print tab @ dup 32 < until ; \
+static const char *coref="forth.core", *initprg="# FORTH statup program.    \n\
+: state 8 ! exit : ; immediate ' exit , 0 state exit : hex 9 ! ; : pwd 10 ; \n\
+: h 0 ; : r 1 ; : here h @ ; : [ immediate 0 state ; : ] 1 state ;          \n\
+: :noname immediate here 2 , ] ; : if immediate ' jz , here 0 , ;           \n\
+: else immediate ' j , here 0 , swap dup here swap - swap ! ;               \n\
+: then immediate dup here swap - swap ! ; : 2dup dup >r >r dup r> swap r> ; \n\
+: begin immediate here ; : until immediate ' jz , here - , ;                \n\
+: 0= 0 = ; : 1+ 1 + ; : ')' 41 ; : tab 9 emit ; : cr 10 emit ;              \n\
+: .( key drop begin key dup ')' = if drop exit then emit 0 until ;          \n\
+: line dup . tab dup 4 + swap begin dup @ . tab 1+ 2dup = until drop ;      \n\
+: list swap begin line cr 2dup < until ; : allot here + h ! ;               \n\
+: words pwd @ begin dup 1 + @ 32768 + print tab @ dup 32 < until ;          \n\
 : :: [ find : , ] ; : create :: 2 , here 2 + , ' exit , 0 state ; ";
-
 static const char *errorfmt = "( error \"%s%s\" %s %u )\n";
+
 #define PWARN(P,M) fprintf(stderr, errorfmt, (P), (M), __FILE__, __LINE__)
 #define WARN(M)    PWARN("",(M))
 #define CORESZ     ((UINT16_MAX + 1u) / 2u) /*virtual machine memory size*/
@@ -52,12 +48,10 @@ struct forth_obj {         /*The FORTH environment is contained in here*/
 static uint16_t ck(forth_obj_t *o, uint16_t f)
 { return f & 0x8000 ? WARN("bounds fail"), longjmp(o->exception, 1), 0 : f; }
 
-enum registers { DIC=0/*m[0]*/, RSTK=1, STATE=8, HEX=9, PWD=10, SSTORE=11 };
-
-enum codes { PUSH, COMPILE, RUN, DEFINE, IMMEDIATE, COMMENT, READ, LOAD,
-STORE, SUB, ADD, AND, OR, XOR, INV, SHL, SHR, LESS, EXIT, EMIT, KEY, FROMR,
-TOR, JMP, JMPZ, PNUM, QUOTE, COMMA, EQUAL, SWAP, DUP, DROP, TAIL, BSAVE,
-BLOAD, FIND, PRINT, LAST }; /*instructions for the VM*/
+enum registers    { DIC=0/*m[0]*/,RSTK=1,STATE=8,HEX=9,PWD=10,SSTORE=11 };
+enum instructions { PUSH,COMPILE,RUN,DEFINE,IMMEDIATE,COMMENT,READ,LOAD,STORE,
+SUB,ADD,AND,OR,XOR,INV,SHL,SHR,LESS,EXIT,EMIT,KEY,FROMR,TOR,JMP,JMPZ,PNUM,
+QUOTE,COMMA,EQUAL,SWAP,DUP,DROP,TAIL,BSAVE,BLOAD,FIND,PRINT,LAST };
 
 static char *names[] = { "read","@","!","-","+","&","|","^","~","<<",">>","<",
 "exit","emit","key","r>",">r","j","jz",".","'",",","=", "swap","dup","drop",
@@ -80,9 +74,7 @@ static int ogetwrd(forth_obj_t *o, uint8_t *p)
                 if(sscanf((char *)&(o->sin[o->sidx]), "%31s%n", p, &n) < 0)
                         return EOF;
                 return o->sidx += n, n;
-        } else {
-                return fscanf(o->in, "%31s", p);
-        }
+        } else  return fscanf(o->in, "%31s", p);
 } /*get a word (space delimited, up to 31 chars) from a FILE* or string-in*/
 
 static int compile(forth_obj_t *o, uint16_t code, char *str)
@@ -183,19 +175,18 @@ int forth_run(forth_obj_t *o)
         if(setjmp(o->exception)) return -(o->invalid = 1); /*setup handler*/
         m = o->m, S = o->S, I = o->I; /*set S & I to values from forth_init*/
 
-        for(;(pc = m[CK(I++)]);) {
-        if((S<m)||(S>(m+CORESZ))) return WARN("stk err."), -(o->invalid = 1);
+        for(;(pc = m[CK(I++)]);) { /* Threaded code interpreter */
+        if((S<m) || (S>(m+CORESZ))) return WARN("stk err."), -(o->invalid = 1);
         INNER:  switch (m[CK(pc++)]) {
-                case PUSH:    *++S = f;     f = m[CK(I++)];   break;
-                case COMPILE: m[CK(m[0]++)] = pc;             break;
-                case RUN:     m[CK(++m[RSTK])] = I; I = pc;   break;
+                case PUSH:    *++S = f;     f = m[CK(I++)];           break;
+                case COMPILE: m[CK(m[0]++)] = pc;                     break;
+                case RUN:     m[CK(++m[RSTK])] = I; I = pc;           break;
                 case DEFINE:  m[STATE] = 1;
                               if(compile(o, COMPILE, NULL) < 0)
                                       return -(o->invalid = 1);
-                              m[CK(m[0]++)] = RUN;            break;
-                case IMMEDIATE: *m -= 2; m[m[0]++] = RUN;     break;
-                case COMMENT: while (((c=ogetc(o))>0) && (c!='\n'));
-                                                              break;
+                              m[CK(m[0]++)] = RUN;                    break;
+                case IMMEDIATE: *m -= 2; m[m[0]++] = RUN;             break;
+                case COMMENT: while (((c=ogetc(o))>0) && (c!='\n'));  break;
                 case READ:    m[CK(RSTK)]--;
                               if(ogetwrd(o, o->s) < 1)
                                       return 0;
@@ -214,42 +205,41 @@ int forth_run(forth_obj_t *o)
                               } else {
                                       *++S = f;
                                       f = strtol((char*)o->s, 0, 0);
-                              }                               break;
-                case LOAD:    f = m[CK(f)];                   break;
-                case STORE:   m[CK(f)] = *S--; f = *S--;      break;
-                case SUB:     f = *S-- - f;                   break;
-                case ADD:     f = *S-- + f;                   break;
-                case AND:     f = *S-- & f;                   break;
-                case OR:      f = *S-- | f;                   break;
-                case XOR:     f = *S-- ^ f;                   break;
-                case INV:     f = ~f;                         break;
-                case SHL:     f = *S-- << f;                  break;
-                case SHR:     f = *S-- >> f;                  break;
-                case LESS:    f = *S-- < f;                   break;
-                case EXIT:    I = m[CK(m[RSTK]--)];           break;
-                case EMIT:    fputc(f, o->out); f = *S--;     break;
-                case KEY:     *++S = f; f = ogetc(o);         break;
-                case FROMR:   *++S = f; f = m[CK(m[RSTK]--)]; break;
-                case TOR:     m[CK(++m[RSTK])] = f; f = *S--; break;
-                case JMP:     I += m[CK(I)];                  break;
-                case JMPZ:    I += f == 0 ? m[I]:1; f = *S--; break;
-                case PNUM:    fprintf(o->out, m[HEX]? "%X":"%u", f);
-                              f = *S--;                       break;
-                case QUOTE:   *++S = f;      f = m[CK(I++)];  break;
-                case COMMA:   m[CK(m[0]++)] = f; f = *S--;    break;
-                case EQUAL:   f = *S-- == f;                  break;
-                case SWAP:    w = f;  f = *S--;   *++S = w;   break;
-                case DUP:     *++S = f;                       break;
-                case DROP:    f = *S--;                       break;
-                case TAIL:    m[RSTK]--;                      break;
-                case BSAVE:   f = blockio(m, *S--, f, 'w');   break;
-                case BLOAD:   f = blockio(m, *S--, f, 'r');   break;
+                              }                                       break;
+                case LOAD:    f = m[CK(f)];                           break;
+                case STORE:   m[CK(f)] = *S--; f = *S--;              break;
+                case SUB:     f = *S-- - f;                           break;
+                case ADD:     f = *S-- + f;                           break;
+                case AND:     f = *S-- & f;                           break;
+                case OR:      f = *S-- | f;                           break;
+                case XOR:     f = *S-- ^ f;                           break;
+                case INV:     f = ~f;                                 break;
+                case SHL:     f = *S-- << f;                          break;
+                case SHR:     f = *S-- >> f;                          break;
+                case LESS:    f = *S-- < f;                           break;
+                case EXIT:    I = m[CK(m[RSTK]--)];                   break;
+                case EMIT:    fputc(f, o->out); f = *S--;             break;
+                case KEY:     *++S = f; f = ogetc(o);                 break;
+                case FROMR:   *++S = f; f = m[CK(m[RSTK]--)];         break;
+                case TOR:     m[CK(++m[RSTK])] = f; f = *S--;         break;
+                case JMP:     I += m[CK(I)];                          break;
+                case JMPZ:    I += f == 0 ? m[I]:1; f = *S--;         break;
+                case PNUM:    fprintf(o->out, m[HEX] ? "%X": "%u", f);
+                              f = *S--;                               break;
+                case QUOTE:   *++S = f;      f = m[CK(I++)];          break;
+                case COMMA:   m[CK(m[0]++)] = f; f = *S--;            break;
+                case EQUAL:   f = *S-- == f;                          break;
+                case SWAP:    w = f;  f = *S--;   *++S = w;           break;
+                case DUP:     *++S = f;                               break;
+                case DROP:    f = *S--;                               break;
+                case TAIL:    m[RSTK]--;                              break;
+                case BSAVE:   f = blockio(m, *S--, f, 'w');           break;
+                case BLOAD:   f = blockio(m, *S--, f, 'r');           break;
                 case FIND:    *++S = f;
                               if(ogetwrd(o, o->s) < 1) return 0;
                               f = find(o) + 2;
-                              f = f < 32 ? 0 : f;             break;
-                case PRINT:   fputs(((char*)m)+f, o->out);
-                              f = *S--;                       break;
+                              f = f < 32 ? 0 : f;                     break;
+                case PRINT:   fputs(((char*)m)+f, o->out); f = *S--;  break;
                 default:      return WARN("illegal op"), -(o->invalid = 1);
                 }
         }
@@ -268,8 +258,7 @@ int main_forth(int argc, char **argv)   /*options: ./forth (-d)? (file)* */
         if(argc > 1)
                 while(++argv, --argc) {
                         forth_seti(o, in = fopenj(argv[0], "rb", &go));
-                        if((rval = forth_run(o)) < 0)
-                                goto END;
+                        if((rval = forth_run(o)) < 0) goto END;
                         fclose(in), in = NULL;
                 }
         else rval = forth_run(o);
