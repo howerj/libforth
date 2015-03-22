@@ -560,6 +560,13 @@ contiguous range of bytes, usually 1024 of them as in this instance, and
 they can be written or read from disk. Flushing of dirty blocks is not
 performed in this implementation and must be done 'manually'.
 
+## TO-DO
+
+* Add a better *create* and a *does>* . 
+* 'recurse' keyword.
+* '#!/bin/forth' should work correctly for scripting
+* Redesign *FORTH* word header.
+
 [FORTH]: https://en.wikipedia.org/wiki/Forth_%28programming_language%29
 [Wikipedia]: https://en.wikipedia.org/wiki/Forth_%28programming_language%29
 [IOCCC]: http://ioccc.org/winners.html
