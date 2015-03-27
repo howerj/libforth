@@ -67,7 +67,52 @@ Becomes:
 And brackets are no longer needed. Numbers of pushed on to the variable
 stack automatically and commands (such as '\*' and '+') take their operands
 off the stack and push the result. Juggling variables on the stack becomes
-easier over time.
+easier over time. To pop a value from the stack and print it there is the
+'.' word.
+
+So:
+
+        2 2 + . 
+
+Prints:
+
+        4
+
+The simplicity of the language allows for a very small interpreter, the
+loop looks something like this:
+
+        1) Read in a space delimited FORTH WORD.
+        2) Is this WORD in the dictionary?
+           FOUND)      Are we in IMMEDIATE mode?
+                       IMMEDIATE-MODE) Execute WORD.
+                                       goto 1;
+                       COMPILE-MODE)   Compile WORD into the dictionary.
+                                       goto 1;
+           NOT-FOUND)  Is this actually a number?
+                       YES) Are we in IMMEDIATE mode?
+                            IMMEDIATE-MODE) Push Number onto the stack.
+                                            goto 1;
+                            COMPILE-MODE)   Compile a literal number.
+                                            goto 1;
+                       NO)  Error! Handle error
+                            goto 1;
+
+Given that we are reading in *space delimited words* if follows that the
+above expression:
+
+        2 2 + .
+
+Would not work if we did:
+
+        2 2+ .
+
+Or:
+
+        2 2 +.
+
+As "2+" and "+." would be parsed as words, which may or may not be defined
+and if they are do not have the behavior that we want. This is more apparent
+when we do any kind of string handling.
 
 ## A Forth Word
 
@@ -133,6 +178,22 @@ And the dictionary looks like this:
 Searching of the dictionary starts from the *Previous Word Register* and ends
 at a special 'fake' word.
 
+Defining words adds them to the dictionary, we can defined words with the ':'
+words like this:
+
+        : two-times 2 * ;
+
+Which defined the word "two-times", a word that takes a value from the stack,
+multiplies it by two and pushes the results back onto the stack.
+
+The word ':' does several things, it is an immediate word that reads in the
+next space delimited word from the input stream and creates a header for that
+word. It also switches the interpreter into compile mode, compiling words will
+be compiled into that word definition instead of being executed, immediate words
+are executed as normal. ';' is also an immediate word, it compiles a special
+word exit into the dictionary which returns from a word call and switches the
+interpreter back into command mode. This type of behavior is very typical of
+[FORTH][] implementations.
 
 ## Memory Map and Special Registers
 
@@ -385,7 +446,11 @@ Duplicate a value on the stack.
 
 * 'drop'        ( x -- )
 
-Drop a value
+Drop a value.
+
+* 'over'        ( x y -- x y x )
+
+Duplicate the value that is next on the stack.
 
 * 'tail'        ( -- )
 
@@ -424,6 +489,9 @@ life easier.
 Change the interpreter state, turning the mode from 'compile' to 'immediate'.
 
 * ';'           ( -- )
+
+Write 'exit' into the dictionary and switch back into command mode.
+
 * 'hex'         ( bool -- )
 
 Change the state of the output of number printing, 0 for decimal which is the
@@ -447,22 +515,61 @@ Push the current dictionary pointer (equivalent to "h @").
 Immediately switch into command mode.
 
 * ':noname'     ( -- execution-token )
+
+This creates a word header for a word without a name and switches to compile
+mode, the usual ';' finishes the definition. It pushes a execution token onto
+the stack that can be written into the dictionary and run, or executed directly.
+
 * 'if'          ( bool -- )
+
+Begin an if-else-then statement. If the top of stack is true then we
+execute all between the if and a corresponding 'else' or 'then', otherwise
+we skip over it.
+
+Examples: 
+
+        : word ... bool if do-stuff ... else do-other-stuff ... then ... ;
+
+        : word ... bool if do-stuff ... then ... ;
+
 * 'else'        ( -- )
+
+See 'if'.
+
 * 'then'        ( -- )
+
+See 'if'.
+
 * 'begin'       ( -- )
+
+This marks the beginning of a loop.
+
 * 'until'       ( bool -- )
+
+Loop back to the corresponding 'begin' if the top of the stack is zero, continue
+on otherwise.
+
 * '0='          ( x -- bool )
+
+Is the top of the stack zero?
+
 * "')'"         ( -- char )
 
 Push the number representing the ')' character onto the stack.
 
-* 1+            ( x -- x )
-* tab           ( -- )
+* '1+'          ( x -- x )
+
+Add one to the top of the stack.
+
+* '1-'          ( x -- x )
+
+Subtract one from the top of the stack.
+
+* 'tab'         ( -- )
 
 Print a tab.
 
-* cr            ( -- )
+* 'cr'          ( -- )
 
 Prints a newline.
 
@@ -498,6 +605,35 @@ Allocate a number of cells in the dictionary.
 * 'words'       ( -- )
 
 Print out a list of all the words in the dictionary that are reachable.
+
+* 'tuck'        ( x y -- y x y )
+
+The stack comment documents this word completely.
+
+* 'nip'         ( x y -- y )
+
+The stack comment documents this word completely.
+
+* 'rot'         ( x y z -- z x y )
+
+The stack comment documents this word completely.
+
+* '-rot'        ( x y z -- y z x )
+
+The stack comment documents this word completely.
+
+* '?'           ( bool -- )
+
+This implements conditional execution, if true then the rest of the#
+current input line is not executed, for example
+
+        0 ? 2 2 + . cr
+
+Does nothing.
+
+        1 ? 2 2 + . cr
+
+Prints '4'.
 
 * '::'          ( -- )
 
@@ -564,7 +700,11 @@ performed in this implementation and must be done 'manually'.
 
 * Add a better *create* and a *does>* . 
 * 'recurse' keyword.
-* '#!/bin/forth' should work correctly for scripting
+* Figure out if there are any more primitives that need adding that would
+  aide in scripting, perhaps file handles, floating point values, larger
+  VM sizes.
+* Improve documentation.
+* '#!/bin/forth' should work correctly for scripting.
 * Redesign *FORTH* word header.
 
 [FORTH]: https://en.wikipedia.org/wiki/Forth_%28programming_language%29

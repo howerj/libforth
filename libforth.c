@@ -17,13 +17,15 @@ static const char *coref="forth.core", *initprg="# FORTH statup program.    \n\
 : h 0 ; : r 1 ; : here h @ ; : [ immediate 0 state ; : ] 1 state ;          \n\
 : :noname immediate here 2 , ] ; : if immediate ' jz , here 0 , ;           \n\
 : else immediate ' j , here 0 , swap dup here swap - swap ! ;               \n\
-: then immediate dup here swap - swap ! ; : 2dup dup >r >r dup r> swap r> ; \n\
+: then immediate dup here swap - swap ! ; : 2dup over over ;                \n\
 : begin immediate here ; : until immediate ' jz , here - , ;                \n\
-: 0= 0 = ; : 1+ 1 + ; : ')' 41 ; : tab 9 emit ; : cr 10 emit ;              \n\
+: 0= 0 = ; : 1+ 1 + ; : 1- 1 - ; : ')' 41 ; : tab 9 emit ; : cr 10 emit ;   \n\
 : .( key drop begin key dup ')' = if drop exit then emit 0 until ;          \n\
 : line dup . tab dup 4 + swap begin dup @ . tab 1+ 2dup = until drop ;      \n\
 : list swap begin line cr 2dup < until ; : allot here + h ! ;               \n\
 : words pwd @ begin dup 1 + @ 32768 + print tab @ dup 32 < until ;          \n\
+: tuck swap over ; : nip swap drop ; : rot >r swap r> swap ;                \n\
+: -rot rot rot ; : ? 0= if [ find # , ] then ;                              \n\
 : :: [ find : , ] ; : create :: 2 , here 2 + , ' exit , 0 state ; ";
 static const char *errorfmt = "( error \"%s%s\" %s %u )\n";
 
@@ -51,11 +53,11 @@ static uint16_t ck(forth_obj_t *o, uint16_t f)
 enum registers    { DIC=0/*m[0]*/,RSTK=1,STATE=8,HEX=9,PWD=10,SSTORE=11 };
 enum instructions { PUSH,COMPILE,RUN,DEFINE,IMMEDIATE,COMMENT,READ,LOAD,STORE,
 SUB,ADD,AND,OR,XOR,INV,SHL,SHR,LESS,EXIT,EMIT,KEY,FROMR,TOR,JMP,JMPZ,PNUM,
-QUOTE,COMMA,EQUAL,SWAP,DUP,DROP,TAIL,BSAVE,BLOAD,FIND,PRINT,LAST };
+QUOTE,COMMA,EQUAL,SWAP,DUP,DROP,OVER,TAIL,BSAVE,BLOAD,FIND,PRINT,LAST };
 
 static char *names[] = { "read","@","!","-","+","&","|","^","~","<<",">>","<",
 "exit","emit","key","r>",">r","j","jz",".","'",",","=", "swap","dup","drop",
-"tail","save","load","find","print", NULL }; /*named instructions (words)*/
+"over", "tail","save","load","find","print", NULL }; 
 
 static int ogetc(forth_obj_t *o)
 {       if(o->stringin) return o->sidx >= o->slen ? EOF : o->sin[o->sidx++];
@@ -235,6 +237,7 @@ int forth_run(forth_obj_t *o)
                 case SWAP:    w = f;  f = *S--;   *++S = w;           break;
                 case DUP:     *++S = f;                               break;
                 case DROP:    f = *S--;                               break;
+                case OVER:    w = *S; *++S = f; f = w;                break;
                 case TAIL:    m[RSTK]--;                              break;
                 case BSAVE:   f = blockio(m, *S--, f, 'w');           break;
                 case BLOAD:   f = blockio(m, *S--, f, 'r');           break;

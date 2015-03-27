@@ -1,25 +1,21 @@
 CC=gcc
 CFLAGS=-Wall -Wextra
-.PHONY: doxygen all clean
-all: forth
-doc: forth.htm doxygen
-libforth.a: libforth.o
+TARGET=forth
+.PHONY: all clean
+all: $(TARGET)
+doc: $(TARGET).htm 
+lib$(TARGET).a: lib$(TARGET).o
 	ar rcs $@ $<
-libforth.so: libforth.c libforth.h
+lib$(TARGET).so: lib$(TARGET).c lib$(TARGET).h
 	$(CC) $(CFLAGS) $< -c -fpic -o $@
 	$(CC) -shared $< -o $@
-libforth.o: libforth.c libforth.h
+lib$(TARGET).o: lib$(TARGET).c lib$(TARGET).h
 	$(CC) $(CFLAGS) $< -c -o $@
-forth: main.c libforth.a
+$(TARGET): main.c lib$(TARGET).a
 	$(CC) $(CFLAGS) $^ -o $@
-forth.htm: forth.md
-	rm -f $@
+$(TARGET).htm: $(TARGET).md
 	markdown $^ > $@
-doxygen: doxygen *.c *.h
-	rm -rf doxygen
-	mkdir doxygen
-	doxygen doxygen.conf
-run: forth
+run: $(TARGET)
 	./$^
 clean:
-	rm -rf forth *.a *.so *.o *.blk *.core *.log *.htm doxygen
+	rm -rf $(TARGET) *.a *.so *.o *.log *.htm doxygen
