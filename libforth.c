@@ -53,11 +53,11 @@ static uint16_t ck(forth_obj_t *o, uint16_t f)
 enum registers    { DIC=0/*m[0]*/,RSTK=1,STATE=8,HEX=9,PWD=10,SSTORE=11 };
 enum instructions { PUSH,COMPILE,RUN,DEFINE,IMMEDIATE,COMMENT,READ,LOAD,STORE,
 SUB,ADD,AND,OR,XOR,INV,SHL,SHR,LESS,EXIT,EMIT,KEY,FROMR,TOR,JMP,JMPZ,PNUM,
-QUOTE,COMMA,EQUAL,SWAP,DUP,DROP,OVER,TAIL,BSAVE,BLOAD,FIND,PRINT,LAST };
+QUOTE,COMMA,EQUAL,SWAP,DUP,DROP,OVER,TAIL,BSAVE,BLOAD,FIND,PRINT,PSTK,LAST };
 
 static char *names[] = { "read","@","!","-","+","&","|","^","~","<<",">>","<",
 "exit","emit","key","r>",">r","j","jz",".","'",",","=", "swap","dup","drop",
-"over", "tail","save","load","find","print", NULL }; 
+"over", "tail","save","load","find","print",".s", NULL }; 
 
 static int ogetc(forth_obj_t *o)
 {       if(o->stringin) return o->sidx >= o->slen ? EOF : o->sin[o->sidx++];
@@ -81,11 +81,11 @@ static int ogetwrd(forth_obj_t *o, uint8_t *p)
 
 static int compile(forth_obj_t *o, uint16_t code, char *str)
 {       uint16_t *m = o->m;
-        int r = 0;
-        m[m[0]++] = m[PWD];     
-        m[PWD] = m[0] - 1;     
-        m[m[0]++] = m[SSTORE];
-        m[m[0]++] = code;
+        int r = 0;              /*FORTH header structure*/
+        m[m[0]++] = m[PWD];     /*0: Pointer to previous words header*/
+        m[PWD] = m[0] - 1;      /*   Update the PWD register to new word */
+        m[m[0]++] = m[SSTORE];  /*1: Point to where new word is string is */
+        m[m[0]++] = code;       /*2: Add in VM code to run for this word*/
         if (str) strcpy((char *)o->s + m[SSTORE], str);
         else     r = ogetwrd(o, o->s + m[SSTORE]);
         m[SSTORE] += strlen((char*)o->s + m[SSTORE]) + 1;
@@ -117,14 +117,20 @@ static uint16_t find(forth_obj_t *o)
         return w;
 } /*find a word in the FORTH dictionary*/
 
-static int comment(forth_obj_t *o)
-{       int c; 
-        while(((c = ogetc(o)) > 0) && (c != '\n'));
-        return c;
-} /*process a comment line from input*/
+static int comment(forth_obj_t *o) /*process a comment line from input*/
+{ int c; while(((c = ogetc(o)) > 0) && (c != '\n')); return c; } 
+
+static int pstk(forth_obj_t *o, uint16_t f, uint16_t *S)
+{       uint16_t *begin = o->m + CORESZ - (2*STKSZ);
+        if(fprintf(o->out,o->m[HEX]?"%hx\t":"%hu\t",f) < 0) return -1;
+        while(begin+1<S)
+                if(fprintf(o->out,o->m[HEX]?"%hx\t":"%hu\t",*(S--)) < 0) 
+                        return -1;
+        return 0;
+} /*print the forth stack*/
 
 void forth_seti(forth_obj_t *o, FILE *in)  
-{ assert(o && in);  o->stringin = 0; o->in  = in;  }
+{ assert(o && in); o->stringin = 0; o->in = in;  }
 
 void forth_seto(forth_obj_t *o, FILE *out) 
 { assert(o && out); o->stringin = 0; o->out = out; }
@@ -134,7 +140,7 @@ void forth_sets(forth_obj_t *o, const char *s)
         o->sidx = 0;             /*sidx == current character in string*/
         o->slen = strlen(s) + 1; /*slen == actual string len*/
         o->stringin = 1;         /*read from string not a file handle*/
-        o->sin = (uint8_t *)s;
+        o->sin = (uint8_t *)s;   /*sin  == pointer actual string*/
 }
 
 int forth_eval(forth_obj_t *o, const char *s)
@@ -246,6 +252,7 @@ int forth_run(forth_obj_t *o)
                               f = find(o) + 2;
                               f = f < 32 ? 0 : f;                     break;
                 case PRINT:   fputs(((char*)m)+f, o->out); f = *S--;  break;
+                case PSTK:    if(pstk(o,f,S) < 0) return -1;          break;
                 default:      return WARN("illegal op"), -(o->invalid = 1);
                 }
         }

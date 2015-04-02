@@ -473,6 +473,11 @@ memory of a likewise *blocknum* derived name as in *save*.
 Find a word in the dictionary pushing a pointer to that word onto the
 variable stack.
 
+* '.s'
+
+Print out the contents of the variable stack (and the top of the stack) but
+do not affect the contents.
+
 * 'print'       ( char-address -- )
 
 This prints a NUL terminate string at *charptr*. *charptr* is a character
@@ -498,6 +503,9 @@ Change the state of the output of number printing, 0 for decimal which is the
 default, anything else and it prints hexadecimal.
 
 * 'pwd'         ( -- pointer )
+
+Pushes a pointer to the previously define word onto the stack.
+
 * 'h'           ( -- pointer )
 
 Push a pointer to the dictionary pointer register.
@@ -526,11 +534,22 @@ Begin an if-else-then statement. If the top of stack is true then we
 execute all between the if and a corresponding 'else' or 'then', otherwise
 we skip over it.
 
-Examples: 
+Abstract Examples:
 
         : word ... bool if do-stuff ... else do-other-stuff ... then ... ;
 
         : word ... bool if do-stuff ... then ... ;
+
+and a concrete examples:
+
+        : test-word if 2 2 + . cr else 3 3 * . cr ;
+        0 test-word
+        4             # prints 4
+        1 test-word
+        9             # prints 9
+
+Is a simple and contrived example.
+
 
 * 'else'        ( -- )
 
@@ -624,7 +643,7 @@ The stack comment documents this word completely.
 
 * '?'           ( bool -- )
 
-This implements conditional execution, if true then the rest of the#
+This implements conditional execution, if true then the rest of the
 current input line is not executed, for example
 
         0 ? 2 2 + . cr
@@ -696,16 +715,42 @@ contiguous range of bytes, usually 1024 of them as in this instance, and
 they can be written or read from disk. Flushing of dirty blocks is not
 performed in this implementation and must be done 'manually'.
 
-## TO-DO
+## To-do and notes
 
-* Add a better *create* and a *does>* . 
-* 'recurse' keyword.
+This is more like a list of wants or likes as well as notes. It is not
+meant to be particularly coherent.
+
+* Add a better *create* and a *does>* .
+  * This would allow for 'variable', 'array' and 'constant' to be defined
+  as well as perhaps some string handling functions.
+* 'recurse' keyword. Although I do not really use it.
+* Hide the currently defined word until it has been completely defined?
+  This would necessitate there being a 'recurse' keyword.
+* Immediate words should be defined by a flag not having two code words
+and trickery.
 * Figure out if there are any more primitives that need adding that would
   aide in scripting, perhaps file handles, floating point values, larger
   VM sizes.
-* Improve documentation.
-* '#!/bin/forth' should work correctly for scripting.
+* A stack based interface to the FORTH environment would be good as well,
+so we can use this more as a library we can shell work out to.
+  - A function for adding in user defined code words would be good. It
+  would not have to be too complex.
+  * forth\_define("name", func\_ptr)
+  * forth\_get\_top\_of\_stk();
+  * ...
+* A small example that is integrated with the linenoise library would be
+good, with auto complete! A list of all defined words would need to be
+exported from the library however.
+* Hex input needs to be handled correctly.
+* 32-bit version? Allow for power of 2 size of environment; 2048, 4096, ...
 * Redesign *FORTH* word header.
+* Possible redesigns of FORTH word pointer to included more modes apart
+from just being hidden. I could use some trickery to accomplish this
+and free up more bits. I could store some words as just hashes, or some
+entire words in the lower bits (for example single or two character words,
+the latter requiring encoding the remaining bits). If the string was stored
+*relative* to the current word then I would have even more spare bits to
+mess around with.
 
 [FORTH]: https://en.wikipedia.org/wiki/Forth_%28programming_language%29
 [Wikipedia]: https://en.wikipedia.org/wiki/Forth_%28programming_language%29
