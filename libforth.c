@@ -172,6 +172,8 @@ forth_obj_t *forth_init(FILE *in, FILE *out)
         return o;
 }
 
+void forth_free(forth_obj_t *o) { assert(o); free(o); }
+
 int forth_run(forth_obj_t *o)
 {       uint16_t *m, pc, *S, I, f = 0, w;
         if(!o || o->invalid) return WARN("invalid obj"), -1;
@@ -274,6 +276,6 @@ END:    if(in && (in != stdin)) fclose(in), in = NULL;
                         return -1;
                 fclose(coreo); 
         }
-        free(o), o = NULL;
+        forth_free(o), o = NULL;
         return rval;
 }

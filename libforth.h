@@ -21,6 +21,12 @@ typedef struct forth_obj forth_obj_t;
  *  @param   output      Output to this file. Caller closes.
  *  @return  forth_obj_t A fully initialized forth environment or NULL. **/
 forth_obj_t *forth_init(FILE *input, FILE *output); 
+/** @brief   Given a FORTH object it will free any memory and perform any
+ *           internal cleanup needed. This will not free any evaluated
+ *           strings nor will it close any files passed in via the C-API.
+ *  @param   o    An object to free
+ *  @return  void **/
+void forth_free(forth_obj_t *o); 
 /** @brief   Execute an initialized forth environment, this will read
  *           from input until there is no more or an error occurs. If
  *           an error occurs a negative number will be returned and the
