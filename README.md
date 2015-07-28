@@ -19,6 +19,8 @@ which includes some quite good documentation on how the interpreter works.
 * Documentation of my own.
 * Dump registers on error for debugging.
 * Experiment with hashing words instead of using names.
+* 32-bit version instead of 16-bit, and with variable length allocation
+  on init.
 
 [FORTH]: https://en.wikipedia.org/wiki/Forth_%28programming_language%29
 [IOCCC]: http://ioccc.org/winners.html
