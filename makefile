@@ -1,13 +1,12 @@
 CC=gcc
-CFLAGS=-Wall -Wextra -g
+CFLAGS=-Wall -Wextra -g -pedantic -fPIC -std=c99
 TARGET=forth
 .PHONY: all clean
-all: $(TARGET)
+all: $(TARGET) lib$(TARGET).so
 doc: $(TARGET).htm 
 lib$(TARGET).a: lib$(TARGET).o
 	ar rcs $@ $<
-lib$(TARGET).so: lib$(TARGET).c lib$(TARGET).h
-	$(CC) $(CFLAGS) $< -c -fpic -o $@
+lib$(TARGET).so: lib$(TARGET).o lib$(TARGET).h
 	$(CC) -shared -fPIC $< -o $@
 lib$(TARGET).o: lib$(TARGET).c lib$(TARGET).h
 	$(CC) $(CFLAGS) $< -c -o $@

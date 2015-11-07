@@ -323,7 +323,7 @@ Instead of:
 
         : word ... ; immediate
 
-* '#'           ( -- )
+* '\\'           ( -- )
 
 A comment, ignore everything until the end of the line.
 
