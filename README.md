@@ -19,8 +19,12 @@ which includes some quite good documentation on how the interpreter works.
 * Documentation of my own.
 * Dump registers on error for debugging.
 * Experiment with hashing words instead of using names.
-* 32-bit version instead of 16-bit, and with variable length allocation
+* 32/64-bit version instead of 16-bit, and with variable length allocation
   on init.
+* Integrate "create/does>" into the start up code, including
+  "constant/array/variable".
+* Better string handling (would be nice).
+* Split into heavy and lightweight versions
 
 [FORTH]: https://en.wikipedia.org/wiki/Forth_%28programming_language%29
 [IOCCC]: http://ioccc.org/winners.html

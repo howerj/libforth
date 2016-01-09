@@ -10,11 +10,15 @@ lib$(TARGET).so: lib$(TARGET).o lib$(TARGET).h
 	$(CC) -shared -fPIC $< -o $@
 lib$(TARGET).o: lib$(TARGET).c lib$(TARGET).h
 	$(CC) $(CFLAGS) $< -c -o $@
+unit: unit.c libforth.a
+	$(CC) $(CFLAGS) $^ -o $@
 $(TARGET): main.c lib$(TARGET).a
 	$(CC) $(CFLAGS) $^ -o $@
 $(TARGET).htm: $(TARGET).md
 	markdown $^ > $@
 run: $(TARGET)
 	./$^
+test: unit
+	./$^
 clean:
-	rm -rf $(TARGET) *.a *.so *.o *.log *.htm doxygen
+	rm -rf $(TARGET) unit *.a *.so *.o *.log *.htm doxygen
