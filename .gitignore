@@ -16,3 +16,9 @@ a.out
 doxygen/*
 doxygen
 unit
+core
+vgcore*
+html/*
+html
+latex/*
+latex

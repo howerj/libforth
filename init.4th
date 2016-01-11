@@ -56,3 +56,6 @@
 \ .( '+'    ) find + . cr
 \ .( 'exit' ) find exit . cr 
 
+\ Simple Create -> : create :: 2 , here 2 + , ' exit , 0 state ; ";
+
+
