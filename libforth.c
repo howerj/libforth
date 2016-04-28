@@ -13,6 +13,8 @@
  *  @todo different word lengths need trying out
  *  @todo Port this to a micro controller, and a Linux kernel module device
  *  driver (just because).
+ *  @todo Make a better interface to the library, allowing the stack to
+ *  be accessed and different size interpreters to be made.
  **/
 
 #include "libforth.h"
@@ -78,7 +80,7 @@ static char *names[] = { "read","@","!","-","+","&","|","^","~","<<",">>","<",
 "exit","emit","key","r>",">r","j","jz",".","'",",","=", "swap","dup","drop",
 "over", "tail","save","load","find","print",".s", NULL }; 
 
-static int ogetc(forth *o) { 
+static int forth_get_char(forth *o) { 
 	assert(o);
 	if(o->stringin) 
 		return o->sidx >= o->slen ? EOF : o->sin[o->sidx++];
@@ -97,7 +99,7 @@ static FILE *afopen(const char *name, char *mode)
 	return file;
 } /*fopen with assertion on failure*/
 
-static int ogetwrd(forth *o, uint8_t *p) 
+static int forth_get_word(forth *o, uint8_t *p) 
 { 
 	assert(o && p);
 	int n = 0;
@@ -122,7 +124,7 @@ static int compile(forth *o, mw code, char *str)
 	if (str) 
 		strcpy((char *)o->s + m[SSTORE], str);
 	else     
-		r = ogetwrd(o, o->s + m[SSTORE]);
+		r = forth_get_word(o, o->s + m[SSTORE]);
 	m[SSTORE] += strlen((char*)o->s + m[SSTORE]) + 1;
 	return r;
 }
@@ -153,7 +155,7 @@ static int comment(forth *o)  /**< process a comment line*/
 {
 	assert(o);
 	int c; 
-	while(((c = ogetc(o)) > 0) && (c != '\n')); 
+	while(((c = forth_get_char(o)) > 0) && (c != '\n')); 
 	return c;
 } 
 
@@ -161,7 +163,7 @@ static mw find(forth *o)
 { 
 	assert(o);
 	mw *m = o->m, w = m[PWD];
-	for (;(w & hide)||strcmp((char*)o->s,(char*)&o->s[m[(w & ~hide)+1]]);)
+	for (;(w & hide) || strcmp((char*)o->s,(char*)&o->s[m[(w & ~hide)+1]]);)
 		w = m[w & ~hide]; /*top bit, or hide bit, hides the word*/
 	return w;
 } /*find a word in the FORTH dictionary*/
@@ -261,8 +263,9 @@ int forth_run(forth *o)
 	m = o->m, S = o->S, I = o->I; /*set S & I to values from forth_init*/
 
 	for(;(pc = m[ck(I++)]);) { /* Threaded code interpreter */
-	assert((S>m) && (S<(m+CORESZ)));
-	INNER:  switch (m[ck(pc++)]) {
+		assert((S > m) && (S < (m + CORESZ)));
+	INNER:  
+		switch (m[ck(pc++)]) {
 		case PUSH:    *++S = f;     f = m[ck(I++)];        break;
 		case COMPILE: m[ck(m[DIC]++)] = pc;                break;
 		case RUN:     m[ck(++m[RSTK])] = I; I = pc;        break;
@@ -274,7 +277,7 @@ int forth_run(forth *o)
 		case COMMENT: if(comment(o) < 0) return 0;         break;
 		case READ:    
 				m[ck(RSTK)]--;
-				if(ogetwrd(o, o->s) < 1)
+				if(forth_get_word(o, o->s) < 1)
 					return 0;
 				if ((w = find(o)) > 1) {
 					pc = w + 2;
@@ -305,7 +308,7 @@ int forth_run(forth *o)
 		case LESS:    f = *S-- < f;                          break;
 		case EXIT:    I = m[ck(m[RSTK]--)];                  break;
 		case EMIT:    fputc(f, o->out); f = *S--;            break;
-		case KEY:     *++S = f; f = ogetc(o);                break;
+		case KEY:     *++S = f; f = forth_get_char(o);       break;
 		case FROMR:   *++S = f; f = m[ck(m[RSTK]--)];        break;
 		case TOR:     m[ck(++m[RSTK])] = f; f = *S--;        break;
 		case JMP:     I += m[ck(I)];                         break;
@@ -323,7 +326,7 @@ int forth_run(forth *o)
 		case BSAVE:   f = blockio(m, *S--, f, 'w');          break;
 		case BLOAD:   f = blockio(m, *S--, f, 'r');          break;
 		case FIND:    *++S = f;
-			      if(ogetwrd(o, o->s) < 1) 
+			      if(forth_get_word(o, o->s) < 1) 
 				      return 0 /*EOF*/;
 			      f = find(o) + 2;
 			      f = f < 32 ? 0 : f;                     break;
