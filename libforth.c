@@ -90,7 +90,10 @@ static FILE *afopen(const char *name, char *mode)
 {
 	assert(name && mode);
 	FILE *file = fopen(name, mode);
-	assert(file);
+	if(!file) {
+		perror(name);
+		exit(EXIT_FAILURE);
+	}
 	return file;
 } /*fopen with assertion on failure*/
 
@@ -123,7 +126,6 @@ static int compile(forth *o, mw code, char *str)
 	m[SSTORE] += strlen((char*)o->s + m[SSTORE]) + 1;
 	return r;
 }
-
 
 static int blockio(void *p, mw poffset, mw id, char rw) 
 { 
@@ -280,7 +282,7 @@ int forth_run(forth *o)
 						pc++;
 					goto INNER;
 				} else if(!isnum((char*)o->s)) {
-					PWARN(o->s, ": not a word or number");
+					PWARN(o->s, " => not a word or number");
 					break;
 				}
 				if (m[STATE]) { /*must be a number then*/
