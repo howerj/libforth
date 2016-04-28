@@ -203,11 +203,11 @@ treats certain sectors of memory as being special, as shown below (numbers are
 given in *hexadecimal* and are multiples of the virtual machines word-size
 which is a *uint16_t*):
 
-        .----------------------------------------------------------------.
-        | 0-1F      | 20-3FFF       | 4000-7BFF      |7C00-7DFF|7E00-7FFF|
-        .----------------------------------------------------------------.
-        | Registers | Dictionary... | Word names ... | V stack | R stack |
-        .----------------------------------------------------------------.
+        .-----------------------------------------------.
+        | 0-3F      | 40-7BFF       |7C00-7DFF|7E00-7FFF|
+        .-----------------------------------------------.
+        | Registers | Dictionary... | V stack | R stack |
+        .-----------------------------------------------.
 
         V stack = The Variable Stack
         R stack = The Return Stack
@@ -222,18 +222,18 @@ Each may be further divided into special sections:
 * 0x8:      State, the state of the interpreter, either in *compile* or *command* mode.
 * 0x9:      Hex, if none zero numbers get output in hexadecimal, otherwise they are output in decimal.
 * 0xA:      Pointer to the previously declared word in the dictionary.
-* 0xB:      Pointer into the string storage, this is a character pointer not a word pointer.
-* 0xC-0x1F: Reserved register locations.
+* 0xB-0x1F: Unused and reserved 
+* 0x20-0x3F This is used to temporarily store a word when it is being read in
 
 ### Dictionary
 
 Apart from the constraints that the dictionary begins after where the 
-registers are and before where string storage is there are no set demarcations
+registers are and before where V stack is there are no set demarcations
 for each region, although currently the defined word region ends before
-0x200 leaving room between that and 0x3FFF for user defined words.
+0x200 leaving room between that and 0x7BFF for user defined words.
 
         .----------------------------------------------------------------.
-        | 20-???            | ???-???          | ???-3FFF                |
+        | 40-???            | ???-???          | ???-7BFF                |
         .----------------------------------------------------------------.
         | Special read word | Interpreter word | Defined word ...        |
         .----------------------------------------------------------------.
@@ -244,25 +244,6 @@ for each region, although currently the defined word region ends before
         Interpreter word  = Any named (not 'invisible' ones) interpreter word 
                             gets put here.
         Defined word      = A list of words that have been defined with ':'
-
-### Word names
-
-The storage area for the names of the words is disjoint from the rest of
-the word definition, this is for simplicity of the implementation which
-might be corrected in future versions.
-
-The first 32 bytes are reserved for the storage of the current word that
-is being read in, only 31 characters are allowed in a word name as the 32nd
-character is reserved for the NUL character. 
-
-The rest of the dictionary contains NUL separated strings that words point
-into.
-
-        .----------------------------------------------------------------.
-        | 4000-401F              | 4020-7BFF                             |
-        .----------------------------------------------------------------.
-        | Currently read in word | List of null terminated defined words |
-        .----------------------------------------------------------------.
 
 ## Glossary of FORTH words
 
@@ -724,10 +705,10 @@ meant to be particularly coherent.
   * This would allow for 'variable', 'array' and 'constant' to be defined
   as well as perhaps some string handling functions.
 * 'recurse' keyword. Although I do not really use it.
-* Hide the currently defined word until it has been completely defined?
-  This would necessitate there being a 'recurse' keyword.
 * Immediate words should be defined by a flag not having two code words
 and trickery.
+* A forth word header should be described, and this document checked for
+  errors
 * Figure out if there are any more primitives that need adding that would
   aide in scripting, perhaps file handles, floating point values, larger
   VM sizes.

@@ -5,8 +5,8 @@
  *  @license    LGPL v2.1 or later version
  *  @email      howe.r.j.89@gmail.com 
  * 
- *  @todo The string store should be eliminated, the names being stored just
- *  before the header
+ *  @todo The string storage should be made clear, removing vestiges
+ *  of the previous string storage mechanism
  *  @todo Whether a word is immediate or not should be down to a single bit
  *  flag in a word, this would also allow "immediate" to be called after
  *  a words definition, not during
@@ -15,43 +15,49 @@
  *  driver (just because).
  *  @todo Make a better interface to the library, allowing the stack to
  *  be accessed and different size interpreters to be made.
+ *  @todo Routines for saving and loading the image should be made
+ *  @todo The hide bit should probably be moved else where instead of being
+ *  in the word pointer
+ *  @todo Cleanup: More assertions, better names for things, better indentation
  **/
 
 #include "libforth.h"
 #include <assert.h>
+#include <errno.h>
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 
 static const char *errorfmt = "( error \"%s%s\" %s %u )\n";
-static const char *coref    = "forth.core";
-static const char *initprg  = "\\ FORTH startup program.		    \n\
+static const char *core_file= "forth.core";
+static const char *initial_forth_program = "\\ FORTH startup program.       \n\
 : state 8 ! exit : ; immediate ' exit , 0 state exit : hex 9 ! ; : pwd 10 ; \n\
-: h 0 ; : r 1 ; : here h @ ; : [ immediate 0 state ; : ] 1 state ;	  \n\
-: :noname immediate here 2 , ] ; : if immediate ' jz , here 0 , ;	   \n\
-: else immediate ' j , here 0 , swap dup here swap - swap ! ;	       \n\
-: then immediate dup here swap - swap ! ; : 2dup over over ;		\n\
-: begin immediate here ; : until immediate ' jz , here - , ;		\n\
+: h 0 ; : r 1 ; : here h @ ; : [ immediate 0 state ; : ] 1 state ;          \n\
+: :noname immediate here 2 , ] ; : if immediate ' jz , here 0 , ;           \n\
+: else immediate ' j , here 0 , swap dup here swap - swap ! ;               \n\
+: then immediate dup here swap - swap ! ; : 2dup over over ;                \n\
+: begin immediate here ; : until immediate ' jz , here - , ;                \n\
 : 0= 0 = ; : 1+ 1 + ; : 1- 1 - ; : ')' 41 ; : tab 9 emit ; : cr 10 emit ;   \n\
-: .( key drop begin key dup ')' = if drop exit then emit 0 until ;	  \n\
+: .( key drop begin key dup ')' = if drop exit then emit 0 until ;          \n\
 : line dup . tab dup 4 + swap begin dup @ . tab 1+ 2dup = until drop ;      \n\
-: list swap begin line cr 2dup < until ; : allot here + h ! ;	       \n\
-: words pwd @ begin dup 1 + @ 32768 + print tab @ dup 32 < until ;	  \n\
-: tuck swap over ; : nip swap drop ; : rot >r swap r> swap ;		\n\
+: list swap begin line cr 2dup < until ; : allot here + h ! ;               \n\
+: words pwd @ begin dup 1 + @ 64 + print tab @ dup 32 < until ; \\ 64 == sizeof(mw) * string_offset\n\
+: tuck swap over ; : nip swap drop ; : rot >r swap r> swap ;                \n\
 : -rot rot rot ; : ? 0= if [ find \\ , ] then ; : :: [ find : , ] ;";
 
 #define PWARN(P,M) fprintf(stderr, errorfmt, (P), (M), __FILE__, __LINE__)
 #define WARN(M)    PWARN("",(M)) /**@todo use c99 variadic macros*/
-#define CORESZ     ((UINT16_MAX + 1u) / 2u) /**< virtual machine memory size*/
+#define CORE_SIZE  ((UINT16_MAX + 1u) / 2u) /**< virtual machine memory size*/
 
-static const mw blksz = 1024u,  /**< size of a FORTH block, in bytes*/
+static const mw block_size = 1024u,  /**< size of a FORTH block, in bytes*/
 	hide = 1 << ((CHAR_BIT * sizeof(hide)) - 1), /**< hide bit*/
-	stroff = CORESZ / 2u,   /**< string storage offset into memory*/
-	stksz  = CORESZ / 64u;  /**< size of the variable and return stack*/
+	string_offset = 32u,   /**< offset for strings (@todo remove the need for this!)*/
+	max_word_length = 32u,
+	stack_size  = CORE_SIZE / 64u;  /**< size of the variable and return stack*/
 
 struct forth {	  /**< The FORTH environment is contained in here*/
 	mw  pad1[8],    /**< guard padding, should always be zero*/
-	    m[CORESZ]   /**< FORTH VM Mem*/, 
+	    m[CORE_SIZE]   /**< FORTH VM Mem*/, 
 	    pad2[8],    /**< guard padding, should always be zero*/
 	    I,	  /**< instruction pointer*/
 	   *S;	  /**< stack pointer*/
@@ -67,11 +73,11 @@ struct forth {	  /**< The FORTH environment is contained in here*/
 
 static mw ck(mw f) 
 { 
-	assert(f < CORESZ); 
+	assert(f < CORE_SIZE); 
 	return f; 
 }
 
-enum registers    { DIC=0/*m[0]*/,RSTK=1,STATE=8,HEX=9,PWD=10,SSTORE=11 };
+enum registers    { DIC=0/*m[0]*/,RSTK=1,STATE=8,HEX=9,PWD=10 };
 enum instructions { PUSH,COMPILE,RUN,DEFINE,IMMEDIATE,COMMENT,READ,LOAD,STORE,
 SUB,ADD,AND,OR,XOR,INV,SHL,SHR,LESS,EXIT,EMIT,KEY,FROMR,TOR,JMP,JMPZ,PNUM,
 QUOTE,COMMA,EQUAL,SWAP,DUP,DROP,OVER,TAIL,BSAVE,BLOAD,FIND,PRINT,PSTK,LAST };
@@ -88,17 +94,19 @@ static int forth_get_char(forth *o) {
 		return fgetc(o->in);
 } /*get a char from string-in or a file*/
 
-static FILE *afopen(const char *name, char *mode) 
+static FILE *fopen_or_die(const char *name, char *mode) 
 {
 	assert(name && mode);
 	FILE *file = fopen(name, mode);
 	if(!file) {
-		perror(name);
+		if(errno)
+			perror(name);
 		exit(EXIT_FAILURE);
 	}
 	return file;
-} /*fopen with assertion on failure*/
+}
 
+/*get a word (space delimited, up to 31 chars) from a FILE* or string-in*/
 static int forth_get_word(forth *o, uint8_t *p) 
 { 
 	assert(o && p);
@@ -110,23 +118,29 @@ static int forth_get_word(forth *o, uint8_t *p)
 	} else  {
 		return fscanf(o->in, "%31s", p);
 	}
-} /*get a word (space delimited, up to 31 chars) from a FILE* or string-in*/
+} 
 
 static int compile(forth *o, mw code, char *str) 
 { 
 	assert(o && code < LAST);
-	mw *m = o->m;
-	int r = 0;	      /*FORTH header structure*/
-	m[m[0]++] = m[PWD];     /*0: Pointer to previous words header*/
+	mw *m = o->m, header = m[DIC];
+	size_t l = 0;
+	if(!str) {
+		if(forth_get_word(o, (uint8_t*)(o->s)) < 0)
+			return -1;
+		str = (char *)o->s;
+	} 
+	/*FORTH header structure*/
+	strcpy((char *)(o->m + header), str); /* 0: Copy the new FORTH word into the new header */
+	l = strlen(str) + 1;
+	l = (l + (sizeof(mw) - 1)) & ~(sizeof(mw) - 1); /* align up to sizeof word */
+	m[DIC] += (l/sizeof(mw)); /* Add string length in words to header (STRLEN) */
+
+	m[m[0]++] = m[PWD];     /*0 + STRLEN: Pointer to previous words header*/
 	m[PWD] = m[0] - 1;      /*   Update the PWD register to new word */
-	m[m[0]++] = m[SSTORE];  /*1: Point to where new word is string is */
-	m[m[0]++] = code;       /*2: Add in VM code to run for this word*/
-	if (str) 
-		strcpy((char *)o->s + m[SSTORE], str);
-	else     
-		r = forth_get_word(o, o->s + m[SSTORE]);
-	m[SSTORE] += strlen((char*)o->s + m[SSTORE]) + 1;
-	return r;
+	m[m[0]++] = (header*sizeof(mw)) - (string_offset*sizeof(mw));  /*1 + STRLEN: Point to string*/
+	m[m[0]++] = code;       /*2 + STRLEN: Add in VM code to run for this word*/
+	return 0;
 }
 
 static int blockio(void *p, mw poffset, mw id, char rw) 
@@ -134,14 +148,14 @@ static int blockio(void *p, mw poffset, mw id, char rw)
 	char name[16] = {0}; /* XXXX + ".blk" + '\0' + a little spare change */
 	FILE *file = NULL;
 	size_t n;
-	assert(p && (poffset < (CORESZ - blksz)) && (rw == 'w' || rw == 'r'));
+	assert(p && (poffset < (CORE_SIZE - block_size)) && (rw == 'w' || rw == 'r'));
 	sprintf(name, "%04x.blk", (int)id);
 	if(!(file = fopen(name, rw == 'r' ? "rb" : "wb")))
 		return PWARN(name, ": could not open file"), -1;
-	n = rw == 'w' ? fwrite(((char*)p) + poffset, 1, blksz, file):
-			fread (((char*)p) + poffset, 1, blksz, file);
+	n = rw == 'w' ? fwrite(((char*)p) + poffset, 1, block_size, file):
+			fread (((char*)p) + poffset, 1, block_size, file);
 	fclose(file);
-	return n == blksz ? 0 : -1;
+	return n == block_size ? 0 : -1;
 } /*a basic FORTH block I/O interface*/
 
 static int isnum(const char *s)  /**< is word a number? */
@@ -168,10 +182,10 @@ static mw find(forth *o)
 	return w;
 } /*find a word in the FORTH dictionary*/
 
-static int pstk(forth *o, mw f, mw *S)
+static int print_stack(forth *o, mw f, mw *S)
 { 
 	assert(o && S);
-	mw *begin = o->m + CORESZ - (2*stksz);
+	mw *begin = o->m + CORE_SIZE - (2*stack_size);
 	if(fprintf(o->out, o->m[HEX] ? "%hx\t" : "%hu\t", f) < 0) return -1;
 	while(begin + 1 < S)
 		if(fprintf(o->out, o->m[HEX] ? "%hx\t" : "%hu\t", *(S--)) < 0) 
@@ -209,7 +223,7 @@ int forth_eval(forth *o, const char *s)
 	return forth_run(o);
 }
 
-int forth_coredump(forth *o, FILE *dump) 
+int forth_dump_core(forth *o, FILE *dump) 
 { 
 	assert(o && dump);
 	return sizeof(*o) != fwrite(o, 1, sizeof(*o), dump) ? -1: 0; 
@@ -223,12 +237,11 @@ forth *forth_init(FILE *in, FILE *out)
 
 	if(!(o = calloc(1, sizeof(*o)))) return NULL;
 	m = o->m;       /*a local variable only for convenience*/
-	o->s = (uint8_t*)(m + stroff); /*string store offset into CORE*/
+	o->s = (uint8_t*)(m + string_offset); /*string store offset into CORE, skip register*/
 	o->out = out;   /*this will be used for standard output*/
 
-	w = m[DIC] = 32;  /*initial dictionary offset, skip registers*/
+	w = m[DIC] = string_offset + max_word_length; /*initial dictionary offset, skip registers and string offset*/
 	m[PWD] = 1;     /*special terminating pwd*/
-	m[SSTORE] = 32; /*offset into str storage defines maximum word length*/
 
 	m[m[DIC]++] = READ; /*create a special word that reads in FORTH*/
 	m[m[DIC]++] = RUN;  /*call the special word recursively*/
@@ -241,9 +254,9 @@ forth *forth_init(FILE *in, FILE *out)
 	compile(o, COMMENT,   "\\");	/*immediate word*/
 	for(i = 0, w = READ; names[i]; i++) /*compiling words*/
 		compile(o, COMPILE, names[i]), m[m[DIC]++] = w++;
-	m[RSTK] = CORESZ - stksz;	   /*set up return stk pointer*/
-	o->S    = m + CORESZ - (2 * stksz); /*set up variable stk pointer*/
-	if(forth_eval(o, initprg) < 0) 
+	m[RSTK] = CORE_SIZE - stack_size;	   /*set up return stk pointer*/
+	o->S    = m + CORE_SIZE - (2 * stack_size); /*set up variable stk pointer*/
+	if(forth_eval(o, initial_forth_program) < 0) 
 		return NULL; /*define words*/
 	forth_set_file_input(o, in);	/*set up input after out eval*/
 	return o;
@@ -263,7 +276,7 @@ int forth_run(forth *o)
 	m = o->m, S = o->S, I = o->I; /*set S & I to values from forth_init*/
 
 	for(;(pc = m[ck(I++)]);) { /* Threaded code interpreter */
-		assert((S > m) && (S < (m + CORESZ)));
+		assert((S > m) && (S < (m + CORE_SIZE)));
 	INNER:  
 		switch (m[ck(pc++)]) {
 		case PUSH:    *++S = f;     f = m[ck(I++)];        break;
@@ -331,7 +344,7 @@ int forth_run(forth *o)
 			      f = find(o) + 2;
 			      f = f < 32 ? 0 : f;                     break;
 		case PRINT:   fputs(((char*)m)+f, o->out); f = *S--;  break;
-		case PSTK:    if(pstk(o, f ,S) < 0) return -1;        break;
+		case PSTK:    if(print_stack(o, f ,S) < 0) return -1; break;
 		default:      WARN("illegal op"); abort();
 		}
 	}
@@ -350,7 +363,7 @@ int main_forth(int argc, char **argv)
 			argv++, argc--, dump = 1;
 	if(argc > 1) {
 		while(++argv, --argc) {
-			forth_set_file_input(o, in = afopen(argv[0], "rb"));
+			forth_set_file_input(o, in = fopen_or_die(argv[0], "rb"));
 /*shebang line '#!' */  if((c = fgetc(in)) == '#') {
 				comment(o); /*special case*/
 			} else if (c == EOF) { 
@@ -366,10 +379,11 @@ int main_forth(int argc, char **argv)
 	} else { 
 		rval = forth_run(o); /*read from defaults, stdin*/
 	}
-END:	if(in && (in != stdin)) 
+END:	
+	if(in && (in != stdin)) 
 		fclose(in), in = NULL;
-	if(dump) { /*perform raw dump of FORTH Virtual Machines memory*/
-		if(forth_coredump(o, coreo = afopen(coref, "wb")) < 0)
+	if(dump) { 
+		if(forth_dump_core(o, coreo = fopen_or_die(core_file, "wb")) < 0)
 			return -1;
 		fclose(coreo); 
 	}

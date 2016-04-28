@@ -66,7 +66,7 @@ int forth_eval(forth *o, const char *s);
  *  @param   o    The FORTH environment to dump. Caller frees. Asserted.
  *  @param   dump Core dump file handle ("wb"). Caller closes. Asserted.
  *  @return  int  An error code, negative on error. **/
-int forth_coredump(forth *o, FILE *dump);
+int forth_dump_core(forth *o, FILE *dump);
 /** @brief Set the input of an environment 'o' to read from a file 'in'.
  *  @param o   An initialized FORTH environment. Caller frees.
  *  @param in  Open handle for reading; "r"/"rb". Caller closes. **/
