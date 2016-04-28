@@ -21,9 +21,9 @@ extern "C" {
 #endif
 #include <stdio.h>
 #include <stdint.h>
-struct forth; /**An opaque object that holds a running FORTH environment**/
+struct forth; /**< An opaque object that holds a running FORTH environment**/
 typedef struct forth forth;
-typedef uint16_t mw; /*FORTH "machine word", basic int used.*/
+typedef uint16_t mw; /**< FORTH "machine word", basic int used.*/
 /** @brief   Given an input and an output this will initialize forth,
  *           allocating memory for it and setting it up so it has a few
  *           FORTH words predefined. The returned object must be free'd

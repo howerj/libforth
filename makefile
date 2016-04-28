@@ -13,7 +13,7 @@ shorthelp:
 help:
 	@$(ECHO) ""
 	@$(ECHO) "project:      lib$(TARGET)"
-	@$(ECHO) "descriptions: A small FORTH interpreter and library"
+	@$(ECHO) "description: A small $(TARGET) interpreter and library"
 	@$(ECHO) ""
 	@$(ECHO) "make (option)*"
 	@$(ECHO) ""
@@ -42,7 +42,7 @@ lib$(TARGET).a: lib$(TARGET).o
 	$(AR) rcs $@ $<
 lib$(TARGET).so: lib$(TARGET).o lib$(TARGET).h
 	$(CC) -shared -fPIC $< -o $@
-unit: unit.c libforth.a
+unit: unit.c lib$(TARGET).a
 	$(CC) $(CFLAGS) $^ -o $@
 $(TARGET): main.c lib$(TARGET).a
 	$(CC) $(CFLAGS) $^ -o $@
