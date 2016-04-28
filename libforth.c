@@ -63,7 +63,11 @@ struct forth {	  /**< The FORTH environment is contained in here*/
 		 stringin :1; /**< string used if true (*sin), *in otherwise */
 };
 
-static mw ck(mw f) { assert(f < CORESZ); return f; }
+static mw ck(mw f) 
+{ 
+	assert(f < CORESZ); 
+	return f; 
+}
 
 enum registers    { DIC=0/*m[0]*/,RSTK=1,STATE=8,HEX=9,PWD=10,SSTORE=11 };
 enum instructions { PUSH,COMPILE,RUN,DEFINE,IMMEDIATE,COMMENT,READ,LOAD,STORE,
@@ -257,71 +261,72 @@ int forth_run(forth *o)
 	for(;(pc = m[ck(I++)]);) { /* Threaded code interpreter */
 	assert((S>m) && (S<(m+CORESZ)));
 	INNER:  switch (m[ck(pc++)]) {
-		case PUSH:    *++S = f;     f = m[ck(I++)];	   break;
-		case COMPILE: m[ck(m[DIC]++)] = pc;		   break;
-		case RUN:     m[ck(++m[RSTK])] = I; I = pc;	   break;
+		case PUSH:    *++S = f;     f = m[ck(I++)];        break;
+		case COMPILE: m[ck(m[DIC]++)] = pc;                break;
+		case RUN:     m[ck(++m[RSTK])] = I; I = pc;        break;
 		case DEFINE:  m[STATE] = 1;
 			      if(compile(o, COMPILE, NULL) < 0)
 				      return -(o->invalid = 1) /*EOF*/;
-			      m[ck(m[DIC]++)] = RUN;		  break;
-		case IMMEDIATE: *m -= 2; m[m[DIC]++] = RUN;	   break;
-		case COMMENT: if(comment(o) < 0) return 0;	    break;
-		case READ:    m[ck(RSTK)]--;
-			      if(ogetwrd(o, o->s) < 1)
-				      return 0;
-			      if ((w = find(o)) > 1) {
-				      pc = w + 2;
-				      if (!m[STATE] && m[ck(pc)] == COMPILE)
-					      pc++;
-				      goto INNER;
-			      } else if(!isnum((char*)o->s)) {
-				      PWARN(o->s, ": not a word or number");
-				      break;
-			      }
-			      if (m[STATE]) { /*must be a number then*/
-				      m[m[0]++] = 2; /*word push at m[2]*/
-				      m[ck(m[0]++)] = strtol((char*)o->s,0,0);
-			      } else {
-				      *++S = f;
-				      f = strtol((char*)o->s, 0, 0);
-			      }				       break;
-		case LOAD:    f = m[ck(f)];			   break;
-		case STORE:   m[ck(f)] = *S--; f = *S--;	      break;
-		case SUB:     f = *S-- - f;			   break;
-		case ADD:     f = *S-- + f;			   break;
-		case AND:     f = *S-- & f;			   break;
-		case OR:      f = *S-- | f;			   break;
-		case XOR:     f = *S-- ^ f;			   break;
-		case INV:     f = ~f;				 break;
-		case SHL:     f = *S-- << f;			  break;
-		case SHR:     f = *S-- >> f;			  break;
-		case LESS:    f = *S-- < f;			   break;
-		case EXIT:    I = m[ck(m[RSTK]--)];		   break;
-		case EMIT:    fputc(f, o->out); f = *S--;	     break;
-		case KEY:     *++S = f; f = ogetc(o);		 break;
-		case FROMR:   *++S = f; f = m[ck(m[RSTK]--)];	 break;
-		case TOR:     m[ck(++m[RSTK])] = f; f = *S--;	 break;
-		case JMP:     I += m[ck(I)];			  break;
-		case JMPZ:    I += f == 0 ? m[I] : 1; f = *S--;       break;
+			      m[ck(m[DIC]++)] = RUN;               break;
+		case IMMEDIATE: *m -= 2; m[m[DIC]++] = RUN;        break;
+		case COMMENT: if(comment(o) < 0) return 0;         break;
+		case READ:    
+				m[ck(RSTK)]--;
+				if(ogetwrd(o, o->s) < 1)
+					return 0;
+				if ((w = find(o)) > 1) {
+					pc = w + 2;
+					if (!m[STATE] && m[ck(pc)] == COMPILE)
+						pc++;
+					goto INNER;
+				} else if(!isnum((char*)o->s)) {
+					PWARN(o->s, ": not a word or number");
+					break;
+				}
+				if (m[STATE]) { /*must be a number then*/
+					m[m[0]++] = 2; /*word push at m[2]*/
+					m[ck(m[0]++)] = strtol((char*)o->s,0,0);
+				} else {
+					*++S = f;
+					f = strtol((char*)o->s, 0, 0);
+				}                                    break;
+		case LOAD:    f = m[ck(f)];                          break;
+		case STORE:   m[ck(f)] = *S--; f = *S--;             break;
+		case SUB:     f = *S-- - f;                          break;
+		case ADD:     f = *S-- + f;                          break;
+		case AND:     f = *S-- & f;                          break;
+		case OR:      f = *S-- | f;                          break;
+		case XOR:     f = *S-- ^ f;                          break;
+		case INV:     f = ~f;                                break;
+		case SHL:     f = *S-- << f;                         break;
+		case SHR:     f = *S-- >> f;                         break;
+		case LESS:    f = *S-- < f;                          break;
+		case EXIT:    I = m[ck(m[RSTK]--)];                  break;
+		case EMIT:    fputc(f, o->out); f = *S--;            break;
+		case KEY:     *++S = f; f = ogetc(o);                break;
+		case FROMR:   *++S = f; f = m[ck(m[RSTK]--)];        break;
+		case TOR:     m[ck(++m[RSTK])] = f; f = *S--;        break;
+		case JMP:     I += m[ck(I)];                         break;
+		case JMPZ:    I += f == 0 ? m[I] : 1; f = *S--;      break;
 		case PNUM:    fprintf(o->out, m[HEX] ? "%X" : "%u", f);
-			      f = *S--;			       break;
-		case QUOTE:   *++S = f;     f = m[ck(I++)];	   break;
-		case COMMA:   m[ck(m[0]++)] = f; f = *S--;	    break;
-		case EQUAL:   f = *S-- == f;			  break;
-		case SWAP:    w = f;  f = *S--;   *++S = w;	   break;
-		case DUP:     *++S = f;			       break;
-		case DROP:    f = *S--;			       break;
-		case OVER:    w = *S; *++S = f; f = w;		break;
-		case TAIL:    m[RSTK]--;			      break;
-		case BSAVE:   f = blockio(m, *S--, f, 'w');	   break;
-		case BLOAD:   f = blockio(m, *S--, f, 'r');	   break;
+			      f = *S--;                              break;
+		case QUOTE:   *++S = f;     f = m[ck(I++)];          break;
+		case COMMA:   m[ck(m[0]++)] = f; f = *S--;           break;
+		case EQUAL:   f = *S-- == f;                         break;
+		case SWAP:    w = f;  f = *S--;   *++S = w;          break;
+		case DUP:     *++S = f;                              break;
+		case DROP:    f = *S--;                              break;
+		case OVER:    w = *S; *++S = f; f = w;               break;
+		case TAIL:    m[RSTK]--;                             break;
+		case BSAVE:   f = blockio(m, *S--, f, 'w');          break;
+		case BLOAD:   f = blockio(m, *S--, f, 'r');          break;
 		case FIND:    *++S = f;
 			      if(ogetwrd(o, o->s) < 1) 
 				      return 0 /*EOF*/;
 			      f = find(o) + 2;
-			      f = f < 32 ? 0 : f;		     break;
+			      f = f < 32 ? 0 : f;                     break;
 		case PRINT:   fputs(((char*)m)+f, o->out); f = *S--;  break;
-		case PSTK:    if(pstk(o, f ,S) < 0) return -1;	break;
+		case PSTK:    if(pstk(o, f ,S) < 0) return -1;        break;
 		default:      WARN("illegal op"); abort();
 		}
 	}
