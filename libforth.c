@@ -12,11 +12,9 @@
  *  Word Header:
  *  field <0 = Word Name (the name is stored before the main header)
  *  field 0  = Previous Word
- *  field 1  = Hidden Bit | Word Length
- *  field 2  = Code Word
- *  field 3  = Code Word (optional)
+ *  field 1  = Code Word (bits 0 - 7) | Hidden Flag (bit 8) | Word Name Offset (bit 9 - 15) 
+ *  field 3  = Code Word or First Data field Entry
  *  field 4+ = Data Field
- *  @todo Fields 1, 2 and 3 should be merged.
  **/
 
 #include "libforth.h"
@@ -32,8 +30,11 @@
 #define STRING_OFFSET    (32u)   /**< offset into memory of string buffer*/
 #define MAX_WORD_LENGTH  (32u)   /**< maximum forth word length, must be < 255 */
 #define DICTIONARY_START (STRING_OFFSET + MAX_WORD_LENGTH) /**< start of dic */
-#define WORD_LENGTH(FIELD1)   ((FIELD1) & 0xff)
-#define WORD_HIDDEN(FIELD1)   ((FIELD1) & 0x100)
+#define WORD_LENGTH_OFFSET  (8)
+#define WORD_LENGTH(FIELD1) (((FIELD1) >> WORD_LENGTH_OFFSET) & 0xff)
+#define WORD_HIDDEN(FIELD1) ((FIELD1) & 0x80)
+#define INSTRUCTION_MASK    (0x7f)
+#define b(k)                ((k) & INSTRUCTION_MASK)
 
 static const char *core_file= "forth.core";
 static const char *initial_forth_program = "\\ FORTH startup program.       \n\
@@ -48,10 +49,9 @@ static const char *initial_forth_program = "\\ FORTH startup program.       \n\
 : line dup . tab dup 4 + swap begin dup @ . tab 1+ 2dup = until drop ;      \n\
 : literal 2 , , ; : size [ 11 @ literal ] ;                                 \n\
 : list swap begin line cr 2dup < until ; : allot here + h ! ;               \n\
-: words pwd @ begin dup dup 1 + @ - size * print tab @ dup 32 < until cr ;  \n\
+: words pwd @ begin dup dup 1 + @ 8 rshift 255 and - size * print tab @ dup 32 < until drop cr ;  \n\
 : tuck swap over ; : nip swap drop ; : rot >r swap r> swap ;                \n\
 : -rot rot rot ; : ? 0= if [ find \\ , ] then ; : :: [ find : , ] ;";
-
 
 struct forth {	        /**< The FORTH environment is contained in here*/
 	jmp_buf error;
@@ -59,7 +59,7 @@ struct forth {	        /**< The FORTH environment is contained in here*/
 	FILE *out;      /**< file output */  
 	uint8_t *s;     /**< string storage pointer */
 	uint8_t *sin;   /**< string input pointer*/
-	size_t core_size; /**< size of VM */
+	size_t core_size;  /**< size of VM */
 	size_t stack_size; /**< size of variable and return stacks */
 	size_t slen;    /**< string input length*/
 	size_t sidx;    /**< string input index*/
@@ -76,9 +76,10 @@ enum instructions { PUSH,COMPILE,RUN,DEFINE,IMMEDIATE,COMMENT,READ,LOAD,STORE,
 SUB,ADD,AND,OR,XOR,INV,SHL,SHR,MUL,LESS,EXIT,EMIT,KEY,FROMR,TOR,JMP,JMPZ,PNUM,
 QUOTE,COMMA,EQUAL,SWAP,DUP,DROP,OVER,TAIL,BSAVE,BLOAD,FIND,PRINT,PSTK,LAST };
 
-static char *names[] = { "read","@","!","-","+","&","|","^","~","<<",">>","*",
-"<", "exit","emit","key","r>",">r","j","jz",".","'",",","=", "swap","dup",
-"drop", "over", "tail","save","load","find","print",".s", NULL }; 
+static char *names[] = { "read","@","!","-","+","and","or","xor","invert",
+"lshift","rshift","*","<", "exit","emit","key","r>",">r","j","jz",".","'",
+",","=", "swap","dup","drop", "over", "tail","save","load","find",
+"print",".s", NULL }; 
 
 static int forth_get_char(forth_t *o) /**< get a char from string-in or a file*/
 { 
@@ -115,7 +116,7 @@ static int forth_get_word(forth_t *o, uint8_t *p)
 
 static int compile(forth_t *o, forth_cell_t code, char *str) 
 { 
-	assert(o && code < LAST);
+	assert(o && code < LAST && code < INSTRUCTION_MASK);
 	forth_cell_t *m = o->m, header = m[DIC];
 	size_t l = 0;
 	if(!str) {
@@ -127,12 +128,13 @@ static int compile(forth_t *o, forth_cell_t code, char *str)
 	strcpy((char *)(o->m + header), str); /* 0: Copy the new FORTH word into the new header */
 	l = strlen(str) + 1;
 	l = (l + (sizeof(forth_cell_t) - 1)) & ~(sizeof(forth_cell_t) - 1); /* align up to sizeof word */
-	m[DIC] += (l/sizeof(forth_cell_t)); /* Add string length in words to header (STRLEN) */
+	l = l/sizeof(forth_cell_t);
+	m[DIC] += l; /* Add string length in words to header (STRLEN) */
 
 	m[m[0]++] = m[PWD];     /*0 + STRLEN: Pointer to previous words header*/
 	m[PWD] = m[0] - 1;      /*   Update the PWD register to new word */
-	m[m[0]++] = l/sizeof(forth_cell_t); /* 1: size of words name */
-	m[m[0]++] = code;       /*2 + STRLEN: Add in VM code to run for this word*/
+	m[m[0]++] = (l << WORD_LENGTH_OFFSET) | code;          /*1: size of words name */
+	//m[m[0]++] = code;       /*2 + STRLEN: Add in VM code to run for this word*/
 	return 0;
 }
 
@@ -276,17 +278,6 @@ void forth_free(forth_t *o)
 	free(o); 
 }
 
-static forth_cell_t check_bounds(forth_t *o, forth_cell_t f) 
-{ 
-	if(f >= o->core_size) {
-		fprintf(stderr, "( fatal \"bounds check failed: %d >= %zu\" )\n", f, o->core_size);
-		longjmp(o->error, 1);
-	}
-	return f; 
-}
-
-#define ck(c) check_bounds(o, c)
-
 void forth_push(forth_t *o, forth_cell_t f)
 {
 	assert(o && o->S < o->m + o->core_size);
@@ -307,6 +298,17 @@ forth_cell_t forth_stack_position(forth_t *o)
 	return o->S - o->m;
 }
 
+static forth_cell_t check_bounds(forth_t *o, forth_cell_t f) 
+{ 
+	if(f >= o->core_size) {
+		fprintf(stderr, "( fatal \"bounds check failed: %d >= %zu\" )\n", f, o->core_size);
+		longjmp(o->error, 1);
+	}
+	return f; 
+}
+
+#define ck(c) check_bounds(o, c)
+
 int forth_run(forth_t *o) 
 { 
 	assert(o);
@@ -319,7 +321,7 @@ int forth_run(forth_t *o)
 	for(;(pc = m[ck(I++)]);) { /* Threaded code interpreter */
 		assert((S > m) && (S < (m + o->core_size)));
 	INNER:  
-		switch (m[ck(pc++)]) {
+		switch (b(m[ck(pc++)])) {
 		case PUSH:    *++S = f;     f = m[ck(I++)];        break;
 		case COMPILE: m[ck(m[DIC]++)] = pc;                break;
 		case RUN:     m[ck(++m[RSTK])] = I; I = pc;        break;
@@ -327,15 +329,15 @@ int forth_run(forth_t *o)
 			      if(compile(o, COMPILE, NULL) < 0)
 				      goto end;
 			      m[ck(m[DIC]++)] = RUN;               break;
-		case IMMEDIATE: *m -= 2; m[m[DIC]++] = RUN;        break;
+		case IMMEDIATE: *m -= 2; m[m[DIC]] = (m[m[DIC]] & ~INSTRUCTION_MASK) | RUN; m[DIC]++; break;
 		case COMMENT: if(comment(o) < 0) goto end;         break;
 		case READ:    
 			m[ck(RSTK)]--;
 			if(forth_get_word(o, o->s) < 0)
 				goto end;
 			if ((w = find(o)) > 1) {
-				pc = w + 2;
-				if (!m[STATE] && m[ck(pc)] == COMPILE)
+				pc = w + 1;
+				if (!m[STATE] && b(m[ck(pc)]) == COMPILE)
 					pc++;
 				goto INNER;
 			} else if(!is_number((char*)o->s)) {

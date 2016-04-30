@@ -1,19 +1,22 @@
 #!./forth
-\ ============================================================================
-\ START CREATE
-\ ============================================================================
-\ @bug Test code only, this needs refactoring
-: _push 2 ; \ @bug (really @hack) this should be 0, not 2!
+
+: not 0= ;
+: <> = not ;
+: find-) key ')' <> if tail find-) then ;
+: ( immediate find-) ;
+
+( CREATE DOES> )
+: _push 2 ; ( @bug really "@hack", this should be 0, not 2! )
 : _run 2 ;
 : false 0 ;
 : true 1 ;
 
-: write-quote ' ' , ;   \ A word that writes ' into the dictionary
-: write-comma ' , , ;   \ A word that writes , into the dictionary
-: write-exit ' exit , ; \ A word that write exit into the dictionary
+: write-quote ' ' , ;   ( A word that writes ' into the dictionary )
+: write-comma ' , , ;   ( A word that writes , into the dictionary )
+: write-exit ' exit , ; ( A word that write exit into the dictionary )
 : 2+ 2 + ;
 : 3+ 2+ 1+ ;
-: cpf 8 ; \ compile flag, used in "state"
+: cpf 8 ; ( compile flag, used in "state" )
 
 \ This word should be hidden when possible
 : _create        \ create a new work that pushes its data field
@@ -53,19 +56,67 @@
 : variable create ,     does>   ;
 : constant create ,     does> @ ;
 
-\ ============================================================================
-\ END CREATE
-\ ============================================================================
+( UTILITY )
 
-\ ============================================================================
-\ UTILITY
-\ ============================================================================
-
+: logical not not ;
 : 2drop drop drop ;
 : ?dup dup if dup then ;
 : > 2dup = if 2drop false else < if false else true then then ;
 : min 2dup < if drop else swap drop then  ; 
 : max 2dup > if drop else swap drop then  ; 
+: >= < not ;
+: <= > not ;
+: 2* 1 lshift ;
+: 2/ 1 rshift ;
+: # dup . cr ;
+
+: log-2 0 swap begin swap 1+ swap 2/ dup 0= until drop 1- ;
+
+( : 8* 8 * ;
+: mask 8* 255 swap lshift ;
+: size-1 [ size 1- literal ] ;
+: alignment-bits size-1 and ;
+: caddr [ size log-2 literal ] rshift ;
+: c@ dup caddr @ swap alignment-bits tuck mask and swap 8* rshift ;
+: c! tuck dup caddr @ swap alignment-bits rot swap  8* lshift or swap caddr ! ;
+1 hex
+1 0x4000 !
+0xF0 0x8000 c! 
+0xC0 0x8001 c!
+0x4000 @ . cr )
+
+0 variable i
+0 variable j
+
+: i! i ! ;
+: j! j ! ;
+: i@ i @ ;
+: j@ j @ ;
+
+: do immediate 
+  ' j! ,
+  ' i! ,
+  here
+;
+
+: >= 
+  < not
+;
+
+: (++i)>=j
+  i@ 1+ i! i@ j@ >= 
+;
+
+: loop immediate
+  ' (++i)>=j ,
+  ' jz ,
+  here - ,
+;
+
+: break 
+  j@ i!
+;
+
 
 \ ============================================================================
 \ UTILITY
