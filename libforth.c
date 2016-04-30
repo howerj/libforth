@@ -5,16 +5,18 @@
  *  @license    LGPL v2.1 or later version
  *  @email      howe.r.j.89@gmail.com 
  * 
- *  @todo The string storage should be made clear, removing vestiges
- *  of the previous string storage mechanism
- *  @todo A new Forth word format needs making.
  *  @todo Port this to a micro controller, and a Linux kernel module device
  *  driver (just because).
- *  @todo Make a better interface to the library, allowing the stack to
- *  be accessed and different size interpreters to be made.
  *  @todo Routines for saving and loading the image should be made
- *  @todo The hide bit should probably be moved else where instead of being
- *  in the word pointer
+ *
+ *  Word Header:
+ *  field <0 = Word Name (the name is stored before the main header)
+ *  field 0  = Previous Word
+ *  field 1  = Hidden Bit | Word Length
+ *  field 2  = Code Word
+ *  field 3  = Code Word (optional)
+ *  field 4+ = Data Field
+ *  @todo Fields 1, 2 and 3 should be merged.
  **/
 
 #include "libforth.h"
@@ -26,6 +28,12 @@
 #include <setjmp.h>
 
 #define CORE_SIZE  ((UINT16_MAX + 1u) / 2u) /**< virtual machine memory size*/
+#define BLOCK_SIZE       (1024u) /**< size of forth block in bytes */
+#define STRING_OFFSET    (32u)   /**< offset into memory of string buffer*/
+#define MAX_WORD_LENGTH  (32u)   /**< maximum forth word length, must be < 255 */
+#define DICTIONARY_START (STRING_OFFSET + MAX_WORD_LENGTH) /**< start of dic */
+#define WORD_LENGTH(FIELD1)   ((FIELD1) & 0xff)
+#define WORD_HIDDEN(FIELD1)   ((FIELD1) & 0x100)
 
 static const char *core_file= "forth.core";
 static const char *initial_forth_program = "\\ FORTH startup program.       \n\
@@ -38,17 +46,12 @@ static const char *initial_forth_program = "\\ FORTH startup program.       \n\
 : 0= 0 = ; : 1+ 1 + ; : 1- 1 - ; : ')' 41 ; : tab 9 emit ; : cr 10 emit ;   \n\
 : .( key drop begin key dup ')' = if drop exit then emit 0 until ;          \n\
 : line dup . tab dup 4 + swap begin dup @ . tab 1+ 2dup = until drop ;      \n\
-: literal 2 , , ; : size [ 11 @ literal ] ; : string-offset [ 12 @ literal ] ; \n\
+: literal 2 , , ; : size [ 11 @ literal ] ;                                 \n\
 : list swap begin line cr 2dup < until ; : allot here + h ! ;               \n\
-: words pwd @ begin dup 1 + @ size string-offset * + print tab @ dup 32 < until cr ; \n\
+: words pwd @ begin dup dup 1 + @ - size * print tab @ dup 32 < until cr ;  \n\
 : tuck swap over ; : nip swap drop ; : rot >r swap r> swap ;                \n\
 : -rot rot rot ; : ? 0= if [ find \\ , ] then ; : :: [ find : , ] ;";
 
-static const forth_cell_t 
-        block_size = 1024u,  /**< size of a FORTH block, in bytes*/
-	hide            = 1 << ((CHAR_BIT * sizeof(hide)) - 1), /**< hide bit*/
-	string_offset   = 32u,   /**< offset for strings (@todo remove the need for this!)*/
-	max_word_length = 32u;
 
 struct forth {	        /**< The FORTH environment is contained in here*/
 	jmp_buf error;
@@ -63,6 +66,7 @@ struct forth {	        /**< The FORTH environment is contained in here*/
 	unsigned stringin :1; /**< string used if true (*sin), *in otherwise */
 	unsigned invalid  :1; /**< if true, this object is invalid*/
 	forth_cell_t I;	 /**< instruction pointer*/
+	forth_cell_t top; /**< stored top of stack */
 	forth_cell_t *S; /**< stack pointer*/
 	forth_cell_t m[]; /**< Forth Virtual Machine memory */
 };
@@ -99,7 +103,7 @@ static int forth_get_word(forth_t *o, uint8_t *p)
 { 
 	int n = 0;
 	char fmt[16] = { 0 };
-	sprintf(fmt, "%%%ds%%n", max_word_length - 1);
+	sprintf(fmt, "%%%ds%%n", MAX_WORD_LENGTH - 1);
 	if(o->stringin) {
 		if(sscanf((char *)&(o->sin[o->sidx]), fmt, p, &n) < 0)
 			return EOF;
@@ -127,7 +131,7 @@ static int compile(forth_t *o, forth_cell_t code, char *str)
 
 	m[m[0]++] = m[PWD];     /*0 + STRLEN: Pointer to previous words header*/
 	m[PWD] = m[0] - 1;      /*   Update the PWD register to new word */
-	m[m[0]++] = (header*sizeof(forth_cell_t)) - (string_offset*sizeof(forth_cell_t));  /*1 + STRLEN: Point to string*/
+	m[m[0]++] = l/sizeof(forth_cell_t); /* 1: size of words name */
 	m[m[0]++] = code;       /*2 + STRLEN: Add in VM code to run for this word*/
 	return 0;
 }
@@ -137,23 +141,29 @@ static int blockio(forth_t *o, void *p, forth_cell_t poffset, forth_cell_t id, c
 	char name[16] = {0}; /* XXXX + ".blk" + '\0' + a little spare change */
 	FILE *file = NULL;
 	size_t n;
-	if(poffset > (o->core_size - block_size))
+	if(poffset > (o->core_size - BLOCK_SIZE))
 		return -1;
 	sprintf(name, "%04x.blk", (int)id);
 	if(!(file = fopen(name, rw == 'r' ? "rb" : "wb"))) {
 		fprintf(stderr, "( error 'file-open \"%s : could not open file\" )\n", name);
 		return -1;
 	}
-	n = rw == 'w' ? fwrite(((char*)p) + poffset, 1, block_size, file):
-			fread (((char*)p) + poffset, 1, block_size, file);
+	n = rw == 'w' ? fwrite(((char*)p) + poffset, 1, BLOCK_SIZE, file):
+			fread (((char*)p) + poffset, 1, BLOCK_SIZE, file);
 	fclose(file);
-	return n == block_size ? 0 : -1;
+	return n == BLOCK_SIZE ? 0 : -1;
 } /*a basic FORTH block I/O interface*/
 
-static int isnum(const char *s)  /**< is word a number? */
+static int is_number(const char *s)  /**< is word a number? */
 {
 	s += *s == '-' ? 1 : 0; 
-	return s[strspn(s, "0123456789")] == '\0'; 
+	if(s[0] == '0') {
+		if(s[1] == 'x')
+			return s[strspn(s+2,"0123456789abcdefABCDEF")+2] == '\0' && s[2];
+		else
+			return s[strspn(s,"01234567")] == '\0';
+	}
+	return s[strspn(s, "0123456789")] == '\0' && s[0]; 
 }
 
 static int comment(forth_t *o)  /**< process a comment line*/
@@ -165,11 +175,13 @@ static int comment(forth_t *o)  /**< process a comment line*/
 
 static forth_cell_t find(forth_t *o) 
 { 
-	forth_cell_t *m = o->m, w = m[PWD];
-	for (;(w & hide) || strcmp((char*)o->s,(char*)&o->s[m[(w & ~hide)+1]]);)
-		w = m[w & ~hide]; /*top bit, or hide bit, hides the word*/
-	return w;
-} /*find a word in the FORTH dictionary*/
+	forth_cell_t *m = o->m, w = m[PWD], len = WORD_LENGTH(m[w+1]);
+	for (;w > DICTIONARY_START && (strcmp((char*)o->s,(char*)(&o->m[w - len])) || WORD_HIDDEN(m[w+1]));) {
+		w = m[w]; 
+		len = WORD_LENGTH(m[w+1]);
+	}
+	return w > DICTIONARY_START ? w : 0;
+} 
 
 static int print_stack(forth_t *o, forth_cell_t f, forth_cell_t *S)
 { 
@@ -231,14 +243,13 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out)
 	o->core_size = size;
 	o->stack_size = size / 64;
 	m = o->m;       /*a local variable only for convenience*/
-	o->s = (uint8_t*)(m + string_offset); /*string store offset into CORE, skip register*/
+	o->s = (uint8_t*)(m + STRING_OFFSET); /*string store offset into CORE, skip registers*/
 	o->out = out;   /*this will be used for standard output*/
 
-	w = m[DIC] = string_offset + max_word_length; /*initial dictionary offset, skip registers and string offset*/
+	w = m[DIC] = DICTIONARY_START; /*initial dictionary offset, skip registers and string offset*/
 	m[PWD]     = 1;     /*special terminating pwd*/
 	m[INFO]    = sizeof(forth_cell_t);
-	m[INFO+1]  = string_offset;
-	m[INFO+2]  = size;
+	m[INFO+1]  = size;
 
 	m[m[DIC]++] = READ; /*create a special word that reads in FORTH*/
 	m[m[DIC]++] = RUN;  /*call the special word recursively*/
@@ -279,13 +290,16 @@ static forth_cell_t check_bounds(forth_t *o, forth_cell_t f)
 void forth_push(forth_t *o, forth_cell_t f)
 {
 	assert(o && o->S < o->m + o->core_size);
-	*++(o->S) = f;
+	*++(o->S) = o->top;
+	o->top = f;
 }
 
 forth_cell_t forth_pop(forth_t *o)
 {
 	assert(o && o->S > o->m);
-	return *(o->S)--;
+	forth_cell_t f = o->top;
+	o->top = *(o->S)--;
+	return f;
 }
 
 forth_cell_t forth_stack_position(forth_t *o)
@@ -296,7 +310,7 @@ forth_cell_t forth_stack_position(forth_t *o)
 int forth_run(forth_t *o) 
 { 
 	assert(o);
-	forth_cell_t *m, pc, *S, I, f = 0, w;
+	forth_cell_t *m, pc, *S, I, f = o->top, w;
 	m = o->m, S = o->S, I = o->I; 
 
 	if(o->invalid || setjmp(o->error))
@@ -311,20 +325,20 @@ int forth_run(forth_t *o)
 		case RUN:     m[ck(++m[RSTK])] = I; I = pc;        break;
 		case DEFINE:  m[STATE] = 1;
 			      if(compile(o, COMPILE, NULL) < 0)
-				      return 0;
+				      goto end;
 			      m[ck(m[DIC]++)] = RUN;               break;
 		case IMMEDIATE: *m -= 2; m[m[DIC]++] = RUN;        break;
-		case COMMENT: if(comment(o) < 0) return 0;         break;
+		case COMMENT: if(comment(o) < 0) goto end;         break;
 		case READ:    
 			m[ck(RSTK)]--;
-			if(forth_get_word(o, o->s) < 1)
-				return 0;
+			if(forth_get_word(o, o->s) < 0)
+				goto end;
 			if ((w = find(o)) > 1) {
 				pc = w + 2;
 				if (!m[STATE] && m[ck(pc)] == COMPILE)
 					pc++;
 				goto INNER;
-			} else if(!isnum((char*)o->s)) {
+			} else if(!is_number((char*)o->s)) {
 				fprintf(stderr, "( error \"%s is not a word\" )\n", o->s);
 				break;
 			}
@@ -367,17 +381,18 @@ int forth_run(forth_t *o)
 		case BSAVE:   f = blockio(o, m, *S--, f, 'w');       break;
 		case BLOAD:   f = blockio(o, m, *S--, f, 'r');       break;
 		case FIND:    *++S = f;
-			      if(forth_get_word(o, o->s) < 1) 
-				      return 0 /*EOF*/;
+			      if(forth_get_word(o, o->s) < 0) 
+				      goto end;
 			      f = find(o) + 2;
-			      f = f < max_word_length ? 0 : f;        break;
+			      f = f < DICTIONARY_START ? 0 : f;       break;
 		case PRINT:   fputs(((char*)m)+f, o->out); f = *S--;  break;
-		case PSTK:    if(print_stack(o, f ,S) < 0) return -1; break;
+		case PSTK:    print_stack(o, f ,S);                   break;
 		default:      
 			fputs("( fatal 'illegal-op )\n", stderr);
-			abort();
+			longjmp(o->error, 1);
 		}
 	}
+end:    o->top = f;
 	return 0;
 }
 

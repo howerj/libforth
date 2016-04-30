@@ -153,11 +153,15 @@ int main(int argc, char **argv) {
 
         unit_test_start("libforth");
         {
-                forth *f;
+                forth_t *f;
                 print_note("libforth.c");
-                test(f = forth_init(stdin, stdout));
+                test(f = forth_init(MINIMUM_CORE_SIZE, stdin, stdout));
 
                 test(forth_eval(f, "2 2 + . cr") >= 0);
+		state(forth_push(f, 99));
+		state(forth_push(f, 98));
+                test(forth_eval(f, "+") >= 0);
+		test(forth_pop(f) == 197);
 
                 state(forth_free(f));
         }
