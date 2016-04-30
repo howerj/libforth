@@ -3,25 +3,7 @@
  *  @author   Richard Howe (2015)
  *  @license  LGPL v2.1 or Later 
  *            <https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html> 
- *  @email    howe.r.j.89@gmail.com
- *
- *  @todo     It is possible to test if a function throws an
- *            assertion when passed invalid data. If it does not throw
- *            an assertion it might irrevocably corrupt the program
- *            state.
- *  @todo     This unit test framework should aim for 100% coverage in
- *            each file, however difficult it might be, Gcov can be
- *            used to get the current coverage percentage:
- *            (see <https://gcc.gnu.org/onlinedocs/gcc/Gcov.html>).
- *  @note     This could be moved to "util.c" so it can be reused, the
- *            unit test functionality has been encapsulated in a series
- *            of functions here that should be quite module, if limited
- *            to single threaded applications.
- *  @note     All functions under test should have assertions turned on
- *            when they were compiled. This test suite can handle SIGABRT
- *            signals being generated, it will fail the unit that caused
- *            it and continue processing the next tests. 
- **/
+ *  @email    howe.r.j.89@gmail.com **/
 
 /*** module to test ***/
 #include "libforth.h"
@@ -157,6 +139,7 @@ int main(int argc, char **argv) {
                 print_note("libforth.c");
                 test(f = forth_init(MINIMUM_CORE_SIZE, stdin, stdout));
 
+                test(forth_eval(f, "here . cr")  >= 0);
                 test(forth_eval(f, "2 2 + . cr") >= 0);
 		state(forth_push(f, 99));
 		state(forth_push(f, 98));

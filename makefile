@@ -48,7 +48,7 @@ $(TARGET): main.c lib$(TARGET).a
 	$(CC) $(CFLAGS) $^ -o $@
 
 run: $(TARGET)
-	./$^
+	./$^ 
 test: unit
 	./$^
 

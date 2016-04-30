@@ -24,6 +24,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <setjmp.h>
+#include <time.h>
 
 #define CORE_SIZE  ((UINT16_MAX + 1u) / 2u) /**< virtual machine memory size*/
 #define BLOCK_SIZE       (1024u) /**< size of forth block in bytes */
@@ -41,17 +42,17 @@ static const char *initial_forth_program = "\\ FORTH startup program.       \n\
 : state 8 ! exit : ; immediate ' exit , 0 state exit : hex 9 ! ; : pwd 10 ; \n\
 : h 0 ; : r 1 ; : here h @ ; : [ immediate 0 state ; : ] 1 state ;          \n\
 : :noname immediate here 2 , ] ; : if immediate ' jz , here 0 , ;           \n\
-: else immediate ' j , here 0 , swap dup here swap - swap ! ;               \n\
-: then immediate dup here swap - swap ! ; : 2dup over over ;                \n\
+: else immediate ' j , here 0 , swap dup here swap - swap ! ; : 0= 0 = ;    \n\
+: then immediate dup here swap - swap ! ; : 2dup over over ; : <> = 0= ;    \n\
 : begin immediate here ; : until immediate ' jz , here - , ;                \n\
-: 0= 0 = ; : 1+ 1 + ; : 1- 1 - ; : ')' 41 ; : tab 9 emit ; : cr 10 emit ;   \n\
+: not 0= ; : 1+ 1 + ; : 1- 1 - ; : ')' 41 ; : tab 9 emit ; : cr 10 emit ;   \n\
 : .( key drop begin key dup ')' = if drop exit then emit 0 until ;          \n\
 : line dup . tab dup 4 + swap begin dup @ . tab 1+ 2dup = until drop ;      \n\
 : literal 2 , , ; : size [ 11 @ literal ] ;                                 \n\
+: find-) key ')' <> if tail find-) then ; : ( immediate find-) ;            \n\
 : list swap begin line cr 2dup < until ; : allot here + h ! ;               \n\
-: words pwd @ begin dup dup 1 + @ 8 rshift 255 and - size * print tab @ dup 32 < until drop cr ;  \n\
 : tuck swap over ; : nip swap drop ; : rot >r swap r> swap ;                \n\
-: -rot rot rot ; : ? 0= if [ find \\ , ] then ; : :: [ find : , ] ;";
+: -rot rot rot ; : ? 0= if [ find \\ 1+ , ] then ; : :: [ find : 1+ , ] ;";
 
 struct forth {	        /**< The FORTH environment is contained in here*/
 	jmp_buf error;
@@ -65,6 +66,7 @@ struct forth {	        /**< The FORTH environment is contained in here*/
 	size_t sidx;    /**< string input index*/
 	unsigned stringin :1; /**< string used if true (*sin), *in otherwise */
 	unsigned invalid  :1; /**< if true, this object is invalid*/
+	clock_t start_time;
 	forth_cell_t I;	 /**< instruction pointer*/
 	forth_cell_t top; /**< stored top of stack */
 	forth_cell_t *S; /**< stack pointer*/
@@ -73,13 +75,13 @@ struct forth {	        /**< The FORTH environment is contained in here*/
 
 enum registers    { DIC=0/*m[0]*/,RSTK=1,STATE=8,HEX=9,PWD=10,INFO=11 };
 enum instructions { PUSH,COMPILE,RUN,DEFINE,IMMEDIATE,COMMENT,READ,LOAD,STORE,
-SUB,ADD,AND,OR,XOR,INV,SHL,SHR,MUL,LESS,EXIT,EMIT,KEY,FROMR,TOR,JMP,JMPZ,PNUM,
-QUOTE,COMMA,EQUAL,SWAP,DUP,DROP,OVER,TAIL,BSAVE,BLOAD,FIND,PRINT,PSTK,LAST };
+SUB,ADD,AND,OR,XOR,INV,SHL,SHR,MUL,LESS,MORE,EXIT,EMIT,KEY,FROMR,TOR,JMP,JMPZ,PNUM,
+QUOTE,COMMA,EQUAL,SWAP,DUP,DROP,OVER,TAIL,BSAVE,BLOAD,FIND,PRINT,PSTK,CLOCK,LAST };
 
 static char *names[] = { "read","@","!","-","+","and","or","xor","invert",
-"lshift","rshift","*","<", "exit","emit","key","r>",">r","j","jz",".","'",
+"lshift","rshift","*","<",">","exit","emit","key","r>",">r","j","jz",".","'",
 ",","=", "swap","dup","drop", "over", "tail","save","load","find",
-"print",".s", NULL }; 
+"print",".s", "clock", NULL }; 
 
 static int forth_get_char(forth_t *o) /**< get a char from string-in or a file*/
 { 
@@ -133,8 +135,7 @@ static int compile(forth_t *o, forth_cell_t code, char *str)
 
 	m[m[0]++] = m[PWD];     /*0 + STRLEN: Pointer to previous words header*/
 	m[PWD] = m[0] - 1;      /*   Update the PWD register to new word */
-	m[m[0]++] = (l << WORD_LENGTH_OFFSET) | code;          /*1: size of words name */
-	//m[m[0]++] = code;       /*2 + STRLEN: Add in VM code to run for this word*/
+	m[m[0]++] = (l << WORD_LENGTH_OFFSET) | code; /*1: size of words name and code field */
 	return 0;
 }
 
@@ -188,9 +189,11 @@ static forth_cell_t find(forth_t *o)
 static int print_stack(forth_t *o, forth_cell_t f, forth_cell_t *S)
 { 
 	forth_cell_t *begin = o->m + o->core_size - (2*o->stack_size);
-	if(fprintf(o->out, o->m[HEX] ? "%hx\t" : "%hu\t", f) < 0) return -1;
+	if(begin != S)
+		if(fprintf(o->out, o->m[HEX] ? "0x%x\t" : "%u\t", f) < 0) 
+			return -1;
 	while(begin + 1 < S)
-		if(fprintf(o->out, o->m[HEX] ? "%hx\t" : "%hu\t", *(S--)) < 0) 
+		if(fprintf(o->out, o->m[HEX] ? "0x%x\t" : "%u\t", *(S--)) < 0) 
 			return -1;
 	return 0;
 } /*print the forth stack*/
@@ -269,6 +272,7 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out)
 	if(forth_eval(o, initial_forth_program) < 0) 
 		return NULL; /*define words*/
 	forth_set_file_input(o, in);	/*set up input after out eval*/
+	o->start_time = clock();
 	return o;
 }
 
@@ -322,15 +326,19 @@ int forth_run(forth_t *o)
 		assert((S > m) && (S < (m + o->core_size)));
 	INNER:  
 		switch (b(m[ck(pc++)])) {
-		case PUSH:    *++S = f;     f = m[ck(I++)];        break;
-		case COMPILE: m[ck(m[DIC]++)] = pc;                break;
-		case RUN:     m[ck(++m[RSTK])] = I; I = pc;        break;
+		case PUSH:    *++S = f;     f = m[ck(I++)];         break;
+		case COMPILE: m[ck(m[DIC]++)] = pc;                 break;
+		case RUN:     m[ck(++m[RSTK])] = I; I = pc;         break;
 		case DEFINE:  m[STATE] = 1;
 			      if(compile(o, COMPILE, NULL) < 0)
 				      goto end;
-			      m[ck(m[DIC]++)] = RUN;               break;
-		case IMMEDIATE: *m -= 2; m[m[DIC]] = (m[m[DIC]] & ~INSTRUCTION_MASK) | RUN; m[DIC]++; break;
-		case COMMENT: if(comment(o) < 0) goto end;         break;
+			      m[ck(m[DIC]++)] = RUN;                break;
+		case IMMEDIATE: 
+			      *m -= 2; 
+			      m[m[DIC]] &= ~INSTRUCTION_MASK;
+			      m[m[DIC]] |= RUN; 
+			      m[DIC]++;                             break;
+		case COMMENT: if(comment(o) < 0) goto end;          break;
 		case READ:    
 			m[ck(RSTK)]--;
 			if(forth_get_word(o, o->s) < 0)
@@ -363,6 +371,7 @@ int forth_run(forth_t *o)
 		case SHR:     f = *S-- >> f;                         break;
 		case MUL:     f = *S-- * f;                          break;
 		case LESS:    f = *S-- < f;                          break;
+		case MORE:    f = *S-- > f;                          break;
 		case EXIT:    I = m[ck(m[RSTK]--)];                  break;
 		case EMIT:    fputc(f, o->out); f = *S--;            break;
 		case KEY:     *++S = f; f = forth_get_char(o);       break;
@@ -370,7 +379,7 @@ int forth_run(forth_t *o)
 		case TOR:     m[ck(++m[RSTK])] = f; f = *S--;        break;
 		case JMP:     I += m[ck(I)];                         break;
 		case JMPZ:    I += f == 0 ? m[I] : 1; f = *S--;      break;
-		case PNUM:    fprintf(o->out, m[HEX] ? "%X" : "%u", f);
+		case PNUM:    fprintf(o->out, m[HEX] ? "0x%x" : "%u", f);
 			      f = *S--;                              break;
 		case QUOTE:   *++S = f;     f = m[ck(I++)];          break;
 		case COMMA:   m[ck(m[0]++)] = f; f = *S--;           break;
@@ -385,10 +394,13 @@ int forth_run(forth_t *o)
 		case FIND:    *++S = f;
 			      if(forth_get_word(o, o->s) < 0) 
 				      goto end;
-			      f = find(o) + 2;
-			      f = f < DICTIONARY_START ? 0 : f;       break;
-		case PRINT:   fputs(((char*)m)+f, o->out); f = *S--;  break;
-		case PSTK:    print_stack(o, f ,S);                   break;
+			      f = find(o);
+			      f = f < DICTIONARY_START ? 0 : f;      break;
+		case PRINT:   fputs(((char*)m)+f, o->out); f = *S--; break;
+		case PSTK:    print_stack(o, f ,S);                  break;
+		case CLOCK:   *++S = f;
+			      f = ((1000 * (clock() - o->start_time)) / CLOCKS_PER_SEC);
+			                                             break;
 		default:      
 			fputs("( fatal 'illegal-op )\n", stderr);
 			longjmp(o->error, 1);
