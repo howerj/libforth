@@ -39,15 +39,15 @@
 
 static const char *core_file= "forth.core";
 static const char *initial_forth_program = "\\ FORTH startup program.       \n\
-: state 8 ! exit : ; immediate ' exit , 0 state exit : hex 9 ! ; : pwd 10 ; \n\
-: h 0 ; : r 1 ; : here h @ ; : [ immediate 0 state ; : ] 1 state ;          \n\
+: state 8 exit : ; immediate ' exit , 0 state ! exit : hex 9 ! ; : pwd 10 ; \n\
+: h 0 ; : r 1 ; : here h @ ; : [ immediate 0 state ! ; : ] 1 state ! ;      \n\
 : :noname immediate here 2 , ] ; : if immediate ' jmpz , here 0 , ;         \n\
 : else immediate ' jmp , here 0 , swap dup here swap - swap ! ; : 0= 0 = ;  \n\
 : then immediate dup here swap - swap ! ; : 2dup over over ; : <> = 0= ;    \n\
 : begin immediate here ; : until immediate ' jmpz , here - , ; : '\\n' 10 ; \n\
 : not 0= ; : 1+ 1 + ; : 1- 1 - ; : ')' 41 ; : tab 9 emit ; : cr '\\n' emit ;\n\
 : line dup . tab dup 4 + swap begin dup @ . tab 1+ 2dup = until drop ;      \n\
-: literal 2 , , ; : size [ 11 @ literal ] ; : stack-start [ 13 @ literal ] ;\n\
+: literal immediate 2 , , ; : size [ 11 @ literal ] ; : stack-start [ 13 @ literal ] ;\n\
 : find-) key ')' <> if tail find-) then ; : ( immediate find-) ;            \n\
 : list swap begin line cr 2dup < until ; : allot here + h ! ;               \n\
 : tuck swap over ; : nip swap drop ; : rot >r swap r> swap ;                \n\

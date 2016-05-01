@@ -40,6 +40,16 @@ See:
 	is not a defined word ) 
 	64 
 ;
+: source ( -- c-addr u ) 
+	32 size * ( size of input buffer, in characters )
+	64 size * ( start of input buffer, in characters )
+;
+
+: again immediate 
+	( loop unconditionally in a begin-loop:
+		begin ... again )
+	' jmp , here - , 
+; 
 : 2drop ( x y -- ) drop drop ;
 : words ( -- )
 	( This function prints out all of the defined words, excluding hidden words.
@@ -84,6 +94,9 @@ See:
 : 2+ ( x -- x ) 2 + ;
 : 3+ ( x -- x ) 3 + ;
 : +! ( x addr -- ) ( add x to a value stored at addr ) tuck @ + swap ! ;
+: mod ( x u -- remainder ) 2dup / * - ;
+: char key drop key ;
+: [char] immediate char ;
 
 : hide ( WORD -- hide-token ) 
 	( This hides a word from being found by the interpreter )
@@ -101,7 +114,6 @@ hide find-) drop
 : push-location 2 ;       ( location of special "push" word )
 : compile-instruction 1 ; ( compile code word, threaded code interpreter instruction )
 : run-instruction 2 ;     ( run code word, threaded code interpreter instruction )
-: state? 8 @ ;            ( state flag is in register location eight )
 : ?dup ( x -- ? ) dup if dup then ;
 : min ( x y -- min ) 2dup < if drop else swap drop then  ; 
 : max ( x y -- max ) 2dup > if drop else swap drop then  ; 
@@ -116,8 +128,20 @@ hide find-) drop
 : 0> 0 > ;
 : 0<> 0 <> ;
 
-: usleep * clock + begin dup clock < until drop ;
+: usleep clock +  begin dup clock < until drop ;
 : sleep 1000 * usleep ;
+
+: gcd ( a b -- n ) ( greatest common divisor )
+	begin
+		dup
+		if
+			tuck mod 0
+		else
+			1
+		then
+	until
+	drop
+;
 
 : log-2 ( x -- log2 ) 
 	( Computes the binary integer logarithm of a number,
@@ -137,36 +161,39 @@ words can be used to add constants, variables and arrays to the language,
 amongst other things.
 
 A simple version of create is as follows  
-	: create :: 2 , here 2 + , ' exit , 0 state ; 
+	: create :: 2 , here 2 + , ' exit , 0 state ! ; 
 But this version is much more limited )
 
 : write-quote ' ' , ;   ( A word that writes ' into the dictionary )
 : write-comma ' , , ;   ( A word that writes , into the dictionary )
 : write-exit ' exit , ; ( A word that write exit into the dictionary ) 
 
+: state! ( bool -- ) ( set the compilation state variable ) state ! ;
+
 : _create             \ create a new work that pushes its data field
 	::            \ compile a word
 	push-location ,       \ write push into new word
 	here 2+ ,     \ push a pointer to data field
 	' exit ,      \ write in an exit to new word data field is after exit 
-	false state   \ return to command mode
+	false state!  \ return to command mode
 ;
 
 : create immediate              \ This is a complicated word! It makes a
                                 \ word that makes a word.
-  state? if                     \ Compile time behavior
+  state @ if                    \ Compile time behavior
   ' :: ,                        \ Make the defining word compile a header
   write-quote push-location , write-comma    \ Write in push to the creating word
   ' here , ' 3+ , write-comma        \ Write in the number we want the created word to push
   write-quote here 0 , write-comma   \ Write in a place holder 0 and push a 
                                      \ pointer to to be used by does>
   write-quote write-exit write-comma \ Write in an exit in the word we're compiling.
-  ' false , ' state ,           \ Make sure to change the state back to command mode
+  ' false , ' state! ,          \ Make sure to change the state back to command mode
   else                          \ Run time behavior
         _create
   then
 ;
 hide _create drop
+hide state! drop
 
 : does> ( whole-to-patch -- ) 
   immediate
@@ -253,18 +280,36 @@ hide inci drop
 : decimal ( -- ) ( print out decimal ) 0 hex ;
 : negate -1 * ;
 
-: recurse ( recursively call the word currently being defined ) 
+hide tail drop ( avoids confusion of there being two versions of tail )
+: tail 
+	( This replaces the built in version of "tail", which messes up the
+	stack and requires a word that uses it to be wrapped up in another
+	definition. It allows you to recursively call a function, however
+	the function must be tail recursive, if the function is not, "recurse"
+	should be used instead )
 	immediate
 	pwd @ 1+ dup @ 
 	instruction-mask and compile-instruction = 
 	if
 		1+
 	then
-	\ ' tail , ( currently causes problems )
+	' jmp ,
+	here - 1+ ,
+;
+
+: recurse
+	immediate
+	( We can test "recurse" with this factorial function:
+	  : factorial  dup 2 < if drop 1 exit then dup 1- recurse * ;)
+	pwd @ 1+ dup @ 
+	instruction-mask and compile-instruction = 
+	if
+		1+
+	then
 	,
 ;
 
-: bl ( space character ) 32 ;
+: bl ( space character ) [char]  literal ; ( warning: white space is significant after [char] )
 : space bl emit ;
 : spaces ( n -- ) 0 do space loop ;
 
@@ -355,9 +400,10 @@ hide inci drop
 ;
 hide delim drop
 
+
 255 constant max-string-length 
 
-: '"' 34 ;
+: '"' [char] " literal ;
 : accept swap '\n' accepter ;
 : accept-string max-string-length '"' accepter  ;
 
@@ -385,8 +431,13 @@ size 1- constant aligner
 ;
 hide aligner drop
 
+: align ( x -- x ) ; ( nop in this implementation )
+
 0 variable delim
 : write-string ( char -- )
+	( Write a string into word being currently defined, this
+	code has to jump over the string it has just put into the
+	dictionary so normal execution of a word can continue )
 	delim !         ( save delimiter )
 	' jmp ,         ( write in jump, this will jump past the string )
 	here 0 ,        ( make hole )
@@ -404,7 +455,7 @@ hide aligner drop
 hide delim drop
 
 : do-string ( char -- )
-	state? if write-string else print-string then
+	state @ if write-string else print-string then
 ;
 
 : " immediate '"' do-string ;
@@ -438,6 +489,7 @@ hide delim drop
 	2drop
 ;
 
+( 
 255 0x8000 accept hello world
 drop
 
@@ -445,6 +497,7 @@ drop
 
 0x8000 print cr
 0x8200 print cr
+)
 
 hide write-string drop
 hide do-string drop
@@ -481,5 +534,6 @@ hide  max-string-length    drop
 	* Base
 	* Find is not ANS forth compatible
 	* By adding "c@" and "c!" to the interpreter I could remove print
+	* Word, Parse, ?do, more looping constructs, Case statements
 	quite easily by implementing "count" in the start up code
 )
