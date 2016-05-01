@@ -270,8 +270,16 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out)
 		compile(o, COMPILE, names[i]), m[m[DIC]++] = w++;
 	m[RSTK] = size - o->stack_size;	   /*set up return stk pointer*/
 	o->S    = m + size - (2 * o->stack_size); /*set up variable stk pointer*/
+
 	if(forth_eval(o, initial_forth_program) < 0) 
 		return NULL; /*define words*/
+
+	static const char fmt[] = " : x %d ; ";
+	static char constants[sizeof(fmt)+50];
+	sprintf(constants, fmt, 10);
+	if(forth_eval(o, constants) < 0) 
+		return NULL; /*define words*/
+
 	forth_set_file_input(o, in);	/*set up input after out eval*/
 	o->start_time = clock();
 	return o;
