@@ -4,17 +4,8 @@
  *  @copyright  Copyright 2015 Richard James Howe.
  *  @license    LGPL v2.1 or later version
  *  @email      howe.r.j.89@gmail.com 
+ *  Please consult "libforth.md" and "start.4th" for more information
  * 
- *  @todo Port this to a micro controller, and a Linux kernel module device
- *  driver (just because).
- *  @todo Routines for saving and loading the image should be made
- *
- *  Word Header:
- *  field <0 = Word Name (the name is stored before the main header)
- *  field 0  = Previous Word
- *  field 1  = Code Word (bits 0 - 7) | Hidden Flag (bit 8) | Word Name Offset (bit 9 - 15) 
- *  field 3  = Code Word or First Data field Entry
- *  field 4+ = Data Field
  **/
 
 #include "libforth.h"
@@ -35,9 +26,10 @@
 #define WORD_LENGTH(FIELD1) (((FIELD1) >> WORD_LENGTH_OFFSET) & 0xff)
 #define WORD_HIDDEN(FIELD1) ((FIELD1) & 0x80)
 #define INSTRUCTION_MASK    (0x7f)
+#define VERIFY(X)           do { if(!(X)) { abort(); } } while(0)
 #define b(k)                ((k) & INSTRUCTION_MASK)
 
-static const char *core_file= "forth.core";
+static const char *core_file_name = "forth.core";
 static const char *initial_forth_program = "\\ FORTH startup program.       \n\
 : state 8 exit : ; immediate ' exit , 0 state ! exit : hex 9 ! ; : pwd 10 ; \n\
 : h 0 ; : r 1 ; : here h @ ; : [ immediate 0 state ! ; : ] 1 state ! ;      \n\
@@ -47,8 +39,7 @@ static const char *initial_forth_program = "\\ FORTH startup program.       \n\
 : begin immediate here ; : until immediate ' jmpz , here - , ; : '\\n' 10 ; \n\
 : not 0= ; : 1+ 1 + ; : 1- 1 - ; : ')' 41 ; : tab 9 emit ; : cr '\\n' emit ;\n\
 : line dup . tab dup 4 + swap begin dup @ . tab 1+ 2dup = until drop ;      \n\
-: literal immediate 2 , , ; : size [ 11 @ literal ] ; : stack-start [ 13 @ literal ] ;\n\
-: find-) key ')' <> if tail find-) then ; : ( immediate find-) ;            \n\
+: ( immediate begin key ')' = until ;                                       \n\
 : list swap begin line cr 2dup < until ; : allot here + h ! ;               \n\
 : tuck swap over ; : nip swap drop ; : rot >r swap r> swap ;                \n\
 : -rot rot rot ; : ? 0= if [ find \\ 1+ , ] then ; : :: [ find : 1+ , ] ;";
@@ -65,22 +56,22 @@ struct forth {	        /**< The FORTH environment is contained in here*/
 	size_t sidx;    /**< string input index*/
 	unsigned stringin :1; /**< string used if true (*sin), *in otherwise */
 	unsigned invalid  :1; /**< if true, this object is invalid*/
-	clock_t start_time;
+	clock_t start_time; /**< used for "clock", start of initialization */
 	forth_cell_t I;	 /**< instruction pointer*/
 	forth_cell_t top; /**< stored top of stack */
 	forth_cell_t *S; /**< stack pointer*/
 	forth_cell_t m[]; /**< Forth Virtual Machine memory */
 };
 
-enum registers    { DIC=0/*m[0]*/,RSTK=1,STATE=8,HEX=9,PWD=10,INFO=11 };
+enum registers    { DIC=0/*m[0]*/,RSTK=1,STATE=8,HEX=9,PWD=10 };
 enum instructions { PUSH,COMPILE,RUN,DEFINE,IMMEDIATE,COMMENT,READ,LOAD,STORE,
 SUB,ADD,AND,OR,XOR,INV,SHL,SHR,MUL,DIV,LESS,MORE,EXIT,EMIT,KEY,FROMR,TOR,JMP,
-JMPZ, PNUM, QUOTE,COMMA,EQUAL,SWAP,DUP,DROP,OVER,TAIL,BSAVE,BLOAD,FIND,PRINT,
+JMPZ, PNUM, QUOTE,COMMA,EQUAL,SWAP,DUP,DROP,OVER,BSAVE,BLOAD,FIND,PRINT,
 PSTK,DEPTH,CLOCK,LAST };
 
 static char *names[] = { "read","@","!","-","+","and","or","xor","invert",
 "lshift","rshift","*","/","<",">","exit","emit","key","r>",">r","jmp","jmpz",
-".","'", ",","=", "swap","dup","drop", "over", "tail","save","load","find",
+".","'", ",","=", "swap","dup","drop", "over", "save","load","find",
 "print",".s", "depth", "clock", NULL }; 
 
 static int forth_get_char(forth_t *o) /**< get a char from string-in or a file*/
@@ -235,6 +226,14 @@ int forth_dump_core(forth_t *o, FILE *dump)
 	return w != fwrite(o, 1, w, dump) ? -1: 0; 
 }
 
+int forth_define_constant(forth_t *o, const char *name, forth_cell_t c)
+{
+	char e[MAX_WORD_LENGTH+32] = {0};
+	assert(strlen(name) < MAX_WORD_LENGTH);
+	sprintf(e, ": %31s %d ; \n", name, c);
+	return forth_eval(o, e);
+}
+
 forth_t *forth_init(size_t size, FILE *in, FILE *out) 
 { 
 	assert(in && out);
@@ -253,10 +252,6 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out)
 
 	w = m[DIC] = DICTIONARY_START; /*initial dictionary offset, skip registers and string offset*/
 	m[PWD]     = 1;     /*special terminating pwd*/
-	m[INFO]    = sizeof(forth_cell_t);
-	m[INFO+1]  = size;
-	m[INFO+2]  = size - (2 * o->stack_size);
-
 	m[m[DIC]++] = READ; /*create a special word that reads in FORTH*/
 	m[m[DIC]++] = RUN;  /*call the special word recursively*/
 	o->I = m[DIC];      /*instruction stream points to our special word*/
@@ -271,14 +266,10 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out)
 	m[RSTK] = size - o->stack_size;	   /*set up return stk pointer*/
 	o->S    = m + size - (2 * o->stack_size); /*set up variable stk pointer*/
 
-	if(forth_eval(o, initial_forth_program) < 0) 
-		return NULL; /*define words*/
-
-	static const char fmt[] = " : x %d ; ";
-	static char constants[sizeof(fmt)+50];
-	sprintf(constants, fmt, 10);
-	if(forth_eval(o, constants) < 0) 
-		return NULL; /*define words*/
+	VERIFY(forth_eval(o, initial_forth_program) >= 0);
+	VERIFY(forth_define_constant(o, "size",        sizeof(forth_cell_t)) >= 0);
+	VERIFY(forth_define_constant(o, "stack-start", size - (2 * o->stack_size)) >= 0);
+	VERIFY(forth_define_constant(o, "max-core",    size) >= 0);
 
 	forth_set_file_input(o, in);	/*set up input after out eval*/
 	o->start_time = clock();
@@ -325,29 +316,29 @@ static forth_cell_t check_bounds(forth_t *o, forth_cell_t f)
 int forth_run(forth_t *o) 
 { 
 	assert(o);
-	forth_cell_t *m, pc, *S, I, f = o->top, w;
-	m = o->m, S = o->S, I = o->I; 
+	forth_cell_t *m, pc, *S, I, f, w;
 
 	if(o->invalid || setjmp(o->error))
 		return -(o->invalid = 1);
+	m = o->m, S = o->S, I = o->I, f = o->top; 
 
 	for(;(pc = m[ck(I++)]);) { /* Threaded code interpreter */
 		assert((S > m) && (S < (m + o->core_size)));
 	INNER:  
 		switch (b(m[ck(pc++)])) {
-		case PUSH:    *++S = f;     f = m[ck(I++)];         break;
-		case COMPILE: m[ck(m[DIC]++)] = pc;                 break;
-		case RUN:     m[ck(++m[RSTK])] = I; I = pc;         break;
+		case PUSH:    *++S = f;     f = m[ck(I++)];          break;
+		case COMPILE: m[ck(m[DIC]++)] = pc;                  break;
+		case RUN:     m[ck(++m[RSTK])] = I; I = pc;          break;
 		case DEFINE:  m[STATE] = 1;
 			      if(compile(o, COMPILE, NULL) < 0)
 				      goto end;
-			      m[ck(m[DIC]++)] = RUN;                break;
+			      m[ck(m[DIC]++)] = RUN;                 break;
 		case IMMEDIATE: 
 			      *m -= 2; 
 			      m[m[DIC]] &= ~INSTRUCTION_MASK;
 			      m[m[DIC]] |= RUN; 
-			      m[DIC]++;                             break;
-		case COMMENT: if(comment(o) < 0) goto end;          break;
+			      m[DIC]++;                              break;
+		case COMMENT: if(comment(o) < 0) goto end;           break;
 		case READ:    
 			m[ck(RSTK)]--;
 			if(forth_get_word(o, o->s) < 0)
@@ -402,7 +393,6 @@ int forth_run(forth_t *o)
 		case DUP:     *++S = f;                              break;
 		case DROP:    f = *S--;                              break;
 		case OVER:    w = *S; *++S = f; f = w;               break;
-		case TAIL:    m[RSTK]--;                             break;
 		case BSAVE:   f = blockio(o, m, *S--, f, 'w');       break;
 		case BLOAD:   f = blockio(o, m, *S--, f, 'r');       break;
 		case FIND:    *++S = f;
@@ -430,7 +420,7 @@ end:    o->top = f;
 int main_forth(int argc, char **argv) 
 { 	/*options: ./forth (-d)? (file)* */
 	int dump = 0, rval = 0, c;      /*dump on?, return value, temp char*/
-	FILE *in = NULL, *coreo = NULL; /*current input file, dump file*/
+	FILE *in = NULL, *core_file = NULL; /*current input file, dump file*/
 	forth_t *o = NULL;		/*our FORTH environment*/
 	assert(argv);
 	if(!(o = forth_init(CORE_SIZE, stdin, stdout))) 
@@ -459,9 +449,9 @@ END:
 	if(in && (in != stdin)) 
 		fclose(in), in = NULL;
 	if(dump) { 
-		if(forth_dump_core(o, coreo = fopen_or_die(core_file, "wb")) < 0)
+		if(forth_dump_core(o, core_file = fopen_or_die(core_file_name, "wb")) < 0)
 			return -1;
-		fclose(coreo); 
+		fclose(core_file); 
 	}
 	forth_free(o), o = NULL;
 	return rval;

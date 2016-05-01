@@ -16,7 +16,7 @@ extern "C" {
 
 struct forth; /**< An opaque object that holds a running FORTH environment**/
 typedef struct forth forth_t;
-typedef uint16_t forth_cell_t; /**< FORTH "machine word", basic int used.*/
+typedef uint32_t forth_cell_t; /**< FORTH "machine word", basic int used.*/
 /** @brief   Given an input and an output this will initialize forth,
  *           allocating memory for it and setting it up so it has a few
  *           FORTH words predefined. The returned object must be free'd
@@ -81,6 +81,15 @@ int forth_eval(forth_t *o, const char *s);
  *  @param   dump Core dump file handle ("wb"). Caller closes. Asserted.
  *  @return  int  An error code, negative on error. **/
 int forth_dump_core(forth_t *o, FILE *dump);
+
+/** @brief   Define a new constant in an Forth environment.
+ *  @param   o    Forth environment to define new constant in
+ *  @param   name Name of constant, should be less than 31 characters in
+ *                length as only they will be used in defining the new
+ *                name
+ *  @param   c    Value of constant
+ *  @return  Same return status as forth_eval */
+int forth_define_constant(forth_t *o, const char *name, forth_cell_t c);
 
 /** @brief Set the input of an environment 'o' to read from a file 'in'.
  *  @param o   An initialized FORTH environment. Caller frees.

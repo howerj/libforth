@@ -124,55 +124,99 @@ varies between implementations. A dictionary is simply a linked list of
 [FORTH][] words, the dictionary is usually contiguous and can only grow. The
 format for our [FORTH][] words is as follows:
 
-        .-----------------------------------------------------------------.
-        |        Word Header     ~                   |                    |
-        .-----------------------------------------------------------------.
-        | PWD | SPTR | CODE WORD | CODE WORD or DATA | DATA, optional...  |
-        .-----------------------------------------------------------------.
+Briefly:
 
-        PWD         = A pointer to the previously declared word. If the
-                      highest bit of the pointer is set this word is
-                      ignored when searched for.
-        SPTR        = A pointer to the name of the word in ASCII.
-        CODE WORD   = A low level (virtual) machine which gets executed
-                      when the word is run, if the word is a compiling word
-                      this CODE WORD will be COMPILE and the next value will
-                      be another CODE WORD, most like of a different type.
+ *  Word Header:
+ *  field <0 = Word Name (the name is stored before the main header)
+ *  field 0  = Previous Word
+ *  field 1  = Code Word (bits 0 - 7) | Hidden Flag (bit 8) | Word Name Offset (bit 9 - 15) 
+ *  field 3  = Code Word or First Data field Entry
+ *  field 4+ = Data Field
+
+And in more detail:
+
+        .------------------------------------------------.----------------.
+        |                   Word Header                  |   Word Body    |
+        .---------------.-----.------.-------------------.----------------.
+        | NAME ...      | PWD | MISC | CODE WORD or DATA | DATA ...       |
+        .---------------.-----.------.-------------------.----------------.
+
+        ____
+        NAME        = The name, or the textual representation, of a Forth
+                      word, it is a variable length field that is ASCII NUL
+                      terminated, the MISC field has an offset that points
+                      to the begining of this field if taken off the PWD
+                      position (not value). The offset is in machine words,
+                      not characters.
+        ___
+        PWD         = A pointer to the previously declared word.
+        ____
+        MISC        = A complex field that can contains a CODE WORD, a
+                      "hide" bit and the offset from the PWD field to the
+                      beginning of NAME
+        _________    ____
         CODE WORD or DATA = This will be RUN if the following DATA is a pointer
                       to the CODE WORDs of previously defined words. But it
                       could be any CODE WORD.
+        ____
         DATA        = This could be anything, but it is most likely to be
                       a list of pointers to CODE WORDs of previously defined
                       words if this optional DATA field is present.
 
+All fields are aligned on the [FORTH][] virtual machines word boundaries.
+
+The MISC field is laid out as so:
+
+        .-------------------------------------------------------------------------------.
+        |  0 |  1 |  2 |  3 |  4 |  5 |  6 |  7 |  8 |  9 | 10 | 11 | 12 | 13 | 14 | 15 |
+        .-------------------------------------------------------------------------------.
+        |            CODE WORD             | HD |          NAME OFFSET                  |
+        .-------------------------------------------------------------------------------.
+        _________
+        CODE WORD    = Bits 0-6 are a code word, this code word is always run
+                       reguardless of whether we are in compiling or command
+                       mode
+        __
+        HD           = Bit 7 is the Hide Bit, if this is true then when
+                       compiling or executing words the word will be hidden from the 
+                       search.
+        ___________
+        NAME OFFSET  = Bits 8 to 15 are the offset to the words name. To find the 
+                       beginning of the words name we take this value away from
+                       position of this words PWD header. This value is in
+                       machine words, and so the beginning of the NAME must be aligned 
+                       to the virtual machine words boundaries and not character, or byte, 
+                       aligned. The length of this field, and the size of the input buffer, 
+                       limit the maximum size of a word.
+
 And the dictionary looks like this:
 
        [ Special 'fake' word ]
-          .
-         /|\
-          |
-       .----------------------------.
-       | PWD | Rest of the word ... |
-       .----------------------------.
-          .
-         /|\
-          |
-        ~~~~~
-
-        ~~~~~
-          |
-       .----------------------------.
-       | PWD | Rest of the word ... |
-       .----------------------------.
-          .
-         /|\
-          |
-       .----------------------------.
-       | PWD | Rest of the word ... |
-       .----------------------------.
-          .
-         /|\
-          |
+                  .
+                 /|\
+                  |
+       .-------.-----.----------------------.
+       | NAME  | PWD | Rest of the word ... |
+       .-------.-----.----------------------.
+                  .
+                 /|\
+                  |
+                ~~~~~
+         The rest of the dictionary
+                ~~~~~
+                  |
+       .-------.-----.----------------------.
+       | NAME  | PWD | Rest of the word ... |
+       .-------.-----.----------------------.
+                  .
+                 /|\
+                  |
+       .-------.-----.----------------------.
+       | NAME  | PWD | Rest of the word ... |
+       .-------.-----.----------------------.
+                  .
+                 /|\
+                  |
        [ Previous Word Register ]
 
 Searching of the dictionary starts from the *Previous Word Register* and ends
@@ -338,24 +382,34 @@ Pop two values, subtract 'y' from 'x' and push the result onto the stack.
 
 Pop two values, add 'y' to 'x' and push the result onto the stack.
 
-* '&'           ( x y -- z )
+* 'and'         ( x y -- z )
 
 Pop two values, compute the bitwise 'AND' of them and push the result on to
 the stack.
 
-* '|'           ( x y -- z )
+* 'or'          ( x y -- z )
 
 Pop two values, compute the bitwise 'OR' of them and push the result on to
 the stack.
 
-* '^'           ( x y -- z )
+* 'xor'         ( x y -- z )
 
 Pop two values, compute the bitwise 'XOR' of them and push the result on to
 the stack.
 
-* '~'           ( x y -- z )
+* 'invert'      ( x y -- z )
 
 Perform a bitwise negation on the top of the stack.
+
+* 'lshift'      ( x y -- z )
+
+Pop two values, compute 'y' shifted by 'x' places to the left and push
+the result on to the stack.
+
+* 'rshift'      ( x y -- z )
+
+Pop two values, compute 'y' shifted by 'x' places to the right and push
+the result on to the stack.
 
 * '\*'          ( x y -- z )
 
@@ -363,11 +417,17 @@ Pop two values, multiply them and push the result onto the stack.
 
 * '/'           ( x y -- z )
 
-Pop two values, divide 'x' by 'y' and push the result onto the stack.
+Pop two values, divide 'x' by 'y' and push the result onto the stack. If 'y'
+is zero and error message is printed and 'x' and 'y' will remain on the
+stack, but execution will continue on as normal.
 
 * '\<'          ( x y -- z )
 
 Pop two values, compare them (y < x) and push the result onto the stack.
+
+* '\>'          ( x y -- z )
+
+Pop two values, compare them (y > x) and push the result onto the stack.
 
 * 'exit'        ( -- )
 
@@ -382,19 +442,19 @@ Pop a value and emit the character to the output.
 
 Get a value from the input and put it onto the stack.
 
-* 'r>'          ( -- x )
+* 'r\>'          ( -- x )
         
 Pop a value from the return stack and push it to the variable stack.
 
-* '>r'          ( x -- )
+* '\>r'          ( x -- )
 
 Pop a value from the variable stack and push it to the return stack.
 
-* 'j'           ( -- )
+* 'jmp'           ( -- )
 
 Jump unconditionally to the destination next in the instruction stream.
 
-* 'jz'          ( bool -- )
+* 'jmpz'          ( bool -- )
 
 Pop a value from the variable stack, if it is zero the jump to the
 destination next in the instruction stream, otherwise skip over it.
@@ -433,11 +493,6 @@ Drop a value.
 
 Duplicate the value that is next on the stack.
 
-* 'tail'        ( -- )
-
-A drop but for the return stack, it is used in lieu of a *recurse* word
-used in most FORTH implementations.
-
 * 'save'        ( address block-number -- )
 
 Given an address, attempt to write out the values addr to addr+1023 values
@@ -464,15 +519,29 @@ do not affect the contents.
 This prints a NUL terminate string at *charptr*. *charptr* is a character
 aligned pointer not a machine-word aligned pointer.
 
+* 'depth'       ( -- depth )
+
+Push the current stack depth onto the stack, the value is the depth of the
+stack before the depth value was pushed onto the variable stack.
+
+* 'clock'       ( -- x )
+
+Push the difference between the startup time and now, in milliseconds. This
+can be used for timing and implementing sleep functionality, the counter
+will not increase the interpreter is blocking and waiting for input, although
+this is implementation dependent.
+
 ### Defined words
 
 Defined words are ones which have been created with the ':' word, some words
 get defined before the user has a chance to define their own to make their
 life easier.
 
-* 'state'       ( bool -- )
+* 'state'       ( -- addr )
 
-Change the interpreter state, turning the mode from 'compile' to 'immediate'.
+Push the address of the register that controls the interpreter state onto
+the stack, this value can be written to put the interpreter into compile
+or command modes. 
 
 * ';'           ( -- )
 
@@ -531,7 +600,6 @@ and a concrete examples:
 
 Is a simple and contrived example.
 
-
 * 'else'        ( -- )
 
 See 'if'.
@@ -552,6 +620,10 @@ on otherwise.
 * '0='          ( x -- bool )
 
 Is the top of the stack zero?
+
+* 'not'         ( x -- bool )
+
+Equivalent to '0='
 
 * "')'"         ( -- char )
 
@@ -593,6 +665,11 @@ Given an address print out the address and the contents of the four
 consecutive addresses and push the original address plus four. This is
 a helper word for 'list'.
 
+* '('           ( -- )
+
+This will read the input stream until encountering a ')' character, it
+is used for comments.
+
 * 'list'        ( address-1 address-2 -- )
 
 Given two memory address, address-2 being the larger address, print out
@@ -601,10 +678,6 @@ the contents of memory between those two addresses.
 * 'allot'       ( amount -- )
 
 Allocate a number of cells in the dictionary.
-
-* 'words'       ( -- )
-
-Print out a list of all the words in the dictionary that are reachable.
 
 * 'tuck'        ( x y -- y x y )
 
@@ -638,8 +711,6 @@ Prints '4'.
 * '::'          ( -- )
 
 Unlike ':' this is a compiling word, but performs the same function.
-
-* 'create'      ( -- address )
 
 ## Glossary of FORTH terminology 
 
@@ -698,40 +769,8 @@ performed in this implementation and must be done 'manually'.
 
 ## To-do and notes
 
-This is more like a list of wants or likes as well as notes. It is not
-meant to be particularly coherent.
-
-* Add a better *create* and a *does>* .
-  * This would allow for 'variable', 'array' and 'constant' to be defined
-  as well as perhaps some string handling functions.
-* 'recurse' keyword. Although I do not really use it.
-* Immediate words should be defined by a flag not having two code words
-and trickery.
-* A forth word header should be described, and this document checked for
-  errors
-* Figure out if there are any more primitives that need adding that would
-  aide in scripting, perhaps file handles, floating point values, larger
-  VM sizes.
-* A stack based interface to the FORTH environment would be good as well,
-so we can use this more as a library we can shell work out to.
-  - A function for adding in user defined code words would be good. It
-  would not have to be too complex.
-  * forth\_define("name", func\_ptr)
-  * forth\_get\_top\_of\_stk();
-  * ...
-* A small example that is integrated with the linenoise library would be
-good, with auto complete! A list of all defined words would need to be
-exported from the library however.
-* Hex input needs to be handled correctly.
-* 32-bit version? Allow for power of 2 size of environment; 2048, 4096, ...
-* Redesign *FORTH* word header.
-* Possible redesigns of FORTH word pointer to included more modes apart
-from just being hidden. I could use some trickery to accomplish this
-and free up more bits. I could store some words as just hashes, or some
-entire words in the lower bits (for example single or two character words,
-the latter requiring encoding the remaining bits). If the string was stored
-*relative* to the current word then I would have even more spare bits to
-mess around with.
+* Port this to a micro controller, and a Linux kernel module device
+* Routines for saving and loading the image should be made
 
 [FORTH]: https://en.wikipedia.org/wiki/Forth_%28programming_language%29
 [Wikipedia]: https://en.wikipedia.org/wiki/Forth_%28programming_language%29
@@ -744,5 +783,7 @@ mess around with.
 [Gforth]: https://www.gnu.org/software/gforth/
 [Reverse Polish Notation]: https://en.wikipedia.org/wiki/Reverse_Polish_notation
 [Threaded Code]: https://en.wikipedia.org/wiki/Threaded_code
+[start.4th]: start.4th
+[tail calls]: https://en.wikipedia.org/wiki/Tail_call
 
 <style type="text/css">body{margin:40px auto;max-width:650px;line-height:1.6;font-size:18px;color:#444;padding:0 10px}h1,h2,h3{line-height:1.2}</style>

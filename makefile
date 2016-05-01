@@ -1,8 +1,8 @@
-ECHO=echo
-AR=ar
-CC=gcc
-CFLAGS=-Wall -Wextra -g -pedantic -fPIC -std=c99
-TARGET=forth
+ECHO	= echo
+AR	= ar
+CC	= gcc
+CFLAGS	= -Wall -Wextra -g -pedantic -fPIC -std=c99 -O2
+TARGET	= forth
 
 .PHONY: all clean doxygen
 
@@ -36,14 +36,14 @@ lib$(TARGET).htm: lib$(TARGET).md
 doxygen:
 	doxygen doxygen.conf
 
-lib$(TARGET).o: lib$(TARGET).c lib$(TARGET).h
-	$(CC) $(CFLAGS) $< -c -o $@
 lib$(TARGET).a: lib$(TARGET).o
 	$(AR) rcs $@ $<
+
 lib$(TARGET).so: lib$(TARGET).o lib$(TARGET).h
-	$(CC) -shared -fPIC $< -o $@
-unit: unit.c lib$(TARGET).a
-	$(CC) $(CFLAGS) $^ -o $@
+	$(CC) $(CFLAGS) -shared $< -o $@
+
+unit: unit.o lib$(TARGET).a
+
 $(TARGET): main.c lib$(TARGET).a
 	$(CC) $(CFLAGS) $^ -o $@
 

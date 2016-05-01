@@ -89,7 +89,6 @@ See:
 
 : false 0 ;
 : true 1 ;
-: max-core ( -- x ) [ 12 @ literal ] ; ( maximum words available )
 : 2- ( x -- x ) 2 - ;
 : 2+ ( x -- x ) 2 + ;
 : 3+ ( x -- x ) 3 + ;
@@ -109,11 +108,10 @@ See:
 ;
 
 : unhide ( hide-token -- ) dup @ hidden-mask invert and swap ! ;
-hide find-) drop 
-
 : push-location 2 ;       ( location of special "push" word )
 : compile-instruction 1 ; ( compile code word, threaded code interpreter instruction )
 : run-instruction 2 ;     ( run code word, threaded code interpreter instruction )
+: literal immediate push-location , , ; 
 : ?dup ( x -- ? ) dup if dup then ;
 : min ( x y -- min ) 2dup < if drop else swap drop then  ; 
 : max ( x y -- max ) 2dup > if drop else swap drop then  ; 
@@ -280,41 +278,58 @@ hide inci drop
 : decimal ( -- ) ( print out decimal ) 0 hex ;
 : negate -1 * ;
 
-hide tail drop ( avoids confusion of there being two versions of tail )
+: execution-token ( previous-word-address -- execution-token )
+        ( Given the address of the PWD field of a word this
+	function will return an execution token for the word )
+	1+    ( MISC field )
+	dup 
+	@     ( Contents of MISC field )
+	instruction-mask and  ( Mask off the instruction )
+        ( If the word is not an immediate word, execution token pointer ) 
+        compile-instruction = +
+;
+
 : tail 
-	( This replaces the built in version of "tail", which messes up the
-	stack and requires a word that uses it to be wrapped up in another
-	definition. It allows you to recursively call a function, however
-	the function must be tail recursive, if the function is not, "recurse"
-	should be used instead )
+	( This function implements tail calls, which is just a jump
+        to the beginning of the words definition, for example this
+        word will never overflow the stack and will print "1" followed
+        by a new line forever,
+    
+		: forever 1 . cr tail ; 
+
+	Whereas
+
+		: forever 1 . cr recurse ;
+
+	or
+
+		: forever 1 . cr forever ;
+
+	Would overflow the return stack. )
 	immediate
-	pwd @ 1+ dup @ 
-	instruction-mask and compile-instruction = 
-	if
-		1+
-	then
+	pwd @ execution-token 
 	' jmp ,
 	here - 1+ ,
 ;
 
 : recurse
 	immediate
-	( We can test "recurse" with this factorial function:
+	( This function implements recursion, although this interpreter
+	allows calling a word directly. If used incorrectly this will
+	blow up the return stack.
+
+	We can test "recurse" with this factorial function:
 	  : factorial  dup 2 < if drop 1 exit then dup 1- recurse * ;)
-	pwd @ 1+ dup @ 
-	instruction-mask and compile-instruction = 
-	if
-		1+
-	then
-	,
+	pwd @ execution-token ,
 ;
+hide execution-token drop
 
 : bl ( space character ) [char]  literal ; ( warning: white space is significant after [char] )
 : space bl emit ;
 : spaces ( n -- ) 0 do space loop ;
 
-: 8* 8 * ;
-: mask-byte 8* 0xff swap lshift ;
+: 8* ( x -- x ) 8 * ;
+: mask-byte ( x -- x ) 8* 0xff swap lshift ;
 : alignment-bits [ 1 size log-2 lshift 1- literal ] and ;
 
 : c@ ( character-address -- char )
@@ -407,7 +422,6 @@ hide delim drop
 : accept swap '\n' accepter ;
 : accept-string max-string-length '"' accepter  ;
 
-
 0 variable delim
 : print-string 
 	( delimiter -- )
@@ -434,33 +448,38 @@ hide aligner drop
 : align ( x -- x ) ; ( nop in this implementation )
 
 0 variable delim
-: write-string ( char -- )
+: write-string ( char -- c-addr u )
 	( Write a string into word being currently defined, this
 	code has to jump over the string it has just put into the
-	dictionary so normal execution of a word can continue )
+	dictionary so normal execution of a word can continue. The
+	length and character address of the string are left on the
+	stack )
 	delim !         ( save delimiter )
 	' jmp ,         ( write in jump, this will jump past the string )
 	here 0 ,        ( make hole )
 	dup 1+ size *   ( calculate address to write to )
-	max-string-length delim @ accepter ( write string into dictionary )
+	max-string-length delim @ accepter dup >r ( write string into dictionary, save index )
 	aligned 2dup size / ( stack: length hole char-len hole )
-	dup here + h !  ( update dictionary pointer with string length )
-	1+ swap !       ( write place to jump to )
-	drop            ( do not need string length anymore )
-	push-location , ( push next value ) 
-	1+ size *       ( calculate place to print )
-	,               ( write value to push, the character address to print)
-	' print ,       ( write out print, which will print our string )
+	dup here + h !   ( update dictionary pointer with string length )
+	1+ swap !        ( write place to jump to )
+	drop             ( do not need string length anymore )
+	push-location ,  ( push next value ) 
+	1+ size * dup >r ( calculate place to print, save it )
+	,                ( write value to push, the character address to print)
+	' print ,        ( write out print, which will print our string )
+	r> r> swap       ( restore index and address of string )
 ;
 hide delim drop
 
 : do-string ( char -- )
-	state @ if write-string else print-string then
+	state @ if write-string 2drop else print-string then
 ;
 
 : " immediate '"' do-string ;
 : .( immediate ')' do-string ;
 : ." immediate '"' do-string ;
+
+: ok " ok" cr ;
 
 : count ( c-addr1 -- c-addr2 u ) dup c@ swap 1+ swap ;
 
@@ -470,10 +489,19 @@ hide delim drop
 	0> if 
 		0
 		do 
-			2dup i + c! 
+			2dup i + c!
 		loop
 	then
 	2drop
+;
+
+: erase ( addr u )
+	size * swap size * 0 -rot fill
+;
+
+: blank ( c-addr u )
+	( given a character address and length, this fills that range with spaces )
+	bl -rot swap fill
 ;
 
 : move ( addr1 addr2 u -- )
@@ -489,15 +517,33 @@ hide delim drop
 	2drop
 ;
 
-( 
-255 0x8000 accept hello world
+: ) ;
+
+size 2 = ? 0x0123           variable endianess
+size 4 = ? 0x01234567       variable endianess
+size 8 = ? 0x01234567abcdef variable endianess
+
+: endian ( -- bool )
+	( returns the endianess of the processor )
+	endianess size * c@ 0x01 =
+;
+hide endianess
+
+( create a new variable "pad", which can be used as a scratch pad )
+0 variable pad 32 allot
+
+( 255 0x8000 accept hello world
 drop
 
 8 0x4100 0x4000 move
 
 0x8000 print cr
 0x8200 print cr
-)
+
+0x4000 40 erase
+0x8000 print cr
+0x8200 print cr )
+
 
 hide write-string drop
 hide do-string drop
@@ -516,7 +562,6 @@ hide  max-core             drop
 hide  push-location        drop
 hide  run-instruction      drop
 hide  stack-start          drop
-hide  stack-start          drop
 hide  x                    drop
 hide  x!                   drop
 hide  x@                   drop
@@ -534,6 +579,6 @@ hide  max-string-length    drop
 	* Base
 	* Find is not ANS forth compatible
 	* By adding "c@" and "c!" to the interpreter I could remove print
-	* Word, Parse, ?do, more looping constructs, Case statements
+	* Word, Parse, ?do, repeat, while, Case statements
 	quite easily by implementing "count" in the start up code
 )
