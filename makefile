@@ -30,8 +30,8 @@ help:
 	@$(ECHO) "	dist            (TODO) create a distribution archive"
 	@$(ECHO) ""
 
-doc: $(TARGET).htm doxygen
-$(TARGET).htm: $(TARGET).md
+doc: lib$(TARGET).htm doxygen
+lib$(TARGET).htm: lib$(TARGET).md
 	markdown $^ > $@
 doxygen:
 	doxygen doxygen.conf
@@ -53,5 +53,5 @@ test: unit
 	./$^
 
 clean:
-	rm -rf $(TARGET) unit *.a *.so *.o *.log *.htm doxygen
+	rm -rf $(TARGET) unit *.blk *.core *.a *.so *.o *.log *.htm doxygen html latex *.db
 

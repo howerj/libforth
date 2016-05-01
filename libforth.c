@@ -41,14 +41,13 @@ static const char *core_file= "forth.core";
 static const char *initial_forth_program = "\\ FORTH startup program.       \n\
 : state 8 ! exit : ; immediate ' exit , 0 state exit : hex 9 ! ; : pwd 10 ; \n\
 : h 0 ; : r 1 ; : here h @ ; : [ immediate 0 state ; : ] 1 state ;          \n\
-: :noname immediate here 2 , ] ; : if immediate ' jz , here 0 , ;           \n\
-: else immediate ' j , here 0 , swap dup here swap - swap ! ; : 0= 0 = ;    \n\
+: :noname immediate here 2 , ] ; : if immediate ' jmpz , here 0 , ;         \n\
+: else immediate ' jmp , here 0 , swap dup here swap - swap ! ; : 0= 0 = ;  \n\
 : then immediate dup here swap - swap ! ; : 2dup over over ; : <> = 0= ;    \n\
-: begin immediate here ; : until immediate ' jz , here - , ;                \n\
-: not 0= ; : 1+ 1 + ; : 1- 1 - ; : ')' 41 ; : tab 9 emit ; : cr 10 emit ;   \n\
-: .( key drop begin key dup ')' = if drop exit then emit 0 until ;          \n\
+: begin immediate here ; : until immediate ' jmpz , here - , ; : '\\n' 10 ; \n\
+: not 0= ; : 1+ 1 + ; : 1- 1 - ; : ')' 41 ; : tab 9 emit ; : cr '\\n' emit ;\n\
 : line dup . tab dup 4 + swap begin dup @ . tab 1+ 2dup = until drop ;      \n\
-: literal 2 , , ; : size [ 11 @ literal ] ;                                 \n\
+: literal 2 , , ; : size [ 11 @ literal ] ; : stack-start [ 13 @ literal ] ;\n\
 : find-) key ')' <> if tail find-) then ; : ( immediate find-) ;            \n\
 : list swap begin line cr 2dup < until ; : allot here + h ! ;               \n\
 : tuck swap over ; : nip swap drop ; : rot >r swap r> swap ;                \n\
@@ -75,13 +74,14 @@ struct forth {	        /**< The FORTH environment is contained in here*/
 
 enum registers    { DIC=0/*m[0]*/,RSTK=1,STATE=8,HEX=9,PWD=10,INFO=11 };
 enum instructions { PUSH,COMPILE,RUN,DEFINE,IMMEDIATE,COMMENT,READ,LOAD,STORE,
-SUB,ADD,AND,OR,XOR,INV,SHL,SHR,MUL,LESS,MORE,EXIT,EMIT,KEY,FROMR,TOR,JMP,JMPZ,PNUM,
-QUOTE,COMMA,EQUAL,SWAP,DUP,DROP,OVER,TAIL,BSAVE,BLOAD,FIND,PRINT,PSTK,CLOCK,LAST };
+SUB,ADD,AND,OR,XOR,INV,SHL,SHR,MUL,DIV,LESS,MORE,EXIT,EMIT,KEY,FROMR,TOR,JMP,
+JMPZ, PNUM, QUOTE,COMMA,EQUAL,SWAP,DUP,DROP,OVER,TAIL,BSAVE,BLOAD,FIND,PRINT,
+PSTK,DEPTH,CLOCK,LAST };
 
 static char *names[] = { "read","@","!","-","+","and","or","xor","invert",
-"lshift","rshift","*","<",">","exit","emit","key","r>",">r","j","jz",".","'",
-",","=", "swap","dup","drop", "over", "tail","save","load","find",
-"print",".s", "clock", NULL }; 
+"lshift","rshift","*","/","<",">","exit","emit","key","r>",">r","jmp","jmpz",
+".","'", ",","=", "swap","dup","drop", "over", "tail","save","load","find",
+"print",".s", "depth", "clock", NULL }; 
 
 static int forth_get_char(forth_t *o) /**< get a char from string-in or a file*/
 { 
@@ -158,7 +158,7 @@ static int blockio(forth_t *o, void *p, forth_cell_t poffset, forth_cell_t id, c
 } /*a basic FORTH block I/O interface*/
 
 static int is_number(const char *s)  /**< is word a number? */
-{
+{ /* @todo Implement a normal BASE mechanism, like in other Forths */
 	s += *s == '-' ? 1 : 0; 
 	if(s[0] == '0') {
 		if(s[1] == 'x')
@@ -255,6 +255,7 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out)
 	m[PWD]     = 1;     /*special terminating pwd*/
 	m[INFO]    = sizeof(forth_cell_t);
 	m[INFO+1]  = size;
+	m[INFO+2]  = size - (2 * o->stack_size);
 
 	m[m[DIC]++] = READ; /*create a special word that reads in FORTH*/
 	m[m[DIC]++] = RUN;  /*call the special word recursively*/
@@ -368,8 +369,13 @@ int forth_run(forth_t *o)
 		case XOR:     f = *S-- ^ f;                          break;
 		case INV:     f = ~f;                                break;
 		case SHL:     f = *S-- << f;                         break;
-		case SHR:     f = *S-- >> f;                         break;
+		case SHR:     f = (uint64_t)*S-- >> f;               break;
 		case MUL:     f = *S-- * f;                          break;
+		case DIV:     if(f) 
+				      f = *S-- / f; 
+			      else /* should throw exception */
+				      fputs("( error \"x/0\" )\n", stderr); 
+			                                             break;
 		case LESS:    f = *S-- < f;                          break;
 		case MORE:    f = *S-- > f;                          break;
 		case EXIT:    I = m[ck(m[RSTK]--)];                  break;
@@ -398,6 +404,9 @@ int forth_run(forth_t *o)
 			      f = f < DICTIONARY_START ? 0 : f;      break;
 		case PRINT:   fputs(((char*)m)+f, o->out); f = *S--; break;
 		case PSTK:    print_stack(o, f ,S);                  break;
+		case DEPTH:   w = S- (m + o->core_size - (2 * o->stack_size));
+			      *++S = f;
+			      f = w;                                 break;
 		case CLOCK:   *++S = f;
 			      f = ((1000 * (clock() - o->start_time)) / CLOCKS_PER_SEC);
 			                                             break;
