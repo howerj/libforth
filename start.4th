@@ -517,6 +517,21 @@ hide delim drop
 	2drop
 ;
 
+( It would be nice if move and cmove could share more code, as they do exactly
+  the same thing but with different load and store functions, cmove>  )
+: cmove ( c-addr1 c-addr2 u -- )
+	( copy u characters of memory from 'c-addr2' to 'c-addr1' if u is greater than zero )
+	rot
+	dup 
+	0> if
+		0
+		do
+			2dup i + c@ swap i + c!
+		loop
+	then
+	2drop
+;
+
 : ) ;
 
 size 2 = ? 0x0123           variable endianess
@@ -571,6 +586,7 @@ hide  jmpz                 drop
 hide  mask-byte            drop
 hide  accepter             drop
 hide  max-string-length    drop
+hide  line                 drop
 
 ( TODO
 	* Execute

@@ -2,12 +2,13 @@
 # A Small Forth Library.
 ## Introduction
 
-[FORTH][] is an odd language that is a loyal following in certain groups, but it
+[Forth][] is an odd language that is has loyal following in certain groups, but it
 is admittedly not the most practical of language as it lacks nearly everything
 the modern programmer wants in a language; safety, garbage collection,
 modularity and clarity. It is however possible to implement a fully working
-interpreter in a few kilobytes of assembly, those few kilobytes can make for a
-fairly decent programming environment giving a high utility to space used ratio.
+interpreter in a one to two kilobytes of assembly, those kilobytes can make a
+functional and interactive programming environment, giving a high ratio of utility
+memory used.
 
 From the [Wikipedia][] article we can neatly summarize the language:
 
@@ -26,32 +27,55 @@ From the [Wikipedia][] article we can neatly summarize the language:
         for systems that lack a more formal operating system) and the ability 
         to compile sequences of commands for later execution." 
 
-Given the nature of the [FORTH][] language it does not make for a terribly good
-embeddable scripting, but it is simple to implement and can be quite fun
+Given the nature of the [Forth][] language it does not make for a terribly good
+embeddable scripting language, but it is simple to implement and can be fun
 to use. This interpreter is based off a previous [IOCCC][] in a file called
-[buzzard.2.c][], it is a descendant of that file.
+[buzzard.2.c][], it is a descendant of that file and the original is stored as
+a compressed [shell archive][] in the project.
 
 Before using and understanding this library/interpreter it is useful to checkout
-more literature on [FORTH][] such as [Thinking Forth][] by Leo Brodie for a
+more literature on [Forth][] such as [Thinking Forth][] by Leo Brodie for a
 philosophy of the language, [Starting Forth][] (same Author), [Jonesforth][]
 which is a specific implementation of the language in x86 assembly and
 [Gforth][], a more modern and portable implementation of the language.
 
-It is important to realize that [FORTH][] is really more a philosophy and
+It is important to realize that [Forth][] is really more a philosophy and
 collection of ideas than a specific reference implementation or standard.
-It has been said that an intermediate [FORTH][] user is one who has implemented
-a [FORTH][] interpreter, something which cannot be said about other languages
+It has been said that an intermediate [Forth][] user is one who has implemented
+a [Forth][] interpreter, something which cannot be said about other languages
 nor is possible given their complexity. 
 
-The saying "if you have seen one FORTH implementation, you have seen one FORTH 
-implementation" applies, nearly every single [FORTH][] implementation has its 
+The saying "if you have seen one Forth implementation, you have seen one Forth 
+implementation" applies, nearly every single [Forth][] implementation has its 
 own idea of how to go about things despite standardization efforts - in keeping 
-with this library has its own idiosyncrasies (many in fact!).
+with this, this library has its own idiosyncrasies.
+
+## Other documentation
+
+Apart from this file there are other sources of information about the
+project:
+
+The manual pages can be consulted:
+
+* [forth.1][]
+* [libforth.3][] 
+
+As can the code, which is small enough to be comprehensible:
+
+* [libforth.c][] (contains the core interpreter)
+* [libforth.h][] (contains the API documentation)
+
+And the forth startup code:
+
+* [start.4th][]
+
+The startup code is well commented and shows how the core interpreter is
+extended to a more function [Forth][] environment.
 
 ## Using the interpreter
 
 *main.c* simple calls the function *main_forth()* in *libforth.c*, this function
-initializes a [FORTH][] environment and puts the user in a [REPL][] where you
+initializes a [Forth][] environment and puts the user in a [REPL][] where you
 can issue commands and define words. See the manual pages for list of command
 line options and library calls. All commands are given using 
 [Reverse Polish Notation][] (or RPN), 
@@ -78,10 +102,10 @@ Prints:
 
         4
 
-The simplicity of the language allows for a very small interpreter, the
+The simplicity of the language allows for a small interpreter, the
 loop looks something like this:
 
-        1) Read in a space delimited FORTH WORD.
+        1) Read in a space delimited Forth WORD.
         2) Is this WORD in the dictionary?
            FOUND)      Are we in IMMEDIATE mode?
                        IMMEDIATE-MODE) Execute WORD.
@@ -116,13 +140,13 @@ when we do any kind of string handling.
 
 ## A Forth Word
 
-The FORTH execution model uses [Threaded Code][], the layout of a word
+The Forth execution model uses [Threaded Code][], the layout of a word
 header follows from this.
 
-A [FORTH][] word is defined in the dictionary and has a particular format that
+A [Forth][] word is defined in the dictionary and has a particular format that
 varies between implementations. A dictionary is simply a linked list of
-[FORTH][] words, the dictionary is usually contiguous and can only grow. The
-format for our [FORTH][] words is as follows:
+[Forth][] words, the dictionary is usually contiguous and can only grow. The
+format for our [Forth][] words is as follows:
 
 Briefly:
 
@@ -163,7 +187,7 @@ And in more detail:
                       a list of pointers to CODE WORDs of previously defined
                       words if this optional DATA field is present.
 
-All fields are aligned on the [FORTH][] virtual machines word boundaries.
+All fields are aligned on the [Forth][] virtual machines word boundaries.
 
 The MISC field is laid out as so:
 
@@ -230,22 +254,26 @@ words like this:
 Which defined the word "two-times", a word that takes a value from the stack,
 multiplies it by two and pushes the results back onto the stack.
 
-The word ':' does several things, it is an immediate word that reads in the
+The word ':' performs multiple actions; it is an immediate word that reads in the
 next space delimited word from the input stream and creates a header for that
 word. It also switches the interpreter into compile mode, compiling words will
 be compiled into that word definition instead of being executed, immediate words
 are executed as normal. ';' is also an immediate word, it compiles a special
 word exit into the dictionary which returns from a word call and switches the
-interpreter back into command mode. This type of behavior is very typical of
-[FORTH][] implementations.
+interpreter back into command mode. This type of behavior is typical of
+[Forth][] implementations.
 
 ## Memory Map and Special Registers
 
 The way this interpreter works is that is emulates an idealized machine, one
-built for executing [FORTH][] directly. As such it has to make compromises and
+built for executing [Forth][] directly. As such it has to make compromises and
 treats certain sectors of memory as being special, as shown below (numbers are
 given in *hexadecimal* and are multiples of the virtual machines word-size
-which is a *uint16_t*):
+which is either 16, 32 or 64 bit depending on compile time options. 
+
+Where the dictionary ends and the variable and return stacks begin depends on 
+how much memory was allocated to the interpreter (with a minimum of 2048 
+words), the default is 32768 words, and the following diagram assumes this:
 
         .-----------------------------------------------.
         | 0-3F      | 40-7BFF       |7C00-7DFF|7E00-7FFF|
@@ -289,7 +317,7 @@ for each region, although currently the defined word region ends before
                             gets put here.
         Defined word      = A list of words that have been defined with ':'
 
-## Glossary of FORTH words
+## Glossary of Forth words
 
 Each word is also given with its effect on the variable stack, any other effects
 are documented (including the effects on other stacks). Each entry looks like
@@ -307,7 +335,7 @@ There are three types of words.
 
 #### 'Invisible' words
 
-These invisible words have no name but are used to implement the FORTH. They
+These invisible words have no name but are used to implement the Forth. They
 are all *immediate* words.
 
 * push ( -- x)
@@ -336,7 +364,7 @@ Read in a new word from the input stream and compile it into the dictionary.
 
 * 'immediate'   ( -- )
 
-Make the previously declared word immediate. Unlike in most FORTH
+Make the previously declared word immediate. Unlike in most Forth
 implementations this is used after the words name is given not after the
 final ';' has been reached.
 
@@ -357,7 +385,7 @@ A comment, ignore everything until the end of the line.
 * 'read'        ( -- )
 
 *read* is a complex word that implements most of the user facing interpreter,
-it reads in a [FORTH][] *word* (up to 31 characters), if this *word* is in
+it reads in a [Forth][] *word* (up to 31 characters), if this *word* is in
 the *dictionary* it will either execute the word if we are in *command mode*
 or compile a pointer to the executable section of the word if in *compile
 mode*. If this *word* is not in the *dictionary* it is checked if it is a
@@ -681,19 +709,19 @@ Allocate a number of cells in the dictionary.
 
 * 'tuck'        ( x y -- y x y )
 
-The stack comment documents this word completely.
+The stack comment documents this word entirely.
 
 * 'nip'         ( x y -- y )
 
-The stack comment documents this word completely.
+The stack comment documents this word entirely.
 
 * 'rot'         ( x y z -- z x y )
 
-The stack comment documents this word completely.
+The stack comment documents this word entirely.
 
 * '-rot'        ( x y z -- y z x )
 
-The stack comment documents this word completely.
+The stack comment documents this word entirely.
 
 * '?'           ( bool -- )
 
@@ -712,22 +740,22 @@ Prints '4'.
 
 Unlike ':' this is a compiling word, but performs the same function.
 
-## Glossary of FORTH terminology 
+## Glossary of Forth terminology 
 
 * Word vs Machine-Word
 
 Usually in computing a 'word' refers to the natural length of integer in a
-machine, I specifically use the term 'Machine-Word' when I want to invoke
-this meaning, a word in [FORTH][] is more analogous to a function, but there
-are different types of FORTH words; *immediate* and *compiling* words,
+machine, the term 'machine word' is used to invoke this specific meaning, 
+a word in [Forth][] is more analogous to a function, but there
+are different types of Forth words; *immediate* and *compiling* words,
 *internal* and *defined* words and finally *visible* and *invisible* words.
 
-Suffice to say the distinction between a machine word and a FORTH word
+The distinction between a machine word and a Forth word
 can lead to some confusion.
 
 * *The* dictionary
 
-There is only one dictionary in a normal [FORTH][] implementation, it is a
+There is only one dictionary in a normal [Forth][] implementation, it is a
 data structure that can only grow in size (or at least it can in this
 implementation) and holds all of the defined words.
 
@@ -761,18 +789,71 @@ we execute words or push them on to the stack.
 
 * A block.
 
-A [FORTH][] block is primitive way of managing persistent storage and this
+A [Forth][] block is primitive way of managing persistent storage and this
 version of block interface is more primitive than most. A block is a
 contiguous range of bytes, usually 1024 of them as in this instance, and
 they can be written or read from disk. Flushing of dirty blocks is not
 performed in this implementation and must be done 'manually'.
+
+## Porting this interpreter
+
+The interpreter code is written in C99, and is written to be portable, however
+porting it to embedded platforms that lack a C standard library (which is most
+of them) would mean replacing the most of the C standard library functions used, 
+and implementing a new I/O mechanism for reading, printing and block storage.
+
+The interpreter has been tested on the following platforms:
+
+* Linux ARM 32-bit Little Endian
+* Linux x86-64
+* Windows 7 x86-64
+
+And the different virtual machine word size options (16, 32 and 64 bit machine
+words) have been tested.
+
+## Standards compliance
+
+This Forth interpreter is in no way compliant with any of the standards
+relating to Forth, such as [ANS Forth][], previous Forth standardization
+efforts. However attempts to support words and behavior typical of these
+standards are made.
+
+Some important deviations are:
+
+* immediate
+
+In most forths the "immediate" word goes after a words definition instead of
+inside it like this:
+
+	: word ... ; immediate
+
+Instead of how this interpreter does it:
+
+	: word immediate ... ;
+
+
+This behavior will not be changed.
+
+* recursion
+
+A word can be called immediately before the terminating semi-colon has been
+reached, in the middle of a word definition. This makes the recurse keyword
+redundant but means using a previous definition of a word with the same name
+more difficult (but can be done). This might be a candidate for behavior that
+should be made more compliant.
+
+* case sensitivity
+
+Most Forths are case insensitive, however this forth is not, and by default all
+core words are lower case, this will not be changed to be more compliant and is
+by design.
 
 ## To-do and notes
 
 * Port this to a micro controller, and a Linux kernel module device
 * Routines for saving and loading the image should be made
 
-[FORTH]: https://en.wikipedia.org/wiki/Forth_%28programming_language%29
+[Forth]: https://en.wikipedia.org/wiki/Forth_%28programming_language%29
 [Wikipedia]: https://en.wikipedia.org/wiki/Forth_%28programming_language%29
 [IOCCC]: http://ioccc.org/winners.html
 [buzzard.2.c]: http://www.ioccc.org/1992/buzzard.2.c
@@ -785,5 +866,11 @@ performed in this implementation and must be done 'manually'.
 [Threaded Code]: https://en.wikipedia.org/wiki/Threaded_code
 [start.4th]: start.4th
 [tail calls]: https://en.wikipedia.org/wiki/Tail_call
+[forth.1]: forth.1
+[libforth.3]: libforth.3
+[libforth.c]: libforth.c
+[libforth.h]: libforth.h
+[shell archive]: third.sh.gz
+[ANS Forth]: http://lars.nocrew.org/dpans/dpans.htm
 
-<style type="text/css">body{margin:40px auto;max-width:650px;line-height:1.6;font-size:18px;color:#444;padding:0 10px}h1,h2,h3{line-height:1.2}</style>
+<style type="text/css">body{margin:40px auto;max-width:850px;line-height:1.6;font-size:16px;color:#444;padding:0 10px}h1,h2,h3{line-height:1.2}</style>

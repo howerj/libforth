@@ -1,7 +1,8 @@
 ECHO	= echo
 AR	= ar
 CC	= gcc
-CFLAGS	= -Wall -Wextra -g -pedantic -fPIC -std=c99 -O2
+WORD    = 32
+CFLAGS	= -Wall -Wextra -g -pedantic -fPIC -std=c99 -O2 -DWORD=${WORD}
 TARGET	= forth
 
 .PHONY: all clean doxygen
@@ -17,17 +18,22 @@ help:
 	@$(ECHO) ""
 	@$(ECHO) "make (option)*"
 	@$(ECHO) ""
-	@$(ECHO) "	all             create the $(TARGET) libraries and executables"
-	@$(ECHO) "	$(TARGET)           create the $(TARGET) executable"
-	@$(ECHO) "	unit            create the unit test executable"
-	@$(ECHO) "	test            execute the unit tests"
-	@$(ECHO) "	doc             make the project documentation"
-	@$(ECHO) "	lib$(TARGET).so     make a shared $(TARGET) library"
-	@$(ECHO) "	lib$(TARGET).a      make a static $(TARGET) library"
-	@$(ECHO) "	clean           remove generated files"
-	@$(ECHO) "	install         (TODO) install the project"
-	@$(ECHO) "	uninstall       (TODO) uninstall the project"
-	@$(ECHO) "	dist            (TODO) create a distribution archive"
+	@$(ECHO) "      all             create the $(TARGET) libraries and executables"
+	@$(ECHO) "      $(TARGET)           create the $(TARGET) executable"
+	@$(ECHO) "      unit            create the unit test executable"
+	@$(ECHO) "      test            execute the unit tests"
+	@$(ECHO) "      doc             make the project documentation"
+	@$(ECHO) "      lib$(TARGET).so     make a shared $(TARGET) library"
+	@$(ECHO) "      lib$(TARGET).a      make a static $(TARGET) library"
+	@$(ECHO) "      clean           remove generated files"
+	@$(ECHO) "      install         (TODO) install the project"
+	@$(ECHO) "      uninstall       (TODO) uninstall the project"
+	@$(ECHO) "      dist            (TODO) create a distribution archive"
+	@$(ECHO) ""
+	@$(ECHO) "compile time options:"
+	@$(ECHO) ""
+	@$(ECHO) "      WORD            set the virtual machine word size,"
+	@$(ECHO) "                      valid sizes are 16, 32 and 64" 
 	@$(ECHO) ""
 
 doc: lib$(TARGET).htm doxygen
