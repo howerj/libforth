@@ -1,8 +1,7 @@
 ECHO	= echo
 AR	= ar
 CC	= gcc
-WORD    = 32
-CFLAGS	= -Wall -Wextra -g -pedantic -fPIC -std=c99 -O2 -DWORD=${WORD}
+CFLAGS	= -Wall -Wextra -g -pedantic -fPIC -std=c99 -O2 
 TARGET	= forth
 
 .PHONY: all clean doxygen
@@ -30,11 +29,6 @@ help:
 	@$(ECHO) "      uninstall       (TODO) uninstall the project"
 	@$(ECHO) "      dist            (TODO) create a distribution archive"
 	@$(ECHO) ""
-	@$(ECHO) "compile time options:"
-	@$(ECHO) ""
-	@$(ECHO) "      WORD            set the virtual machine word size,"
-	@$(ECHO) "                      valid sizes are 16, 32 and 64" 
-	@$(ECHO) ""
 
 doc: lib$(TARGET).htm doxygen
 lib$(TARGET).htm: lib$(TARGET).md
@@ -54,7 +48,7 @@ $(TARGET): main.c lib$(TARGET).a
 	$(CC) $(CFLAGS) $^ -o $@
 
 run: $(TARGET)
-	./$^ 
+	@./$^ start.4th -
 test: unit
 	./$^
 

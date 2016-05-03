@@ -45,6 +45,19 @@ See:
 	64 size * ( start of input buffer, in characters )
 ;
 
+: source-id ( -- 0 | -1 )
+	( The returned values correspond to whether the interpreter is
+	reading from the user input device or is evaluating a string,
+	currently the "evaluate" word is not accessible from within
+	the Forth environment and only via the C-API, however the
+	value can still change, the values correspond to:
+	Value    Input Source
+	-1       String
+	0        User input device )
+	source-id-reg @
+	( Warning: the register holding the source-id must never be set )
+;
+
 : again immediate 
 	( loop unconditionally in a begin-loop:
 		begin ... again )
@@ -94,12 +107,13 @@ See:
 : 3+ ( x -- x ) 3 + ;
 : +! ( x addr -- ) ( add x to a value stored at addr ) tuck @ + swap ! ;
 : mod ( x u -- remainder ) 2dup / * - ;
+: */ ( n1 n2 n3 -- n4 ) * / ; ( warning: this does not use a double cell for the multiply )
 : char key drop key ;
 : [char] immediate char ;
 
-: hide ( WORD -- hide-token ) 
+: hide  ( WORD -- hide-token ) 
 	( This hides a word from being found by the interpreter )
-	find 1+ dup 
+	find dup 
 	if 
 		dup @ hidden-mask or swap tuck ! 
 	else 
@@ -107,6 +121,7 @@ See:
 	then 
 ;
 
+: hider ( -- ) ( hide with drop ) hide drop ;
 : unhide ( hide-token -- ) dup @ hidden-mask invert and swap ! ;
 : push-location 2 ;       ( location of special "push" word )
 : compile-instruction 1 ; ( compile code word, threaded code interpreter instruction )
@@ -190,8 +205,8 @@ But this version is much more limited )
         _create
   then
 ;
-hide _create drop
-hide state! drop
+hider _create 
+hider state! 
 
 : does> ( whole-to-patch -- ) 
   immediate
@@ -201,17 +216,14 @@ hide state! drop
   run-instruction ,             \ Write a run in.
 ;
 
-hide write-quote drop
-hide write-comma drop
+hider write-quote 
+hider write-comma 
 
 : array    create allot does> + ;
 : variable create ,     does>   ;
 : constant create ,     does> @ ;
 
-
-( === End Create === )
-
-: inc dup @ 1 + swap ! exit
+: inc ( addr -- : increment a value at an address ) dup @ 1 + swap ! exit
 
 ( do loop : This section as the do-loop looping constructs )
 
@@ -220,6 +232,13 @@ hide write-comma drop
 	' >r ,        ( compile to push the limit onto the return stack )
 	' >r ,        ( compile to push the start on the return stack )
 	here          ( save this address so we can branch back to it )
+;
+
+: rdrop ( R: x -- )
+	r>           ( get caller's return address )
+	r>           ( get value to drop )
+	drop         ( drop it like it's hot )
+	>r           ( return return address )
 ;
 
 : inci 
@@ -232,20 +251,19 @@ hide write-comma drop
 		r@ @ @ r@ @ + r@ ! exit ( branch )
 	then
 	r> 1+
-	r> drop
-	r> drop
+	rdrop
+	rdrop
 	>r
 ;
   	
 : loop immediate ' inci , here - , ;
-
-hide inci drop
+hider inci 
 
 : leave
 	( break out of a do-loop construct )
-	r> drop ( pop off our return address )
-	r> drop ( pop off i )
-	r> drop ( pop off the limit of i and return to the caller's caller routine )
+	rdrop ( pop off our return address )
+	rdrop ( pop off i )
+	rdrop ( pop off the limit of i and return to the caller's caller routine )
 ;
 
 : i ( -- i ) 
@@ -322,13 +340,13 @@ hide inci drop
 	  : factorial  dup 2 < if drop 1 exit then dup 1- recurse * ;)
 	pwd @ execution-token ,
 ;
-hide execution-token drop
 
 : bl ( space character ) [char]  literal ; ( warning: white space is significant after [char] )
 : space bl emit ;
 : spaces ( n -- ) 0 do space loop ;
 
 : 8* ( x -- x ) 8 * ;
+: address-unit-bits size 8* ;
 : mask-byte ( x -- x ) 8* 0xff swap lshift ;
 : alignment-bits [ 1 size log-2 lshift 1- literal ] and ;
 
@@ -413,13 +431,13 @@ hide execution-token drop
 		key delim @ =
 	until
 ;
-hide delim drop
+hider delim 
 
+
+: '"' ( -- char : push literal " character ) [char] " literal ;
+: accept ( c-addr +n1 -- +n2 : see accepter definition ) swap '\n' accepter ;
 
 255 constant max-string-length 
-
-: '"' [char] " literal ;
-: accept swap '\n' accepter ;
 : accept-string max-string-length '"' accepter  ;
 
 0 variable delim
@@ -437,13 +455,13 @@ hide delim drop
 		emit 0 
 	until 
 ;
-hide delim drop
+hider delim 
 
 size 1- constant aligner 
 : aligned 
 	aligner + aligner invert and
 ;
-hide aligner drop
+hider aligner 
 
 : align ( x -- x ) ; ( nop in this implementation )
 
@@ -469,7 +487,7 @@ hide aligner drop
 	' print ,        ( write out print, which will print our string )
 	r> r> swap       ( restore index and address of string )
 ;
-hide delim drop
+hider delim
 
 : do-string ( char -- )
 	state @ if write-string 2drop else print-string then
@@ -532,7 +550,7 @@ hide delim drop
 	2drop
 ;
 
-: ) ;
+: ) immediate ;
 
 size 2 = ? 0x0123           variable endianess
 size 4 = ? 0x01234567       variable endianess
@@ -542,12 +560,41 @@ size 8 = ? 0x01234567abcdef variable endianess
 	( returns the endianess of the processor )
 	endianess size * c@ 0x01 =
 ;
-hide endianess
+hider endianess
 
 ( create a new variable "pad", which can be used as a scratch pad )
 0 variable pad 32 allot
 
-( 255 0x8000 accept hello world
+: forget ( ) find 1- dup @ pwd ! h ! ;
+: bye ( -- : quit the interpreter ) 0 r ! ;
+
+: execute ( execution-token -- )
+	( given an execution token, execute the word )
+
+	( create a word that pushes the address of a hole to write to
+	a literal takes up two words, '!' takes up one )
+
+	[ here 3+ literal ] 
+	!                   ( write an execution token to a hole )
+	[ 0 , ]             ( )
+;
+
+: ' immediate 
+	( create a version of "'" that works at command time as well
+        as compile time ) 
+	[ hide ' hide ' drop ]
+	state @ 
+	if 
+		push-location , find , 
+	else 
+		find 
+	then 
+	[ unhide ] 
+; 
+
+
+( \ Test code
+255 0x8000 accept hello world
 drop
 
 8 0x4100 0x4000 move
@@ -557,44 +604,55 @@ drop
 
 0x4000 40 erase
 0x8000 print cr
-0x8200 print cr )
+0x8200 print cr 
 
+\ 2 2 find + 1+ execute . cr
+\ :noname " hello world " cr ; execute
+)
+: aword            " example non immediate word to execute " cr ; find aword  1+ execute
+: aiword immediate " example immediate word to execute " cr ;     find aiword execute
+2 2 find + execute . cr
+:noname " hello world " cr ; execute
 
-hide write-string drop
-hide do-string drop
-
-hide  accept-string        drop
-hide  '"'                  drop
-hide  ')'                  drop
-hide  alignment-bits       drop
-hide  print-string         drop
-hide  compile-instruction  drop
-hide  dictionary-start     drop
-hide  hidden?              drop
-hide  hidden-mask          drop
-hide  instruction-mask     drop
-hide  max-core             drop
-hide  push-location        drop
-hide  run-instruction      drop
-hide  stack-start          drop
-hide  x                    drop
-hide  x!                   drop
-hide  x@                   drop
-hide  write-exit           drop
-hide  jmp                  drop
-hide  jmpz                 drop
-hide  mask-byte            drop
-hide  accepter             drop
-hide  max-string-length    drop
-hide  line                 drop
+hider write-string 
+hider do-string 
+hider  accept-string        
+hider  '"'                  
+hider  ')'                  
+hider  alignment-bits       
+hider  print-string         
+hider  compile-instruction  
+hider  dictionary-start     
+hider  hidden?              
+hider  hidden-mask          
+hider  instruction-mask     
+hider  max-core             
+hider  push-location        
+hider  run-instruction      
+hider  stack-start          
+hider  x                    
+hider  x!                   
+hider  x@                   
+hider  write-exit           
+hider  jmp                  
+hider  jmpz                 
+hider  mask-byte            
+hider  accepter             
+hider  max-string-length    
+hider  line                 
+hider  source-id-reg        
+hider  execution-token 
 
 ( TODO
-	* Execute
-	* Fix recurse
+	* Execute needs fixing
 	* Evaluate [this would require changes to the interpreter]
 	* Base
-	* Find is not ANS forth compatible
 	* By adding "c@" and "c!" to the interpreter I could remove print
-	* Word, Parse, ?do, repeat, while, Case statements
+	* Add unit testing to the end of this file
+	* Word, Parse, ?do, +loop, repeat, while, Case statements
 	quite easily by implementing "count" in the start up code
+	* Try to simplify the definitions of write-string using "create" "does>"
+	and come up with a way of reusing code for "move", "cmove" and "cmove>",
+	for that matter "create" and "does>" could be simplified
+	* add "j" if possible to get outer loop context
 )

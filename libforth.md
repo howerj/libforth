@@ -740,6 +740,15 @@ Prints '4'.
 
 Unlike ':' this is a compiling word, but performs the same function.
 
+## [start.4th][]
+
+The file [start.4th][] contains many defined words, however those words are
+documented within that file and so as to avoid duplication will not be
+mentioned here. This file is *not* loaded automatically, and so should be run
+like this (on Unix systems):
+
+	./forth start.4th /dev/stdin
+
 ## Glossary of Forth terminology 
 
 * Word vs Machine-Word
