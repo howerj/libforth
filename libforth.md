@@ -537,11 +537,6 @@ memory of a likewise *blocknum* derived name as in *save*.
 Find a word in the dictionary pushing a pointer to that word onto the
 variable stack.
 
-* '.s'
-
-Print out the contents of the variable stack (and the top of the stack) but
-do not affect the contents.
-
 * 'print'       ( char-address -- )
 
 This prints a NUL terminate string at *charptr*. *charptr* is a character
@@ -698,10 +693,10 @@ a helper word for 'list'.
 This will read the input stream until encountering a ')' character, it
 is used for comments.
 
-* 'list'        ( address-1 address-2 -- )
+* 'lister'        ( address-1 address-2 -- )
 
 Given two memory address, address-2 being the larger address, print out
-the contents of memory between those two addresses.
+the contents of memory between those two addresses, inclusively.
 
 * 'allot'       ( amount -- )
 

@@ -61,7 +61,7 @@ See:
 : again immediate 
 	( loop unconditionally in a begin-loop:
 		begin ... again )
-	' jmp , here - , 
+	' branch , here - , 
 ; 
 : 2drop ( x y -- ) drop drop ;
 : words ( -- )
@@ -110,6 +110,7 @@ See:
 : */ ( n1 n2 n3 -- n4 ) * / ; ( warning: this does not use a double cell for the multiply )
 : char key drop key ;
 : [char] immediate char ;
+: compile immediate find , ;
 
 : hide  ( WORD -- hide-token ) 
 	( This hides a word from being found by the interpreter )
@@ -127,6 +128,7 @@ See:
 : compile-instruction 1 ; ( compile code word, threaded code interpreter instruction )
 : run-instruction 2 ;     ( run code word, threaded code interpreter instruction )
 : literal immediate push-location , , ; 
+: \ immediate begin key '\n' = until ;
 : ?dup ( x -- ? ) dup if dup then ;
 : min ( x y -- min ) 2dup < if drop else swap drop then  ; 
 : max ( x y -- max ) 2dup > if drop else swap drop then  ; 
@@ -191,13 +193,15 @@ But this version is much more limited )
 	false state!  \ return to command mode
 ;
 
+: >mark ( -- ) here 0 , ; 
+
 : create immediate              \ This is a complicated word! It makes a
                                 \ word that makes a word.
   state @ if                    \ Compile time behavior
   ' :: ,                        \ Make the defining word compile a header
   write-quote push-location , write-comma    \ Write in push to the creating word
   ' here , ' 3+ , write-comma        \ Write in the number we want the created word to push
-  write-quote here 0 , write-comma   \ Write in a place holder 0 and push a 
+  write-quote >mark write-comma   \ Write in a place holder 0 and push a 
                                      \ pointer to to be used by does>
   write-quote write-exit write-comma \ Write in an exit in the word we're compiling.
   ' false , ' state! ,          \ Make sure to change the state back to command mode
@@ -223,8 +227,8 @@ hider write-comma
 : variable create ,     does>   ;
 : constant create ,     does> @ ;
 
-: inc ( addr -- : increment a value at an address ) dup @ 1+ swap ! exit
-: dec ( addr -- : decrement a value at an address ) dup @ 1- swap ! exit
+: inc ( addr -- : increment a value at an address )  1 swap +! ;
+: dec ( addr -- : decrement a value at an address ) -1 swap +! ;
 
 ( do loop : This section as the do-loop looping constructs )
 
@@ -242,9 +246,9 @@ hider write-comma
 	>r           ( return return address )
 ;
 
-: inci 
+: addi 
 	r@ 1-        ( get the pointer to i )
-	inc          ( add one to it )
+	+!           ( add value to it )
 	r@ 1- @      ( find the value again )
 	r@ 2- @      ( find the limit value )
 	<
@@ -256,8 +260,9 @@ hider write-comma
 	rdrop
 	>r
 ;
-  	
-: loop immediate ' inci , here - , ;
+
+: loop immediate push-location , 1 , ' addi , here - , ;
+: +loop immediate ' addi , here - , ;
 hider inci 
 
 : leave
@@ -265,6 +270,14 @@ hider inci
 	rdrop ( pop off our return address )
 	rdrop ( pop off i )
 	rdrop ( pop off the limit of i and return to the caller's caller routine )
+;
+
+: ?leave ( x -- : conditional leave )
+	if
+		rdrop ( pop off our return address )
+		rdrop ( pop off i )
+		rdrop ( pop off the limit of i and return to the caller's caller routine )
+	then
 ;
 
 : i ( -- i ) 
@@ -294,7 +307,9 @@ hider inci
 : cells ( n1 -- n2 ) ;
 : char+ ( c-addr1 -- c-addr2 ) 1+ ;
 : chars ( n1 -- n2 )  size / ;
-: decimal ( -- ) ( print out decimal ) 0 hex ;
+: hex     ( -- ) ( print out hex )     16 base ! ;
+: octal   ( -- ) ( print out octal )    8 base ! ;
+: decimal ( -- ) ( print out decimal )  0 base ! ;
 : negate -1 * ;
 
 : execution-token ( previous-word-address -- execution-token )
@@ -327,7 +342,7 @@ hider inci
 	Would overflow the return stack. )
 	immediate
 	pwd @ execution-token 
-	' jmp ,
+	' branch ,
 	here - 1+ ,
 ;
 
@@ -423,7 +438,7 @@ hider inci
 		if
 			over c! 1+ 
 		else ( too many characters read in )
-			2drop
+			0 swap c! drop
 			i 1+
 			leave
 		then
@@ -474,8 +489,8 @@ hider aligner
 	length and character address of the string are left on the
 	stack )
 	delim !         ( save delimiter )
-	' jmp ,         ( write in jump, this will jump past the string )
-	here 0 ,        ( make hole )
+	' branch ,      ( write in jump, this will jump past the string )
+	>mark           ( make hole )
 	dup 1+ size *   ( calculate address to write to )
 	max-string-length delim @ accepter dup >r ( write string into dictionary, save index )
 	aligned 2dup size / ( stack: length hole char-len hole )
@@ -555,6 +570,7 @@ hider delim
 
 : ? ( a-addr -- : view value at address ) @ . cr ;
 
+
 ( The words "[if]", "[else]" and "[then]" implement conditional compilation,
 they can be nested as well
 
@@ -613,24 +629,20 @@ hider endianess
 ( create a new variable "pad", which can be used as a scratch pad )
 0 variable pad 32 allot
 
-: forget ( ) find 1- dup @ pwd ! h ! ;
+: dump  ( addr u -- )
+	( dump out contents of memory starting at 'addr', for 'u' units )
+	over + lister 2drop
+;
+
+: forget 
+	( given a word, forget every word defined after that
+	word and the word itself )
+	find 
+	1- dup @ pwd ! h ! 
+;
+
 : bye ( -- : quit the interpreter ) 0 r ! ;
 
-: ' immediate 
-	( create a version of "'" that works at command time as well
-        as compile time ) 
-	[ 
-		hide ' ( hide this definition, we will use the hide token it produces ) 
-		hide ' drop ( hide the built in definition , drop the token it produces ) ]
-	state @ 
-	if 
-		push-location , find , 
-	else 
-		find 
-	then 
-	[ unhide ] 
-;
- 
 : execute ( execution-token -- )
 	( given an execution token, execute the word )
 
@@ -641,7 +653,36 @@ hider endianess
 	execution-token
 	[ here 3+ literal ] 
 	!                   ( write an execution token to a hole )
-	[ 0 , ]             ( this is the hole we write to an execute )
+	[ 0 , ]             ( this is the hole we write )
+;
+
+: .s    ( -- : print out the stack for debugging )
+	depth if
+		depth 0 do i pick . tab loop
+	then
+	cr
+;
+
+: ' immediate 
+	( create a version of "'" that works at command time as well
+        as compile time ) 
+	[ 
+		hide ' ( hide this definition, we will use the hide token it produces ) 
+		hide ' drop ( hide the built in definition , drop the token it produces ) 
+	]
+	state @ 
+	if 
+		push-location ,  find execution-token , 
+	else 
+		find 
+	then 
+	[ unhide ] 
+; 
+
+: ?dup-if immediate ( x -- x | - ) 
+	' ?dup , 
+	' ?branch , here 0 ,
+	( compile if )
 ;
 
 ( \ Test code
@@ -663,7 +704,7 @@ drop
 :noname " hello world " cr ;  execute
 
 1 [if] 
-	." Hello World " cr
+	." Hello World " 
 	0 [if]
 		." Bye, bye! " cr
 	[else]
@@ -676,7 +717,11 @@ drop
 	[then]
 
 
-[then] )
+[then] 
+: c 99  ?dup-if 2 then .s ; 
+find c 16 dump
+cr
+c )
 
 hider write-string 
 hider do-string 
@@ -698,8 +743,8 @@ hider  x
 hider  x!                   
 hider  x@                   
 hider  write-exit           
-hider  jmp                  
-hider  jmpz                 
+hider  branch
+hider  ?branch
 hider  mask-byte            
 hider  accepter             
 hider  max-string-length    

@@ -30,17 +30,17 @@
 #define instruction(k)      ((k) & INSTRUCTION_MASK)
 
 static const char *core_file_name = "forth.core";
-static const char *initial_forth_program = "\\ FORTH startup program.       \n\
-: state 8 exit : ; immediate ' exit , 0 state ! exit : hex 9 ! ; : pwd 10 ; \n\
+static const char *initial_forth_program = "\n\
+: state 8 exit : ; immediate ' exit , 0 state ! exit : base 9 ; : pwd 10 ; \n\
 : h 0 ; : r 1 ; : here h @ ; : [ immediate 0 state ! ; : ] 1 state ! ;      \n\
-: :noname immediate here 2 , ] ; : if immediate ' jmpz , here 0 , ;         \n\
-: else immediate ' jmp , here 0 , swap dup here swap - swap ! ; : 0= 0 = ;  \n\
+: :noname immediate here 2 , ] ; : if immediate ' ?branch , here 0 , ;         \n\
+: else immediate ' branch , here 0 , swap dup here swap - swap ! ; : 0= 0 = ;  \n\
 : then immediate dup here swap - swap ! ; : 2dup over over ; : <> = 0= ;    \n\
-: begin immediate here ; : until immediate ' jmpz , here - , ; : '\\n' 10 ; \n\
+: begin immediate here ; : until immediate ' ?branch , here - , ; : '\\n' 10 ; \n\
 : not 0= ; : 1+ 1 + ; : 1- 1 - ; : ')' 41 ; : tab 9 emit ; : cr '\\n' emit ;\n\
 : line dup . tab dup 4 + swap begin dup @ . tab 1+ 2dup = until drop ;      \n\
 : ( immediate begin key ')' = until ; : rot >r swap r> swap ; : -rot rot rot ;\n\
-: list swap begin line cr 2dup < until ; : allot here + h ! ;               \n\
+: lister swap begin line cr 2dup < until ; : allot here + h ! ;               \n\
 : tuck swap over ; : nip swap drop ; : :: [ find : , ] ;";
 
 struct forth {	        /**< The FORTH environment is contained in here*/
@@ -62,16 +62,17 @@ struct forth {	        /**< The FORTH environment is contained in here*/
 };
 
 enum input_stream { FILE_IN, STDIN_IN, STRING_IN };
-enum registers    { DIC=0/*m[0]*/,RSTK=1,STATE=8,HEX=9,PWD=10,SOURCE_ID=11 };
-enum instructions { PUSH,COMPILE,RUN,DEFINE,IMMEDIATE,COMMENT,READ,LOAD,STORE,
-SUB,ADD,AND,OR,XOR,INV,SHL,SHR,MUL,DIV,LESS,MORE,EXIT,EMIT,KEY,FROMR,TOR,JMP,
-JMPZ, PNUM, QUOTE,COMMA,EQUAL,SWAP,DUP,DROP,OVER,BSAVE,BLOAD,FIND,PRINT,
-PSTK,DEPTH,CLOCK,LAST };
+enum registers    { DIC=0/*m[0]*/,RSTK=1,STATE=8,BASE=9,PWD=10,SOURCE_ID=11 };
+enum instructions { PUSH,COMPILE,RUN,DEFINE,IMMEDIATE,READ,LOAD,STORE,
+SUB,ADD,AND,OR,XOR,INV,SHL,SHR,MUL,DIV,LESS,MORE,EXIT,EMIT,KEY,FROMR,TOR,BRANCH,
+QBRANCH, PNUM, QUOTE,COMMA,EQUAL,SWAP,DUP,DROP,OVER,BSAVE,BLOAD,FIND,PRINT,
+
+DEPTH,CLOCK,LAST };
 
 static char *names[] = { "read","@","!","-","+","and","or","xor","invert",
-"lshift","rshift","*","/","<",">","exit","emit","key","r>",">r","jmp","jmpz",
+"lshift","rshift","*","/","<",">","exit","emit","key","r>",">r","branch","?branch",
 ".","'", ",","=", "swap","dup","drop", "over", "save","load","find",
-"print",".s", "depth", "clock", NULL }; 
+"print","depth", "clock", NULL }; 
 
 static int forth_get_char(forth_t *o) /**< get a char from string-in or a file*/
 { 
@@ -151,24 +152,13 @@ static int blockio(forth_t *o, void *p, forth_cell_t poffset, forth_cell_t id, c
 	return n == BLOCK_SIZE ? 0 : -1;
 } /*a basic FORTH block I/O interface*/
 
-static int is_number(const char *s)  /**< is word a number? */
-{ /* @todo Implement a normal BASE mechanism, like in other Forths */
-	s += *s == '-' ? 1 : 0; 
-	if(s[0] == '0') {
-		if(s[1] == 'x')
-			return s[strspn(s+2,"0123456789abcdefABCDEF")+2] == '\0' && s[2];
-		else
-			return s[strspn(s,"01234567")] == '\0';
-	}
-	return s[strspn(s, "0123456789")] == '\0' && s[0]; 
-}
-
-static int comment(forth_t *o)  /**< process a comment line*/
+static int numberify(forth_t *o, forth_cell_t *n, const char *s)  
 {
-	int c; 
-	while(((c = forth_get_char(o)) > 0) && (c != '\n')); 
-	return c;
-} 
+	char *end = NULL;
+	errno = 0;
+	*n = strtol(s, &end, o->m[BASE]);
+	return !errno && *s != '\0' && *end == '\0';
+}
 
 static forth_cell_t find(forth_t *o) 
 { 
@@ -182,21 +172,9 @@ static forth_cell_t find(forth_t *o)
 
 static int print_cell(forth_t *o, forth_cell_t f, int tab)
 {
-	char *fmt = o->m[HEX] ? "0x%" PRIxCell "%s" : "%" PRIuCell "%s";
+	char *fmt = o->m[BASE] == 16 ? "0x%" PRIxCell "%s" : "%" PRIuCell "%s";
 	return fprintf(o->out, fmt, f, tab ? "\t" : "");
 }
-
-static int print_stack(forth_t *o, forth_cell_t f, forth_cell_t *S)
-{ 
-	forth_cell_t *begin = o->m + o->core_size - (2*o->stack_size);
-	if(begin != S)
-		if (print_cell(o, f, 1) < 0)
-			return -1;
-	while(begin + 1 < S)
-		if (print_cell(o, *(S--), 1) < 0)
-			return -1; 
-	return 0;
-} /*print the forth stack*/
 
 void forth_set_file_input(forth_t *o, FILE *in) 
 { /** @todo o->sin should be set to a program that exits */
@@ -268,7 +246,6 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out)
 
 	compile(o, DEFINE,    ":");	    /*immediate word*/
 	compile(o, IMMEDIATE, "immediate"); /*immediate word*/
-	compile(o, COMMENT,   "\\");	    /*immediate word*/
 	for(i = 0, w = READ; names[i]; i++) /*compiling words*/
 		compile(o, COMPILE, names[i]), m[m[DIC]++] = w++;
 	m[RSTK] = size - o->stack_size;	   /*set up return stk pointer*/
@@ -280,7 +257,7 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out)
 	VERIFY(forth_define_constant(o, "max-core",      size) >= 0);
 	VERIFY(forth_define_constant(o, "source-id-reg", SOURCE_ID) >= 0);
 
-	forth_set_file_input(o, in);	/*set up input after out eval*/
+	forth_set_file_input(o, in);	/*set up input after our eval*/
 	o->start_time = clock();
 	return o;
 }
@@ -334,7 +311,7 @@ int forth_run(forth_t *o)
 	for(;(pc = m[ck(I++)]);) { /* Threaded code interpreter */
 		assert((S > m) && (S < (m + o->core_size)));
 	INNER:  
-		switch (instruction(m[ck(pc++)])) {
+		switch (w = instruction(m[ck(pc++)])) {
 		case PUSH:    *++S = f;     f = m[ck(I++)];          break;
 		case COMPILE: m[ck(m[DIC]++)] = pc;                  break;
 		case RUN:     m[ck(++m[RSTK])] = I; I = pc;          break;
@@ -347,7 +324,6 @@ int forth_run(forth_t *o)
 			      m[m[DIC]] &= ~INSTRUCTION_MASK;
 			      m[m[DIC]] |= RUN; 
 			      m[DIC]++;                              break;
-		case COMMENT: if(comment(o) < 0) goto end;           break;
 		case READ:    
 			m[ck(RSTK)]--;
 			if(forth_get_word(o, o->s) < 0)
@@ -357,16 +333,16 @@ int forth_run(forth_t *o)
 				if (!m[STATE] && instruction(m[ck(pc)]) == COMPILE)
 					pc++;
 				goto INNER;
-			} else if(!is_number((char*)o->s)) {
+			} else if(!numberify(o, &w, (char*)o->s)) {
 				fprintf(stderr, "( error \"%s is not a word\" )\n", o->s);
 				break;
 			}
 			if (m[STATE]) { /*must be a number then*/
-				m[m[0]++] = 2; /*word push at m[2]*/
-				m[ck(m[0]++)] = strtol((char*)o->s,0,0);
+				m[m[0]++] = 2; /*fake word push at m[2]*/
+				m[ck(m[0]++)] = w;
 			} else {
 				*++S = f;
-				f = strtol((char*)o->s, 0, 0);
+				f = w;
 			}                                            break;
 		case LOAD:    f = m[ck(f)];                          break;
 		case STORE:   m[ck(f)] = *S--; f = *S--;             break;
@@ -391,8 +367,8 @@ int forth_run(forth_t *o)
 		case KEY:     *++S = f; f = forth_get_char(o);       break;
 		case FROMR:   *++S = f; f = m[ck(m[RSTK]--)];        break;
 		case TOR:     m[ck(++m[RSTK])] = f; f = *S--;        break;
-		case JMP:     I += m[ck(I)];                         break;
-		case JMPZ:    I += f == 0 ? m[I] : 1; f = *S--;      break;
+		case BRANCH:  I += m[ck(I)];                         break;
+		case QBRANCH: I += f == 0 ? m[I] : 1; f = *S--;      break;
 		case PNUM:    print_cell(o, f, 0);
 			      f = *S--;                              break;
 		case QUOTE:   *++S = f;     f = m[ck(I++)];          break;
@@ -410,7 +386,6 @@ int forth_run(forth_t *o)
 			      f = find(o);
 			      f = f < DICTIONARY_START ? 0 : f;    break;
 		case PRINT:   fputs(((char*)m)+f, o->out); f = *S--; break;
-		case PSTK:    print_stack(o, f ,S);                  break;
 		case DEPTH:   w = S- (m + o->core_size - (2 * o->stack_size));
 			      *++S = f;
 			      f = w;                                 break;
@@ -418,7 +393,7 @@ int forth_run(forth_t *o)
 			      f = ((1000 * (clock() - o->start_time)) / CLOCKS_PER_SEC);
 			                                             break;
 		default:      
-			fputs("( fatal 'illegal-op )\n", stderr);
+			fprintf(stderr, "( fatal 'illegal-op %" PRIuCell " )\n", w);
 			longjmp(o->error, 1);
 		}
 	}
@@ -450,7 +425,7 @@ int main_forth(int argc, char **argv)
 			else
 				forth_set_file_input(o, in = fopen_or_die(argv[0], "rb"));
 /*shebang line '#!' */  if((c = fgetc(in)) == '#') {
-				comment(o); /*special case*/
+				while(((c = forth_get_char(o)) > 0) && (c != '\n')); 
 			} else if (c == EOF) { 
 				fclose_input(&in);
 				continue; 
