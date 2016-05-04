@@ -16,27 +16,9 @@ extern "C" {
 
 struct forth; /**< An opaque object that holds a running FORTH environment**/
 typedef struct forth forth_t;
-#ifdef WORD /**< uintptr_t should also be an option */
-#if WORD == 16
-typedef uint16_t forth_cell_t; /**< FORTH "machine word", minimum viable size*/
-#define PRIuCell PRIu16
-#define PRIxCell PRIx16
-#elif WORD == 32
-typedef uint32_t forth_cell_t; /**< FORTH "machine word"*/
-#define PRIuCell PRIu32
-#define PRIxCell PRIx32
-#elif WORD == 64
-typedef uint64_t forth_cell_t; /**< FORTH "machine word"*/
-#define PRIuCell PRIu64
-#define PRIxCell PRIx64
-#else
-#error "Invalid WORD size: valid sizes are 16, 32 or 64."
-#endif
-#else
-typedef uintptr_t forth_cell_t; /**< FORTH "machine word", default */
+typedef uintptr_t forth_cell_t; /**< FORTH "machine word"*/
 #define PRIuCell PRIuPTR
 #define PRIxCell PRIxPTR
-#endif
 /** @brief   Given an input and an output this will initialize forth,
  *           allocating memory for it and setting it up so it has a few
  *           FORTH words predefined. The returned object must be free'd

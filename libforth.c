@@ -139,7 +139,7 @@ static int blockio(forth_t *o, void *p, forth_cell_t poffset, forth_cell_t id, c
 	char name[16] = {0}; /* XXXX + ".blk" + '\0' + a little spare change */
 	FILE *file = NULL;
 	size_t n;
-	if(poffset > (o->core_size - BLOCK_SIZE))
+	if(((uintptr_t)poffset) > (o->core_size - BLOCK_SIZE))
 		return -1;
 	sprintf(name, "%04x.blk", (int)id);
 	if(!(file = fopen(name, rw == 'r' ? "rb" : "wb"))) {
@@ -290,7 +290,7 @@ forth_cell_t forth_stack_position(forth_t *o)
 
 static forth_cell_t check_bounds(forth_t *o, forth_cell_t f) 
 { 
-	if(f >= o->core_size) {
+	if(((uintptr_t)f) >= o->core_size) {
 		fprintf(stderr, "( fatal \"bounds check failed: %" PRIuCell " >= %zu\" )\n", f, o->core_size);
 		longjmp(o->error, 1);
 	}

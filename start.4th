@@ -685,6 +685,45 @@ hider endianess
 	( compile if )
 ;
 
+( ANSI Escape Codes )
+27 constant 'escape'
+char ; constant ';'
+: CSI 'escape' emit ." [" ;
+0  constant black   
+1  constant red     
+2  constant green   
+3  constant yellow 
+4  constant blue     
+5  constant magenta  
+6  constant cyan     
+7  constant white  
+: foreground 30 + ;
+: background 40 + ;
+0 constant dark
+1 constant bright
+
+: color ( brightness color-code -- )
+	( set color on an ANSI compliant terminal,
+	for example:
+		bright red foreground color
+	sets the foreground text to bright red )
+	CSI . 
+	if 
+		." ;1" 
+	then 
+	." m" 
+;
+
+: at-xy ( x y -- ) ( set ANSI terminal cursor position to x y ) CSI . ';' emit . ." H" ;
+: page  ( clear ANSI terminal screen and move cursor to beginning ) CSI ." 2J" 1 1 at-xy ;
+: hide-cursor ( hide the cursor from view ) CSI ." ?25l" ;
+: show-cursor ( show the cursor )           CSI ." ?25h" ;
+: save-cursor ( save cursor position ) CSI ." s" ;
+: restore-cursor ( restore saved cursor position ) CSI ." u" ;
+: reset-color CSI ." 0m" ;
+
+hider CSI
+
 ( \ Test code
 255 0x8000 accept hello world
 drop
@@ -758,12 +797,12 @@ hider  execution-token
 	* Base
 	* By adding "c@" and "c!" to the interpreter I could remove print
 	* Add unit testing to the end of this file
-	* Word, Parse, ?do, +loop, repeat, while, Case statements
+	* Word, Parse, ?do, repeat, while, Case statements
 	quite easily by implementing "count" in the start up code
 	* Try to simplify the definitions of write-string using "create" "does>"
 	and come up with a way of reusing code for "move", "cmove" and "cmove>",
 	for that matter "create" and "does>" could be simplified
 	* add "j" if possible to get outer loop context
 	* Decompiler "see" http://lars.nocrew.org/dpans/dpans15.htm
-	* ANSI colors, AT-XY, PAGE (see http://lars.nocrew.org/dpans/dpans10.htm)
+	* FORTH, VOCABULARY 
 )
