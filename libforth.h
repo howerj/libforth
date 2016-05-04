@@ -35,7 +35,7 @@ typedef uint64_t forth_cell_t; /**< FORTH "machine word"*/
 #else
 typedef uintptr_t forth_cell_t; /**< FORTH "machine word", default */
 #define PRIuCell PRIuPTR
-#define PRIxCell PRIuPTR
+#define PRIxCell PRIxPTR
 #endif
 /** @brief   Given an input and an output this will initialize forth,
  *           allocating memory for it and setting it up so it has a few

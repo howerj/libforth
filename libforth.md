@@ -2,7 +2,7 @@
 # A Small Forth Library.
 ## Introduction
 
-[Forth][] is an odd language that is has loyal following in certain groups, but it
+[Forth][] is an odd language that has a loyal following groups, but it
 is admittedly not the most practical of language as it lacks nearly everything
 the modern programmer wants in a language; safety, garbage collection,
 modularity and clarity. It is however possible to implement a fully working
@@ -723,19 +723,6 @@ The stack comment documents this word entirely.
 
 The stack comment documents this word entirely.
 
-* '?'           ( bool -- )
-
-This implements conditional execution, if true then the rest of the
-current input line is not executed, for example
-
-        0 ? 2 2 + . cr
-
-Does nothing.
-
-        1 ? 2 2 + . cr
-
-Prints '4'.
-
 * '::'          ( -- )
 
 Unlike ':' this is a compiling word, but performs the same function.
@@ -861,6 +848,26 @@ by design.
 
 * Port this to a micro controller, and a Linux kernel module device
 * Routines for saving and loading the image should be made
+* If the word size is the same as the machine size it all memory address,
+such as those passed to load and store, should be actual addresses.
+Implementing this would probably mean *only* supporting the machines natural
+word length.
+* Experiment with different names for [FORTH][] words, shorter words could 
+be used such as:
+
+        s       swap
+        d       dup
+        D       drop
+        h       here
+        t       tuck
+        n       nip
+        o       over
+        {       begin
+        }       until
+        r       rot
+        -r      -rot
+        2d      2dup
+        2D      2drop
 
 [Forth]: https://en.wikipedia.org/wiki/Forth_%28programming_language%29
 [Wikipedia]: https://en.wikipedia.org/wiki/Forth_%28programming_language%29

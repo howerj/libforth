@@ -45,17 +45,17 @@ See:
 	64 size * ( start of input buffer, in characters )
 ;
 
-: source-id ( -- 0 | -1 )
+: source-id ( -- 0 | 1 | 2 )
 	( The returned values correspond to whether the interpreter is
 	reading from the user input device or is evaluating a string,
 	currently the "evaluate" word is not accessible from within
 	the Forth environment and only via the C-API, however the
 	value can still change, the values correspond to:
 	Value    Input Source
-	-1       String
-	0        User input device )
+	2        String
+	1        Standard input
+	0        File Input [this may be stdin] )
 	source-id-reg @
-	( Warning: the register holding the source-id must never be set )
 ;
 
 : again immediate 
@@ -141,8 +141,8 @@ See:
 : 0> 0 > ;
 : 0<> 0 <> ;
 
-: usleep clock +  begin dup clock < until drop ;
-: sleep 1000 * usleep ;
+: ms ( u -- : wait at least 'u' milliseconds ) clock +  begin dup clock < until drop ;
+: sleep 1000 * ms ;
 
 : gcd ( a b -- n ) ( greatest common divisor )
 	begin
@@ -223,7 +223,8 @@ hider write-comma
 : variable create ,     does>   ;
 : constant create ,     does> @ ;
 
-: inc ( addr -- : increment a value at an address ) dup @ 1 + swap ! exit
+: inc ( addr -- : increment a value at an address ) dup @ 1+ swap ! exit
+: dec ( addr -- : decrement a value at an address ) dup @ 1- swap ! exit
 
 ( do loop : This section as the do-loop looping constructs )
 
@@ -423,7 +424,7 @@ hider inci
 			over c! 1+ 
 		else ( too many characters read in )
 			2drop
-			i
+			i 1+
 			leave
 		then
 	loop
@@ -493,7 +494,7 @@ hider delim
 	state @ if write-string 2drop else print-string then
 ;
 
-: " immediate '"' do-string ;
+: "  immediate '"' do-string ;
 : .( immediate ')' do-string ;
 : ." immediate '"' do-string ;
 
@@ -552,13 +553,60 @@ hider delim
 
 : ) immediate ;
 
-size 2 = ? 0x0123           variable endianess
-size 4 = ? 0x01234567       variable endianess
-size 8 = ? 0x01234567abcdef variable endianess
+: ? ( a-addr -- : view value at address ) @ . cr ;
+
+( The words "[if]", "[else]" and "[then]" implement conditional compilation,
+they can be nested as well
+
+See http://lars.nocrew.org/dpans/dpans15.htm for more information
+
+A much simpler conditional compilation method is the folling
+single word definition:
+
+ : compile-line? 0= if [ find \\ , ] then ;
+
+Which will skip a line if a conditional is false, and compile it
+if true )
+
+( These words really, really need refactoring )
+0 variable nest      ( level of [if] nesting )
+0 variable else-word ( this will be populated with a forward reference to [else] )
+: reset-nest 1 nest ! ;
+: [then] ;
+: [if]
+	0= if
+		reset-nest
+		begin
+			find ( read in a word, we'll try to process it )
+			dup [ find [if]   ] literal = if nest inc then
+			dup else-word @ = nest @ 1 = and if exit then
+			    [ find [then] ] literal = if nest dec then
+			nest @ 0=
+		until
+	then
+;
+
+: [else]
+	reset-nest
+	begin
+		find
+		dup [ find [if]   ] literal = if nest inc then
+		    [ find [then] ] literal = if nest dec then
+		nest @ 0=
+	until
+;
+find [else] else-word ! 
+hider else-word
+hider nest
+hider reset-nest
+
+size 2 = [if] 0x0123           variable endianess [then]
+size 4 = [if] 0x01234567       variable endianess [then]
+size 8 = [if] 0x01234567abcdef variable endianess [then]
 
 : endian ( -- bool )
 	( returns the endianess of the processor )
-	endianess size * c@ 0x01 =
+	[ endianess size * c@ 0x01 = ] literal 
 ;
 hider endianess
 
@@ -568,21 +616,12 @@ hider endianess
 : forget ( ) find 1- dup @ pwd ! h ! ;
 : bye ( -- : quit the interpreter ) 0 r ! ;
 
-: execute ( execution-token -- )
-	( given an execution token, execute the word )
-
-	( create a word that pushes the address of a hole to write to
-	a literal takes up two words, '!' takes up one )
-
-	[ here 3+ literal ] 
-	!                   ( write an execution token to a hole )
-	[ 0 , ]             ( )
-;
-
 : ' immediate 
 	( create a version of "'" that works at command time as well
         as compile time ) 
-	[ hide ' hide ' drop ]
+	[ 
+		hide ' ( hide this definition, we will use the hide token it produces ) 
+		hide ' drop ( hide the built in definition , drop the token it produces ) ]
 	state @ 
 	if 
 		push-location , find , 
@@ -590,8 +629,20 @@ hider endianess
 		find 
 	then 
 	[ unhide ] 
-; 
+;
+ 
+: execute ( execution-token -- )
+	( given an execution token, execute the word )
 
+	( create a word that pushes the address of a hole to write to
+	a literal takes up two words, '!' takes up one )
+	1- ( execution token expects pointer to PWD field, it does not
+		care about that field however, and increments past it )
+	execution-token
+	[ here 3+ literal ] 
+	!                   ( write an execution token to a hole )
+	[ 0 , ]             ( this is the hole we write to an execute )
+;
 
 ( \ Test code
 255 0x8000 accept hello world
@@ -606,13 +657,26 @@ drop
 0x8000 print cr
 0x8200 print cr 
 
-\ 2 2 find + 1+ execute . cr
-\ :noname " hello world " cr ; execute
-)
-: aword            " example non immediate word to execute " cr ; find aword  1+ execute
+: aword            " example non immediate word to execute " cr ; find aword  execute
 : aiword immediate " example immediate word to execute " cr ;     find aiword execute
 2 2 find + execute . cr
-:noname " hello world " cr ; execute
+:noname " hello world " cr ;  execute
+
+1 [if] 
+	." Hello World " cr
+	0 [if]
+		." Bye, bye! " cr
+	[else]
+
+		0 [if]
+			." Top Kek " cr
+		[else]
+			." lowest kek " cr
+		[then]
+	[then]
+
+
+[then] )
 
 hider write-string 
 hider do-string 
@@ -655,4 +719,6 @@ hider  execution-token
 	and come up with a way of reusing code for "move", "cmove" and "cmove>",
 	for that matter "create" and "does>" could be simplified
 	* add "j" if possible to get outer loop context
+	* Decompiler "see" http://lars.nocrew.org/dpans/dpans15.htm
+	* ANSI colors, AT-XY, PAGE (see http://lars.nocrew.org/dpans/dpans10.htm)
 )

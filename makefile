@@ -4,7 +4,7 @@ CC	= gcc
 CFLAGS	= -Wall -Wextra -g -pedantic -fPIC -std=c99 -O2 
 TARGET	= forth
 
-.PHONY: all clean doxygen
+.PHONY: all clean 
 
 all: shorthelp $(TARGET) lib$(TARGET).so
 
@@ -30,11 +30,9 @@ help:
 	@$(ECHO) "      dist            (TODO) create a distribution archive"
 	@$(ECHO) ""
 
-doc: lib$(TARGET).htm doxygen
+doc: lib$(TARGET).htm 
 lib$(TARGET).htm: lib$(TARGET).md
 	markdown $^ > $@
-doxygen:
-	doxygen doxygen.conf
 
 lib$(TARGET).a: lib$(TARGET).o
 	$(AR) rcs $@ $<
@@ -53,5 +51,5 @@ test: unit
 	./$^
 
 clean:
-	rm -rf $(TARGET) unit *.blk *.core *.a *.so *.o *.log *.htm doxygen html latex *.db
+	rm -rf $(TARGET) unit *.blk *.core *.a *.so *.o *.log *.htm
 

@@ -39,10 +39,9 @@ static const char *initial_forth_program = "\\ FORTH startup program.       \n\
 : begin immediate here ; : until immediate ' jmpz , here - , ; : '\\n' 10 ; \n\
 : not 0= ; : 1+ 1 + ; : 1- 1 - ; : ')' 41 ; : tab 9 emit ; : cr '\\n' emit ;\n\
 : line dup . tab dup 4 + swap begin dup @ . tab 1+ 2dup = until drop ;      \n\
-: ( immediate begin key ')' = until ;                                       \n\
+: ( immediate begin key ')' = until ; : rot >r swap r> swap ; : -rot rot rot ;\n\
 : list swap begin line cr 2dup < until ; : allot here + h ! ;               \n\
-: tuck swap over ; : nip swap drop ; : rot >r swap r> swap ;                \n\
-: -rot rot rot ; : ? 0= if [ find \\ , ] then ; : :: [ find : , ] ;";
+: tuck swap over ; : nip swap drop ; : :: [ find : , ] ;";
 
 struct forth {	        /**< The FORTH environment is contained in here*/
 	jmp_buf error;
@@ -62,6 +61,7 @@ struct forth {	        /**< The FORTH environment is contained in here*/
 	forth_cell_t m[]; /**< Forth Virtual Machine memory */
 };
 
+enum input_stream { FILE_IN, STDIN_IN, STRING_IN };
 enum registers    { DIC=0/*m[0]*/,RSTK=1,STATE=8,HEX=9,PWD=10,SOURCE_ID=11 };
 enum instructions { PUSH,COMPILE,RUN,DEFINE,IMMEDIATE,COMMENT,READ,LOAD,STORE,
 SUB,ADD,AND,OR,XOR,INV,SHL,SHR,MUL,DIV,LESS,MORE,EXIT,EMIT,KEY,FROMR,TOR,JMP,
@@ -75,10 +75,12 @@ static char *names[] = { "read","@","!","-","+","and","or","xor","invert",
 
 static int forth_get_char(forth_t *o) /**< get a char from string-in or a file*/
 { 
-	if(o->m[SOURCE_ID]) 
-		return o->sidx >= o->slen ? EOF : o->sin[o->sidx++];
-	else 
-		return fgetc(o->in);
+	switch(o->m[SOURCE_ID]) {
+	case FILE_IN:   return fgetc(o->in);
+	case STDIN_IN:  return fgetc(stdin);
+	case STRING_IN: return o->sidx >= o->slen ? EOF : o->sin[o->sidx++];
+	default:        return EOF;
+	}
 } 
 
 static FILE *fopen_or_die(const char *name, char *mode) 
@@ -97,12 +99,14 @@ static int forth_get_word(forth_t *o, uint8_t *p)
 	int n = 0;
 	char fmt[16] = { 0 };
 	sprintf(fmt, "%%%ds%%n", MAX_WORD_LENGTH - 1);
-	if(o->m[SOURCE_ID]) {
+	switch(o->m[SOURCE_ID]) {
+	case FILE_IN:   return fscanf(o->in, fmt, p, &n);
+	case STDIN_IN:  return fscanf(stdin, fmt, p, &n);
+	case STRING_IN:
 		if(sscanf((char *)&(o->sin[o->sidx]), fmt, p, &n) < 0)
 			return EOF;
 		return o->sidx += n, n;
-	} else  {
-		return fscanf(o->in, fmt, p, &n);
+	default:       return EOF;
 	}
 } 
 
@@ -176,19 +180,20 @@ static forth_cell_t find(forth_t *o)
 	return w > DICTIONARY_START ? w+1 : 0;
 }
 
-static int print_cell(forth_t *o, forth_cell_t f)
+static int print_cell(forth_t *o, forth_cell_t f, int tab)
 {
-	return fprintf(o->out, o->m[HEX] ? "0x%" PRIxCell "\t" : "%" PRIuCell "\t", f);
+	char *fmt = o->m[HEX] ? "0x%" PRIxCell "%s" : "%" PRIuCell "%s";
+	return fprintf(o->out, fmt, f, tab ? "\t" : "");
 }
 
 static int print_stack(forth_t *o, forth_cell_t f, forth_cell_t *S)
 { 
 	forth_cell_t *begin = o->m + o->core_size - (2*o->stack_size);
 	if(begin != S)
-		if (print_cell(o, f) < 0)
+		if (print_cell(o, f, 1) < 0)
 			return -1;
 	while(begin + 1 < S)
-		if (print_cell(o, *(S--)) < 0)
+		if (print_cell(o, *(S--), 1) < 0)
 			return -1; 
 	return 0;
 } /*print the forth stack*/
@@ -196,14 +201,13 @@ static int print_stack(forth_t *o, forth_cell_t f, forth_cell_t *S)
 void forth_set_file_input(forth_t *o, FILE *in) 
 { /** @todo o->sin should be set to a program that exits */
 	assert(o && in); 
-	o->m[SOURCE_ID] = 0;
+	o->m[SOURCE_ID] = in == stdin ? STDIN_IN : FILE_IN;
 	o->in = in; 
 }
 
 void forth_set_file_output(forth_t *o, FILE *out) 
 {  
 	assert(o && out); 
-	o->m[SOURCE_ID] = 0;
 	o->out = out; 
 }
 
@@ -212,7 +216,7 @@ void forth_set_string_input(forth_t *o, const char *s)
 	assert(o && s);
 	o->sidx = 0;	         /*sidx == current character in string*/
 	o->slen = strlen(s) + 1; /*slen == string len*/
-	o->m[SOURCE_ID] = -1;    /*read from string, not a file handle*/
+	o->m[SOURCE_ID] = STRING_IN; /*read from string, not a file handle*/
 	o->sin = (uint8_t *)s;   /*sin  == pointer to string input*/
 }
 
@@ -389,7 +393,7 @@ int forth_run(forth_t *o)
 		case TOR:     m[ck(++m[RSTK])] = f; f = *S--;        break;
 		case JMP:     I += m[ck(I)];                         break;
 		case JMPZ:    I += f == 0 ? m[I] : 1; f = *S--;      break;
-		case PNUM:    print_cell(o, f);
+		case PNUM:    print_cell(o, f, 0);
 			      f = *S--;                              break;
 		case QUOTE:   *++S = f;     f = m[ck(I++)];          break;
 		case COMMA:   m[ck(m[0]++)] = f; f = *S--;           break;
@@ -426,7 +430,7 @@ static void fclose_input(FILE **in)
 {
 	if(*in && (*in != stdin))
 		fclose(*in);
-	*in = NULL;
+	*in = stdin;
 }
 
 int main_forth(int argc, char **argv) 

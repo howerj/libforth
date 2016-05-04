@@ -4,7 +4,7 @@
 .SH NAME
 forth \- A small FORTH interpreter.
 .SH SYNOPSIS
-forth (-d)? file*
+forth (-d)? - file*
 .SH DESCRIPTION
 This is a small FORTH interpreter for a very simple to implement version
 of FORTH based an IOCCC winner. Good luck!
@@ -25,9 +25,14 @@ blocks will persist between files but values on the stacks will not.
 
 If no file is given we read input from stdin(3).
 
+.TP
+.B -
+
+Read FORTH commands from stdin(3).
+
 .SH SEE ALSO
 forth(3)
 .SH BUGS
-Yes, see forth(3) for a list.
+Yes, see libforth(3) for a list.
 .SH AUTHOR
 Richard James Howe (howe.r.j.89@gmail.com)

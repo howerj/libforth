@@ -24,3 +24,4 @@ latex/*
 latex
 .swp
 *.db
+*.hex
