@@ -86,13 +86,13 @@ See:
 	begin 
 		dup dup     ( Make some copies: pwd pwd pwd )
 		1+ @ dup    ( Load Flags fields: misc misc pwd pwd )
-		hidden? not ( If the word is hidden, do not print it: hidden? pwd-1 pwd pwd ) 
+		hidden? ( If the word is hidden, do not print it: hidden? pwd-1 pwd pwd ) 
 		if 
+			2drop ( pwd )
+		else 
 			8 rshift 255 and ( offset pwd pwd )
 			- size *  ( word-name-address pwd )
 			print tab  ( pwd )
-		else 
-			2drop ( pwd )
 		then 
 		@  ( Get pointer to previous word )
 		dup dictionary-start < ( stop if pwd no longer points to a word )
@@ -100,6 +100,9 @@ See:
 	drop cr 
 ; 
 
+: push-location 2 ;       ( location of special "push" word )
+: compile-instruction 1 ; ( compile code word, threaded code interpreter instruction )
+: run-instruction 2 ;     ( run code word, threaded code interpreter instruction )
 : false 0 ;
 : true 1 ;
 : 2- ( x -- x ) 2 - ;
@@ -109,8 +112,8 @@ See:
 : mod ( x u -- remainder ) 2dup / * - ;
 : */ ( n1 n2 n3 -- n4 ) * / ; ( warning: this does not use a double cell for the multiply )
 : char key drop key ;
-: [char] immediate char ;
-: compile immediate find , ;
+: [char] immediate char push-location , , ;
+: postpone immediate find , ;
 
 : hide  ( WORD -- hide-token ) 
 	( This hides a word from being found by the interpreter )
@@ -124,9 +127,6 @@ See:
 
 : hider ( -- ) ( hide with drop ) hide drop ;
 : unhide ( hide-token -- ) dup @ hidden-mask invert and swap ! ;
-: push-location 2 ;       ( location of special "push" word )
-: compile-instruction 1 ; ( compile code word, threaded code interpreter instruction )
-: run-instruction 2 ;     ( run code word, threaded code interpreter instruction )
 : literal immediate push-location , , ; 
 : \ immediate begin key '\n' = until ;
 : ?dup ( x -- ? ) dup if dup then ;
@@ -136,12 +136,14 @@ See:
 : <= ( x y -- bool ) > not ;
 : 2* ( x -- x ) 1 lshift ;
 : 2/ ( x -- x ) 1 rshift ;
-: #  ( x -- x ) dup . cr ;
+\ : #  ( x -- x ) dup . cr ;
 : 2! swap over ! 1+ ! ;
 : 2@ dup 1+ @ swap @ ;
 : r@ r> r @ swap >r ;
 : 0> 0 > ;
 : 0<> 0 <> ;
+: nand ( x x -- x : Logical NAND ) and not ;
+: nor  ( x x -- x : Logical NOR  )  or not ;
 
 : ms ( u -- : wait at least 'u' milliseconds ) clock +  begin dup clock < until drop ;
 : sleep 1000 * ms ;
@@ -180,7 +182,7 @@ A simple version of create is as follows
 But this version is much more limited )
 
 : write-quote ' ' , ;   ( A word that writes ' into the dictionary )
-: write-comma ' , , ;   ( A word that writes , into the dictionary )
+: compile, ' , , ;   ( A word that writes , into the dictionary )
 : write-exit ' exit , ; ( A word that write exit into the dictionary ) 
 
 : state! ( bool -- ) ( set the compilation state variable ) state ! ;
@@ -195,15 +197,17 @@ But this version is much more limited )
 
 : >mark ( -- ) here 0 , ; 
 
+: end immediate (  A synonym for until ) postpone until ;
+
 : create immediate              \ This is a complicated word! It makes a
                                 \ word that makes a word.
   state @ if                    \ Compile time behavior
   ' :: ,                        \ Make the defining word compile a header
-  write-quote push-location , write-comma    \ Write in push to the creating word
-  ' here , ' 3+ , write-comma        \ Write in the number we want the created word to push
-  write-quote >mark write-comma   \ Write in a place holder 0 and push a 
+  write-quote push-location , compile,    \ Write in push to the creating word
+  ' here , ' 3+ , compile,        \ Write in the number we want the created word to push
+  write-quote >mark compile,   \ Write in a place holder 0 and push a 
                                      \ pointer to to be used by does>
-  write-quote write-exit write-comma \ Write in an exit in the word we're compiling.
+  write-quote write-exit compile, \ Write in an exit in the word we're compiling.
   ' false , ' state! ,          \ Make sure to change the state back to command mode
   else                          \ Run time behavior
         _create
@@ -221,14 +225,13 @@ hider state!
 ;
 
 hider write-quote 
-hider write-comma 
 
-: array    create allot does> + ;
-: variable create ,     does>   ;
-: constant create ,     does> @ ;
+: array    ( ) create allot does> + ;
+: variable ( ) create ,     does>   ;
+: constant ( ) create ,     does> @ ;
 
-: inc ( addr -- : increment a value at an address )  1 swap +! ;
-: dec ( addr -- : decrement a value at an address ) -1 swap +! ;
+: 1+! ( addr -- : increment a value at an address )  1 swap +! ;
+: 1-! ( addr -- : decrement a value at an address ) -1 swap +! ;
 
 ( do loop : This section as the do-loop looping constructs )
 
@@ -357,7 +360,7 @@ hider inci
 	pwd @ execution-token ,
 ;
 
-: bl ( space character ) [char]  literal ; ( warning: white space is significant after [char] )
+: bl ( space character ) [char]  ; ( warning: white space is significant after [char] )
 : space bl emit ;
 : spaces ( n -- ) 0 do space loop ;
 
@@ -450,7 +453,7 @@ hider inci
 hider delim 
 
 
-: '"' ( -- char : push literal " character ) [char] " literal ;
+: '"' ( -- char : push literal " character ) [char] " ;
 : accept ( c-addr +n1 -- +n2 : see accepter definition ) swap '\n' accepter ;
 
 255 constant max-string-length 
@@ -480,6 +483,8 @@ size 1- constant aligner
 hider aligner 
 
 : align ( x -- x ) ; ( nop in this implementation )
+
+( string handling should really be done with PARSE, and CMOVE )
 
 0 variable delim
 : write-string ( char -- c-addr u )
@@ -539,30 +544,24 @@ hider delim
 ;
 
 : move ( addr1 addr2 u -- )
-	( copy u words of memory from 'addr2' to 'addr1' if u is greater than zero )
+	( copy u words of memory from 'addr2' to 'addr1' )
 	rot
 	dup 
-	0> if
-		0
-		do
-			2dup i + @ swap i + !
-		loop
-	then
+	0 do
+		2dup i + @ swap i + !
+	loop
 	2drop
 ;
 
 ( It would be nice if move and cmove could share more code, as they do exactly
   the same thing but with different load and store functions, cmove>  )
 : cmove ( c-addr1 c-addr2 u -- )
-	( copy u characters of memory from 'c-addr2' to 'c-addr1' if u is greater than zero )
+	( copy u characters of memory from 'c-addr2' to 'c-addr1' )
 	rot
 	dup 
-	0> if
-		0
-		do
-			2dup i + c@ swap i + c!
-		loop
-	then
+	0 do
+		2dup i + c@ swap i + c!
+	loop
 	2drop
 ;
 
@@ -576,7 +575,7 @@ they can be nested as well
 
 See http://lars.nocrew.org/dpans/dpans15.htm for more information
 
-A much simpler conditional compilation method is the folling
+A much simpler conditional compilation method is the following
 single word definition:
 
  : compile-line? 0= if [ find \\ , ] then ;
@@ -587,27 +586,31 @@ if true )
 ( These words really, really need refactoring )
 0 variable nest      ( level of [if] nesting )
 0 variable else-word ( this will be populated with a forward reference to [else] )
+: unless immediate ( bool -- : like 'if' but execute clause if false ) ' 0= , postpone if ;
+: endif immediate ( synonym for 'then' ) postpone then ;
+: [then] immediate ;
+
 : reset-nest 1 nest ! ;
-: [then] ;
 : [if]
-	0= if
+	unless
 		reset-nest
 		begin
 			find ( read in a word, we'll try to process it )
-			dup [ find [if]   ] literal = if nest inc then
+			dup [ find [if]   ] literal = if nest 1+! then
 			dup else-word @ = nest @ 1 = and if exit then
-			    [ find [then] ] literal = if nest dec then
+			    [ find [then] ] literal = if nest 1-! then
 			nest @ 0=
 		until
 	then
 ;
 
+
 : [else]
 	reset-nest
 	begin
 		find
-		dup [ find [if]   ] literal = if nest inc then
-		    [ find [then] ] literal = if nest dec then
+		dup [ find [if]   ] literal = if nest 1+! then
+		    [ find [then] ] literal = if nest 1-! then
 		nest @ 0=
 	until
 ;
@@ -677,13 +680,29 @@ hider endianess
 		find 
 	then 
 	[ unhide ] 
-; 
-
+;
+ 
 : ?dup-if immediate ( x -- x | - ) 
 	' ?dup , 
 	' ?branch , here 0 ,
 	( compile if )
 ;
+
+: ** ( b e -- x : exponent, raise 'b' to the power of 'e')
+	dup
+	if 
+		dup
+		1
+		do over * loop
+	else
+		drop
+		1
+	endif
+;
+
+
+: bell 7 ( ASCII BEL ) emit ;
+: b/buf  ( bytes per buffer ) 1024 ;
 
 ( ANSI Escape Codes )
 27 constant 'escape'
@@ -760,7 +779,32 @@ drop
 : c 99  ?dup-if 2 then .s ; 
 find c 16 dump
 cr
-c )
+c 
+
+
+: star      [char] * emit ;
+: stars	    0 do star loop cr ;
+: square    dup 0 do dup stars loop drop ;
+: triangle  1 do i stars loop ;
+: tower     dup triangle square ;
+
+: memcpy 
+  over +
+  do
+    dup @ @ swap ! 1+
+  loop
+  drop
+;
+
+: memset 
+  rot dup rot +
+  do
+    dup @ !
+  loop
+;
+
+)
+
 
 hider write-string 
 hider do-string 
@@ -794,7 +838,6 @@ hider  execution-token
 ( TODO
 	* Execute needs fixing
 	* Evaluate [this would require changes to the interpreter]
-	* Base
 	* By adding "c@" and "c!" to the interpreter I could remove print
 	* Add unit testing to the end of this file
 	* Word, Parse, ?do, repeat, while, Case statements
@@ -805,4 +848,7 @@ hider  execution-token
 	* add "j" if possible to get outer loop context
 	* Decompiler "see" http://lars.nocrew.org/dpans/dpans15.htm
 	* FORTH, VOCABULARY 
+	* Clean up "create" and "does>"
+	* Find does not always return an execution token...
 )
+

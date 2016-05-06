@@ -352,8 +352,6 @@ Compile a pointer to the next instruction stream value into the dictionary.
 Save the current instruction stream pointer onto the return stack and set
 the pointer instruction stream pointer to point to value after *run*.
 
-* The special read word ( -- )
-
 #### Immediate words
 
 These words are named and are *immediate* words.
@@ -478,11 +476,11 @@ Pop a value from the return stack and push it to the variable stack.
 
 Pop a value from the variable stack and push it to the return stack.
 
-* 'jmp'           ( -- )
+* 'branch'           ( -- )
 
 Jump unconditionally to the destination next in the instruction stream.
 
-* 'jmpz'          ( bool -- )
+* '?branch'          ( bool -- )
 
 Pop a value from the variable stack, if it is zero the jump to the
 destination next in the instruction stream, otherwise skip over it.
@@ -845,8 +843,10 @@ by design.
 * Routines for saving and loading the image should be made
 * If the word size is the same as the machine size it all memory address,
 such as those passed to load and store, should be actual addresses.
-Implementing this would probably mean *only* supporting the machines natural
-word length.
+Implementing this would mean *only* supporting the machines natural
+word length. The first steps would be to change the "forth\_cell\_t" to
+"uintptr\_t" and move as many pointers into the virtual machines address
+space.
 * Experiment with different names for [FORTH][] words, shorter words could 
 be used such as:
 
@@ -859,10 +859,18 @@ be used such as:
         o       over
         {       begin
         }       until
-        r       rot
-        -r      -rot
+        R       rot
+        -R      -rot
         2d      2dup
         2D      2drop
+
+* The Input and Output mechanism need rethinking.
+* Error handling needs to be improved.
+It should be small, but powerful and general.
+* Command line argument parsing could be improved.
+* The "check\_bounds" function, whilst useful for debugging, limits the virtual
+machine to address only in its range.
+* A line editor could be added
 
 [Forth]: https://en.wikipedia.org/wiki/Forth_%28programming_language%29
 [Wikipedia]: https://en.wikipedia.org/wiki/Forth_%28programming_language%29

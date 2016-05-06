@@ -4,10 +4,7 @@
  *  @copyright  Copyright 2015 Richard James Howe.
  *  @license    LGPL v2.1 or later version
  *  @email      howe.r.j.89@gmail.com 
- *  Please consult "libforth.md" and "start.4th" for more information
- * 
- **/
-
+ *  Please consult "libforth.md" and "start.4th" for more information **/
 #include "libforth.h"
 #include <assert.h>
 #include <errno.h>
@@ -32,7 +29,7 @@
 static const char *core_file_name = "forth.core";
 static const char *initial_forth_program = "\n\
 : state 8 exit : ; immediate ' exit , 0 state ! exit : base 9 ; : pwd 10 ; \n\
-: h 0 ; : r 1 ; : here h @ ; : [ immediate 0 state ! ; : ] 1 state ! ;      \n\
+: h 0 ; : r 7 ; : here h @ ; : [ immediate 0 state ! ; : ] 1 state ! ;      \n\
 : :noname immediate here 2 , ] ; : if immediate ' ?branch , here 0 , ;         \n\
 : else immediate ' branch , here 0 , swap dup here swap - swap ! ; : 0= 0 = ;  \n\
 : then immediate dup here swap - swap ! ; : 2dup over over ; : <> = 0= ;    \n\
@@ -47,7 +44,7 @@ struct forth {	        /**< The FORTH environment is contained in here*/
 	jmp_buf error;
 	FILE *in;       /**< file input, if not using string input*/
 	FILE *out;      /**< file output */  
-	uint8_t *s;     /**< string storage pointer */
+	uint8_t *s;     /**< convenience pointer for string input buffer*/
 	uint8_t *sin;   /**< string input pointer*/
 	size_t core_size;  /**< size of VM */
 	size_t stack_size; /**< size of variable and return stacks */
@@ -62,11 +59,10 @@ struct forth {	        /**< The FORTH environment is contained in here*/
 };
 
 enum input_stream { FILE_IN, STDIN_IN, STRING_IN };
-enum registers    { DIC=0/*m[0]*/,RSTK=1,STATE=8,BASE=9,PWD=10,SOURCE_ID=11 };
+enum registers    { DIC=0/*m[0]*/,RSTK=7,STATE=8,BASE=9,PWD=10,SOURCE_ID=11 };
 enum instructions { PUSH,COMPILE,RUN,DEFINE,IMMEDIATE,READ,LOAD,STORE,
 SUB,ADD,AND,OR,XOR,INV,SHL,SHR,MUL,DIV,LESS,MORE,EXIT,EMIT,KEY,FROMR,TOR,BRANCH,
 QBRANCH, PNUM, QUOTE,COMMA,EQUAL,SWAP,DUP,DROP,OVER,BSAVE,BLOAD,FIND,PRINT,
-
 DEPTH,CLOCK,LAST };
 
 static char *names[] = { "read","@","!","-","+","and","or","xor","invert",
@@ -111,16 +107,10 @@ static int forth_get_word(forth_t *o, uint8_t *p)
 	}
 } 
 
-static int compile(forth_t *o, forth_cell_t code, char *str) 
+static void compile(forth_t *o, forth_cell_t code, char *str) 
 { 
 	assert(o && code < LAST && code < INSTRUCTION_MASK);
-	forth_cell_t *m = o->m, header = m[DIC];
-	size_t l = 0;
-	if(!str) {
-		if(forth_get_word(o, (uint8_t*)(o->s)) < 0)
-			return -1;
-		str = (char *)o->s;
-	} 
+	forth_cell_t *m = o->m, header = m[DIC], l = 0;
 	/*FORTH header structure*/
 	strcpy((char *)(o->m + header), str); /* 0: Copy the new FORTH word into the new header */
 	l = strlen(str) + 1;
@@ -131,7 +121,6 @@ static int compile(forth_t *o, forth_cell_t code, char *str)
 	m[m[0]++] = m[PWD];     /*0 + STRLEN: Pointer to previous words header*/
 	m[PWD] = m[0] - 1;      /*   Update the PWD register to new word */
 	m[m[0]++] = (l << WORD_LENGTH_OFFSET) | code; /*1: size of words name and code field */
-	return 0;
 }
 
 static int blockio(forth_t *o, void *p, forth_cell_t poffset, forth_cell_t id, char rw) 
@@ -139,7 +128,7 @@ static int blockio(forth_t *o, void *p, forth_cell_t poffset, forth_cell_t id, c
 	char name[16] = {0}; /* XXXX + ".blk" + '\0' + a little spare change */
 	FILE *file = NULL;
 	size_t n;
-	if(((uintptr_t)poffset) > (o->core_size - BLOCK_SIZE))
+	if(((forth_cell_t)poffset) > (o->core_size - BLOCK_SIZE))
 		return -1;
 	sprintf(name, "%04x.blk", (int)id);
 	if(!(file = fopen(name, rw == 'r' ? "rb" : "wb"))) {
@@ -201,7 +190,7 @@ void forth_set_string_input(forth_t *o, const char *s)
 int forth_eval(forth_t *o, const char *s) 
 { 
 	assert(o && s); 
-	forth_set_string_input(o,s); 
+	forth_set_string_input(o, s); 
 	return forth_run(o);
 }
 
@@ -225,8 +214,7 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out)
 	assert(in && out);
 	forth_cell_t *m, i, w;
 	forth_t *o;
-	if(size < MINIMUM_CORE_SIZE)
-		return NULL;
+	VERIFY(size >= MINIMUM_CORE_SIZE);
 
 	if(!(o = calloc(1, sizeof(*o) + sizeof(forth_cell_t)*size))) 
 		return NULL;
@@ -290,7 +278,7 @@ forth_cell_t forth_stack_position(forth_t *o)
 
 static forth_cell_t check_bounds(forth_t *o, forth_cell_t f) 
 { 
-	if(((uintptr_t)f) >= o->core_size) {
+	if(((forth_cell_t)f) >= o->core_size) {
 		fprintf(stderr, "( fatal \"bounds check failed: %" PRIuCell " >= %zu\" )\n", f, o->core_size);
 		longjmp(o->error, 1);
 	}
@@ -316,9 +304,10 @@ int forth_run(forth_t *o)
 		case COMPILE: m[ck(m[DIC]++)] = pc;                  break;
 		case RUN:     m[ck(++m[RSTK])] = I; I = pc;          break;
 		case DEFINE:  m[STATE] = 1;
-			      if(compile(o, COMPILE, NULL) < 0)
-				      goto end;
-			      m[ck(m[DIC]++)] = RUN;                 break;
+                              if(forth_get_word(o, (uint8_t*)(o->s)) < 0)
+                                      goto end;
+                              compile(o, COMPILE, (char*)o->s);
+                              m[ck(m[DIC]++)] = RUN;               break;
 		case IMMEDIATE: 
 			      *m -= 2; 
 			      m[m[DIC]] &= ~INSTRUCTION_MASK;
@@ -384,7 +373,7 @@ int forth_run(forth_t *o)
 			      if(forth_get_word(o, o->s) < 0) 
 				      goto end;
 			      f = find(o);
-			      f = f < DICTIONARY_START ? 0 : f;    break;
+			      f = f < DICTIONARY_START ? 0 : f;      break;
 		case PRINT:   fputs(((char*)m)+f, o->out); f = *S--; break;
 		case DEPTH:   w = S- (m + o->core_size - (2 * o->stack_size));
 			      *++S = f;
