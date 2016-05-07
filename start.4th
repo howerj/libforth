@@ -31,18 +31,90 @@ See:
 	http://www.ioccc.org/1992/buzzard.2.design
 )
 
+( We'll begin by defining very simple words we can use later )
 : logical ( x -- bool ) not not ;
 : hidden-mask 0x80 ( Mask for the hide bit in a words MISC field ) ;
 : instruction-mask 0x1f ( Mask for the first code word in a words MISC field ) ;
 : hidden? hidden-mask and logical ;
+: push-location 2 ;       ( location of special "push" word )
+: compile-instruction 1 ; ( compile code word, threaded code interpreter instruction )
+: run-instruction 2 ;     ( run code word, threaded code interpreter instruction )
+: literal immediate push-location , , ; 
+: false 0 ;
+: true 1 ;
+: 8* 3 lshift ;
+: 2- 2 - ;
+: 2+ 2 + ;
+: 3+ 3 + ;
+: 256/ 8 rshift ;
+: mod ( x u -- remainder ) 2dup / * - ;
+: */ ( n1 n2 n3 -- n4 ) * / ; ( warning: this does not use a double cell for the multiply )
+: char key drop key ;
+: [char] immediate char push-location , , ;
+: postpone immediate find , ;
+: bl ( space character ) [char]  ; ( warning: white space is significant after [char] )
+: space bl emit ;
+: address-unit-bits size 8* ;
+: mask-byte ( x -- x ) 8* 0xff swap lshift ;
+: cell+ 1+ ( a-addr1 -- a-addr2 ) ;
+: cells ( n1 -- n2 ) ;
+: char+ ( c-addr1 -- c-addr2 ) 1+ ;
+: chars  ( n1 -- n2: convert character address to cell address ) size / ;
+: chars> ( n1 -- n2: convert cell address to character address ) size * ;
+: hex     ( -- ) ( print out hex )     16 base ! ;
+: octal   ( -- ) ( print out octal )    8 base ! ;
+: decimal ( -- ) ( print out decimal )  0 base ! ;
+: negate ( x -- x ) -1 * ;
+: square ( x -- x ) dup * ;
+: +! ( x addr -- ) ( add x to a value stored at addr ) tuck @ + swap ! ;
+: 1+! ( addr -- : increment a value at an address )  1 swap +! ;
+: 1-! ( addr -- : decrement a value at an address ) -1 swap +! ;
+: lsb ( x -- x : mask off the least significant byte of a cell ) 255 and ;
+: \ immediate begin key '\n' = until ;
+: ?dup ( x -- ? ) dup if dup then ;
+: min ( x y -- min ) 2dup < if drop else swap drop then  ; 
+: max ( x y -- max ) 2dup > if drop else swap drop then  ; 
+: >= ( x y -- bool ) < not ;
+: <= ( x y -- bool ) > not ;
+: 2* ( x -- x ) 1 lshift ;
+: 2/ ( x -- x ) 1 rshift ;
+\ : #  ( x -- x ) dup . cr ;
+: 2@ dup 1+ @ swap @ ;
+: r@ r> r @ swap >r ;
+: 0> 0 > ;
+: 0<> 0 <> ;
+: nand ( x x -- x : Logical NAND ) and not ;
+: nor  ( x x -- x : Logical NOR  )  or not ;
+: ms ( u -- : wait at least 'u' milliseconds ) clock +  begin dup clock < until drop ;
+: sleep 1000 * ms ;
+: align immediate ( x -- x ) ; ( nop in this implementation )
+: ) immediate ;
+: ? ( a-addr -- : view value at address ) @ . cr ;
+: bell 7 ( ASCII BEL ) emit ;
+: b/buf  ( bytes per buffer ) 1024 ;
+: # dup ( x -- x : debug print ). cr ;
+: compile, ' , , ;   ( A word that writes , into the dictionary )
+: >mark ( -- ) here 0 , ; 
+: end immediate (  A synonym for until ) postpone until ;
+: bye ( -- : quit the interpreter ) 0 r ! ;
+
+: rdrop ( R: x -- )
+	r>           ( get caller's return address )
+	r>           ( get value to drop )
+	drop         ( drop it like it's hot )
+	>r           ( return return address )
+;
+
+: ?exit ( x -- ) ( exit current definition if not zero ) if rdrop exit then ;
+
 : dictionary-start 
 	( The dictionary start at this location, anything before this value 
 	is not a defined word ) 
 	64 
 ;
 : source ( -- c-addr u ) 
-	32 size * ( size of input buffer, in characters )
-	64 size * ( start of input buffer, in characters )
+	[ 32 chars> ] literal ( size of input buffer, in characters )
+	[ 64 chars> ] literal ( start of input buffer, in characters )
 ;
 
 : source-id ( -- 0 | 1 | 2 )
@@ -90,8 +162,8 @@ See:
 		if 
 			2drop ( pwd )
 		else 
-			8 rshift 255 and ( offset pwd pwd )
-			- size *  ( word-name-address pwd )
+			256/ lsb ( offset pwd pwd )
+			- chars>  ( word-name-address pwd )
 			print tab  ( pwd )
 		then 
 		@  ( Get pointer to previous word )
@@ -99,21 +171,6 @@ See:
 	until 
 	drop cr 
 ; 
-
-: push-location 2 ;       ( location of special "push" word )
-: compile-instruction 1 ; ( compile code word, threaded code interpreter instruction )
-: run-instruction 2 ;     ( run code word, threaded code interpreter instruction )
-: false 0 ;
-: true 1 ;
-: 2- ( x -- x ) 2 - ;
-: 2+ ( x -- x ) 2 + ;
-: 3+ ( x -- x ) 3 + ;
-: +! ( x addr -- ) ( add x to a value stored at addr ) tuck @ + swap ! ;
-: mod ( x u -- remainder ) 2dup / * - ;
-: */ ( n1 n2 n3 -- n4 ) * / ; ( warning: this does not use a double cell for the multiply )
-: char key drop key ;
-: [char] immediate char push-location , , ;
-: postpone immediate find , ;
 
 : hide  ( WORD -- hide-token ) 
 	( This hides a word from being found by the interpreter )
@@ -127,27 +184,6 @@ See:
 
 : hider ( -- ) ( hide with drop ) hide drop ;
 : unhide ( hide-token -- ) dup @ hidden-mask invert and swap ! ;
-: literal immediate push-location , , ; 
-: \ immediate begin key '\n' = until ;
-: ?dup ( x -- ? ) dup if dup then ;
-: min ( x y -- min ) 2dup < if drop else swap drop then  ; 
-: max ( x y -- max ) 2dup > if drop else swap drop then  ; 
-: >= ( x y -- bool ) < not ;
-: <= ( x y -- bool ) > not ;
-: 2* ( x -- x ) 1 lshift ;
-: 2/ ( x -- x ) 1 rshift ;
-\ : #  ( x -- x ) dup . cr ;
-: 2! swap over ! 1+ ! ;
-: 2@ dup 1+ @ swap @ ;
-: r@ r> r @ swap >r ;
-: 0> 0 > ;
-: 0<> 0 <> ;
-: nand ( x x -- x : Logical NAND ) and not ;
-: nor  ( x x -- x : Logical NOR  )  or not ;
-
-: ms ( u -- : wait at least 'u' milliseconds ) clock +  begin dup clock < until drop ;
-: sleep 1000 * ms ;
-
 : gcd ( a b -- n ) ( greatest common divisor )
 	begin
 		dup
@@ -160,7 +196,7 @@ See:
 	drop
 ;
 
-: log-2 ( x -- log2 ) 
+: log2 ( x -- log2 ) 
 	( Computes the binary integer logarithm of a number,
 	zero however returns itself instead of reporting an error )
 	0 swap 
@@ -168,6 +204,32 @@ See:
 		swap 1+ swap 2/ dup 0= 
 	until 
 	drop 1- 
+;
+
+: execution-token ( previous-word-address -- execution-token )
+        ( Given the address of the PWD field of a word this
+	function will return an execution token for the word )
+	1+    ( MISC field )
+	dup 
+	@     ( Contents of MISC field )
+	instruction-mask and  ( Mask off the instruction )
+        ( If the word is not an immediate word, execution token pointer ) 
+        compile-instruction = +
+;
+
+: ['] immediate find execution-token push-location , , ;
+
+: execute ( execution-token -- )
+	( given an execution token, execute the word )
+
+	( create a word that pushes the address of a hole to write to
+	a literal takes up two words, '!' takes up one )
+	1- ( execution token expects pointer to PWD field, it does not
+		care about that field however, and increments past it )
+	execution-token
+	[ here 3+ literal ] 
+	!                   ( write an execution token to a hole )
+	[ 0 , ]             ( this is the hole we write )
 ;
 
 ( The following section defines a pair of words "create" and "does>" which 
@@ -181,9 +243,8 @@ A simple version of create is as follows
 	: create :: 2 , here 2 + , ' exit , 0 state ! ; 
 But this version is much more limited )
 
-: write-quote ' ' , ;   ( A word that writes ' into the dictionary )
-: compile, ' , , ;   ( A word that writes , into the dictionary )
-: write-exit ' exit , ; ( A word that write exit into the dictionary ) 
+: write-quote ['] ' , ;   ( A word that writes ' into the dictionary )
+: write-exit ['] exit , ; ( A word that write exit into the dictionary ) 
 
 : state! ( bool -- ) ( set the compilation state variable ) state ! ;
 
@@ -191,24 +252,22 @@ But this version is much more limited )
 	::            \ compile a word
 	push-location ,       \ write push into new word
 	here 2+ ,     \ push a pointer to data field
-	' exit ,      \ write in an exit to new word data field is after exit 
+	['] exit ,      \ write in an exit to new word data field is after exit 
 	false state!  \ return to command mode
 ;
 
-: >mark ( -- ) here 0 , ; 
-
-: end immediate (  A synonym for until ) postpone until ;
 
 : create immediate              \ This is a complicated word! It makes a
                                 \ word that makes a word.
   state @ if                    \ Compile time behavior
+  ( NOTE: ' _create , *nearly* works here )
   ' :: ,                        \ Make the defining word compile a header
   write-quote push-location , compile,    \ Write in push to the creating word
   ' here , ' 3+ , compile,        \ Write in the number we want the created word to push
   write-quote >mark compile,   \ Write in a place holder 0 and push a 
                                      \ pointer to to be used by does>
   write-quote write-exit compile, \ Write in an exit in the word we're compiling.
-  ' false , ' state! ,          \ Make sure to change the state back to command mode
+  ['] false , ['] state! ,        \ Make sure to change the state back to command mode )
   else                          \ Run time behavior
         _create
   then
@@ -226,14 +285,9 @@ hider state!
 
 hider write-quote 
 
-: array    ( ) create allot does> + ;
-: variable ( ) create ,     does>   ;
-: constant ( ) create ,     does> @ ;
-
-: 1+! ( addr -- : increment a value at an address )  1 swap +! ;
-: 1-! ( addr -- : decrement a value at an address ) -1 swap +! ;
-
-( do loop : This section as the do-loop looping constructs )
+: array    ( create a array ) create allot does> + ;
+: variable ( create a variable ) create ,     does>   ;
+: constant ( crate a constant ) create ,     does> @ ;
 
 : do immediate
 	' swap ,      ( compile 'swap' to swap the limit and start )
@@ -242,13 +296,7 @@ hider write-quote
 	here          ( save this address so we can branch back to it )
 ;
 
-: rdrop ( R: x -- )
-	r>           ( get caller's return address )
-	r>           ( get value to drop )
-	drop         ( drop it like it's hot )
-	>r           ( return return address )
-;
-
+( TODO: Simplify )
 : addi 
 	r@ 1-        ( get the pointer to i )
 	+!           ( add value to it )
@@ -306,24 +354,15 @@ hider inci
 	then
 ;
 
-: cell+ 1+ ( a-addr1 -- a-addr2 ) ;
-: cells ( n1 -- n2 ) ;
-: char+ ( c-addr1 -- c-addr2 ) 1+ ;
-: chars ( n1 -- n2 )  size / ;
-: hex     ( -- ) ( print out hex )     16 base ! ;
-: octal   ( -- ) ( print out octal )    8 base ! ;
-: decimal ( -- ) ( print out decimal )  0 base ! ;
-: negate -1 * ;
+: pick ( xu ... x1 x0 u -- xu ... x1 x0 xu )
+	stack-start depth + swap - 1- @
+;
 
-: execution-token ( previous-word-address -- execution-token )
-        ( Given the address of the PWD field of a word this
-	function will return an execution token for the word )
-	1+    ( MISC field )
-	dup 
-	@     ( Contents of MISC field )
-	instruction-mask and  ( Mask off the instruction )
-        ( If the word is not an immediate word, execution token pointer ) 
-        compile-instruction = +
+: .s    ( -- : print out the stack for debugging )
+	depth if
+		depth 0 do i pick . tab loop
+	then
+	cr
 ;
 
 : tail 
@@ -360,14 +399,13 @@ hider inci
 	pwd @ execution-token ,
 ;
 
-: bl ( space character ) [char]  ; ( warning: white space is significant after [char] )
-: space bl emit ;
-: spaces ( n -- ) 0 do space loop ;
+: alignment-bits [ 1 size log2 lshift 1- literal ] and ;
+: name ( PWD -- c-addr ) 
+	(  given a pointer to the PWD field of a word get a pointer to the name
+	of the word )
+	dup 1+ @ 256/ lsb - chars>
+;
 
-: 8* ( x -- x ) 8 * ;
-: address-unit-bits size 8* ;
-: mask-byte ( x -- x ) 8* 0xff swap lshift ;
-: alignment-bits [ 1 size log-2 lshift 1- literal ] and ;
 
 : c@ ( character-address -- char )
 	( retrieve a character from an address )
@@ -420,10 +458,6 @@ hider inci
 	>r >r
 	swap
 	x@ >r ( restore return address )
-;
-
-: pick ( xu ... x1 x0 u -- xu ... x1 x0 xu )
-	stack-start depth + swap - 1- @
 ;
 
 : unused ( -- u ) ( push the amount of core left ) max-core here - ;
@@ -482,8 +516,6 @@ size 1- constant aligner
 ;
 hider aligner 
 
-: align ( x -- x ) ; ( nop in this implementation )
-
 ( string handling should really be done with PARSE, and CMOVE )
 
 0 variable delim
@@ -496,14 +528,14 @@ hider aligner
 	delim !         ( save delimiter )
 	' branch ,      ( write in jump, this will jump past the string )
 	>mark           ( make hole )
-	dup 1+ size *   ( calculate address to write to )
+	dup 1+ chars>   ( calculate address to write to )
 	max-string-length delim @ accepter dup >r ( write string into dictionary, save index )
 	aligned 2dup size / ( stack: length hole char-len hole )
 	dup here + h !   ( update dictionary pointer with string length )
 	1+ swap !        ( write place to jump to )
 	drop             ( do not need string length anymore )
 	push-location ,  ( push next value ) 
-	1+ size * dup >r ( calculate place to print, save it )
+	1+ chars> dup >r ( calculate place to print, save it )
 	,                ( write value to push, the character address to print)
 	' print ,        ( write out print, which will print our string )
 	r> r> swap       ( restore index and address of string )
@@ -524,18 +556,14 @@ hider delim
 
 : fill ( c-addr u char -- )
 	( fill in an area of memory with a character, only if u is greater than zero )
-	swap dup
-	0> if 
-		0
-		do 
-			2dup i + c!
-		loop
-	then
+	swap 
+	0 do 2dup i + c! loop
 	2drop
 ;
 
+: spaces ( n -- ) 0 do space loop ;
 : erase ( addr u )
-	size * swap size * 0 -rot fill
+	chars> swap chars> 0 -rot fill
 ;
 
 : blank ( c-addr u )
@@ -545,8 +573,6 @@ hider delim
 
 : move ( addr1 addr2 u -- )
 	( copy u words of memory from 'addr2' to 'addr1' )
-	rot
-	dup 
 	0 do
 		2dup i + @ swap i + !
 	loop
@@ -557,18 +583,11 @@ hider delim
   the same thing but with different load and store functions, cmove>  )
 : cmove ( c-addr1 c-addr2 u -- )
 	( copy u characters of memory from 'c-addr2' to 'c-addr1' )
-	rot
-	dup 
 	0 do
 		2dup i + c@ swap i + c!
 	loop
 	2drop
 ;
-
-: ) immediate ;
-
-: ? ( a-addr -- : view value at address ) @ . cr ;
-
 
 ( The words "[if]", "[else]" and "[then]" implement conditional compilation,
 they can be nested as well
@@ -614,6 +633,7 @@ if true )
 		nest @ 0=
 	until
 ;
+
 find [else] else-word ! 
 hider else-word
 hider nest
@@ -625,7 +645,7 @@ size 8 = [if] 0x01234567abcdef variable endianess [then]
 
 : endian ( -- bool )
 	( returns the endianess of the processor )
-	[ endianess size * c@ 0x01 = ] literal 
+	[ endianess chars> c@ 0x01 = ] literal 
 ;
 hider endianess
 
@@ -644,44 +664,7 @@ hider endianess
 	1- dup @ pwd ! h ! 
 ;
 
-: bye ( -- : quit the interpreter ) 0 r ! ;
 
-: execute ( execution-token -- )
-	( given an execution token, execute the word )
-
-	( create a word that pushes the address of a hole to write to
-	a literal takes up two words, '!' takes up one )
-	1- ( execution token expects pointer to PWD field, it does not
-		care about that field however, and increments past it )
-	execution-token
-	[ here 3+ literal ] 
-	!                   ( write an execution token to a hole )
-	[ 0 , ]             ( this is the hole we write )
-;
-
-: .s    ( -- : print out the stack for debugging )
-	depth if
-		depth 0 do i pick . tab loop
-	then
-	cr
-;
-
-: ' immediate 
-	( create a version of "'" that works at command time as well
-        as compile time ) 
-	[ 
-		hide ' ( hide this definition, we will use the hide token it produces ) 
-		hide ' drop ( hide the built in definition , drop the token it produces ) 
-	]
-	state @ 
-	if 
-		push-location ,  find execution-token , 
-	else 
-		find 
-	then 
-	[ unhide ] 
-;
- 
 : ?dup-if immediate ( x -- x | - ) 
 	' ?dup , 
 	' ?branch , here 0 ,
@@ -699,10 +682,6 @@ hider endianess
 		1
 	endif
 ;
-
-
-: bell 7 ( ASCII BEL ) emit ;
-: b/buf  ( bytes per buffer ) 1024 ;
 
 ( ANSI Escape Codes )
 27 constant 'escape'
@@ -727,10 +706,7 @@ char ; constant ';'
 		bright red foreground color
 	sets the foreground text to bright red )
 	CSI . 
-	if 
-		." ;1" 
-	then 
-	." m" 
+	if ." ;1" then ." m" 
 ;
 
 : at-xy ( x y -- ) ( set ANSI terminal cursor position to x y ) CSI . ';' emit . ." H" ;
@@ -744,17 +720,46 @@ char ; constant ';'
 hider CSI
 
 ( \ Test code
-255 0x8000 accept hello world
+
+: ' immediate 
+	\ create a version of "'" that works at command time as well
+        \ as compile time 
+	[ 
+		hide '      \ hide this definition, we will use the hide token it produces 
+		hide ' drop \ hide the built in definition , drop the token it produces 
+	]
+	state @ 
+	if 
+		push-location , find execution-token , 
+	else 
+		find 
+	then 
+	[ unhide ] 
+;
+
+
+
+0x8000              constant hello-buffer
+hello-buffer chars  constant move-1-buffer
+move-1-buffer 0x100 + constant move-2-buffer
+
+
+255 hello-buffer accept hello world
 drop
 
-8 0x4100 0x4000 move
+move-2-buffer move-1-buffer 40 move
 
-0x8000 print cr
-0x8200 print cr
+\ ." Dump:" move-1-buffer cr move-1-buffer 20 dump
+\ ." Dump:" move-2-buffer cr move-2-buffer 20 dump
 
-0x4000 40 erase
-0x8000 print cr
-0x8200 print cr 
+move-1-buffer chars> print cr
+move-2-buffer chars> print cr
+
+move-2-buffer 40 erase
+move-1-buffer chars> print cr
+move-2-buffer chars> print cr 
+move-2-buffer 40 char a fill 
+move-2-buffer chars> print cr 
 
 : aword            " example non immediate word to execute " cr ; find aword  execute
 : aiword immediate " example immediate word to execute " cr ;     find aiword execute
@@ -781,12 +786,11 @@ find c 16 dump
 cr
 c 
 
-
-: star      [char] * emit ;
-: stars	    0 do star loop cr ;
-: square    dup 0 do dup stars loop drop ;
-: triangle  1 do i stars loop ;
-: tower     dup triangle square ;
+: make-star     [char] * emit ;
+: make-stars    0 do make-star loop cr ;
+: make-square   dup 0 do dup make-stars loop drop ;
+: make-triangle 1 do i make-stars loop ;
+: make-tower    dup make-triangle make-square ;
 
 : memcpy 
   over +
@@ -803,8 +807,11 @@ c
   loop
 ;
 
-)
+." constant " cr
+31 constant a
+a . cr
 
+)
 
 hider write-string 
 hider do-string 
@@ -850,5 +857,7 @@ hider  execution-token
 	* FORTH, VOCABULARY 
 	* Clean up "create" and "does>"
 	* Find does not always return an execution token...
+	* "Value", "To", "Is"
+	* Check "fill", "erase", "'", other words
 )
 

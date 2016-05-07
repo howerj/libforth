@@ -839,6 +839,7 @@ by design.
 
 ## To-do and notes
 
+### To-Do
 * Port this to a micro controller, and a Linux kernel module device
 * Routines for saving and loading the image should be made
 * If the word size is the same as the machine size it all memory address,
@@ -870,7 +871,17 @@ It should be small, but powerful and general.
 * Command line argument parsing could be improved.
 * The "check\_bounds" function, whilst useful for debugging, limits the virtual
 machine to address only in its range.
-* A line editor could be added
+* A line editor could be added, although this really would not be a priority.
+* A way to integrate calls to arbitrary functions that can be loaded at run time
+  could be added, although making this portable according to the C standard
+would make the code ugly (as function pointers are not guaranteed to be the size
+of a uintptr\_t).
+
+### Notes
+
+* The compilation should result in a small executable, and when statically
+linked against [musl][] under Linux (x86-84), the stripped executable is around
+50kb in size.
 
 [Forth]: https://en.wikipedia.org/wiki/Forth_%28programming_language%29
 [Wikipedia]: https://en.wikipedia.org/wiki/Forth_%28programming_language%29
@@ -891,5 +902,6 @@ machine to address only in its range.
 [libforth.h]: libforth.h
 [shell archive]: third.sh.gz
 [ANS Forth]: http://lars.nocrew.org/dpans/dpans.htm
+[musl]: https://www.musl-libc.org/
 
 <style type="text/css">body{margin:40px auto;max-width:850px;line-height:1.6;font-size:16px;color:#444;padding:0 10px}h1,h2,h3{line-height:1.2}</style>

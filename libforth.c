@@ -313,7 +313,7 @@ int forth_run(forth_t *o)
 			      m[m[DIC]] &= ~INSTRUCTION_MASK;
 			      m[m[DIC]] |= RUN; 
 			      m[DIC]++;                              break;
-		case READ:    
+		case READ: 
 			m[ck(RSTK)]--;
 			if(forth_get_word(o, o->s) < 0)
 				goto end;
