@@ -16,7 +16,7 @@ extern "C" {
 
 struct forth; /**< An opaque object that holds a running FORTH environment**/
 typedef struct forth forth_t;
-typedef uintptr_t forth_cell_t; /**< FORTH "machine word"*/
+typedef uintptr_t forth_cell_t; /**< FORTH "machine word", must be able to store a pointer*/
 #define PRIuCell PRIuPTR
 #define PRIxCell PRIxPTR
 /** @brief   Given an input and an output this will initialize forth,

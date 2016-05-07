@@ -248,12 +248,14 @@ But this version is much more limited )
 
 : state! ( bool -- ) ( set the compilation state variable ) state ! ;
 
-: _create             \ create a new work that pushes its data field
+: command-mode false state! ;
+
+: creater             \ create a new work that pushes its data field
 	::            \ compile a word
 	push-location ,       \ write push into new word
 	here 2+ ,     \ push a pointer to data field
-	['] exit ,      \ write in an exit to new word data field is after exit 
-	false state!  \ return to command mode
+	['] exit ,    \ write in an exit to new word data field is after exit 
+	command-mode  \ return to command mode
 ;
 
 
@@ -267,27 +269,27 @@ But this version is much more limited )
   write-quote >mark compile,   \ Write in a place holder 0 and push a 
                                      \ pointer to to be used by does>
   write-quote write-exit compile, \ Write in an exit in the word we're compiling.
-  ['] false , ['] state! ,        \ Make sure to change the state back to command mode )
-  else                          \ Run time behavior
-        _create
+  ['] command-mode ,           \ Make sure to change the state back to command mode )
+  else                         \ Run time behavior
+        creater
   then
 ;
-hider _create 
+hider creater
 hider state! 
 
 : does> ( whole-to-patch -- ) 
   immediate
-  write-exit                    \ Write in an exit, we don't want the
-                                \ defining to run it, but the *defined* word to.
-  here swap !                   \ Patch in the code fields to point to.
-  run-instruction ,             \ Write a run in.
+  write-exit            ( write in an exit, we don't want the
+                          defining to run it, but the *defined* word to )
+  here swap !           ( patch in the code fields to point to )
+  run-instruction ,     ( write a run in )
 ;
 
 hider write-quote 
 
-: array    ( create a array ) create allot does> + ;
+: array    ( create a array )    create allot does> + ;
 : variable ( create a variable ) create ,     does>   ;
-: constant ( crate a constant ) create ,     does> @ ;
+: constant ( crate a constant )  create ,     does> @ ;
 
 : do immediate
 	' swap ,      ( compile 'swap' to swap the limit and start )
@@ -401,7 +403,7 @@ hider inci
 
 : alignment-bits [ 1 size log2 lshift 1- literal ] and ;
 : name ( PWD -- c-addr ) 
-	(  given a pointer to the PWD field of a word get a pointer to the name
+	( given a pointer to the PWD field of a word get a pointer to the name
 	of the word )
 	dup 1+ @ 256/ lsb - chars>
 ;
@@ -758,7 +760,7 @@ move-2-buffer chars> print cr
 move-2-buffer 40 erase
 move-1-buffer chars> print cr
 move-2-buffer chars> print cr 
-move-2-buffer 40 char a fill 
+\ move-2-buffer 40 char a fill \ fill needs fixing
 move-2-buffer chars> print cr 
 
 : aword            " example non immediate word to execute " cr ; find aword  execute
@@ -773,9 +775,9 @@ move-2-buffer chars> print cr
 	[else]
 
 		0 [if]
-			." Top Kek " cr
+			." Good bye!" cr
 		[else]
-			." lowest kek " cr
+			." Good bye, cruel World!" cr
 		[then]
 	[then]
 
@@ -860,4 +862,5 @@ hider  execution-token
 	* "Value", "To", "Is"
 	* Check "fill", "erase", "'", other words
 )
+
 

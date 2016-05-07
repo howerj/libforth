@@ -865,10 +865,8 @@ be used such as:
         2d      2dup
         2D      2drop
 
-* The Input and Output mechanism need rethinking.
-* Error handling needs to be improved.
-It should be small, but powerful and general.
-* Command line argument parsing could be improved.
+* Command line argument parsing could be improved, and a startup script
+  specified by an environment variable added.
 * The "check\_bounds" function, whilst useful for debugging, limits the virtual
 machine to address only in its range.
 * A line editor could be added, although this really would not be a priority.
@@ -876,12 +874,18 @@ machine to address only in its range.
   could be added, although making this portable according to the C standard
 would make the code ugly (as function pointers are not guaranteed to be the size
 of a uintptr\_t).
+* A debug mode and optional compilation of range checking functions should be
+added to the main interpreter
 
 ### Notes
 
 * The compilation should result in a small executable, and when statically
 linked against [musl][] under Linux (x86-84), the stripped executable is around
 50kb in size.
+* It is quite possible to make Forth programs that corrupt memory that they
+should, this is not a design flaw in this interpreter but more part of the
+Forth philosophy. If you want memory safety (and most of the time you should) 
+you should use a different language, or implementation. 
 
 [Forth]: https://en.wikipedia.org/wiki/Forth_%28programming_language%29
 [Wikipedia]: https://en.wikipedia.org/wiki/Forth_%28programming_language%29

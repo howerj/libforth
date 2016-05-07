@@ -28,38 +28,49 @@
 
 static const char *core_file_name = "forth.core";
 static const char *initial_forth_program = "\n\
-: state 8 exit : ; immediate ' exit , 0 state ! exit : base 9 ; : pwd 10 ; \n\
-: h 0 ; : r 7 ; : here h @ ; : [ immediate 0 state ! ; : ] 1 state ! ;      \n\
-: :noname immediate here 2 , ] ; : if immediate ' ?branch , here 0 , ;         \n\
-: else immediate ' branch , here 0 , swap dup here swap - swap ! ; : 0= 0 = ;  \n\
-: then immediate dup here swap - swap ! ; : 2dup over over ; : <> = 0= ;    \n\
+: state 8 exit : ; immediate ' exit , 0 state ! exit : base 9 ; : pwd 10 ;   \n\
+: h 0 ; : r 7 ; : here h @ ; : [ immediate 0 state ! ; : ] 1 state ! ;       \n\
+: :noname immediate here 2 , ] ; : if immediate ' ?branch , here 0 , ;       \n\
+: else immediate ' branch , here 0 , swap dup here swap - swap ! ; : 0= 0 = ;\n\
+: then immediate dup here swap - swap ! ; : 2dup over over ; : <> = 0= ;     \n\
 : begin immediate here ; : until immediate ' ?branch , here - , ; : '\\n' 10 ; \n\
-: not 0= ; : 1+ 1 + ; : 1- 1 - ; : ')' 41 ; : tab 9 emit ; : cr '\\n' emit ;\n\
-: line dup . tab dup 4 + swap begin dup @ . tab 1+ 2dup = until drop ;      \n\
+: not 0= ; : 1+ 1 + ; : 1- 1 - ; : ')' 41 ; : tab 9 emit ; : cr '\\n' emit ; \n\
+: line dup . tab dup 4 + swap begin dup @ . tab 1+ 2dup = until drop ;       \n\
 : ( immediate begin key ')' = until ; : rot >r swap r> swap ; : -rot rot rot ;\n\
-: lister swap begin line cr 2dup < until ; : allot here + h ! ;               \n\
+: lister swap begin line cr 2dup < until ; : allot here + h ! ;              \n\
 : tuck swap over ; : nip swap drop ; : :: [ find : , ] ;";
 
-struct forth {	        /**< The FORTH environment is contained in here*/
-	jmp_buf error;
-	FILE *in;       /**< file input, if not using string input*/
-	FILE *out;      /**< file output */  
+struct forth {          /**< The FORTH environment is contained in here*/
+	unsigned invalid; /**< if true, this object is invalid*/
+	jmp_buf error;  /**< place to jump to on error */
 	uint8_t *s;     /**< convenience pointer for string input buffer*/
-	uint8_t *sin;   /**< string input pointer*/
-	size_t core_size;  /**< size of VM */
-	size_t stack_size; /**< size of variable and return stacks */
-	size_t slen;    /**< string input length*/
-	size_t sidx;    /**< string input index*/
-	unsigned invalid  :1; /**< if true, this object is invalid*/
+	size_t core_size;   /**< size of VM */
+	size_t stack_size;  /**< size of variable and return stacks */
 	clock_t start_time; /**< used for "clock", start of initialization */
-	forth_cell_t I;	 /**< instruction pointer*/
-	forth_cell_t top; /**< stored top of stack */
-	forth_cell_t *S; /**< stack pointer*/
-	forth_cell_t m[]; /**< Forth Virtual Machine memory */
+	forth_cell_t I;     /**< instruction pointer*/
+	forth_cell_t top;   /**< stored top of stack */
+	forth_cell_t *S;    /**< stack pointer*/
+	forth_cell_t m[];   /**< Forth Virtual Machine memory */
 };
 
-enum input_stream { FILE_IN, STDIN_IN, STRING_IN };
-enum registers    { DIC=0/*m[0]*/,RSTK=7,STATE=8,BASE=9,PWD=10,SOURCE_ID=11 };
+enum registers    { /* virtual machine registers */
+	DIC    = 0,      /**< dictionary pointer */
+	RSTK   = 7,      /**< return stack pointer */
+	STATE  = 8,      /**< interpreter state; compile or command mode*/
+	BASE   = 9,      /**< base pointer */
+	PWD    = 10,     /**< pointer to previous word */
+	SOURCE_ID = 11,  /**< input source selector */
+	SIN    = 12,     /**< string input pointer*/
+	SIDX   = 13,     /**< string input index*/
+	SLEN   = 14,     /**< string input length*/ 
+	START_ADDR = 15, /**< pointer to start of VM */
+	FIN    = 16,     /**< file input pointer */
+	FOUT   = 17,     /**< file output pointer */
+	STDIN  = 18,     /**< file pointer to stdin */
+	STDOUT = 19,     /**< file pointer to stdout */
+	STDERR = 20      /**< file pointer to stderr */
+};
+enum input_stream { FILE_IN, STRING_IN = -1 };
 enum instructions { PUSH,COMPILE,RUN,DEFINE,IMMEDIATE,READ,LOAD,STORE,
 SUB,ADD,AND,OR,XOR,INV,SHL,SHR,MUL,DIV,LESS,MORE,EXIT,EMIT,KEY,FROMR,TOR,BRANCH,
 QBRANCH, PNUM, QUOTE,COMMA,EQUAL,SWAP,DUP,DROP,OVER,BSAVE,BLOAD,FIND,PRINT,
@@ -71,11 +82,10 @@ static char *names[] = { "read","@","!","-","+","and","or","xor","invert",
 "print","depth", "clock", NULL }; 
 
 static int forth_get_char(forth_t *o) /**< get a char from string-in or a file*/
-{ 
+{ /**@todo The input system needs rethinking */ 
 	switch(o->m[SOURCE_ID]) {
-	case FILE_IN:   return fgetc(o->in);
-	case STDIN_IN:  return fgetc(stdin);
-	case STRING_IN: return o->sidx >= o->slen ? EOF : o->sin[o->sidx++];
+	case FILE_IN:   return fgetc((FILE*)(o->m[FIN]));
+	case STRING_IN: return o->m[SIDX] >= o->m[SLEN] ? EOF : ((char*)(o->m[SIN]))[o->m[SIDX]++];
 	default:        return EOF;
 	}
 } 
@@ -97,12 +107,11 @@ static int forth_get_word(forth_t *o, uint8_t *p)
 	char fmt[16] = { 0 };
 	sprintf(fmt, "%%%ds%%n", MAX_WORD_LENGTH - 1);
 	switch(o->m[SOURCE_ID]) {
-	case FILE_IN:   return fscanf(o->in, fmt, p, &n);
-	case STDIN_IN:  return fscanf(stdin, fmt, p, &n);
+	case FILE_IN:   return fscanf((FILE*)(o->m[FIN]), fmt, p, &n);
 	case STRING_IN:
-		if(sscanf((char *)&(o->sin[o->sidx]), fmt, p, &n) < 0)
+		if(sscanf((char *)&(((char*)(o->m[SIN]))[o->m[SIDX]]), fmt, p, &n) < 0)
 			return EOF;
-		return o->sidx += n, n;
+		return o->m[SIDX] += n, n;
 	default:       return EOF;
 	}
 } 
@@ -118,9 +127,9 @@ static void compile(forth_t *o, forth_cell_t code, char *str)
 	l = l/sizeof(forth_cell_t);
 	m[DIC] += l; /* Add string length in words to header (STRLEN) */
 
-	m[m[0]++] = m[PWD];     /*0 + STRLEN: Pointer to previous words header*/
-	m[PWD] = m[0] - 1;      /*   Update the PWD register to new word */
-	m[m[0]++] = (l << WORD_LENGTH_OFFSET) | code; /*1: size of words name and code field */
+	m[m[DIC]++] = m[PWD];     /*0 + STRLEN: Pointer to previous words header*/
+	m[PWD] = m[DIC] - 1;      /*   Update the PWD register to new word */
+	m[m[DIC]++] = (l << WORD_LENGTH_OFFSET) | code; /*1: size of words name and code field */
 }
 
 static int blockio(forth_t *o, void *p, forth_cell_t poffset, forth_cell_t id, char rw) 
@@ -142,7 +151,7 @@ static int blockio(forth_t *o, void *p, forth_cell_t poffset, forth_cell_t id, c
 } /*a basic FORTH block I/O interface*/
 
 static int numberify(forth_t *o, forth_cell_t *n, const char *s)  
-{
+{ /*returns non zero if conversion was successful*/
 	char *end = NULL;
 	errno = 0;
 	*n = strtol(s, &end, o->m[BASE]);
@@ -162,29 +171,29 @@ static forth_cell_t find(forth_t *o)
 static int print_cell(forth_t *o, forth_cell_t f, int tab)
 {
 	char *fmt = o->m[BASE] == 16 ? "0x%" PRIxCell "%s" : "%" PRIuCell "%s";
-	return fprintf(o->out, fmt, f, tab ? "\t" : "");
+	return fprintf((FILE*)(o->m[FOUT]), fmt, f, tab ? "\t" : "");
 }
 
 void forth_set_file_input(forth_t *o, FILE *in) 
 { /** @todo o->sin should be set to a program that exits */
 	assert(o && in); 
-	o->m[SOURCE_ID] = in == stdin ? STDIN_IN : FILE_IN;
-	o->in = in; 
+	o->m[SOURCE_ID] = FILE_IN;
+	o->m[FIN]       = (forth_cell_t)in; 
 }
 
 void forth_set_file_output(forth_t *o, FILE *out) 
 {  
 	assert(o && out); 
-	o->out = out; 
+	o->m[FOUT] = (forth_cell_t)out; 
 }
 
 void forth_set_string_input(forth_t *o, const char *s) 
-{ /** @todo o->in should be set to stdin in case SOURCE_ID is messed with */
+{ 
 	assert(o && s);
-	o->sidx = 0;	         /*sidx == current character in string*/
-	o->slen = strlen(s) + 1; /*slen == string len*/
+	o->m[SIDX] = 0;	             /*m[SIDX] == current character in string*/
+	o->m[SLEN] = strlen(s) + 1;  /*m[SLEN] == string len*/
 	o->m[SOURCE_ID] = STRING_IN; /*read from string, not a file handle*/
-	o->sin = (uint8_t *)s;   /*sin  == pointer to string input*/
+	o->m[SIN] = (forth_cell_t)s;   /*sin  == pointer to string input*/
 }
 
 int forth_eval(forth_t *o, const char *s) 
@@ -222,21 +231,25 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out)
 	o->stack_size = size / 64;
 	m = o->m;       /*a local variable only for convenience*/
 	o->s = (uint8_t*)(m + STRING_OFFSET); /*string store offset into CORE, skip registers*/
-	o->out = out;   /*this will be used for standard output*/
+	o->m[FOUT]    = (forth_cell_t)out;
+	m[START_ADDR] = (forth_cell_t)&m;
+	m[STDIN]      = (forth_cell_t)stdin;
+	m[STDOUT]     = (forth_cell_t)stdout;
+	m[STDERR]     = (forth_cell_t)stderr;
 
-	w = m[DIC] = DICTIONARY_START; /*initial dictionary offset, skip registers and string offset*/
-	m[PWD]     = 1;     /*special terminating pwd*/
+	w = m[DIC]  = DICTIONARY_START; /*initial dictionary offset, skip registers and string offset*/
+	m[PWD]      = 1;    /*special terminating pwd*/
 	m[m[DIC]++] = READ; /*create a special word that reads in FORTH*/
 	m[m[DIC]++] = RUN;  /*call the special word recursively*/
 	o->I = m[DIC];      /*instruction stream points to our special word*/
 	m[m[DIC]++] = w;    /*recursive call to that word*/
 	m[m[DIC]++] = o->I - 1; /*execute read*/
 
-	compile(o, DEFINE,    ":");	    /*immediate word*/
+	compile(o, DEFINE,    ":");         /*immediate word*/
 	compile(o, IMMEDIATE, "immediate"); /*immediate word*/
 	for(i = 0, w = READ; names[i]; i++) /*compiling words*/
 		compile(o, COMPILE, names[i]), m[m[DIC]++] = w++;
-	m[RSTK] = size - o->stack_size;	   /*set up return stk pointer*/
+	m[RSTK] = size - o->stack_size;     /*set up return stk pointer*/
 	o->S    = m + size - (2 * o->stack_size); /*set up variable stk pointer*/
 
 	VERIFY(forth_eval(o, initial_forth_program) >= 0);
@@ -245,7 +258,7 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out)
 	VERIFY(forth_define_constant(o, "max-core",      size) >= 0);
 	VERIFY(forth_define_constant(o, "source-id-reg", SOURCE_ID) >= 0);
 
-	forth_set_file_input(o, in);	/*set up input after our eval*/
+	forth_set_file_input(o, in);  /*set up input after our eval*/
 	o->start_time = clock();
 	return o;
 }
@@ -307,9 +320,9 @@ int forth_run(forth_t *o)
                               if(forth_get_word(o, (uint8_t*)(o->s)) < 0)
                                       goto end;
                               compile(o, COMPILE, (char*)o->s);
-                              m[ck(m[DIC]++)] = RUN;               break;
+                              m[ck(m[DIC]++)] = RUN;                 break;
 		case IMMEDIATE: 
-			      *m -= 2; 
+			      m[DIC] -= 2; 
 			      m[m[DIC]] &= ~INSTRUCTION_MASK;
 			      m[m[DIC]] |= RUN; 
 			      m[DIC]++;                              break;
@@ -327,8 +340,8 @@ int forth_run(forth_t *o)
 				break;
 			}
 			if (m[STATE]) { /*must be a number then*/
-				m[m[0]++] = 2; /*fake word push at m[2]*/
-				m[ck(m[0]++)] = w;
+				m[m[DIC]++] = 2; /*fake word push at m[2]*/
+				m[ck(m[DIC]++)] = w;
 			} else {
 				*++S = f;
 				f = w;
@@ -352,7 +365,7 @@ int forth_run(forth_t *o)
 		case LESS:    f = *S-- < f;                          break;
 		case MORE:    f = *S-- > f;                          break;
 		case EXIT:    I = m[ck(m[RSTK]--)];                  break;
-		case EMIT:    fputc(f, o->out); f = *S--;            break;
+		case EMIT:    fputc(f, (FILE*)(o->m[FOUT])); f = *S--; break;
 		case KEY:     *++S = f; f = forth_get_char(o);       break;
 		case FROMR:   *++S = f; f = m[ck(m[RSTK]--)];        break;
 		case TOR:     m[ck(++m[RSTK])] = f; f = *S--;        break;
@@ -361,7 +374,7 @@ int forth_run(forth_t *o)
 		case PNUM:    print_cell(o, f, 0);
 			      f = *S--;                              break;
 		case QUOTE:   *++S = f;     f = m[ck(I++)];          break;
-		case COMMA:   m[ck(m[0]++)] = f; f = *S--;           break;
+		case COMMA:   m[ck(m[DIC]++)] = f; f = *S--;         break;
 		case EQUAL:   f = *S-- == f;                         break;
 		case SWAP:    w = f;  f = *S--;   *++S = w;          break;
 		case DUP:     *++S = f;                              break;
@@ -374,8 +387,8 @@ int forth_run(forth_t *o)
 				      goto end;
 			      f = find(o);
 			      f = f < DICTIONARY_START ? 0 : f;      break;
-		case PRINT:   fputs(((char*)m)+f, o->out); f = *S--; break;
-		case DEPTH:   w = S- (m + o->core_size - (2 * o->stack_size));
+		case PRINT:   fputs(((char*)m)+f, (FILE*)(o->m[FOUT])); f = *S--; break;
+		case DEPTH:   w = S - (m + o->core_size - (2 * o->stack_size));
 			      *++S = f;
 			      f = w;                                 break;
 		case CLOCK:   *++S = f;
@@ -413,7 +426,7 @@ int main_forth(int argc, char **argv)
 				forth_set_file_input(o, in = stdin);
 			else
 				forth_set_file_input(o, in = fopen_or_die(argv[0], "rb"));
-/*shebang line '#!' */  if((c = fgetc(in)) == '#') {
+			if((c = fgetc(in)) == '#') { /*shebang line '#!' */  
 				while(((c = forth_get_char(o)) > 0) && (c != '\n')); 
 			} else if (c == EOF) { 
 				fclose_input(&in);

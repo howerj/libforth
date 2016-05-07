@@ -1,23 +1,26 @@
 #!./forth
-\ A simple hexdump utility
+( A simple hexdump utility )
 : char key drop key ;
 : literal 2 , , ;
 : ':' [ char : literal ] ;
-: source-id-reg 11 ;
+: file-input-reg 16 ;
+: stdin-reg 18 ;
+: eof -1 ;
 : hexdump
-	1 hex
-	1 source-id-reg ! \ read from stdin
+	16 base !
+	stdin-reg @ file-input-reg !
 	0
 	begin
 		dup dup
 		3 and if drop else  cr . tab ':' emit tab then
 		1+
 		key dup 
-		-1 = if drop 1 else . tab 0 then
+		eof = if drop 1 else . tab 0 then
 	until
 	cr
 	drop
-	2 source-id-reg !
+	0 r !
 ;
 
 hexdump 
+
