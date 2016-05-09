@@ -71,7 +71,7 @@ enum registers    { /* virtual machine registers */
 	STDERR = 20,     /**< file pointer to stderr */
 	ARGC   = 21,     /**< argument count */
 	ARGV   = 22,     /**< arguments */
-	READER = 23,     /**< location of startup program */
+	DEBUG  = 23      /**< turn debugging on/off if enabled*/
 };
 enum input_stream { FILE_IN, STRING_IN = -1 };
 enum instructions { PUSH,COMPILE,RUN,DEFINE,IMMEDIATE,READ,LOAD,STORE,
@@ -221,26 +221,34 @@ int forth_define_constant(forth_t *o, const char *name, forth_cell_t c)
 	return forth_eval(o, e);
 }
 
+static void forth_make_default(forth_t *o, size_t size, FILE *in, FILE *out)
+{
+	o->core_size     = size;
+	o->stack_size    = size / 64;
+	o->s             = (uint8_t*)(o->m + STRING_OFFSET); /*string store offset into CORE, skip registers*/
+	o->m[FOUT]       = (forth_cell_t)out;
+	o->m[START_ADDR] = (forth_cell_t)&(o->m);
+	o->m[STDIN]      = (forth_cell_t)stdin;
+	o->m[STDOUT]     = (forth_cell_t)stdout;
+	o->m[STDERR]     = (forth_cell_t)stderr;
+	o->m[RSTK]       = size - o->stack_size;     /*set up return stk pointer*/
+	o->S             = o->m + size - (2 * o->stack_size); /*set up variable stk pointer*/
+	o->start_time    = clock();
+	forth_set_file_input(o, in);  /*set up input after our eval*/
+}
+
 forth_t *forth_init(size_t size, FILE *in, FILE *out) 
 { 
 	assert(in && out);
 	forth_cell_t *m, i, w;
 	forth_t *o;
 	VERIFY(size >= MINIMUM_CORE_SIZE);
-
 	if(!(o = calloc(1, sizeof(*o) + sizeof(forth_cell_t)*size))) 
 		return NULL;
-	o->core_size = size;
-	o->stack_size = size / 64;
+	forth_make_default(o, size, in, out);
 	m = o->m;       /*a local variable only for convenience*/
-	o->s = (uint8_t*)(m + STRING_OFFSET); /*string store offset into CORE, skip registers*/
-	o->m[FOUT]    = (forth_cell_t)out;
-	m[START_ADDR] = (forth_cell_t)&m;
-	m[STDIN]      = (forth_cell_t)stdin;
-	m[STDOUT]     = (forth_cell_t)stdout;
-	m[STDERR]     = (forth_cell_t)stderr;
-	m[PWD]        = 0;  /*special terminating pwd value*/
 
+	o->m[PWD]        = 0;  /*special terminating pwd value*/
 	w = m[DIC]  = DICTIONARY_START; /*initial dictionary offset, skip registers and string offset*/
 	m[m[DIC]++] = READ; /*create a special word that reads in FORTH*/
 	m[m[DIC]++] = RUN;  /*call the special word recursively*/
@@ -252,8 +260,6 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out)
 	compile(o, IMMEDIATE, "immediate"); /*immediate word*/
 	for(i = 0, w = READ; names[i]; i++) /*compiling words*/
 		compile(o, COMPILE, names[i]), m[m[DIC]++] = w++;
-	m[RSTK] = size - o->stack_size;     /*set up return stk pointer*/
-	o->S    = m + size - (2 * o->stack_size); /*set up variable stk pointer*/
 
 	VERIFY(forth_eval(o, initial_forth_program) >= 0);
 	VERIFY(forth_define_constant(o, "size",          sizeof(forth_cell_t)) >= 0);
@@ -262,7 +268,20 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out)
 	VERIFY(forth_define_constant(o, "source-id-reg", SOURCE_ID) >= 0);
 
 	forth_set_file_input(o, in);  /*set up input after our eval*/
-	o->start_time = clock();
+	return o;
+}
+
+static forth_t *forth_load_core(const char *name, size_t size)
+{ /**@todo make a more generic version that parses the header, and add it to the API */
+	forth_t *o;
+	FILE *file = fopen_or_die(name, "rb");
+	size_t w = sizeof(*o) + (sizeof(forth_cell_t) * size);
+	if(!(o = calloc(w, 1)))
+		return NULL;
+	if(w != fread(o, 1, w, file))
+		return NULL;
+	fclose(file);
+	forth_make_default(o, size, stdin, stdout);
 	return o;
 }
 
@@ -292,8 +311,10 @@ forth_cell_t forth_stack_position(forth_t *o)
 	return o->S - o->m;
 }
 
-static forth_cell_t check_bounds(forth_t *o, forth_cell_t f) 
-{ 
+static forth_cell_t check_bounds(forth_t *o, forth_cell_t f, unsigned line) 
+{
+	if(o->m[DEBUG])
+		fprintf(stderr, "\t( debug\t0x%" PRIxCell "\t%u )\n", f, line);
 	if(((forth_cell_t)f) >= o->core_size) {
 		fprintf(stderr, "( fatal \"bounds check failed: %" PRIuCell " >= %zu\" )\n", f, o->core_size);
 		longjmp(o->error, 1);
@@ -301,7 +322,11 @@ static forth_cell_t check_bounds(forth_t *o, forth_cell_t f)
 	return f; 
 }
 
-#define ck(c) check_bounds(o, c)
+#ifndef NDEBUG
+#define ck(c) check_bounds(o, c, __LINE__)
+#else
+#define ck(c) (c)
+#endif
 
 int forth_run(forth_t *o) 
 { 
@@ -426,12 +451,19 @@ int main_forth(int argc, char **argv)
 	FILE *in = NULL, *core_file = NULL; /*current input file, dump file*/
 	forth_t *o = NULL;		/*our FORTH environment*/
 	assert(argv);
-	if(!(o = forth_init(CORE_SIZE, stdin, stdout))) 
-		return -1; /*setup env*/
+	if(argc > 2 && !strcmp(argv[1], "-l")) {
+		if(!(o = forth_load_core(argv[2], CORE_SIZE)))
+			return -1; /**@todo continue on with command line opts*/
+		rval = forth_run(o);
+		goto END;
+	} else {
+		if(!(o = forth_init(CORE_SIZE, stdin, stdout))) 
+			return -1; /*setup env*/
+	}
 	forth_set_args(o, argc, argv);
 	if(argc > 1 && !strcmp(argv[1], "-d")) /*turn core dump on*/
 			argv++, argc--, dump = 1;
-	if(argc > 1) {
+	if(argc > 1) { /**@todo better command linep parsing*/
 		while(++argv, --argc) {
 			if(!strcmp(argv[0], "-"))
 				forth_set_file_input(o, in = stdin);

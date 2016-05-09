@@ -811,7 +811,6 @@ hider CSI
 		drop
 	then
 ;
-see +
 
 hider TrueFalse
 hider >instruction
@@ -938,7 +937,6 @@ hider  source-id-reg
 hider  execution-token 
 
 ( TODO
-	* Execute needs fixing
 	* Evaluate [this would require changes to the interpreter]
 	* By adding "c@" and "c!" to the interpreter I could remove print
 	* Add unit testing to the end of this file
@@ -947,6 +945,7 @@ hider  execution-token
 	* Try to simplify the definitions of write-string using "create" "does>"
 	and come up with a way of reusing code for "move", "cmove" and "cmove>",
 	for that matter "create" and "does>" could be simplified
+	* Add a dump core and load core to the interpreter?
 	* add "j" if possible to get outer loop context
 	* Decompiler "see" http://lars.nocrew.org/dpans/dpans15.htm
 	* FORTH, VOCABULARY 
@@ -954,5 +953,4 @@ hider  execution-token
 	* "Value", "To", "Is"
 	* Check "fill", "erase", "'", other words
 )
-
 

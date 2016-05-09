@@ -1,7 +1,7 @@
 ECHO	= echo
 AR	= ar
 CC	= gcc
-CFLAGS	= -Wall -Wextra -g -pedantic -fPIC -std=c99 -O2 
+CFLAGS	= -Wall -Wextra -g -pedantic -fPIC -std=c99 -O2
 TARGET	= forth
 
 .PHONY: all clean 
