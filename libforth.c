@@ -29,8 +29,8 @@
 static const char *core_file_name = "forth.core";
 static const char *initial_forth_program = "\n\
 : state 8 exit : ; immediate ' exit , 0 state ! exit : base 9 ; : pwd 10 ;   \n\
-: h 0 ; : r 7 ; : here h @ ; : [ immediate 0 state ! ; : ] 1 state ! ;       \n\
-: :noname immediate here 2 , ] ; : if immediate ' ?branch , here 0 , ;       \n\
+: h 6 ; : r 7 ; : here h @ ; : [ immediate 0 state ! ; : ] 1 state ! ;       \n\
+: :noname immediate -1 , here 2 , ] ; : if immediate ' ?branch , here 0 , ;  \n\
 : else immediate ' branch , here 0 , swap dup here swap - swap ! ; : 0= 0 = ;\n\
 : then immediate dup here swap - swap ! ; : 2dup over over ; : <> = 0= ;     \n\
 : begin immediate here ; : until immediate ' ?branch , here - , ; : '\\n' 10 ; \n\
@@ -54,10 +54,10 @@ struct forth {          /**< The FORTH environment is contained in here*/
 };
 
 enum registers    { /* virtual machine registers */
-	DIC    = 0,      /**< dictionary pointer */
+	DIC    = 6,      /**< dictionary pointer */
 	RSTK   = 7,      /**< return stack pointer */
 	STATE  = 8,      /**< interpreter state; compile or command mode*/
-	BASE   = 9,      /**< base pointer */
+	BASE   = 9,      /**< base conversion variable */
 	PWD    = 10,     /**< pointer to previous word */
 	SOURCE_ID = 11,  /**< input source selector */
 	SIN    = 12,     /**< string input pointer*/
@@ -68,7 +68,10 @@ enum registers    { /* virtual machine registers */
 	FOUT   = 17,     /**< file output pointer */
 	STDIN  = 18,     /**< file pointer to stdin */
 	STDOUT = 19,     /**< file pointer to stdout */
-	STDERR = 20      /**< file pointer to stderr */
+	STDERR = 20,     /**< file pointer to stderr */
+	ARGC   = 21,     /**< argument count */
+	ARGV   = 22,     /**< arguments */
+	READER = 23,     /**< location of startup program */
 };
 enum input_stream { FILE_IN, STRING_IN = -1 };
 enum instructions { PUSH,COMPILE,RUN,DEFINE,IMMEDIATE,READ,LOAD,STORE,
@@ -118,7 +121,7 @@ static int forth_get_word(forth_t *o, uint8_t *p)
 
 static void compile(forth_t *o, forth_cell_t code, char *str) 
 { 
-	assert(o && code < LAST && code < INSTRUCTION_MASK);
+	assert(o && code < LAST);
 	forth_cell_t *m = o->m, header = m[DIC], l = 0;
 	/*FORTH header structure*/
 	strcpy((char *)(o->m + header), str); /* 0: Copy the new FORTH word into the new header */
@@ -190,10 +193,10 @@ void forth_set_file_output(forth_t *o, FILE *out)
 void forth_set_string_input(forth_t *o, const char *s) 
 { 
 	assert(o && s);
-	o->m[SIDX] = 0;	             /*m[SIDX] == current character in string*/
+	o->m[SIDX] = 0;              /*m[SIDX] == current character in string*/
 	o->m[SLEN] = strlen(s) + 1;  /*m[SLEN] == string len*/
 	o->m[SOURCE_ID] = STRING_IN; /*read from string, not a file handle*/
-	o->m[SIN] = (forth_cell_t)s;   /*sin  == pointer to string input*/
+	o->m[SIN] = (forth_cell_t)s; /*sin  == pointer to string input*/
 }
 
 int forth_eval(forth_t *o, const char *s) 
@@ -236,9 +239,9 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out)
 	m[STDIN]      = (forth_cell_t)stdin;
 	m[STDOUT]     = (forth_cell_t)stdout;
 	m[STDERR]     = (forth_cell_t)stderr;
+	m[PWD]        = 0;  /*special terminating pwd value*/
 
 	w = m[DIC]  = DICTIONARY_START; /*initial dictionary offset, skip registers and string offset*/
-	m[PWD]      = 1;    /*special terminating pwd*/
 	m[m[DIC]++] = READ; /*create a special word that reads in FORTH*/
 	m[m[DIC]++] = RUN;  /*call the special word recursively*/
 	o->I = m[DIC];      /*instruction stream points to our special word*/
@@ -399,7 +402,7 @@ int forth_run(forth_t *o)
 			longjmp(o->error, 1);
 		}
 	}
-end:    o->top = f;
+end:	o->top = f;
 	return 0;
 }
 
@@ -410,6 +413,13 @@ static void fclose_input(FILE **in)
 	*in = stdin;
 }
 
+void forth_set_args(forth_t *o, int argc, char **argv)
+{
+	assert(o);
+	o->m[ARGC] = argc;
+	o->m[ARGV] = (forth_cell_t)argv;
+}
+
 int main_forth(int argc, char **argv) 
 { 	/*options: ./forth (-d)? (file)* */
 	int dump = 0, rval = 0, c;      /*dump on?, return value, temp char*/
@@ -418,6 +428,7 @@ int main_forth(int argc, char **argv)
 	assert(argv);
 	if(!(o = forth_init(CORE_SIZE, stdin, stdout))) 
 		return -1; /*setup env*/
+	forth_set_args(o, argc, argv);
 	if(argc > 1 && !strcmp(argv[1], "-d")) /*turn core dump on*/
 			argv++, argc--, dump = 1;
 	if(argc > 1) {

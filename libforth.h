@@ -108,12 +108,21 @@ void forth_set_file_output(forth_t *o, FILE *out);
  *  @param s   A NUL terminated string to act as input. Asserted. **/
 void forth_set_string_input(forth_t *o, const char *s); 
 
+/** @brief Set the register elements in the Forth virtual machine for
+ *         "argc" and "argv" to argc and argv, allowing them to be
+ *         accessible within the interpreter
+ *  @param o    An initialized FORTH environment. Caller frees. Asserted.
+ *  @param argc argc, as is passed into main()
+ *  @param argv argv, as is passed into main() */
+void forth_set_args(forth_t *o, int argc, char **argv);
+
 /** @brief  This implements a FORTH REPL whose behavior is documented in
  *          the man pages for this library. You pass in the same format as
  *          is expected to main(). The only option possible to pass to argv
  *          is "-d" which automatically performs a forth_coredump() after
  *          it has read all the files passed in argv. All other strings
- *          are treated as file names to open and read input from. Consult
+ *          are treated as file names to open and read input from, apart
+ *          from "-", which sets the interpreter to read from stdin. Consult
  *          the man pages.
  *  @param  argc  An argument count, like in main().
  *  @param  argv  argc strings, like in main(). Not checked for NULL.

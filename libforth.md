@@ -50,6 +50,13 @@ implementation" applies, nearly every single [Forth][] implementation has its
 own idea of how to go about things despite standardization efforts - in keeping 
 with this, this library has its own idiosyncrasies.
 
+This implementation, written in [C][], can be thought of as a hybrid between a
+fairly dumb stack based virtual machine with instructions such as "pop two
+values off the stack, add them, and push the result" and a small
+interpreter/compiler for the virtual machine. This simple kernel is then used
+to build a more compliant and usable [Forth][] implementation by defining 
+words that build upon those provided by the base system.
+
 ## Other documentation
 
 Apart from this file there are other sources of information about the
@@ -192,6 +199,8 @@ All fields are aligned on the [Forth][] virtual machines word boundaries.
 The MISC field is laid out as so:
 
         .-------------------------------------------------------------------------------.
+        | <- Least Significant Bit                              Most Significant Bit -> |
+        .-------------------------------------------------------------------------------.
         |  0 |  1 |  2 |  3 |  4 |  5 |  6 |  7 |  8 |  9 | 10 | 11 | 12 | 13 | 14 | 15 |
         .-------------------------------------------------------------------------------.
         |            CODE WORD             | HD |          NAME OFFSET                  |
@@ -212,6 +221,10 @@ The MISC field is laid out as so:
                        to the virtual machine words boundaries and not character, or byte, 
                        aligned. The length of this field, and the size of the input buffer, 
                        limit the maximum size of a word.
+
+Depending on the virtual machine word size, or cell size, there may be more
+bits above bit '15', the most significant bit, in the MISC field. These bits
+are not used and should be set to zero.
 
 And the dictionary looks like this:
 
@@ -288,14 +301,36 @@ Each may be further divided into special sections:
 
 ### Registers
 
-* 0x0:      The dictionary pointer
-* 0x1:      The return stack pointer
-* 0x2-0x7:  A 'fake' word used to implement literal numbers
-* 0x8:      State, the state of the interpreter, either in *compile* or *command* mode.
-* 0x9:      Hex, if none zero numbers get output in hexadecimal, otherwise they are output in decimal.
-* 0xA:      Pointer to the previously declared word in the dictionary.
-* 0xB-0x1F: Unused and reserved 
-* 0x20-0x3F This is used to temporarily store a word when it is being read in
+At the beginning of the Forth virtual machine there is a section used for
+registers, modifying them arbitrary can cause undefined behavior to occur which
+will most likely cause the virtual machine to be terminated.
+
+        NAME          LOCATION     DESCRIPTION
+                   DECIMAL  HEX
+                   0-1      0-1    Unused
+                   2-5      2-5    Push integer word
+        DIC        6        6      Dictionary pointer
+        RSTK       7        7      Return stack pointer
+        STATE      8        8      Interpreter state; compile or command mode
+        BASE       9        9      Base conversion variable
+        PWD        10       A      Pointer to last defined word 
+        SOURCE_ID  11       B      Input source selector (-1 = string input, 
+                                   0 = file input)
+        SIN        12       C      String input pointer
+        SIDX       13       D      String input index  (index into SIN)
+        SLEN       14       E      String input length (length of SIN)
+        START_ADDR 15       F      Pointer to start of VM
+        FIN        16       10     File input pointer
+        FOUT       17       11     File output pointer 
+        STDIN      18       12     File pointer to stdin, if available
+        STDOUT     19       13     File pointer to stdout, if available
+        STDERR     20       14     File pointer to stderr, if available
+        ARGC       22       15     Count of arguments passed to program,
+                                   if available
+        ARGV       23       16     An array of pointers to NUL terminated
+                                   ASCII strings, if available, of ARGC
+                                   length
+                   24-31    17-1F  Unused and reserved
 
 ### Dictionary
 
@@ -488,7 +523,7 @@ destination next in the instruction stream, otherwise skip over it.
 * '.'           ( x -- )
 
 Pop a value from the variable stack and print it to the output either
-as a ASCII decimal or hexadecimal value depending on the HEX register.
+as a ASCII decimal or hexadecimal value depending on the BASE register.
 
 * '''           ( -- )
 
@@ -568,10 +603,11 @@ or command modes.
 
 Write 'exit' into the dictionary and switch back into command mode.
 
-* 'hex'         ( bool -- )
+* 'base'         ( -- addr )
 
-Change the state of the output of number printing, 0 for decimal which is the
-default, anything else and it prints hexadecimal.
+This pushes the address of a variable used for input and output conversion of
+numbers, this address can be written to and read, valid numbers to write are 0
+and 2 to 36 (*not* 1).
 
 * 'pwd'         ( -- pointer )
 
@@ -710,11 +746,13 @@ The stack comment documents this word entirely.
 
 * 'rot'         ( x y z -- z x y )
 
-The stack comment documents this word entirely.
+The stack comment documents this word entirely. This word rotates three items
+on the variable stack.
 
 * '-rot'        ( x y z -- y z x )
 
-The stack comment documents this word entirely.
+The stack comment documents this word entirely. This word rotates three items
+on the variable stack, in the opposite direction of "rot".
 
 * '::'          ( -- )
 
@@ -727,7 +765,7 @@ documented within that file and so as to avoid duplication will not be
 mentioned here. This file is *not* loaded automatically, and so should be run
 like this (on Unix systems):
 
-	./forth start.4th /dev/stdin
+        ./forth start.4th /dev/stdin
 
 ## Glossary of Forth terminology 
 
@@ -811,14 +849,14 @@ Some important deviations are:
 
 * immediate
 
-In most forths the "immediate" word goes after a words definition instead of
+In most Forths the "immediate" word goes after a words definition instead of
 inside it like this:
 
-	: word ... ; immediate
+        : word ... ; immediate
 
 Instead of how this interpreter does it:
 
-	: word immediate ... ;
+        : word immediate ... ;
 
 
 This behavior will not be changed.
@@ -837,7 +875,23 @@ Most Forths are case insensitive, however this forth is not, and by default all
 core words are lower case, this will not be changed to be more compliant and is
 by design.
 
-## To-do and notes
+* ok
+
+'ok' is not printed after a successful command execution , this is for two 
+reasons, firstly because of limitations in the implementation, and secondly 
+there is no reason for cluttering up the output window with this. The
+implementation should be silent by default.
+
+## Miscellaneous 
+
+### Bugs and features
+
+If you find a bug, or would like to request a new feature, please Email me at:
+
+        howe.r.j.89 [ at ] gmail . com
+
+The interpreter has not been battle hardened yet so there is likely behavior
+that is non-standard (for no reason) or just outright incorrect.
 
 ### To-Do
 * Port this to a micro controller, and a Linux kernel module device

@@ -287,9 +287,9 @@ hider state!
 
 hider write-quote 
 
-: array    ( create a array )    create allot does> + ;
-: variable ( create a variable ) create ,     does>   ;
-: constant ( crate a constant )  create ,     does> @ ;
+: array    ( length --  :create a array )           create allot does> + ;
+: variable ( initial-value -- : create a variable ) create ,     does>   ;
+: constant ( value -- : crate a constant )          create ,     does> @ ;
 
 : do immediate
 	' swap ,      ( compile 'swap' to swap the limit and start )
@@ -298,8 +298,8 @@ hider write-quote
 	here          ( save this address so we can branch back to it )
 ;
 
-( TODO: Simplify )
 : addi 
+	( TODO: Simplify )
 	r@ 1-        ( get the pointer to i )
 	+!           ( add value to it )
 	r@ 1- @      ( find the value again )
@@ -617,14 +617,13 @@ if true )
 		reset-nest
 		begin
 			find ( read in a word, we'll try to process it )
-			dup [ find [if]   ] literal = if nest 1+! then
-			dup else-word @ = nest @ 1 = and if exit then
-			    [ find [then] ] literal = if nest 1-! then
+			dup [ find [if]   ] literal =     if nest 1+! then
+			dup else-word @ = nest @ 1  = and if exit then
+			    [ find [then] ] literal =     if nest 1-! then
 			nest @ 0=
 		until
 	then
 ;
-
 
 : [else]
 	reset-nest
@@ -721,6 +720,102 @@ char ; constant ';'
 
 hider CSI
 
+: registers ( -- )
+	( print out important registers and information about the
+	virtual machine )
+	" return stack pointer: " r@       . cr
+	" dictionary pointer    " here     . cr
+	" previous word:        " pwd   @  . cr
+	" state:                " state @  . cr
+	" base:                 " base  @  . cr
+	" depth:                " depth    . cr
+	" cell size (in bytes): " size     . cr
+	" last cell address:    " max-core . cr
+	" unused cells:         " unused   . cr
+	( We could determine if we are reading from stdin by looking
+	at the stdin register )
+	" current input source: " source-id -1 = if " string" else " file" then cr
+	( depth if " Stack: " .s then )
+	( " Raw Register Values: " cr 0 31 dump )
+;
+
+: y/n? ( -- bool : ask a yes or no question )
+	key drop
+	" y/n? "
+	begin
+		key
+		dup 
+		[char] y = if true  exit then
+		[char] n = if false exit then
+		" y/n? "
+	again
+;
+
+: TrueFalse if " true" else " false" then ;
+: >instruction ( extract instruction from instruction field ) 0x1f and ;
+
+: word-printer
+	( this word expects a pointer to an execution token and must determine
+	whether the word is immediate, and whether it has no name)
+
+	0
+;
+
+: decompile ( code-field-ptr -- )
+	( This word expects a pointer to the code field of a word, it
+	decompiles a words code field, it needs a lot of work however.
+	There are several complications to implementing this decompile
+	function, ":noname", "branch" and literals.
+
+	This word really needs CASE statements before it can be
+	completed, as it stands the function is not complete
+
+	:noname  This has a marker before its code field of -1 which
+	         cannot occur normally
+	literals Literals can be distinguished by their low value,
+	         which cannot possibly be a word with a name, the
+	         next field is the actual literal 
+	branch   branches are used to skip over data, but also for
+	         some branch constructs, any data in between can only
+	         be printed out generally speaking )
+	255 0
+	do
+		tab 
+		dup @ push-location = if " literal:" tab 1+ dup @ . 1+ cr then
+		dup @ [ find branch execution-token ] literal = if " branch:" tab 1+ dup @ . 1+ cr then
+		dup @ [ find exit execution-token ] literal = if " exit" i cr leave  then
+		cr
+		1+
+	loop
+	cr
+	255 = if " decompile limit exceeded" cr then
+	drop
+;
+
+: see 
+	( decompile a word )
+	find 
+	dup dictionary-start < if drop " word not found" cr exit then
+	1-
+	dup " name:          " name print cr
+	dup " word start:    " name chars . cr
+	dup " previous word: " @ . cr
+	dup " immediate:     " 1+ @ >instruction compile-instruction <> TrueFalse cr
+	dup " instruction:   " execution-token @ >instruction . cr ( @todo lookup instruction name )
+	dup " defined:       " execution-token @ >instruction run-instruction = dup TrueFalse cr
+	if
+		execution-token 1+
+		" code field:    " cr
+		decompile
+	else
+		drop
+	then
+;
+see +
+
+hider TrueFalse
+hider >instruction
+
 ( \ Test code
 
 : ' immediate 
@@ -738,8 +833,6 @@ hider CSI
 	then 
 	[ unhide ] 
 ;
-
-
 
 0x8000              constant hello-buffer
 hello-buffer chars  constant move-1-buffer
@@ -858,7 +951,6 @@ hider  execution-token
 	* Decompiler "see" http://lars.nocrew.org/dpans/dpans15.htm
 	* FORTH, VOCABULARY 
 	* Clean up "create" and "does>"
-	* Find does not always return an execution token...
 	* "Value", "To", "Is"
 	* Check "fill", "erase", "'", other words
 )
