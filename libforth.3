@@ -1,8 +1,8 @@
 .\" Manpage for libforth C API
 .\" Contact howe.r.j.89@gmail.com to correct errors or typos.
-.TH man 1 "07 Mar 2015" "1.0.0" "FORTH library man page"
+.TH libforth 1 "10 May 2016" "1.0.0" "Forth library man page"
 .SH NAME
-FORTH \- C API for a small FORTH interpreter
+Forth \- C API for a small Forth interpreter
 .SH SYNOPSIS
 #include <libforth.h>
 .SH DESCRIPTION
@@ -14,27 +14,35 @@ the "main_forth()" function here.
 If for some reason forth(1) has not been installed along side with this
 library a simple interpreter can be built using the "main_forth()" function:
 
-.RS
+.RS 3
 #include <libforth.h>
-.P
+
 int main(int argc, char **argv)
-.P
+
 {
-.P
-        return main_forth(argc,argv); 
-.P
+
+        return main_forth(argc, argv); 
+
 }
 .RE
 
+.SH COPYRIGHT
+
+This program is distributed under the LGPL 2.1, or optionally any later
+version.
+
 .SH SEE ALSO
 forth(1)
-.SH BUGS
-It is possible to cause access invalid memory from within the FORTH virtual
-machine, but only invalid FORTH programs can do this (or FORTH programs
-that are too large, in keeping with FORTH philosophy these are also invalid).
 
-Some FORTH words maybe implemented incorrectly, but given the source for
-the library is less than 300 lines of C you should be able to work out
-which!
+For more information, including a tutorial, see 
+.B https://github.com/howerj/libforth
+ 
+.SH BUGS
+It is possible to cause access invalid memory from within the Forth virtual
+machine, but only invalid Forth programs can do this (or Forth programs
+that are too large, in keeping with Forth philosophy these are also invalid).
+
+Some Forth words maybe implemented incorrectly, but given the source for
+the everything is so small it should be easy to work out why.
 .SH AUTHOR
 Richard James Howe (howe.r.j.89@gmail.com)

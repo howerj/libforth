@@ -214,7 +214,7 @@ int forth_define_constant(forth_t *o, const char *name, forth_cell_t c)
 }
 
 static void forth_make_default(forth_t *o, size_t size, FILE *in, FILE *out)
-{
+{ /* set defaults for a forth structure for initialization or reload */
 	o->core_size     = size;
 	o->m[VSTACK_SIZE] = size / 64;
 	o->s             = (uint8_t*)(o->m + STRING_OFFSET); /*string store offset into CORE, skip registers*/
@@ -251,7 +251,7 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out)
 	memcpy(o->header, header, sizeof(header));
 	m = o->m;       /*a local variable only for convenience*/
 
-	o->m[PWD]        = 0;  /*special terminating pwd value*/
+	o->m[PWD]   = 0;  /*special terminating pwd value*/
 	w = m[DIC]  = DICTIONARY_START; /*initial dictionary offset, skip registers and string offset*/
 	m[m[DIC]++] = READ; /*create a special word that reads in FORTH*/
 	m[m[DIC]++] = RUN;  /*call the special word recursively*/
@@ -345,7 +345,6 @@ int forth_run(forth_t *o)
 { 
 	assert(o);
 	forth_cell_t *m, pc, *S, I, f, w;
-
 	if(o->m[INVALID] || setjmp(o->error))
 		return -(o->m[INVALID] = 1);
 	m = o->m, S = o->S, I = o->m[INSTRUCTION], f = o->m[TOP]; 
@@ -459,52 +458,58 @@ void forth_set_args(forth_t *o, int argc, char **argv)
 }
 
 int main_forth(int argc, char **argv) 
-{ 	/*options: ./forth (-d)? (file)* */
-	int dump = 0, rval = 0, c;      /*dump on?, return value, temp char*/
-	FILE *in = NULL, *core_file = NULL; /*current input file, dump file*/
-	forth_t *o = NULL;		/*our FORTH environment*/
-	assert(argv);
-	if(argc > 2 && !strcmp(argv[1], "-l")) {
-		if(!(o = forth_load_core(argv[2], CORE_SIZE)))
-			return -1; /**@todo continue on with command line opts*/
-		rval = forth_run(o);
-		goto END;
-	} else {
-		if(!(o = forth_init(CORE_SIZE, stdin, stdout))) 
-			return -1; /*setup env*/
+{
+	FILE *in = NULL, *core_file = NULL;
+	int dump = 0, readterm = 0, rval = 0, i = 1, c = 0;
+	forth_t *o = NULL;
+	for(i = 1; i < argc && argv[i][0] == '-'; i++) {
+		switch(argv[i][1]) {
+		case '\0': goto done; /* stop argument processing */
+		case 'd':  dump = 1;     break;
+		case 't':  readterm = 1; break;
+		case 'l':  if(o || i >= (argc - 1))
+				   goto fail;
+			   if(!(o = forth_load_core(argv[++i], CORE_SIZE))) {
+				   fprintf(stderr, "%s: core load failed\n", argv[i]);
+				   return -1;
+			   }
+			   break;
+		default:
+		fail:
+			fprintf(stderr, "usage: %s [-dt] [-l file] [-] file...\n", argv[0]);
+			return -1;
+		}
+	}
+done:
+	readterm = i == argc || readterm; /* if no files are given, read stdin */
+	if(!o && !(o = forth_init(CORE_SIZE, stdin, stdout))) {
+		fprintf(stderr, "forth initialization failed\n");
+		return -1;
 	}
 	forth_set_args(o, argc, argv);
-	if(argc > 1 && !strcmp(argv[1], "-d")) /*turn core dump on*/
-			argv++, argc--, dump = 1;
-	if(argc > 1) { /**@todo better command linep parsing*/
-		while(++argv, --argc) {
-			if(!strcmp(argv[0], "-"))
-				forth_set_file_input(o, in = stdin);
-			else
-				forth_set_file_input(o, in = fopen_or_die(argv[0], "rb"));
-			if((c = fgetc(in)) == '#') { /*shebang line '#!' */  
-				while(((c = forth_get_char(o)) > 0) && (c != '\n')); 
-			} else if (c == EOF) { 
-				fclose_input(&in);
-				continue; 
-			} else {
-				ungetc(c, in);
-			}
-			if((rval = forth_run(o)) < 0) 
-				goto END;
-			fclose_input(&in);
-		}
-	} else { 
-		rval = forth_run(o); /*read from defaults, stdin*/
+	for(; i < argc; i++) {
+		forth_set_file_input(o, in = fopen_or_die(argv[i], "rb"));
+		if((c = fgetc(in)) == '#') /*shebang line '#!' */  
+			while(((c = forth_get_char(o)) > 0) && (c != '\n'));
+		else if(c == EOF)
+			goto close;
+		else
+			ungetc(c, in);
+		if((rval = forth_run(o)) < 0) 
+			goto end;
+close:
+		fclose_input(&in);
 	}
-END:	
-	fclose_input(&in);
-	if(dump) { 
-		if(forth_dump_core(o, core_file = fopen_or_die(core_file_name, "wb")) < 0)
-			return -1;
+	if(readterm) {
+		forth_set_file_input(o, stdin);
+		rval = forth_run(o);
+	}
+end:	fclose_input(&in);
+	if(dump) {
+		forth_dump_core(o, core_file = fopen_or_die(core_file_name, "wb"));
 		fclose(core_file); 
 	}
-	forth_free(o), o = NULL;
+	forth_free(o);
 	return rval;
 }
 

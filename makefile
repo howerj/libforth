@@ -51,7 +51,7 @@ dist: $(TARGET) doc
 	tar zcf $(TARGET).tgz $(TARGET) *.htm *.so *.a *.h *.4th
 
 run: $(TARGET)
-	@./$^ start.4th -
+	@./$^ -t start.4th
 test: unit
 	./$^
 
