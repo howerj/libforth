@@ -1,7 +1,7 @@
 /** @file       libforth.c
  *  @brief      A FORTH library, based on <www.ioccc.org/1992/buzzard.2.c>
  *  @author     Richard James Howe.
- *  @copyright  Copyright 2015 Richard James Howe.
+ *  @copyright  Copyright 2015,2016 Richard James Howe.
  *  @license    LGPL v2.1 or later version
  *  @email      howe.r.j.89@gmail.com 
  *  Please consult "libforth.md" and "start.4th" for more information **/
@@ -25,6 +25,8 @@
 #define INSTRUCTION_MASK    (0x7f)
 #define VERIFY(X)           do { if(!(X)) { abort(); } } while(0)
 #define instruction(k)      ((k) & INSTRUCTION_MASK)
+#define IS_BIG_ENDIAN       (!(union { uint16_t u16; unsigned char c; }){ .u16 = 1 }.c)
+#define CORE_VERSION        (0x01u) /**< version of the forth core file */
 
 static const char *core_file_name = "forth.core";
 static const char *initial_forth_program = "\n\
@@ -41,15 +43,14 @@ static const char *initial_forth_program = "\n\
 : tuck swap over ; : nip swap drop ; : :: [ find : , ] ;";
 
 struct forth {          /**< The FORTH environment is contained in here*/
-	uint8_t header[16]; /**< header for when writing file to disk */
+	uint8_t header[8]; /**< header for when writing object to disk */
 	size_t core_size;   /**< size of VM */
-	size_t stack_size;  /**< size of variable and return stacks */
 	jmp_buf error;      /**< place to jump to on error */
 	uint8_t *s;         /**< convenience pointer for string input buffer */
 	clock_t start_time; /**< used for "clock", start of initialization */
 	forth_cell_t *S;    /**< stack pointer */
 	forth_cell_t m[];   /**< Forth Virtual Machine memory */
-};
+} /*__attribute__((packed)); // not always portable */;
 
 enum registers    { /* virtual machine registers */
 	DIC    = 6,      /**< dictionary pointer */
@@ -73,6 +74,7 @@ enum registers    { /* virtual machine registers */
 	INVALID = 24,    /**< if non zero, this interpreter is invalid */
 	TOP    = 25,     /**< *stored* version of top of stack */
 	INSTRUCTION = 26, /**< *stored* version of instruction pointer*/
+	VSTACK_SIZE = 27  /**< size of the variable stack (special treatment compared to RSTK)*/
 };
 enum input_stream { FILE_IN, STRING_IN = -1 };
 enum instructions { PUSH,COMPILE,RUN,DEFINE,IMMEDIATE,READ,LOAD,STORE,
@@ -85,8 +87,8 @@ static char *names[] = { "read","@","!","-","+","and","or","xor","invert",
 ".","'", ",","=", "swap","dup","drop", "over", "save","load","find",
 "print","depth", "clock", NULL }; 
 
-static int forth_get_char(forth_t *o) /**< get a char from string-in or a file*/
-{
+static int forth_get_char(forth_t *o) 
+{ /* get a char from string input or a file */
 	switch(o->m[SOURCE_ID]) {
 	case FILE_IN:   return fgetc((FILE*)(o->m[FIN]));
 	case STRING_IN: return o->m[SIDX] >= o->m[SLEN] ? EOF : ((char*)(o->m[SIN]))[o->m[SIDX]++];
@@ -94,19 +96,8 @@ static int forth_get_char(forth_t *o) /**< get a char from string-in or a file*/
 	}
 } 
 
-static FILE *fopen_or_die(const char *name, char *mode) 
-{
-	FILE *file = fopen(name, mode);
-	if(!file) {
-		fprintf(stderr, "( fatal 'file-open \"%s: %s\" )\n", name, errno ? strerror(errno): "unknown");
-		exit(EXIT_FAILURE);
-	}
-	return file;
-}
-
-/*get a word (space delimited, up to 31 chars) from a FILE* or string-in*/
 static int forth_get_word(forth_t *o, uint8_t *p) 
-{ 
+{ /*get a word (space delimited, up to 31 chars) from a FILE* or string-in*/ 
 	int n = 0;
 	char fmt[16] = { 0 };
 	sprintf(fmt, "%%%ds%%n", MAX_WORD_LENGTH - 1);
@@ -121,7 +112,7 @@ static int forth_get_word(forth_t *o, uint8_t *p)
 } 
 
 static void compile(forth_t *o, forth_cell_t code, char *str) 
-{ 
+{ /* create a new forth word header */
 	assert(o && code < LAST);
 	forth_cell_t *m = o->m, header = m[DIC], l = 0;
 	/*FORTH header structure*/
@@ -137,7 +128,7 @@ static void compile(forth_t *o, forth_cell_t code, char *str)
 }
 
 static int blockio(forth_t *o, void *p, forth_cell_t poffset, forth_cell_t id, char rw) 
-{ 
+{ /* simple block I/O, could be replaced with making fopen/fclose available to interpreter */
 	char name[16] = {0}; /* XXXX + ".blk" + '\0' + a little spare change */
 	FILE *file = NULL;
 	size_t n;
@@ -163,7 +154,7 @@ static int numberify(forth_t *o, forth_cell_t *n, const char *s)
 }
 
 static forth_cell_t find(forth_t *o) 
-{ 
+{ /* find a word in the Forth dictionary, which is a linked list, skipping hidden words */
 	forth_cell_t *m = o->m, w = m[PWD], len = WORD_LENGTH(m[w+1]);
 	for (;w > DICTIONARY_START && (strcmp((char*)o->s,(char*)(&o->m[w - len])) || WORD_HIDDEN(m[w+1]));) {
 		w = m[w]; 
@@ -173,17 +164,13 @@ static forth_cell_t find(forth_t *o)
 }
 
 static int print_cell(forth_t *o, forth_cell_t f, int tab)
-{
-	// char *fmt = o->m[BASE] == 16 ? "0x%" PRIxCell "%s" : "%" PRIuCell "%s";
-	// return fprintf((FILE*)(o->m[FOUT]), fmt, f, tab ? "\t" : "");
-	if(o->m[BASE] == 16)
-		return fprintf((FILE*)(o->m[FOUT]), "0x%.*" PRIxCell "%s", 2*(int)sizeof(forth_cell_t), f, tab ? "\t" : "");
-	else
-		return fprintf((FILE*)(o->m[FOUT]), "%" PRIuCell "%s", f, tab ? "\t" : "");
+{ /* print out a number, optional tab after number is printed */
+	char *fmt = o->m[BASE] == 16 ? "0x%" PRIxCell "%s" : "%" PRIuCell "%s";
+	return fprintf((FILE*)(o->m[FOUT]), fmt, f, tab ? "\t" : "");
 }
 
 void forth_set_file_input(forth_t *o, FILE *in) 
-{ /** @todo o->sin should be set to a program that exits */
+{
 	assert(o && in); 
 	o->m[SOURCE_ID] = FILE_IN;
 	o->m[FIN]       = (forth_cell_t)in; 
@@ -212,7 +199,7 @@ int forth_eval(forth_t *o, const char *s)
 }
 
 int forth_dump_core(forth_t *o, FILE *dump) 
-{ 
+{
 	assert(o && dump);
 	size_t w = sizeof(*o) + sizeof(forth_cell_t) * o->core_size;
 	return w != fwrite(o, 1, w, dump) ? -1: 0; 
@@ -229,16 +216,16 @@ int forth_define_constant(forth_t *o, const char *name, forth_cell_t c)
 static void forth_make_default(forth_t *o, size_t size, FILE *in, FILE *out)
 {
 	o->core_size     = size;
-	o->stack_size    = size / 64;
+	o->m[VSTACK_SIZE] = size / 64;
 	o->s             = (uint8_t*)(o->m + STRING_OFFSET); /*string store offset into CORE, skip registers*/
 	o->m[FOUT]       = (forth_cell_t)out;
 	o->m[START_ADDR] = (forth_cell_t)&(o->m);
 	o->m[STDIN]      = (forth_cell_t)stdin;
 	o->m[STDOUT]     = (forth_cell_t)stdout;
 	o->m[STDERR]     = (forth_cell_t)stderr;
-	o->m[RSTK]       = size - o->stack_size;     /*set up return stk pointer*/
+	o->m[RSTK]       = size - o->m[VSTACK_SIZE];     /*set up return stk pointer*/
 	o->m[ARGC] = o->m[ARGV] = 0;
-	o->S             = o->m + size - (2 * o->stack_size); /*set up variable stk pointer*/
+	o->S             = o->m + size - (2 * o->m[VSTACK_SIZE]); /*set up variable stk pointer*/
 	o->start_time    = clock();
 	forth_set_file_input(o, in);  /*set up input after our eval*/
 }
@@ -248,10 +235,20 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out)
 	assert(in && out);
 	forth_cell_t *m, i, w;
 	forth_t *o;
+	unsigned char header[8] = {   /* header at start of struct */
+		0xFF, '4','T','H',    /* file magic number */
+		sizeof(forth_cell_t), /* size is needed for parsing rest of header if dumped */
+		CORE_VERSION,         /* version of forth core*/
+		0,                    /* endianess filled in later */
+		0xFF                  /* end header */
+	};
+	header[6] = !IS_BIG_ENDIAN; /* complete header with endianess */
+
 	VERIFY(size >= MINIMUM_CORE_SIZE);
 	if(!(o = calloc(1, sizeof(*o) + sizeof(forth_cell_t)*size))) 
 		return NULL;
 	forth_make_default(o, size, in, out);
+	memcpy(o->header, header, sizeof(header));
 	m = o->m;       /*a local variable only for convenience*/
 
 	o->m[PWD]        = 0;  /*special terminating pwd value*/
@@ -269,7 +266,7 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out)
 
 	VERIFY(forth_eval(o, initial_forth_program) >= 0);
 	VERIFY(forth_define_constant(o, "size",          sizeof(forth_cell_t)) >= 0);
-	VERIFY(forth_define_constant(o, "stack-start",   size - (2 * o->stack_size)) >= 0);
+	VERIFY(forth_define_constant(o, "stack-start",   size - (2 * o->m[VSTACK_SIZE])) >= 0);
 	VERIFY(forth_define_constant(o, "max-core",      size) >= 0);
 	VERIFY(forth_define_constant(o, "source-id-reg", SOURCE_ID) >= 0);
 
@@ -277,8 +274,18 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out)
 	return o;
 }
 
+static FILE *fopen_or_die(const char *name, char *mode) 
+{
+	FILE *file = fopen(name, mode);
+	if(!file) {
+		fprintf(stderr, "( fatal 'file-open \"%s: %s\" )\n", name, errno ? strerror(errno): "unknown");
+		exit(EXIT_FAILURE);
+	}
+	return file;
+}
+
 static forth_t *forth_load_core(const char *name, size_t size)
-{ /**@todo make a more generic version that parses the header, and add it to the API */
+{ /* load a forth core dump for execution, this could use work */
 	forth_t *o;
 	FILE *file = fopen_or_die(name, "rb");
 	size_t w = sizeof(*o) + (sizeof(forth_cell_t) * size);
@@ -422,7 +429,7 @@ int forth_run(forth_t *o)
 			      f = find(o);
 			      f = f < DICTIONARY_START ? 0 : f;      break;
 		case PRINT:   fputs(((char*)m)+f, (FILE*)(o->m[FOUT])); f = *S--; break;
-		case DEPTH:   w = S - (m + o->core_size - (2 * o->stack_size));
+		case DEPTH:   w = S - (m + o->core_size - (2 * o->m[VSTACK_SIZE]));
 			      *++S = f;
 			      f = w;                                 break;
 		case CLOCK:   *++S = f;
@@ -481,7 +488,7 @@ int main_forth(int argc, char **argv)
 				fclose_input(&in);
 				continue; 
 			} else {
-				ungetc(c,in);
+				ungetc(c, in);
 			}
 			if((rval = forth_run(o)) < 0) 
 				goto END;

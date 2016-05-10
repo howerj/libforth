@@ -1,7 +1,7 @@
 /** @file       libforth.h
  *  @brief      A FORTH library, based on <www.ioccc.org/1992/buzzard.2.c>
  *  @author     Richard James Howe.
- *  @copyright  Copyright 2015 Richard James Howe.
+ *  @copyright  Copyright 2015,2016 Richard James Howe.
  *  @license    LGPL v2.1 or later version
  *  @email      howe.r.j.89@gmail.com **/
 #ifndef FORTH_H

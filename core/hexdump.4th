@@ -1,5 +1,5 @@
 #!./forth
-( A simple hexdump utility )
+( A simple hexdump utility : work in progress )
 : char key drop key ;
 : literal 2 , , ;
 : ':' [ char : literal ] ;
