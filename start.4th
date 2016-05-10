@@ -1,8 +1,4 @@
 #!./forth
-
-( @todo Different machine word sizes need testing, which may affect
-  functions which access memory by character )
-
 ( Welcome to libforth, A dialect of Forth. Like all versions of Forth this 
 version is  a little idiosyncratic, but how the interpreter works is
 documented here and in various other files.
@@ -317,6 +313,7 @@ hider write-quote
 : loop immediate push-location , 1 , ' addi , here - , ;
 : +loop immediate ' addi , here - , ;
 hider inci 
+hider addi
 
 : leave
 	( break out of a do-loop construct )
@@ -811,7 +808,7 @@ hider CSI
 		drop
 	then
 ;
-
+hider decompile
 hider TrueFalse
 hider >instruction
 

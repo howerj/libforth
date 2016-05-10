@@ -41,15 +41,13 @@ static const char *initial_forth_program = "\n\
 : tuck swap over ; : nip swap drop ; : :: [ find : , ] ;";
 
 struct forth {          /**< The FORTH environment is contained in here*/
-	unsigned invalid; /**< if true, this object is invalid*/
-	jmp_buf error;  /**< place to jump to on error */
-	uint8_t *s;     /**< convenience pointer for string input buffer*/
+	uint8_t header[16]; /**< header for when writing file to disk */
 	size_t core_size;   /**< size of VM */
 	size_t stack_size;  /**< size of variable and return stacks */
+	jmp_buf error;      /**< place to jump to on error */
+	uint8_t *s;         /**< convenience pointer for string input buffer */
 	clock_t start_time; /**< used for "clock", start of initialization */
-	forth_cell_t I;     /**< instruction pointer*/
-	forth_cell_t top;   /**< stored top of stack */
-	forth_cell_t *S;    /**< stack pointer*/
+	forth_cell_t *S;    /**< stack pointer */
 	forth_cell_t m[];   /**< Forth Virtual Machine memory */
 };
 
@@ -71,7 +69,10 @@ enum registers    { /* virtual machine registers */
 	STDERR = 20,     /**< file pointer to stderr */
 	ARGC   = 21,     /**< argument count */
 	ARGV   = 22,     /**< arguments */
-	DEBUG  = 23      /**< turn debugging on/off if enabled*/
+	DEBUG  = 23,     /**< turn debugging on/off if enabled*/
+	INVALID = 24,    /**< if non zero, this interpreter is invalid */
+	TOP    = 25,     /**< *stored* version of top of stack */
+	INSTRUCTION = 26, /**< *stored* version of instruction pointer*/
 };
 enum input_stream { FILE_IN, STRING_IN = -1 };
 enum instructions { PUSH,COMPILE,RUN,DEFINE,IMMEDIATE,READ,LOAD,STORE,
@@ -85,7 +86,7 @@ static char *names[] = { "read","@","!","-","+","and","or","xor","invert",
 "print","depth", "clock", NULL }; 
 
 static int forth_get_char(forth_t *o) /**< get a char from string-in or a file*/
-{ /**@todo The input system needs rethinking */ 
+{
 	switch(o->m[SOURCE_ID]) {
 	case FILE_IN:   return fgetc((FILE*)(o->m[FIN]));
 	case STRING_IN: return o->m[SIDX] >= o->m[SLEN] ? EOF : ((char*)(o->m[SIN]))[o->m[SIDX]++];
@@ -173,8 +174,12 @@ static forth_cell_t find(forth_t *o)
 
 static int print_cell(forth_t *o, forth_cell_t f, int tab)
 {
-	char *fmt = o->m[BASE] == 16 ? "0x%" PRIxCell "%s" : "%" PRIuCell "%s";
-	return fprintf((FILE*)(o->m[FOUT]), fmt, f, tab ? "\t" : "");
+	// char *fmt = o->m[BASE] == 16 ? "0x%" PRIxCell "%s" : "%" PRIuCell "%s";
+	// return fprintf((FILE*)(o->m[FOUT]), fmt, f, tab ? "\t" : "");
+	if(o->m[BASE] == 16)
+		return fprintf((FILE*)(o->m[FOUT]), "0x%.*" PRIxCell "%s", 2*(int)sizeof(forth_cell_t), f, tab ? "\t" : "");
+	else
+		return fprintf((FILE*)(o->m[FOUT]), "%" PRIuCell "%s", f, tab ? "\t" : "");
 }
 
 void forth_set_file_input(forth_t *o, FILE *in) 
@@ -232,6 +237,7 @@ static void forth_make_default(forth_t *o, size_t size, FILE *in, FILE *out)
 	o->m[STDOUT]     = (forth_cell_t)stdout;
 	o->m[STDERR]     = (forth_cell_t)stderr;
 	o->m[RSTK]       = size - o->stack_size;     /*set up return stk pointer*/
+	o->m[ARGC] = o->m[ARGV] = 0;
 	o->S             = o->m + size - (2 * o->stack_size); /*set up variable stk pointer*/
 	o->start_time    = clock();
 	forth_set_file_input(o, in);  /*set up input after our eval*/
@@ -252,9 +258,9 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out)
 	w = m[DIC]  = DICTIONARY_START; /*initial dictionary offset, skip registers and string offset*/
 	m[m[DIC]++] = READ; /*create a special word that reads in FORTH*/
 	m[m[DIC]++] = RUN;  /*call the special word recursively*/
-	o->I = m[DIC];      /*instruction stream points to our special word*/
+	o->m[INSTRUCTION] = m[DIC]; /*instruction stream points to our special word*/
 	m[m[DIC]++] = w;    /*recursive call to that word*/
-	m[m[DIC]++] = o->I - 1; /*execute read*/
+	m[m[DIC]++] = o->m[INSTRUCTION] - 1; /*execute read*/
 
 	compile(o, DEFINE,    ":");         /*immediate word*/
 	compile(o, IMMEDIATE, "immediate"); /*immediate word*/
@@ -294,15 +300,15 @@ void forth_free(forth_t *o)
 void forth_push(forth_t *o, forth_cell_t f)
 {
 	assert(o && o->S < o->m + o->core_size);
-	*++(o->S) = o->top;
-	o->top = f;
+	*++(o->S) = o->m[TOP];
+	o->m[TOP] = f;
 }
 
 forth_cell_t forth_pop(forth_t *o)
 {
 	assert(o && o->S > o->m);
-	forth_cell_t f = o->top;
-	o->top = *(o->S)--;
+	forth_cell_t f = o->m[TOP];
+	o->m[TOP] = *(o->S)--;
 	return f;
 }
 
@@ -333,9 +339,9 @@ int forth_run(forth_t *o)
 	assert(o);
 	forth_cell_t *m, pc, *S, I, f, w;
 
-	if(o->invalid || setjmp(o->error))
-		return -(o->invalid = 1);
-	m = o->m, S = o->S, I = o->I, f = o->top; 
+	if(o->m[INVALID] || setjmp(o->error))
+		return -(o->m[INVALID] = 1);
+	m = o->m, S = o->S, I = o->m[INSTRUCTION], f = o->m[TOP]; 
 
 	for(;(pc = m[ck(I++)]);) { /* Threaded code interpreter */
 		assert((S > m) && (S < (m + o->core_size)));
@@ -427,7 +433,7 @@ int forth_run(forth_t *o)
 			longjmp(o->error, 1);
 		}
 	}
-end:	o->top = f;
+end:	o->m[TOP] = f;
 	return 0;
 }
 
