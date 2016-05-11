@@ -753,8 +753,8 @@ hider CSI
 
 : word-printer
 	( this word expects a pointer to an execution token and must determine
-	whether the word is immediate, and whether it has no name)
-
+	whether the word is immediate, and whether it has no name, this
+	needs to be implemented )
 	0
 ;
 
@@ -762,19 +762,24 @@ hider CSI
 	( This word expects a pointer to the code field of a word, it
 	decompiles a words code field, it needs a lot of work however.
 	There are several complications to implementing this decompile
-	function, ":noname", "branch" and literals.
+	function, ":noname", "branch", multiple "exit" commands, and literals.
 
 	This word really needs CASE statements before it can be
 	completed, as it stands the function is not complete
 
 	:noname  This has a marker before its code field of -1 which
 	         cannot occur normally
-	literals Literals can be distinguished by their low value,
-	         which cannot possibly be a word with a name, the
-	         next field is the actual literal 
 	branch   branches are used to skip over data, but also for
 	         some branch constructs, any data in between can only
-	         be printed out generally speaking )
+	         be printed out generally speaking 
+	exit     It might be difficult to determine when a word actually
+	         actually stops, one way of fixing this is to write 
+		 something after the terminating exit [placed by ';'],
+		 such as all bits set, which is not something that
+	         can occur normally
+	literals Literals can be distinguished by their low value,
+	         which cannot possibly be a word with a name, the
+	         next field is the actual literal )
 	255 0
 	do
 		tab 
@@ -788,6 +793,7 @@ hider CSI
 	255 = if " decompile limit exceeded" cr then
 	drop
 ;
+hider word-printer
 
 : see 
 	( decompile a word )

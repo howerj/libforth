@@ -156,7 +156,7 @@ static int numberify(forth_t *o, forth_cell_t *n, const char *s)
 static forth_cell_t find(forth_t *o) 
 { /* find a word in the Forth dictionary, which is a linked list, skipping hidden words */
 	forth_cell_t *m = o->m, w = m[PWD], len = WORD_LENGTH(m[w+1]);
-	for (;w > DICTIONARY_START && (strcmp((char*)o->s,(char*)(&o->m[w - len])) || WORD_HIDDEN(m[w+1]));) {
+	for (;w > DICTIONARY_START && (WORD_HIDDEN(m[w+1]) || strcmp((char*)o->s,(char*)(&o->m[w - len])));) {
 		w = m[w]; 
 		len = WORD_LENGTH(m[w+1]);
 	}
@@ -467,7 +467,7 @@ int main_forth(int argc, char **argv)
 	for(i = 1; i < argc && argv[i][0] == '-'; i++) {
 		switch(argv[i][1]) {
 		case '\0': goto done; /* stop argument processing */
-		case 'd':  dump = 1;     break;
+		case 'd':  dump     = 1; break;
 		case 't':  readterm = 1; break;
 		case 'l':  if(o || i >= (argc - 1))
 				   goto fail;

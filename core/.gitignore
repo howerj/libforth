@@ -1,5 +1,7 @@
 *.o
 *.log
+*.enc
+*.dec
 hexdump
 core
 rle
