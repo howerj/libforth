@@ -1,7 +1,7 @@
 RM=rm -f
-
-all: hexdump core
+CFLAGS=-Wall -Wextra -std=c99
+TARGETS=hexdump core rle
+all: hexdump core rle
 
 clean:
-	$(RM) hexdump
-	$(RM) core
+	${RM} ${TARGETS}

@@ -45,7 +45,7 @@ static const char *initial_forth_program = "\n\
 struct forth {          /**< The FORTH environment is contained in here*/
 	uint8_t header[8]; /**< header for when writing object to disk */
 	size_t core_size;   /**< size of VM */
-	jmp_buf error;      /**< place to jump to on error */
+	jmp_buf *error;      /**< place to jump to on error */
 	uint8_t *s;         /**< convenience pointer for string input buffer */
 	clock_t start_time; /**< used for "clock", start of initialization */
 	forth_cell_t *S;    /**< stack pointer */
@@ -227,6 +227,7 @@ static void forth_make_default(forth_t *o, size_t size, FILE *in, FILE *out)
 	o->m[ARGC] = o->m[ARGV] = 0;
 	o->S             = o->m + size - (2 * o->m[VSTACK_SIZE]); /*set up variable stk pointer*/
 	o->start_time    = clock();
+	o->error         = calloc(sizeof(jmp_buf), 1);
 	forth_set_file_input(o, in);  /*set up input after our eval*/
 }
 
@@ -239,10 +240,9 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out)
 		0xFF, '4','T','H',    /* file magic number */
 		sizeof(forth_cell_t), /* size is needed for parsing rest of header if dumped */
 		CORE_VERSION,         /* version of forth core*/
-		0,                    /* endianess filled in later */
+		!IS_BIG_ENDIAN,       /* endianess of platform*/
 		0xFF                  /* end header */
 	};
-	header[6] = !IS_BIG_ENDIAN; /* complete header with endianess */
 
 	VERIFY(size >= MINIMUM_CORE_SIZE);
 	if(!(o = calloc(1, sizeof(*o) + sizeof(forth_cell_t)*size))) 
@@ -276,6 +276,7 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out)
 
 static FILE *fopen_or_die(const char *name, char *mode) 
 {
+	errno = 0;
 	FILE *file = fopen(name, mode);
 	if(!file) {
 		fprintf(stderr, "( fatal 'file-open \"%s: %s\" )\n", name, errno ? strerror(errno): "unknown");
@@ -301,6 +302,7 @@ static forth_t *forth_load_core(const char *name, size_t size)
 void forth_free(forth_t *o) 
 { 
 	assert(o); 
+	free(o->error);
 	free(o); 
 }
 
@@ -330,7 +332,7 @@ static forth_cell_t check_bounds(forth_t *o, forth_cell_t f, unsigned line)
 		fprintf(stderr, "\t( debug\t0x%" PRIxCell "\t%u )\n", f, line);
 	if(((forth_cell_t)f) >= o->core_size) {
 		fprintf(stderr, "( fatal \"bounds check failed: %" PRIuCell " >= %zu\" )\n", f, o->core_size);
-		longjmp(o->error, 1);
+		longjmp(*o->error, 1);
 	}
 	return f; 
 }
@@ -345,7 +347,7 @@ int forth_run(forth_t *o)
 { 
 	assert(o);
 	forth_cell_t *m, pc, *S, I, f, w;
-	if(o->m[INVALID] || setjmp(o->error))
+	if(o->m[INVALID] || setjmp(*o->error))
 		return -(o->m[INVALID] = 1);
 	m = o->m, S = o->S, I = o->m[INSTRUCTION], f = o->m[TOP]; 
 
@@ -395,7 +397,7 @@ int forth_run(forth_t *o)
 		case XOR:     f = *S-- ^ f;                          break;
 		case INV:     f = ~f;                                break;
 		case SHL:     f = *S-- << f;                         break;
-		case SHR:     f = (uint64_t)*S-- >> f;               break;
+		case SHR:     f = (forth_cell_t)*S-- >> f;           break;
 		case MUL:     f = *S-- * f;                          break;
 		case DIV:     if(f) 
 				      f = *S-- / f; 
@@ -436,7 +438,7 @@ int forth_run(forth_t *o)
 			                                             break;
 		default:      
 			fprintf(stderr, "( fatal 'illegal-op %" PRIuCell " )\n", w);
-			longjmp(o->error, 1);
+			longjmp(*o->error, 1);
 		}
 	}
 end:	o->m[TOP] = f;

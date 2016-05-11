@@ -27,3 +27,5 @@ latex
 *.db
 *.hex
 *.tgz
+callgrind.*
+cachegrind.*
