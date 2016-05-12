@@ -647,7 +647,9 @@ size 8 = [if] 0x01234567abcdef variable endianess [then]
 ;
 hider endianess
 
-( create a new variable "pad", which can be used as a scratch pad )
+( create a new variable "pad", which can be used as a scratch pad,
+  other versions of pad make it relative to the dictionary pointer
+  so modifying modifies the pad pointer )
 0 variable pad 32 allot
 
 : dump  ( addr u -- )
@@ -680,6 +682,14 @@ hider endianess
 		1
 	endif
 ;
+
+0 variable char-alignment
+: c, ( char c-addr -- : write a character into the dictionary )
+	char-alignment @ dup 1+ size mod char-alignment !
+	+
+	c!
+;
+hider char-alignment
 
 ( ANSI Escape Codes )
 27 constant 'escape'
@@ -940,20 +950,18 @@ hider  source-id-reg
 hider  execution-token 
 
 ( TODO
-	* Evaluate [this would require changes to the interpreter]
+	* Evaluate 
 	* By adding "c@" and "c!" to the interpreter I could remove print
 	* Add unit testing to the end of this file
-	* Word, Parse, ?do, repeat, while, Case statements
-	quite easily by implementing "count" in the start up code
+	* Word, Parse, repeat, while, Case statements, other forth words
 	* Try to simplify the definitions of write-string using "create" "does>"
 	and come up with a way of reusing code for "move", "cmove" and "cmove>",
-	for that matter "create" and "does>" could be simplified
 	* Add a dump core and load core to the interpreter?
 	* add "j" if possible to get outer loop context
 	* Decompiler "see" http://lars.nocrew.org/dpans/dpans15.htm
 	* FORTH, VOCABULARY 
-	* Clean up "create" and "does>"
 	* "Value", "To", "Is"
 	* Check "fill", "erase", "'", other words
+	* Make signed comparison operations
 )
 

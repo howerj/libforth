@@ -75,14 +75,24 @@ int forth_run(forth_t *o);
  *  @return  int This is an error code, less than one is an error. **/
 int forth_eval(forth_t *o, const char *s); 
 
-/** @brief   Dump the opaque FORTH object to file, this is a raw dump
- *           of the object and any pointers it may or may not have at
- *           the time of the dump. The contents of this dump are not
- *           guaranteed to have any specific format or structure.
+/** @brief   Save the opaque FORTH object to file, this file may be
+ *           loaded again with forth_load_core. The file passed in should
+ *           be have been opened up in binary mode ("wb"). These files
+ *           are not portable, files generated on machines with different
+ *           machine word sizes or endianess will not work with each
+ *           other.
  *  @param   o    The FORTH environment to dump. Caller frees. Asserted.
  *  @param   dump Core dump file handle ("wb"). Caller closes. Asserted.
  *  @return  int  An error code, negative on error. **/
-int forth_dump_core(forth_t *o, FILE *dump);
+int forth_save_core(forth_t *o, FILE *dump);
+
+/** @brief  Load a Forth file from disk, returning a forth object that
+ *          can be passed to forth_run.
+ *  @param  dump    a file handle opened on a Forth core dump, previously
+ *                  saved with forth_save_core, this must be opened
+ *                  in binary mode ("rb").
+ *  @return forth_t a reinitialized forth object, or NULL on failure*/
+forth_t *forth_load_core(FILE *dump);
 
 /** @brief   Define a new constant in an Forth environment.
  *  @param   o    Forth environment to define new constant in

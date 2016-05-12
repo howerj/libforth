@@ -17,14 +17,14 @@
 #define CORE_SIZE  ((UINT16_MAX + 1u) / 2u) /**< virtual machine memory size*/
 #define BLOCK_SIZE       (1024u) /**< size of forth block in bytes */
 #define STRING_OFFSET    (32u)   /**< offset into memory of string buffer*/
-#define MAX_WORD_LENGTH  (32u)   /**< maximum forth word length, must be < 255 */
+#define MAX_WORD_LENGTH  (32u)   /**< maximum word length, must be < 255 */
 #define DICTIONARY_START (STRING_OFFSET + MAX_WORD_LENGTH) /**< start of dic */
-#define WORD_LENGTH_OFFSET  (8)
+#define WORD_LENGTH_OFFSET  (8)  /**< bit offset for word length start*/
 #define WORD_LENGTH(FIELD1) (((FIELD1) >> WORD_LENGTH_OFFSET) & 0xff)
-#define WORD_HIDDEN(FIELD1) ((FIELD1) & 0x80)
+#define WORD_HIDDEN(FIELD1) ((FIELD1) & 0x80) /**< is a forth word hidden? */
 #define INSTRUCTION_MASK    (0x7f)
-#define VERIFY(X)           do { if(!(X)) { abort(); } } while(0)
 #define instruction(k)      ((k) & INSTRUCTION_MASK)
+#define VERIFY(X)           do { if(!(X)) { abort(); } } while(0)
 #define IS_BIG_ENDIAN       (!(union { uint16_t u16; unsigned char c; }){ .u16 = 1 }.c)
 #define CORE_VERSION        (0x01u) /**< version of the forth core file */
 
@@ -42,8 +42,17 @@ static const char *initial_forth_program = "\n\
 : lister swap begin line cr 2dup < until ; : allot here + h ! ;              \n\
 : tuck swap over ; : nip swap drop ; : :: [ find : , ] ;";
 
+enum header { MAGIC0, MAGIC1, MAGIC2, MAGIC4, CELL_SIZE, VERSION, ENDIAN, MAGIC7 };
+static const uint8_t header[MAGIC7+1] = {
+	0xFF, '4','T','H',    /* file magic number */
+	sizeof(forth_cell_t), /* size is needed for parsing rest of header if dumped */
+	CORE_VERSION,         /* version of forth core*/
+	-1,                   /* endianess of platform, filled in later*/
+	0xFF                  /* end header */
+};
+
 struct forth {          /**< The FORTH environment is contained in here*/
-	uint8_t header[8]; /**< header for when writing object to disk */
+	uint8_t header[sizeof(header)]; /**< header for when writing object to disk */
 	size_t core_size;   /**< size of VM */
 	jmp_buf *error;      /**< place to jump to on error */
 	uint8_t *s;         /**< convenience pointer for string input buffer */
@@ -198,13 +207,6 @@ int forth_eval(forth_t *o, const char *s)
 	return forth_run(o);
 }
 
-int forth_dump_core(forth_t *o, FILE *dump) 
-{
-	assert(o && dump);
-	size_t w = sizeof(*o) + sizeof(forth_cell_t) * o->core_size;
-	return w != fwrite(o, 1, w, dump) ? -1: 0; 
-}
-
 int forth_define_constant(forth_t *o, const char *name, forth_cell_t c)
 {
 	char e[MAX_WORD_LENGTH+32] = {0};
@@ -231,24 +233,22 @@ static void forth_make_default(forth_t *o, size_t size, FILE *in, FILE *out)
 	forth_set_file_input(o, in);  /*set up input after our eval*/
 }
 
+static void make_header(uint8_t *dst)
+{
+	memcpy(dst, header, sizeof(header));
+	dst[ENDIAN] = !IS_BIG_ENDIAN; /*fill in endianess*/
+}
+
 forth_t *forth_init(size_t size, FILE *in, FILE *out) 
 { 
 	assert(in && out);
 	forth_cell_t *m, i, w;
 	forth_t *o;
-	unsigned char header[8] = {   /* header at start of struct */
-		0xFF, '4','T','H',    /* file magic number */
-		sizeof(forth_cell_t), /* size is needed for parsing rest of header if dumped */
-		CORE_VERSION,         /* version of forth core*/
-		!IS_BIG_ENDIAN,       /* endianess of platform*/
-		0xFF                  /* end header */
-	};
-
 	VERIFY(size >= MINIMUM_CORE_SIZE);
 	if(!(o = calloc(1, sizeof(*o) + sizeof(forth_cell_t)*size))) 
 		return NULL;
 	forth_make_default(o, size, in, out);
-	memcpy(o->header, header, sizeof(header));
+	make_header(o->header);
 	m = o->m;       /*a local variable only for convenience*/
 
 	o->m[PWD]   = 0;  /*special terminating pwd value*/
@@ -285,18 +285,38 @@ static FILE *fopen_or_die(const char *name, char *mode)
 	return file;
 }
 
-static forth_t *forth_load_core(const char *name, size_t size)
-{ /* load a forth core dump for execution, this could use work */
-	forth_t *o;
-	FILE *file = fopen_or_die(name, "rb");
-	size_t w = sizeof(*o) + (sizeof(forth_cell_t) * size);
+int forth_save_core(forth_t *o, FILE *dump) 
+{ /**@todo proper serialization needs to be done, as well as deserialization */
+	assert(o && dump);
+	size_t w = sizeof(*o) + sizeof(forth_cell_t) * o->core_size;
+	return w != fwrite(o, 1, w, dump) ? -1: 0; 
+}
+
+forth_t *forth_load_core(FILE *dump)
+{ /* load a forth core dump for execution, makes assumptions about layout of forth_t */
+	uint8_t actual[sizeof(header)] = {0}, expected[sizeof(header)] = {0};
+	forth_t *o = NULL;
+	size_t w = 0, core = 0;
+	make_header(expected);
+	if(sizeof(actual) != fread(actual, 1, sizeof(actual), dump))
+		goto fail; /* no header */
+	if(memcmp(expected, actual, sizeof(header))) 
+		goto fail; /* invalid or incompatible header */
+	if(1 != fread(&core, sizeof(core), 1, dump) || core < MINIMUM_CORE_SIZE)
+		goto fail; /* no header, or size too small */
+	rewind(dump);
+	w = sizeof(*o) + (sizeof(forth_cell_t) * core);
 	if(!(o = calloc(w, 1)))
-		return NULL;
-	if(w != fread(o, 1, w, file))
-		return NULL;
-	fclose(file);
-	forth_make_default(o, size, stdin, stdout);
+		goto fail; /* object too big */
+	if(w != fread(o, 1, w, dump))
+		goto fail; /* not enough bytes in file */
+	forth_make_default(o, core, stdin, stdout);
 	return o;
+fail:
+	if(dump)
+		fclose(dump);
+	free(o);
+	return NULL;
 }
 
 void forth_free(forth_t *o) 
@@ -340,7 +360,7 @@ static forth_cell_t check_bounds(forth_t *o, forth_cell_t f, unsigned line)
 #ifndef NDEBUG
 #define ck(c) check_bounds(o, c, __LINE__)
 #else
-#define ck(c) (c)
+#define ck(c) (c) /*disables checks and debug mode*/
 #endif
 
 int forth_run(forth_t *o) 
@@ -464,24 +484,24 @@ int main_forth(int argc, char **argv)
 	FILE *in = NULL, *core_file = NULL;
 	int dump = 0, readterm = 0, rval = 0, i = 1, c = 0;
 	forth_t *o = NULL;
-	for(i = 1; i < argc && argv[i][0] == '-'; i++) {
+	for(i = 1; i < argc && argv[i][0] == '-'; i++)
 		switch(argv[i][1]) {
 		case '\0': goto done; /* stop argument processing */
 		case 'd':  dump     = 1; break;
 		case 't':  readterm = 1; break;
 		case 'l':  if(o || i >= (argc - 1))
 				   goto fail;
-			   if(!(o = forth_load_core(argv[++i], CORE_SIZE))) {
+			   if(!(o = forth_load_core(core_file = fopen_or_die(argv[++i], "rb")))) {
 				   fprintf(stderr, "%s: core load failed\n", argv[i]);
 				   return -1;
 			   }
+			   fclose(core_file);
 			   break;
 		default:
 		fail:
 			fprintf(stderr, "usage: %s [-dt] [-l file] [-] file...\n", argv[0]);
 			return -1;
 		}
-	}
 done:
 	readterm = i == argc || readterm; /* if no files are given, read stdin */
 	if(!o && !(o = forth_init(CORE_SIZE, stdin, stdout))) {
@@ -491,7 +511,7 @@ done:
 	forth_set_args(o, argc, argv);
 	for(; i < argc; i++) {
 		forth_set_file_input(o, in = fopen_or_die(argv[i], "rb"));
-		if((c = fgetc(in)) == '#') /*shebang line '#!' */  
+		if((c = fgetc(in)) == '#') /*shebang line '#!', core files could also be detected */  
 			while(((c = forth_get_char(o)) > 0) && (c != '\n'));
 		else if(c == EOF)
 			goto close;
@@ -499,16 +519,17 @@ done:
 			ungetc(c, in);
 		if((rval = forth_run(o)) < 0) 
 			goto end;
-close:
+close:	
 		fclose_input(&in);
 	}
 	if(readterm) {
 		forth_set_file_input(o, stdin);
 		rval = forth_run(o);
 	}
-end:	fclose_input(&in);
+end:	
+	fclose_input(&in);
 	if(dump) {
-		forth_dump_core(o, core_file = fopen_or_die(core_file_name, "wb"));
+		forth_save_core(o, core_file = fopen_or_die(core_file_name, "wb"));
 		fclose(core_file); 
 	}
 	forth_free(o);

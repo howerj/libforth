@@ -1,13 +1,13 @@
 ECHO	= echo
 AR	= ar
 CC	= gcc
-CFLAGS	= -Wall -Wextra -g -pedantic -fPIC -std=c99 -O2
+CFLAGS	= -Wall -Wextra -g -pedantic -std=c99 -O2
 TARGET	= forth
 RM      = rm -rf
 
-.PHONY: all clean 
+.PHONY: all shorthelp doc clean 
 
-all: shorthelp ${TARGET} lib${TARGET}.so
+all: shorthelp ${TARGET}
 
 shorthelp:
 	@${ECHO} "Use 'make help' for a list of all options"
@@ -23,32 +23,33 @@ help:
 	@${ECHO} "      unit            create the unit test executable"
 	@${ECHO} "      test            execute the unit tests"
 	@${ECHO} "      doc             make the project documentation"
-	@${ECHO} "      lib${TARGET}.so     make a shared ${TARGET} library"
 	@${ECHO} "      lib${TARGET}.a      make a static ${TARGET} library"
 	@${ECHO} "      clean           remove generated files"
 	@${ECHO} "      dist            create a distribution archive"
 	@${ECHO} ""
 
-doc: lib${TARGET}.htm 
+%.o: %.c *.h
+	@echo "cc $< -c -o $@"
+	@${CC} ${CFLAGS} $< -c -o $@
+
+doc: lib${TARGET}.md
 lib${TARGET}.htm: lib${TARGET}.md
 	markdown $^ > $@
 
 lib${TARGET}.a: lib${TARGET}.o
 	${AR} rcs $@ $<
 
-lib${TARGET}.so: lib${TARGET}.o lib${TARGET}.h
-	${CC} ${CFLAGS} -shared $< -o $@
-
 unit: unit.o lib${TARGET}.a
 
-${TARGET}: main.c lib${TARGET}.a
-	${CC} ${CFLAGS} $^ -o $@
+${TARGET}: main.o lib${TARGET}.a
+	@echo "cc $^ -o $@"
+	@${CC} ${CFLAGS} $^ -o $@
 
 forth.core: ${TARGET} start.4th
 	./${TARGET} -d start.4th
 
-dist: ${TARGET} doc
-	tar zcf ${TARGET}.tgz ${TARGET} *.htm *.so *.a *.h *.4th
+dist: ${TARGET} ${TARGET}.1 lib${TARGET}.[a3] lib${TARGET}.htm
+	tar zvcf ${TARGET}.tgz $^
 
 run: ${TARGET}
 	@./$^ -t start.4th
