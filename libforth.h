@@ -75,6 +75,13 @@ int forth_run(forth_t *o);
  *  @return  int This is an error code, less than one is an error. **/
 int forth_eval(forth_t *o, const char *s); 
 
+/** @brief  Dump a raw forth object to disk, for debugging purposes, this
+ *          cannot be loaded with "forth_load_core".
+ *  @param  o    forth object to dump, caller frees, asserted.
+ *  @param  dump file to dump to (opened as "wb"), caller frees, asserted.
+ *  @return int 0 if successful, non zero otherwise */
+int forth_dump_core(forth_t *o, FILE *dump);
+
 /** @brief   Save the opaque FORTH object to file, this file may be
  *           loaded again with forth_load_core. The file passed in should
  *           be have been opened up in binary mode ("wb"). These files

@@ -104,7 +104,7 @@ static void encode(struct rle *r)
 				must_block_io(r, buf, idx, 'w');
 				idx = 0;
 			}
-			for(j = 0; (c = may_fgetc(r)) == prev && j < 129; j++)
+			for(j = 0; (c = may_fgetc(r)) == prev && j < 128; j++)
 				;
 			must_fputc(r, j);
 			must_fputc(r, prev);

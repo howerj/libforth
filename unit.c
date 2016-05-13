@@ -148,11 +148,16 @@ static unsigned unit_test_end(const char *unit_name)
 static char usage[] = "\
 libforth unit test framework\n\
 \n\
-	usage: %s [-h] [-c] [-k]\n\
+	usage: %s [-h] [-c] [-k] [-]\n\
 \n\
 	-h	print this help message and exit (unsuccessfully so tests do not pass)\n\
 	-c	turn colorized output on (forced on)\n\
 	-k	keep any temporary file\n\
+	-       stop processing command line arguments\n\
+\n\
+This program executes are series of tests to exercise the libforth library. It\n\
+will return zero on success and non zero on failure. The tests and results will\n\
+be printed out as executed.\n\
 \n";
 
 static int keep_files = 0;

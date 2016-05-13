@@ -30,8 +30,7 @@ From the [Wikipedia][] article we can neatly summarize the language:
 Given the nature of the [Forth][] language it does not make for a terribly good
 embeddable scripting language, but it is simple to implement and can be fun
 to use. This interpreter is based off a previous [IOCCC][] in a file called
-[buzzard.2.c][], it is a descendant of that file and the original is stored as
-a compressed [shell archive][] in the project.
+[buzzard.2.c][], it is a descendant of that file.
 
 Before using and understanding this library/interpreter it is useful to checkout
 more literature on [Forth][] such as [Thinking Forth][] by Leo Brodie for a
@@ -958,7 +957,6 @@ you should use a different language, or implementation.
 [libforth.3]: libforth.3
 [libforth.c]: libforth.c
 [libforth.h]: libforth.h
-[shell archive]: third.sh.gz
 [ANS Forth]: http://lars.nocrew.org/dpans/dpans.htm
 [musl]: https://www.musl-libc.org/
 

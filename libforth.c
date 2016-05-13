@@ -26,7 +26,7 @@
 #define instruction(k)      ((k) & INSTRUCTION_MASK)
 #define VERIFY(X)           do { if(!(X)) { abort(); } } while(0)
 #define IS_BIG_ENDIAN       (!(union { uint16_t u16; unsigned char c; }){ .u16 = 1 }.c)
-#define CORE_VERSION        (0x01u) /**< version of the forth core file */
+#define CORE_VERSION        (0x02u) /**< version of the forth core file */
 
 static const char *core_file_name = "forth.core";
 static const char *initial_forth_program = "\n\
@@ -53,12 +53,12 @@ static const uint8_t header[MAGIC7+1] = {
 
 struct forth {          /**< The FORTH environment is contained in here*/
 	uint8_t header[sizeof(header)]; /**< header for when writing object to disk */
-	size_t core_size;   /**< size of VM */
-	jmp_buf *error;      /**< place to jump to on error */
-	uint8_t *s;         /**< convenience pointer for string input buffer */
-	clock_t start_time; /**< used for "clock", start of initialization */
-	forth_cell_t *S;    /**< stack pointer */
-	forth_cell_t m[];   /**< Forth Virtual Machine memory */
+	forth_cell_t core_size;  /**< size of VM */
+	jmp_buf *on_error;   /**< place to jump to on error */
+	uint8_t *s;          /**< convenience pointer for string input buffer */
+	clock_t start_time;  /**< used for "clock", start of initialization */
+	forth_cell_t *S;     /**< stack pointer */
+	forth_cell_t m[];    /**< Forth Virtual Machine memory */
 } /*__attribute__((packed)); // not always portable */;
 
 enum registers    { /* virtual machine registers */
@@ -229,7 +229,7 @@ static void forth_make_default(forth_t *o, size_t size, FILE *in, FILE *out)
 	o->m[ARGC] = o->m[ARGV] = 0;
 	o->S             = o->m + size - (2 * o->m[VSTACK_SIZE]); /*set up variable stk pointer*/
 	o->start_time    = clock();
-	o->error         = calloc(sizeof(jmp_buf), 1);
+	o->on_error      = calloc(sizeof(jmp_buf), 1);
 	forth_set_file_input(o, in);  /*set up input after our eval*/
 }
 
@@ -285,32 +285,46 @@ static FILE *fopen_or_die(const char *name, char *mode)
 	return file;
 }
 
-int forth_save_core(forth_t *o, FILE *dump) 
-{ /**@todo proper serialization needs to be done, as well as deserialization */
+int forth_dump_core(forth_t *o, FILE *dump) 
+{ 
 	assert(o && dump);
 	size_t w = sizeof(*o) + sizeof(forth_cell_t) * o->core_size;
 	return w != fwrite(o, 1, w, dump) ? -1: 0; 
 }
 
+int forth_save_core(forth_t *o, FILE *dump) 
+{ 
+	assert(o && dump);
+	forth_cell_t r1, r2, r3;
+	r1 = fwrite(o->header,     1, sizeof(o->header),    dump);
+	r2 = fwrite(&o->core_size, 1, sizeof(o->core_size), dump);
+	r3 = fwrite(o->m,          1, sizeof(forth_cell_t) * o->core_size, dump);
+	if(r1 + r2 + r3 != (sizeof(o->header) + sizeof(o->core_size) + sizeof(forth_cell_t) * o->core_size))
+		return -1;
+	return 0;
+}
+
 forth_t *forth_load_core(FILE *dump)
-{ /* load a forth core dump for execution, makes assumptions about layout of forth_t */
+{ /* load a forth core dump for execution */
 	uint8_t actual[sizeof(header)] = {0}, expected[sizeof(header)] = {0};
 	forth_t *o = NULL;
-	size_t w = 0, core = 0;
+	forth_cell_t w = 0, core_size = 0;
 	make_header(expected);
 	if(sizeof(actual) != fread(actual, 1, sizeof(actual), dump))
 		goto fail; /* no header */
 	if(memcmp(expected, actual, sizeof(header))) 
 		goto fail; /* invalid or incompatible header */
-	if(1 != fread(&core, sizeof(core), 1, dump) || core < MINIMUM_CORE_SIZE)
+	if(sizeof(core_size) != fread(&core_size, 1, sizeof(core_size), dump) || core_size < MINIMUM_CORE_SIZE)
 		goto fail; /* no header, or size too small */
-	rewind(dump);
-	w = sizeof(*o) + (sizeof(forth_cell_t) * core);
+	w = sizeof(*o) + (sizeof(forth_cell_t) * core_size);
 	if(!(o = calloc(w, 1)))
 		goto fail; /* object too big */
-	if(w != fread(o, 1, w, dump))
+	w = sizeof(forth_cell_t) * core_size;
+	if(w != fread(o->m, 1, w, dump))
 		goto fail; /* not enough bytes in file */
-	forth_make_default(o, core, stdin, stdout);
+	o->core_size = core_size;
+	memcpy(o->header, actual, sizeof(o->header));
+	forth_make_default(o, core_size, stdin, stdout);
 	return o;
 fail:
 	if(dump)
@@ -322,7 +336,7 @@ fail:
 void forth_free(forth_t *o) 
 { 
 	assert(o); 
-	free(o->error);
+	free(o->on_error);
 	free(o); 
 }
 
@@ -351,8 +365,8 @@ static forth_cell_t check_bounds(forth_t *o, forth_cell_t f, unsigned line)
 	if(o->m[DEBUG])
 		fprintf(stderr, "\t( debug\t0x%" PRIxCell "\t%u )\n", f, line);
 	if(((forth_cell_t)f) >= o->core_size) {
-		fprintf(stderr, "( fatal \"bounds check failed: %" PRIuCell " >= %zu\" )\n", f, o->core_size);
-		longjmp(*o->error, 1);
+		fprintf(stderr, "( fatal \"bounds check failed: %" PRIuCell " >= %zu\" )\n", f, (size_t)o->core_size);
+		longjmp(*o->on_error, 1);
 	}
 	return f; 
 }
@@ -364,10 +378,10 @@ static forth_cell_t check_bounds(forth_t *o, forth_cell_t f, unsigned line)
 #endif
 
 int forth_run(forth_t *o) 
-{ 
+{ /* this implements the Forth virtual machine */ 
 	assert(o);
 	forth_cell_t *m, pc, *S, I, f, w;
-	if(o->m[INVALID] || setjmp(*o->error))
+	if(o->m[INVALID] || setjmp(*o->on_error))
 		return -(o->m[INVALID] = 1);
 	m = o->m, S = o->S, I = o->m[INSTRUCTION], f = o->m[TOP]; 
 
@@ -458,7 +472,7 @@ int forth_run(forth_t *o)
 			                                             break;
 		default:      
 			fprintf(stderr, "( fatal 'illegal-op %" PRIuCell " )\n", w);
-			longjmp(*o->error, 1);
+			longjmp(*o->on_error, 1);
 		}
 	}
 end:	o->m[TOP] = f;
@@ -529,7 +543,10 @@ close:
 end:	
 	fclose_input(&in);
 	if(dump) {
-		forth_save_core(o, core_file = fopen_or_die(core_file_name, "wb"));
+		if(forth_save_core(o, core_file = fopen_or_die(core_file_name, "wb"))) {
+			fprintf(stderr, "core file save to '%s' failed\n", core_file_name);
+			rval = -1;
+		}
 		fclose(core_file); 
 	}
 	forth_free(o);

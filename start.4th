@@ -27,6 +27,8 @@ See:
 	http://www.ioccc.org/1992/buzzard.2.design
 )
 
+
+( ========================== Basic Word Set ================================== )
 ( We'll begin by defining very simple words we can use later )
 : logical ( x -- bool ) not not ;
 : hidden-mask 0x80 ( Mask for the hide bit in a words MISC field ) ;
@@ -103,6 +105,9 @@ See:
 
 : ?exit ( x -- ) ( exit current definition if not zero ) if rdrop exit then ;
 
+( ========================== Basic Word Set ================================== )
+
+
 : dictionary-start 
 	( The dictionary start at this location, anything before this value 
 	is not a defined word ) 
@@ -120,8 +125,7 @@ See:
 	the Forth environment and only via the C-API, however the
 	value can still change, the values correspond to:
 	Value    Input Source
-	2        String
-	1        Standard input
+	-1        String
 	0        File Input [this may be stdin] )
 	source-id-reg @
 ;
@@ -274,11 +278,10 @@ hider creater
 hider state! 
 
 : does> ( whole-to-patch -- ) 
-  immediate
-  write-exit            ( write in an exit, we don't want the
-                          defining to run it, but the *defined* word to )
-  here swap !           ( patch in the code fields to point to )
-  run-instruction ,     ( write a run in )
+	immediate
+	write-exit  ( we don't want the defining to exit, but the *defined* word to )
+	here swap !           ( patch in the code fields to point to )
+	run-instruction ,     ( write a run in )
 ;
 
 hider write-quote 
@@ -366,9 +369,9 @@ hider addi
 
 : tail 
 	( This function implements tail calls, which is just a jump
-        to the beginning of the words definition, for example this
-        word will never overflow the stack and will print "1" followed
-        by a new line forever,
+	to the beginning of the words definition, for example this
+	word will never overflow the stack and will print "1" followed
+	by a new line forever,
     
 		: forever 1 . cr tail ; 
 
@@ -485,11 +488,10 @@ hider addi
 ;
 hider delim 
 
-
 : '"' ( -- char : push literal " character ) [char] " ;
 : accept ( c-addr +n1 -- +n2 : see accepter definition ) swap '\n' accepter ;
 
-255 constant max-string-length 
+4096 constant max-string-length 
 : accept-string max-string-length '"' accepter  ;
 
 0 variable delim
@@ -691,7 +693,14 @@ hider endianess
 ;
 hider char-alignment
 
-( ANSI Escape Codes )
+( ==================== ANSI Escape Codes ====================== )
+(
+	see: https://en.wikipedia.org/wiki/ANSI_escape_code 
+	These codes will provide a relatively portable means of 
+	manipulating a terminal
+)
+
+
 27 constant 'escape'
 char ; constant ';'
 : CSI 'escape' emit ." [" ;
@@ -724,9 +733,11 @@ char ; constant ';'
 : save-cursor ( save cursor position ) CSI ." s" ;
 : restore-cursor ( restore saved cursor position ) CSI ." u" ;
 : reset-color CSI ." 0m" ;
-
 hider CSI
+( ==================== ANSI Escape Codes ====================== )
 
+
+( ==================== Debugging info ========================= )
 : registers ( -- )
 	( print out important registers and information about the
 	virtual machine )
@@ -827,6 +838,100 @@ hider word-printer
 hider decompile
 hider TrueFalse
 hider >instruction
+
+: more ( wait for more input )
+	cr "  -- press any key to continue -- " key drop cr ;
+
+: help ( print out a short help message )
+ key drop
+" Welcome to Forth, an imperative stack based language. It is both a low
+level and a high level language, with a very small memory footprint. Most
+of Forth is defined as a combination of various primitives.
+
+A short description of the available function (or Forth words) follows,
+words marked (1) are immediate and cannot be used in command mode, words
+marked with (2) define new words. Words marked with (3) have both command
+and compile functionality.
+" 
+more " The built in words that accessible are:
+
+(1,2)	:                 define a new word, switching to compile mode
+	immediate         make latest defined word immediate
+	read              read in a word, execute in command mode else compile 
+	@ !               fetch, store
+	- + * /           standard arithmetic operations,
+	and or xor invert standard bit operations
+	lshift rshift     left and right bit shift
+	< > =             comparison predicates
+	exit              exit from a word
+	emit              print character from top of stack
+	key               get a character from input
+	r> >r             pop a value from or to the return stack
+	find              find a word in the dictionary and push the location
+	'                 store the address of the following word on the stack
+	,                 write the top of the stack to the dictionary
+	save load         save or load a block at address to indexed file
+	swap              swap first two values on the stack
+	dup               duplicate the top of the stack
+	drop              pop and drop a value
+	over              copy the second stack value over the first
+	.                 pop the top of the stack and print it
+	print             print a NUL terminated string at a character address
+	depth             get the current stack depth
+	clock             get the time since start of execution
+ "
+
+more " All of the other words in the interpreter are built from these
+primitive words. A few examples:
+
+(1)	if...else...then  FORTH branching construct 
+(1)	begin...until     loop until top of stack is non zero
+(1)	begin...again     infinite loop
+(1)	do...loop         FORTH looping construct
+(2,3)	create            create a new word that pushes its location
+(1)	does>             declare a created words run time behaviour
+(1,2)	variable          declare variable with initial value from top of stack
+(1,2)	constant          declare a constant, taken from top of stack
+(1,2)	array             declare an array with size taken from top of stack
+(1)	;                 terminate a word definition and return to command mode
+	words             print out a list of all the defined words
+	help              this help message
+	dump              print out memory contents starting at an address
+	registers         print out the contents of the registers
+	see               decompile a word, viewing what words compose it
+"
+
+more " Some more advanced words:
+
+	here              push the dictionary pointer
+	h                 push the address of the dictionary pointer
+	r                 push the return stack pointer
+	allot             allocate space in the dictionary
+(1)	[                 switch to command mode
+	]                 switch to compile mode
+	::                compile ':' into the dictionary
+"
+
+more "
+For more information either consult the manual pages forth(1) and libforth(1)
+or consult the following sources:
+
+	https://github.com/howerj/libforth 
+	http://work.anapnea.net/html/html/projects.html
+
+And for a larger tutorial:
+
+	https://github.com/howerj/libforth/blob/master/libforth.md
+
+For resources on Forth:
+
+	https://en.wikipedia.org/wiki/Forth_%28programming_language%29
+	http://www.ioccc.org/1992/buzzard.2.design
+	https://rwmj.wordpress.com/2010/08/07/jonesforth-git-repository/
+
+ -- end --
+" cr
+;
 
 ( \ Test code
 
@@ -962,6 +1067,15 @@ hider  execution-token
 	* FORTH, VOCABULARY 
 	* "Value", "To", "Is"
 	* Check "fill", "erase", "'", other words
-	* Make signed comparison operations
+	* Make signed comparison operations, and rename existing comparison
+	operations, and other operations, so they are marked as working on
+	unsigned values [which is the default].
+	* Each forth word defined here needs to be gone over to ensure compliance
+	with existing standards. There is no reason to be non-standards compliant
+	for no reason.
+	* "random", "seed", "hash"
+	* A small editor
+	* "list" to print out a block
+	* proper "load" and "save" 
 )
 
