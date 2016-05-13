@@ -43,7 +43,7 @@ struct forth_header {
 	enum endianess endian;
 };
 
-static struct forth_header parsed_header = { 0 };
+static struct forth_header parsed_header = { 0, 0, 0, 0 };
 
 int parse_header(FILE *core)
 {
