@@ -46,7 +46,7 @@ ${TARGET}: main.o lib${TARGET}.a
 	@${CC} ${CFLAGS} $^ -o $@
 
 forth.core: ${TARGET} start.4th
-	./${TARGET} -d start.4th
+	./${TARGET} -s start.4th
 
 dist: ${TARGET} ${TARGET}.1 lib${TARGET}.[a3] lib${TARGET}.htm
 	tar zvcf ${TARGET}.tgz $^

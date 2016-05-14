@@ -49,15 +49,14 @@ static const uint8_t header[MAGIC7+1] = {
 	0xFF                  /* end header */
 };
 
-struct forth {          /**< The FORTH environment is contained in here*/
-	uint8_t header[sizeof(header)]; /**< header for when writing object to disk */
-	forth_cell_t core_size;  /**< size of VM */
+struct forth { /**< FORTH environment, values marked '!!' are serialized in order*/
+	uint8_t header[sizeof(header)]; /**< header !! (byte order)*/
+	forth_cell_t core_size;  /**< size of VM !! (converted to uint64_t)*/
 	jmp_buf *on_error;   /**< place to jump to on error */
 	uint8_t *s;          /**< convenience pointer for string input buffer */
-	clock_t start_time;  /**< used for "clock", start of initialization */
 	forth_cell_t *S;     /**< stack pointer */
-	forth_cell_t m[];    /**< Forth Virtual Machine memory */
-} /*__attribute__((packed)); // not always portable */;
+	forth_cell_t m[];    /**< Forth Virtual Machine memory !! (as is)*/
+};
 
 enum registers    { /* virtual machine registers */
 	DIC    = 6,      /**< dictionary pointer */
@@ -81,7 +80,8 @@ enum registers    { /* virtual machine registers */
 	INVALID = 24,    /**< if non zero, this interpreter is invalid */
 	TOP    = 25,     /**< *stored* version of top of stack */
 	INSTRUCTION = 26, /**< *stored* version of instruction pointer*/
-	VSTACK_SIZE = 27  /**< size of the variable stack (special treatment compared to RSTK)*/
+	VSTACK_SIZE = 27, /**< size of the variable stack (special treatment compared to RSTK)*/
+	START_TIME = 28, /**< start time in milliseconds */
 };
 enum input_stream { FILE_IN, STRING_IN = -1 };
 enum instructions { PUSH,COMPILE,RUN,DEFINE,IMMEDIATE,READ,LOAD,STORE,
@@ -224,9 +224,9 @@ static void forth_make_default(forth_t *o, size_t size, FILE *in, FILE *out)
 	o->m[STDOUT]     = (forth_cell_t)stdout;
 	o->m[STDERR]     = (forth_cell_t)stderr;
 	o->m[RSTK]       = size - o->m[VSTACK_SIZE];     /*set up return stk pointer*/
+	o->m[START_TIME] = (1000 * clock()) / CLOCKS_PER_SEC;
 	o->m[ARGC] = o->m[ARGV] = 0;
 	o->S             = o->m + size - (2 * o->m[VSTACK_SIZE]); /*set up variable stk pointer*/
-	o->start_time    = clock();
 	o->on_error      = calloc(sizeof(jmp_buf), 1);
 	forth_set_file_input(o, in);  /*set up input after our eval*/
 }
@@ -294,11 +294,11 @@ int forth_dump_core(forth_t *o, FILE *dump)
 int forth_save_core(forth_t *o, FILE *dump) 
 { 
 	assert(o && dump);
-	forth_cell_t r1, r2, r3;
-	r1 = fwrite(o->header,     1, sizeof(o->header),    dump);
-	r2 = fwrite(&o->core_size, 1, sizeof(o->core_size), dump);
-	r3 = fwrite(o->m,          1, sizeof(forth_cell_t) * o->core_size, dump);
-	if(r1 + r2 + r3 != (sizeof(o->header) + sizeof(o->core_size) + sizeof(forth_cell_t) * o->core_size))
+	uint64_t r1, r2, r3, core_size = o->core_size;
+	r1 = fwrite(o->header,  1, sizeof(o->header),    dump);
+	r2 = fwrite(&core_size, sizeof(core_size), 1, dump);
+	r3 = fwrite(o->m,       1, sizeof(forth_cell_t) * o->core_size, dump);
+	if(r1 + r2 + r3 != (sizeof(o->header) + 1 + sizeof(forth_cell_t) * o->core_size))
 		return -1;
 	return 0;
 }
@@ -307,13 +307,13 @@ forth_t *forth_load_core(FILE *dump)
 { /* load a forth core dump for execution */
 	uint8_t actual[sizeof(header)] = {0}, expected[sizeof(header)] = {0};
 	forth_t *o = NULL;
-	forth_cell_t w = 0, core_size = 0;
+	uint64_t w = 0, core_size = 0;
 	make_header(expected);
 	if(sizeof(actual) != fread(actual, 1, sizeof(actual), dump))
 		goto fail; /* no header */
 	if(memcmp(expected, actual, sizeof(header))) 
 		goto fail; /* invalid or incompatible header */
-	if(sizeof(core_size) != fread(&core_size, 1, sizeof(core_size), dump) || core_size < MINIMUM_CORE_SIZE)
+	if(1 != fread(&core_size, sizeof(core_size), 1, dump) || core_size < MINIMUM_CORE_SIZE)
 		goto fail; /* no header, or size too small */
 	w = sizeof(*o) + (sizeof(forth_cell_t) * core_size);
 	if(!(o = calloc(w, 1)))
@@ -326,8 +326,6 @@ forth_t *forth_load_core(FILE *dump)
 	forth_make_default(o, core_size, stdin, stdout);
 	return o;
 fail:
-	if(dump)
-		fclose(dump);
 	free(o);
 	return NULL;
 }
@@ -377,7 +375,7 @@ static forth_cell_t check_bounds(forth_t *o, forth_cell_t f, unsigned line)
 #endif
 
 int forth_run(forth_t *o) 
-{ /* this implements the Forth virtual machine */ 
+{ /* this implements the Forth virtual machine; it does all the work */ 
 	assert(o);
 	forth_cell_t *m, pc, *S, I, f, w;
 	if(o->m[INVALID] || setjmp(*o->on_error))
@@ -467,7 +465,7 @@ int forth_run(forth_t *o)
 			      *++S = f;
 			      f = w;                                 break;
 		case CLOCK:   *++S = f;
-			      f = ((1000 * (clock() - o->start_time)) / CLOCKS_PER_SEC);
+			      f = ((1000 * clock()) - o->m[START_TIME]) / CLOCKS_PER_SEC;
 			                                             break;
 		default:      
 			fprintf(stderr, "( fatal 'illegal-op %" PRIuCell " )\n", w);
@@ -493,14 +491,14 @@ void forth_set_args(forth_t *o, int argc, char **argv)
 }
 
 int main_forth(int argc, char **argv) 
-{ /**@todo attempt to load a default core file?*/
+{
 	FILE *in = NULL, *core_file = NULL;
-	int dump = 0, readterm = 0, rval = 0, i = 1, c = 0;
+	int save = 0, readterm = 0, rval = 0, i = 1, c = 0;
 	forth_t *o = NULL;
 	for(i = 1; i < argc && argv[i][0] == '-'; i++)
 		switch(argv[i][1]) {
 		case '\0': goto done; /* stop argument processing */
-		case 'd':  dump     = 1; break;
+		case 's':  save     = 1; break;
 		case 't':  readterm = 1; break;
 		case 'l':  if(o || i >= (argc - 1))
 				   goto fail;
@@ -512,7 +510,7 @@ int main_forth(int argc, char **argv)
 			   break;
 		default:
 		fail:
-			fprintf(stderr, "usage: %s [-dt] [-l file] [-] file...\n", argv[0]);
+			fprintf(stderr, "usage: %s [-st] [-l file] [-] file...\n", argv[0]);
 			return -1;
 		}
 done:
@@ -541,7 +539,7 @@ close:
 	}
 end:	
 	fclose_input(&in);
-	if(dump) {
+	if(save) {
 		if(forth_save_core(o, core_file = fopen_or_die(core_file_name, "wb"))) {
 			fprintf(stderr, "core file save to '%s' failed\n", core_file_name);
 			rval = -1;

@@ -907,17 +907,16 @@ be used such as:
         2d      2dup
         2D      2drop
 
-* Command line argument parsing could be improved, and a startup script
-  specified by an environment variable added.
-* The "check\_bounds" function, whilst useful for debugging, limits the virtual
-machine to address only in its range.
+* The "check\_bounds" function, whilst useful for debugging, limits the
+memory addressable by the virtual machine to only within its memory limits
 * A line editor could be added, although this really would not be a priority.
 * A way to integrate calls to arbitrary functions that can be loaded at run time
-  could be added, although making this portable according to the C standard
-would make the code ugly (as function pointers are not guaranteed to be the size
-of a uintptr\_t).
-* A debug mode and optional compilation of range checking functions should be
-added to the main interpreter
+  could be added
+* The program command line interface could be improved by:
+  - an evaluate argument that would evaluate a string
+  - an environment variable to load up a start file
+  - allocate a desired virtual memory size
+  - ...
 
 ### Notes
 

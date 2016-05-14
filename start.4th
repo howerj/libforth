@@ -27,7 +27,6 @@ See:
 	http://www.ioccc.org/1992/buzzard.2.design
 )
 
-
 ( ========================== Basic Word Set ================================== )
 ( We'll begin by defining very simple words we can use later )
 : logical ( x -- bool ) not not ;
@@ -103,6 +102,13 @@ See:
 	>r           ( return return address )
 ;
 
+( begin...while...repeat These are defined in a very "Forth" way )
+: while immediate postpone if ( branch to repeats 'then') ;
+: repeat immediate
+	swap            ( swap 'begin' here and 'while' here )
+	postpone again  ( again jumps to begin )
+	postpone then ; ( then writes to the hole made in if )
+
 : ?exit ( x -- ) ( exit current definition if not zero ) if rdrop exit then ;
 
 ( ========================== Basic Word Set ================================== )
@@ -171,9 +177,9 @@ See:
 	drop cr 
 ; 
 
-: hide  ( WORD -- hide-token ) 
+: hide  ( token -- hide-token ) 
 	( This hides a word from being found by the interpreter )
-	find dup 
+	dup 
 	if 
 		dup @ hidden-mask or swap tuck ! 
 	else 
@@ -181,7 +187,7 @@ See:
 	then 
 ;
 
-: hider ( -- ) ( hide with drop ) hide drop ;
+: hider ( WORD -- ) ( hide with drop ) find dup if hide drop else drop then ;
 : unhide ( hide-token -- ) dup @ hidden-mask invert and swap ! ;
 : gcd ( a b -- n ) ( greatest common divisor )
 	begin
@@ -249,30 +255,29 @@ But this version is much more limited )
 
 : command-mode false state! ;
 
-: creater             \ create a new work that pushes its data field
-	::            \ compile a word
-	push-location ,       \ write push into new word
-	here 2+ ,     \ push a pointer to data field
-	['] exit ,    \ write in an exit to new word data field is after exit 
-	command-mode  \ return to command mode
+: command-mode-create   ( create a new work that pushes its data field )
+	::              ( compile a word )
+	push-location , ( write push into new word )
+	here 2+ ,       ( push a pointer to data field )
+	['] exit ,      ( write in an exit to new word data field is after exit )
+	command-mode    ( return to command mode )
 ;
 
-: create immediate              \ This is a complicated word! It makes a
-                                \ word that makes a word.
-  state @ if                    \ Compile time behavior
-  ( NOTE: ' _create , *nearly* works here )
-  ' :: ,                        \ Make the defining word compile a header
-  write-quote push-location , compile,    \ Write in push to the creating word
-  ' here , ' 3+ , compile,        \ Write in the number we want the created word to push
-  write-quote >mark compile,   \ Write in a place holder 0 and push a 
-                                     \ pointer to to be used by does>
-  write-quote write-exit compile, \ Write in an exit in the word we're compiling.
-  ['] command-mode ,           \ Make sure to change the state back to command mode )
-  else                         \ Run time behavior
-        creater
-  then
+: compile-mode-create
+	( @note ' command-mode-create , *nearly* works )
+	' :: ,                               ( Make the defining word compile a header )
+	write-quote push-location , compile, ( Write in push to the creating word )
+	' here , ' 3+ , compile,             ( Write in the number we want the created word to push )
+	write-quote >mark compile,           ( Write in a place holder 0 and push a pointer to to be used by does> )
+	write-quote write-exit compile,      ( Write in an exit in the word we're compiling. )
+	['] command-mode ,                   ( Make sure to change the state back to command mode )
 ;
-hider creater
+
+: create immediate  ( create word is quite a complex forth word )
+  state @ if compile-mode-create else command-mode-create then ;
+
+hider command-mode-create
+hider compile-mode-create
 hider state! 
 
 : does> ( whole-to-patch -- ) 
@@ -286,13 +291,14 @@ hider write-quote
 
 : array    ( length --  :create a array )           create allot does> + ;
 : variable ( initial-value -- : create a variable ) create ,     does>   ;
-: constant ( value -- : crate a constant )          create ,     does> @ ;
+: constant ( value -- : create a constant )         create ,     does> @ ;
 
 4 variable column-width
 : column ( i -- : print a cr if index is at last column )
-	column-width @ mod not if cr then 
-;
+	column-width @ mod not if cr then ;
 
+( do...loop could be improved, perhaps by not using the return stack
+so much )
 : do immediate
 	' swap ,      ( compile 'swap' to swap the limit and start )
 	' >r ,        ( compile to push the limit onto the return stack )
@@ -301,7 +307,7 @@ hider write-quote
 ;
 
 : addi 
-	( TODO: Simplify )
+	( @todo simplify )
 	r@ 1-        ( get the pointer to i )
 	+!           ( add value to it )
 	r@ 1- @      ( find the value again )
@@ -351,11 +357,11 @@ hider addi
 : factorial ( n -- n! )
 	( This factorial is only here to test range, mul, do and loop )
 	dup 1 <= 
- 	if
+	if
 		drop
 		1
 	else ( This is obviously super space inefficient )
-  		dup >r 1 range r> mul
+ 		dup >r 1 range r> mul
 	then
 ;
 
@@ -411,7 +417,6 @@ hider addi
 	dup 1+ @ 256/ lsb - chars>
 ;
 
-
 : c@ ( character-address -- char )
 	( retrieve a character from an address )
 	dup chars @
@@ -454,7 +459,6 @@ hider addi
 		swap
 	x@ >r ( restore return address )
 ;
-
 
 : 2r@ ( -- x1 x2 ) ( R:  x1 x2 -- x1 x2 )
 	r> x! ( pop off this words return address )
@@ -559,6 +563,24 @@ hider delim
 
 : ok " ok" cr ;
 
+: ;hide ( should only be matched with ':hide' ) 
+	immediate " error: ';hide' without ':hide'" cr ;
+: :hide
+	( hide a list of words, the list is terminated with ";hide" )
+	begin
+		find ( find next word )
+		dup [ find ;hide ] literal = if 
+			drop exit ( terminate :hide )
+		then
+		dup 0= if ( word not found )
+			drop 
+			"  error: word '" source drop print " 'not found" cr 
+			exit 
+		then
+		hide drop
+	again
+;
+
 : count ( c-addr1 -- c-addr2 u ) dup c@ swap 1+ swap ;
 
 : fill ( c-addr u char -- )
@@ -641,9 +663,7 @@ if true )
 ;
 
 find [else] else-word ! 
-hider else-word
-hider nest
-hider reset-nest
+:hide else-word nest reset-nest ;hide
 
 size 2 = [if] 0x0123           variable endianess [then]
 size 4 = [if] 0x01234567       variable endianess [then]
@@ -655,10 +675,10 @@ size 8 = [if] 0x01234567abcdef variable endianess [then]
 ;
 hider endianess
 
-( create a new variable "pad", which can be used as a scratch pad,
-  other versions of pad make it relative to the dictionary pointer
-  so modifying modifies the pad pointer )
-0 variable pad 32 allot
+: pad 
+	( the pad is used for temporary storage, and moves
+	along with dictionary pointer, always in front of it )
+	here 64 + ;
 
 : counted-column
 	( i -- : print the current counter and a cr if at column end )
@@ -677,18 +697,15 @@ hider lister
 : forgetter ( pwd-token -- : forget a found word and everything after it )
 	dup @ pwd ! h ! ;
 
-: forget 
+: forget ( WORD -- )
 	( given a word, forget every word defined after that
 	word and the word itself )
-	find 1-
-	forgetter
-;
+	find 1- forgetter ;
 
 : marker
 	( make a word that forgets everything defined after it,
 	including itself )
 	:: push-location , pwd @ , ' forgetter , postpone ; ;
-;
 hider forgetter
 
 : ?dup-if immediate ( x -- x | - ) 
@@ -720,28 +737,29 @@ hider char-alignment
 ( ==================== Random Numbers ========================= )
 
 ( See: 
-	https://stackoverflow.com/questions/3062746/special-simple-random-number-generator 
-	https://en.wikipedia.org/wiki/Linear_congruential_generator
-
-	The output of this could be XORed with the first 2048 words of
-	memory as an extra source of entropy. A better, and also simple
-	PRNG, is detailed at:
-
+	uses xorshift
 	https://en.wikipedia.org/wiki/Xorshift
-	and
 	http://excamera.com/sphinx/article-xorshift.html
+	http://www.arklyffe.com/main/2010/08/29/xorshift-pseudorandom-number-generator/
 )
-123456789  variable seed ( initial PRNG value )
-1103515245 constant a    ( multiplier )
-12345      constant c    ( increment )
-0xFFFFFFFF constant m    ( modulo operation )
+( these constants have be collected from the web )
+size 2 = [if] 13 constant a 9  constant b 7  constant c [then]
+size 4 = [if] 13 constant a 17 constant b 5  constant c [then]
+size 8 = [if] 12 constant a 25 constant b 27 constant c [then]
 
-: random ( -- random )
-	a seed @ c + m and dup seed !
-;
-hider a
-hider c
-hider m
+7 variable seed ( must not be zero )
+
+: seed! ( u -- : set the value of the PRNG seed )
+	dup 0= if drop 7 ( zero not allowed ) then seed ! ;
+
+: random
+	( assumes word size is 32 bit )
+	seed @ 
+	dup a lshift xor
+	dup b rshift xor
+	dup c lshift xor
+	dup seed! ;
+:hide a b c seed ;hide
 
 ( ==================== Random Numbers ========================= )
 
@@ -773,9 +791,7 @@ char ; constant ';'
 	for example:
 		bright red foreground color
 	sets the foreground text to bright red )
-	CSI . 
-	if ." ;1" then ." m" 
-;
+	CSI . if ." ;1" then ." m" ;
 
 : at-xy ( x y -- ) ( set ANSI terminal cursor position to x y ) CSI . ';' emit . ." H" ;
 : page  ( clear ANSI terminal screen and move cursor to beginning ) CSI ." 2J" 1 1 at-xy ;
@@ -790,7 +806,7 @@ hider CSI
 
 ( ==================== Prime Numbers ========================== )
 ( from original "third" code from the ioccc http://www.ioccc.org/1992/buzzard.2.design )
-: isprime ( x -- x/0 : return number if it is prime, zero otherwise )
+: prime? ( x -- x/0 : return number if it is prime, zero otherwise )
 	dup 1 = if 1- exit then
 	dup 2 = if    exit then
 	dup 2 / 2     ( loop from 2 to n/2 )
@@ -809,17 +825,15 @@ hider CSI
 	"  The primes from " dup . "  to " over . "  are: "
 	cr
 	do
-		i isprime
+		i prime?
 		if
 			i . tab counter @ column counter 1+!
 		then
 	loop
 	cr
 	"  There are " counter @ . "  primes."
-	cr
-;
-hide counter
-
+	cr ;
+hider counter
 ( ==================== Prime Numbers ========================== )
 
 ( ==================== Debugging info ========================= )
@@ -851,8 +865,7 @@ hide counter
 		[char] y = if true  exit then
 		[char] n = if false exit then
 		" y/n? "
-	again
-;
+	again ;
 
 : TrueFalse if " true" else " false" then ;
 : >instruction ( extract instruction from instruction field ) 0x1f and ;
@@ -861,8 +874,7 @@ hide counter
 	( this word expects a pointer to an execution token and must determine
 	whether the word is immediate, and whether it has no name, this
 	needs to be implemented )
-	0
-;
+	0 ;
 
 : decompile ( code-field-ptr -- )
 	( This word expects a pointer to the code field of a word, it
@@ -899,8 +911,7 @@ hide counter
 	loop
 	cr
 	255 = if " decompile limit exceeded" cr then
-	drop
-;
+	drop ;
 hider word-printer
 
 : see 
@@ -914,17 +925,14 @@ hider word-printer
 	dup " immediate:     " 1+ @ >instruction compile-instruction <> TrueFalse cr
 	dup " instruction:   " execution-token @ >instruction . cr ( @todo lookup instruction name )
 	dup " defined:       " execution-token @ >instruction run-instruction = dup TrueFalse cr
-	if
-		execution-token 1+
+	if ( decompile if a compiled word )
+		execution-token 1+ ( move to code field )
 		" code field:    " cr
 		decompile
-	else
+	else ( the instruction describes the word if it is not a compiled word )
 		drop
-	then
-;
-hider decompile
-hider TrueFalse
-hider >instruction
+	then ;
+:hide decompile TrueFalse >instruction ;hide
 
 : more ( wait for more input )
 	cr "  -- press any key to continue -- " key drop cr ;
@@ -1113,35 +1121,13 @@ a . cr
 
 )
 
-
-hider write-string 
-hider do-string 
-hider  accept-string        
-hider  '"'                  
-hider  ')'                  
-hider  alignment-bits       
-hider  print-string         
-hider  compile-instruction  
-hider  dictionary-start     
-hider  hidden?              
-hider  hidden-mask          
-hider  instruction-mask     
-hider  max-core             
-hider  push-location        
-hider  run-instruction      
-hider  stack-start          
-hider  x                    
-hider  x!                   
-hider  x@                   
-hider  write-exit           
-hider  branch
-hider  ?branch
-hider  mask-byte            
-hider  accepter             
-hider  max-string-length    
-hider  line                 
-hider  source-id-reg        
-hider  execution-token 
+( clean up the environment )
+:hide
+ write-string do-string accept-string ')' alignment-bits print-string '"'
+ compile-instruction dictionary-start hidden? hidden-mask instruction-mask 
+ max-core push-location run-instruction stack-start x x! x@ write-exit 
+ mask-byte accepter max-string-length source-id-reg execution-token
+;hide
 
 ( TODO
 	* Evaluate 
@@ -1162,7 +1148,6 @@ hider  execution-token
 	* Each forth word defined here needs to be gone over to ensure compliance
 	with existing standards. There is no reason to be non-standards compliant
 	for no reason.
-	* "random", "seed", "hash"
 	* A small block editor
 	* "list" to print out a block
 	* proper "load" and "save" 
@@ -1176,5 +1161,7 @@ hider  execution-token
 	* Various Forth style guides should be applied to this code to
 	make it more understandable, the Forth code here is admittedly
 	not very Forth like
+	* An assembler mode would execute primitives only, this would
+	require a change to the interpreter
 )
 
