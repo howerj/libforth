@@ -715,21 +715,10 @@ Will print:
 
 Duplicate two items on the stack.
 
-* 'line'        ( address -- address )
-
-Given an address print out the address and the contents of the four
-consecutive addresses and push the original address plus four. This is
-a helper word for 'list'.
-
 * '('           ( -- )
 
 This will read the input stream until encountering a ')' character, it
 is used for comments.
-
-* 'lister'        ( address-1 address-2 -- )
-
-Given two memory address, address-2 being the larger address, print out
-the contents of memory between those two addresses, inclusively.
 
 * 'allot'       ( amount -- )
 

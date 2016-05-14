@@ -107,7 +107,6 @@ See:
 
 ( ========================== Basic Word Set ================================== )
 
-
 : dictionary-start 
 	( The dictionary start at this location, anything before this value 
 	is not a defined word ) 
@@ -290,6 +289,11 @@ hider write-quote
 : variable ( initial-value -- : create a variable ) create ,     does>   ;
 : constant ( value -- : crate a constant )          create ,     does> @ ;
 
+4 variable column-width
+: column ( i -- : print a cr if index is at last column )
+	column-width @ mod not if cr then 
+;
+
 : do immediate
 	' swap ,      ( compile 'swap' to swap the limit and start )
 	' >r ,        ( compile to push the limit onto the return stack )
@@ -362,7 +366,7 @@ hider addi
 
 : .s    ( -- : print out the stack for debugging )
 	depth if
-		depth 0 do i pick . tab loop
+		depth 0 do i pick . tab i column loop
 	then
 	cr
 ;
@@ -654,10 +658,21 @@ hider endianess
   so modifying modifies the pad pointer )
 0 variable pad 32 allot
 
+: counted-column
+	( i -- : print the current counter and a cr if at column end )
+ 	dup column-width @ mod 
+	not if 
+		cr . " :" tab 
+	else drop 
+then ;
+
+: lister swap do i dup counted-column @ . tab loop ;
+
 : dump  ( addr u -- )
 	( dump out contents of memory starting at 'addr', for 'u' units )
-	over + lister 2drop
+	1+ over + lister cr
 ;
+hider lister
 
 : forget 
 	( given a word, forget every word defined after that
@@ -665,7 +680,6 @@ hider endianess
 	find 
 	1- dup @ pwd ! h ! 
 ;
-
 
 : ?dup-if immediate ( x -- x | - ) 
 	' ?dup , 
@@ -693,13 +707,32 @@ hider endianess
 ;
 hider char-alignment
 
+( ==================== Random Numbers ========================= )
+
+( See: 
+	https://stackoverflow.com/questions/3062746/special-simple-random-number-generator 
+	https://en.wikipedia.org/wiki/Linear_congruential_generator
+)
+123456789  variable seed ( initial PRNG value )
+1103515245 constant a    ( multiplier )
+12345      constant c    ( increment )
+0xFFFFFFFF constant m    ( modulo operation )
+
+: random ( -- random )
+	a seed @ c + m and dup seed !
+;
+hider a
+hider c
+hider m
+
+( ==================== Random Numbers ========================= )
+
 ( ==================== ANSI Escape Codes ====================== )
 (
 	see: https://en.wikipedia.org/wiki/ANSI_escape_code 
 	These codes will provide a relatively portable means of 
 	manipulating a terminal
 )
-
 
 27 constant 'escape'
 char ; constant ';'
@@ -735,6 +768,41 @@ char ; constant ';'
 : reset-color CSI ." 0m" ;
 hider CSI
 ( ==================== ANSI Escape Codes ====================== )
+
+
+( ==================== Prime Numbers ========================== )
+( from original "third" code from the ioccc http://www.ioccc.org/1992/buzzard.2.design )
+: isprime ( x -- x/0 : return number if it is prime, zero otherwise )
+	dup 2 = if
+		exit
+	then
+	dup 2 / 2     ( loop from 2 to n/2 )
+	do
+		dup   ( value to check if prime )
+		i mod ( mod by divisor )
+		not if
+			drop 0 leave
+		then
+	loop
+;
+
+: primes
+	"  The primes from "
+	dup .
+	"  to "
+	over .
+	"  are: "
+	cr
+	do
+		i isprime
+		if
+			i . tab
+		then
+	loop
+	cr
+;
+
+( ==================== Prime Numbers ========================== )
 
 
 ( ==================== Debugging info ========================= )
@@ -800,7 +868,9 @@ hider CSI
 	         can occur normally
 	literals Literals can be distinguished by their low value,
 	         which cannot possibly be a word with a name, the
-	         next field is the actual literal )
+	         next field is the actual literal 
+
+	Also of note, a number greater than "here" must be data )
 	255 0
 	do
 		tab 
@@ -878,7 +948,7 @@ more " The built in words that accessible are:
 	.                 pop the top of the stack and print it
 	print             print a NUL terminated string at a character address
 	depth             get the current stack depth
-	clock             get the time since start of execution
+	clock             get the time since execution start in milliseconds
  "
 
 more " All of the other words in the interpreter are built from these
@@ -1025,6 +1095,7 @@ a . cr
 
 )
 
+
 hider write-string 
 hider do-string 
 hider  accept-string        
@@ -1074,8 +1145,10 @@ hider  execution-token
 	with existing standards. There is no reason to be non-standards compliant
 	for no reason.
 	* "random", "seed", "hash"
-	* A small editor
+	* A small block editor
 	* "list" to print out a block
 	* proper "load" and "save" 
+	* more help commands would be good, such as "help-ansi-escape",
+	"tutorial", etc.
 )
 

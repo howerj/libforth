@@ -37,10 +37,8 @@ static const char *initial_forth_program = "\n\
 : then immediate dup here swap - swap ! ; : 2dup over over ; : <> = 0= ;     \n\
 : begin immediate here ; : until immediate ' ?branch , here - , ; : '\\n' 10 ; \n\
 : not 0= ; : 1+ 1 + ; : 1- 1 - ; : ')' 41 ; : tab 9 emit ; : cr '\\n' emit ; \n\
-: line dup . tab dup 4 + swap begin dup @ . tab 1+ 2dup = until drop ;       \n\
 : ( immediate begin key ')' = until ; : rot >r swap r> swap ; : -rot rot rot ;\n\
-: lister swap begin line cr 2dup < until ; : allot here + h ! ;              \n\
-: tuck swap over ; : nip swap drop ; : :: [ find : , ] ;";
+: tuck swap over ; : nip swap drop ; : :: [ find : , ] ; : allot here + h ! ; ";
 
 enum header { MAGIC0, MAGIC1, MAGIC2, MAGIC4, CELL_SIZE, VERSION, ENDIAN, MAGIC7 };
 static const uint8_t header[MAGIC7+1] = {
