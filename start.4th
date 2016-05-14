@@ -206,14 +206,14 @@ See:
 ;
 
 : execution-token ( previous-word-address -- execution-token )
-        ( Given the address of the PWD field of a word this
+	( Given the address of the PWD field of a word this
 	function will return an execution token for the word )
 	1+    ( MISC field )
 	dup 
 	@     ( Contents of MISC field )
 	instruction-mask and  ( Mask off the instruction )
-        ( If the word is not an immediate word, execution token pointer ) 
-        compile-instruction = +
+	( If the word is not an immediate word, execution token pointer ) 
+	compile-instruction = +
 ;
 
 : ['] immediate find execution-token push-location , , ;
@@ -256,7 +256,6 @@ But this version is much more limited )
 	['] exit ,    \ write in an exit to new word data field is after exit 
 	command-mode  \ return to command mode
 ;
-
 
 : create immediate              \ This is a complicated word! It makes a
                                 \ word that makes a word.
@@ -472,7 +471,7 @@ hider addi
 : accepter
 	( c-addr max delimiter -- i )
 	( store a "max" number of chars at c-addr until "delimiter" encountered,
-          the number of characters stored is returned )
+	the number of characters stored is returned )
 	key drop ( drop first key after word )
 	delim !  ( store delimiter used to stop string storage when encountered)
 	0
@@ -525,6 +524,9 @@ hider aligner
 
 0 variable delim
 : write-string ( char -- c-addr u )
+	( @todo This really needs simplifying, to do this
+	a set of words that operate on a temporary buffer can
+	be used )
 	( Write a string into word being currently defined, this
 	code has to jump over the string it has just put into the
 	dictionary so normal execution of a word can continue. The
@@ -566,8 +568,8 @@ hider delim
 	2drop
 ;
 
-: spaces ( n -- ) 0 do space loop ;
-: erase ( addr u )
+: spaces ( n -- : print n spaces ) 0 do space loop ;
+: erase ( addr u : erase a block of memory )
 	chars> swap chars> 0 -rot fill
 ;
 
@@ -660,7 +662,7 @@ hider endianess
 
 : counted-column
 	( i -- : print the current counter and a cr if at column end )
- 	dup column-width @ mod 
+	dup column-width @ mod 
 	not if 
 		cr . " :" tab 
 	else drop 
@@ -668,18 +670,26 @@ then ;
 
 : lister swap do i dup counted-column @ . tab loop ;
 
-: dump  ( addr u -- )
-	( dump out contents of memory starting at 'addr', for 'u' units )
-	1+ over + lister cr
-;
+: dump  ( addr u -- : dump out 'u' cells of memory starting from 'addr' )
+	1+ over + lister cr ;
 hider lister
+
+: forgetter ( pwd-token -- : forget a found word and everything after it )
+	dup @ pwd ! h ! ;
 
 : forget 
 	( given a word, forget every word defined after that
 	word and the word itself )
-	find 
-	1- dup @ pwd ! h ! 
+	find 1-
+	forgetter
 ;
+
+: marker
+	( make a word that forgets everything defined after it,
+	including itself )
+	:: push-location , pwd @ , ' forgetter , postpone ; ;
+;
+hider forgetter
 
 : ?dup-if immediate ( x -- x | - ) 
 	' ?dup , 
@@ -712,6 +722,14 @@ hider char-alignment
 ( See: 
 	https://stackoverflow.com/questions/3062746/special-simple-random-number-generator 
 	https://en.wikipedia.org/wiki/Linear_congruential_generator
+
+	The output of this could be XORed with the first 2048 words of
+	memory as an extra source of entropy. A better, and also simple
+	PRNG, is detailed at:
+
+	https://en.wikipedia.org/wiki/Xorshift
+	and
+	http://excamera.com/sphinx/article-xorshift.html
 )
 123456789  variable seed ( initial PRNG value )
 1103515245 constant a    ( multiplier )
@@ -773,9 +791,8 @@ hider CSI
 ( ==================== Prime Numbers ========================== )
 ( from original "third" code from the ioccc http://www.ioccc.org/1992/buzzard.2.design )
 : isprime ( x -- x/0 : return number if it is prime, zero otherwise )
-	dup 2 = if
-		exit
-	then
+	dup 1 = if 1- exit then
+	dup 2 = if    exit then
 	dup 2 / 2     ( loop from 2 to n/2 )
 	do
 		dup   ( value to check if prime )
@@ -786,24 +803,24 @@ hider CSI
 	loop
 ;
 
+0 variable counter
 : primes
-	"  The primes from "
-	dup .
-	"  to "
-	over .
-	"  are: "
+	0 counter !
+	"  The primes from " dup . "  to " over . "  are: "
 	cr
 	do
 		i isprime
 		if
-			i . tab
+			i . tab counter @ column counter 1+!
 		then
 	loop
 	cr
+	"  There are " counter @ . "  primes."
+	cr
 ;
+hide counter
 
 ( ==================== Prime Numbers ========================== )
-
 
 ( ==================== Debugging info ========================= )
 : registers ( -- )
@@ -863,8 +880,8 @@ hider CSI
 	         be printed out generally speaking 
 	exit     It might be difficult to determine when a word actually
 	         actually stops, one way of fixing this is to write 
-		 something after the terminating exit [placed by ';'],
-		 such as all bits set, which is not something that
+	         something after the terminating exit [placed by ';'],
+	         such as all bits set, which is not something that
 	         can occur normally
 	literals Literals can be distinguished by their low value,
 	         which cannot possibly be a word with a name, the
@@ -969,6 +986,7 @@ primitive words. A few examples:
 	dump              print out memory contents starting at an address
 	registers         print out the contents of the registers
 	see               decompile a word, viewing what words compose it
+	.s                print out the contents of the stack
 "
 
 more " Some more advanced words:
@@ -1150,5 +1168,13 @@ hider  execution-token
 	* proper "load" and "save" 
 	* more help commands would be good, such as "help-ansi-escape",
 	"tutorial", etc.
+	* Todo Various different assemblers [assemble VM instructions,
+	native instructions, and cross assemblers]
+	* common words and actions should be factored out to simplify
+	definitions of other words, their standards compliant version found
+	if any
+	* Various Forth style guides should be applied to this code to
+	make it more understandable, the Forth code here is admittedly
+	not very Forth like
 )
 

@@ -263,6 +263,7 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out)
 		compile(o, COMPILE, names[i]), m[m[DIC]++] = w++;
 
 	VERIFY(forth_eval(o, initial_forth_program) >= 0);
+	/** @todo this should be replaced with an X-Macro table of constants */
 	VERIFY(forth_define_constant(o, "size",          sizeof(forth_cell_t)) >= 0);
 	VERIFY(forth_define_constant(o, "stack-start",   size - (2 * o->m[VSTACK_SIZE])) >= 0);
 	VERIFY(forth_define_constant(o, "max-core",      size) >= 0);
@@ -492,7 +493,7 @@ void forth_set_args(forth_t *o, int argc, char **argv)
 }
 
 int main_forth(int argc, char **argv) 
-{
+{ /**@todo attempt to load a default core file?*/
 	FILE *in = NULL, *core_file = NULL;
 	int dump = 0, readterm = 0, rval = 0, i = 1, c = 0;
 	forth_t *o = NULL;
