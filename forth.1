@@ -4,7 +4,7 @@
 .SH NAME
 forth \- A small Forth interpreter.
 .SH SYNOPSIS
-forth [-st] [-l forth.core] [-] file..
+forth [-s] [-t] [-m size] [-l forth.core] [-] file..
 .SH DESCRIPTION
 This is a small Forth interpreter, built around the libforth(3) library. It is
 an provides an idiosyncratic version of Forth with minimal effort to abide by
@@ -20,16 +20,21 @@ This saves the working memory of the Forth interpreter to disk (as a file
 called "forth.core")") this file can later be loaded with the "-l" option.
 
 .TP
+.B -t
+After all the files have been read from and any core files have been loaded
+this will make the Forth interpreter read from stdin(3), but before "-d".
+
+.TP
+.B -m size
+Specify the virtual machines memory size in kilobytes, overriding the default
+memory size.
+
+.TP
 .B -l file
 This option loads a forth core file generated from the "-d" option of a
 previous run. This core file is not portable and must be generated on the same
 platform as it was generated. It can only be specified once per run of the
 interpreter.
-
-.TP
-.B -t
-After all the files have been read from and any core files have been loaded
-this will make the Forth interpreter read from stdin(3), but before "-d".
 
 .TP
 .B -

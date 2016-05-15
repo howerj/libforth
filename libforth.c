@@ -14,11 +14,11 @@
 #include <setjmp.h>
 #include <time.h>
 
-#define CORE_SIZE  ((UINT16_MAX + 1u) / 2u) /**< virtual machine memory size*/
-#define BLOCK_SIZE       (1024u) /**< size of forth block in bytes */
-#define STRING_OFFSET    (32u)   /**< offset into memory of string buffer*/
-#define MAX_WORD_LENGTH  (32u)   /**< maximum word length, must be < 255 */
-#define DICTIONARY_START (STRING_OFFSET + MAX_WORD_LENGTH) /**< start of dic */
+#define DEFAULT_CORE_SIZE   (32 * 1024) /**< default vm size*/
+#define BLOCK_SIZE          (1024u) /**< size of forth block in bytes */
+#define STRING_OFFSET       (32u)   /**< offset into memory of string buffer*/
+#define MAX_WORD_LENGTH     (32u)   /**< max word length, must be < 255 */
+#define DICTIONARY_START    (STRING_OFFSET + MAX_WORD_LENGTH) /**< start of dic */
 #define WORD_LENGTH_OFFSET  (8)  /**< bit offset for word length start*/
 #define WORD_LENGTH(FIELD1) (((FIELD1) >> WORD_LENGTH_OFFSET) & 0xff)
 #define WORD_HIDDEN(FIELD1) ((FIELD1) & 0x80) /**< is a forth word hidden? */
@@ -30,7 +30,7 @@
 
 static const char *core_file_name = "forth.core";
 static const char *initial_forth_program = "\n\
-: state 8 exit : ; immediate ' exit , 0 state ! exit : base 9 ; : pwd 10 ;   \n\
+: state 8 exit : ; immediate ' exit , 0 state ! exit : base 9 ; : pwd 10 ;\n\
 : h 6 ; : r 7 ; : here h @ ; : [ immediate 0 state ! ; : ] 1 state ! ;       \n\
 : :noname immediate -1 , here 2 , ] ; : if immediate ' ?branch , here 0 , ;  \n\
 : else immediate ' branch , here 0 , swap dup here swap - swap ! ; : 0= 0 = ;\n\
@@ -54,6 +54,7 @@ struct forth { /**< FORTH environment, values marked '!!' are serialized in orde
 	forth_cell_t core_size;  /**< size of VM !! (converted to uint64_t)*/
 	jmp_buf *on_error;   /**< place to jump to on error */
 	uint8_t *s;          /**< convenience pointer for string input buffer */
+	char hex_fmt[16];    /**< calculated hex format*/
 	forth_cell_t *S;     /**< stack pointer */
 	forth_cell_t m[];    /**< Forth Virtual Machine memory !! (as is)*/
 };
@@ -152,11 +153,11 @@ static int blockio(forth_t *o, void *p, forth_cell_t poffset, forth_cell_t id, c
 	return n == BLOCK_SIZE ? 0 : -1;
 } /*a basic FORTH block I/O interface*/
 
-static int numberify(forth_t *o, forth_cell_t *n, const char *s)  
-{ /*returns non zero if conversion was successful*/
+static int numberify(int base, forth_cell_t *n, const char *s)  
+{ /*returns non zero if conversion was successful: add to vm*/
 	char *end = NULL;
 	errno = 0;
-	*n = strtol(s, &end, o->m[BASE]);
+	*n = strtol(s, &end, base);
 	return !errno && *s != '\0' && *end == '\0';
 }
 
@@ -170,10 +171,10 @@ static forth_cell_t find(forth_t *o)
 	return w > DICTIONARY_START ? w+1 : 0;
 }
 
-static int print_cell(forth_t *o, forth_cell_t f, int tab)
-{ /* print out a number, optional tab after number is printed */
-	char *fmt = o->m[BASE] == 16 ? "0x%" PRIxCell "%s" : "%" PRIuCell "%s";
-	return fprintf((FILE*)(o->m[FOUT]), fmt, f, tab ? "\t" : "");
+static int print_cell(forth_t *o, forth_cell_t f)
+{ 
+	char *fmt = o->m[BASE] == 16 ? o->hex_fmt : "%" PRIuCell;
+	return fprintf((FILE*)(o->m[FOUT]), fmt, f);
 }
 
 void forth_set_file_input(forth_t *o, FILE *in) 
@@ -227,6 +228,7 @@ static void forth_make_default(forth_t *o, size_t size, FILE *in, FILE *out)
 	o->m[START_TIME] = (1000 * clock()) / CLOCKS_PER_SEC;
 	o->m[ARGC] = o->m[ARGV] = 0;
 	o->S             = o->m + size - (2 * o->m[VSTACK_SIZE]); /*set up variable stk pointer*/
+	sprintf(o->hex_fmt, "0x%%0%d"PRIxCell, (int)(sizeof(forth_cell_t)*2));
 	o->on_error      = calloc(sizeof(jmp_buf), 1);
 	forth_set_file_input(o, in);  /*set up input after our eval*/
 }
@@ -408,7 +410,7 @@ int forth_run(forth_t *o)
 				if (!m[STATE] && instruction(m[ck(pc)]) == COMPILE)
 					pc++;
 				goto INNER;
-			} else if(!numberify(o, &w, (char*)o->s)) {
+			} else if(!numberify(o->m[BASE], &w, (char*)o->s)) {
 				fprintf(stderr, "( error \"%s is not a word\" )\n", o->s);
 				break;
 			}
@@ -444,8 +446,7 @@ int forth_run(forth_t *o)
 		case TOR:     m[ck(++m[RSTK])] = f; f = *S--;        break;
 		case BRANCH:  I += m[ck(I)];                         break;
 		case QBRANCH: I += f == 0 ? m[I] : 1; f = *S--;      break;
-		case PNUM:    print_cell(o, f, 0);
-			      f = *S--;                              break;
+		case PNUM:    print_cell(o, f); f = *S--;            break;
 		case QUOTE:   *++S = f;     f = m[ck(I++)];          break;
 		case COMMA:   m[ck(m[DIC]++)] = f; f = *S--;         break;
 		case EQUAL:   f = *S-- == f;                         break;
@@ -494,12 +495,20 @@ int main_forth(int argc, char **argv)
 {
 	FILE *in = NULL, *core_file = NULL;
 	int save = 0, readterm = 0, rval = 0, i = 1, c = 0;
+	forth_cell_t core_size = DEFAULT_CORE_SIZE;
 	forth_t *o = NULL;
 	for(i = 1; i < argc && argv[i][0] == '-'; i++)
 		switch(argv[i][1]) {
 		case '\0': goto done; /* stop argument processing */
 		case 's':  save     = 1; break;
 		case 't':  readterm = 1; break;
+		case 'm':  if(o || i >= (argc - 1) || !numberify(10, &core_size, argv[++i]))
+				   goto fail;
+			   if((core_size *= 1024/sizeof(forth_cell_t)) < MINIMUM_CORE_SIZE) {
+				   fprintf(stderr, "error: -m too small (minimum %zu)\n", MINIMUM_CORE_SIZE * sizeof(forth_cell_t));
+				   return -1;
+			   }
+			   break;
 		case 'l':  if(o || i >= (argc - 1))
 				   goto fail;
 			   if(!(o = forth_load_core(core_file = fopen_or_die(argv[++i], "rb")))) {
@@ -510,12 +519,12 @@ int main_forth(int argc, char **argv)
 			   break;
 		default:
 		fail:
-			fprintf(stderr, "usage: %s [-st] [-l file] [-] file...\n", argv[0]);
+			fprintf(stderr, "usage: %s [-st] [-m size] [-l file] [-] file...\n", argv[0]);
 			return -1;
 		}
 done:
 	readterm = i == argc || readterm; /* if no files are given, read stdin */
-	if(!o && !(o = forth_init(CORE_SIZE, stdin, stdout))) {
+	if(!o && !(o = forth_init(core_size, stdin, stdout))) {
 		fprintf(stderr, "forth initialization failed\n");
 		return -1;
 	}

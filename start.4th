@@ -32,7 +32,7 @@ See:
 : logical ( x -- bool ) not not ;
 : hidden-mask 0x80 ( Mask for the hide bit in a words MISC field ) ;
 : instruction-mask 0x1f ( Mask for the first code word in a words MISC field ) ;
-: hidden? hidden-mask and logical ;
+: hidden? ( PWD -- PWD bool ) dup 1+ @ hidden-mask and logical ;
 : push-location 2 ;       ( location of special "push" word )
 : compile-instruction 1 ; ( compile code word, threaded code interpreter instruction )
 : run-instruction 2 ;     ( run code word, threaded code interpreter instruction )
@@ -49,6 +49,8 @@ See:
 : char key drop key ;
 : [char] immediate char push-location , , ;
 : postpone immediate find , ;
+: unless immediate ( bool -- : like 'if' but execute clause if false ) ' 0= , postpone if ;
+: endif immediate ( synonym for 'then' ) postpone then ;
 : bl ( space character ) [char]  ; ( warning: white space is significant after [char] )
 : space bl emit ;
 : address-unit-bits size 8* ;
@@ -75,7 +77,6 @@ See:
 : <= ( x y -- bool ) > not ;
 : 2* ( x -- x ) 1 lshift ;
 : 2/ ( x -- x ) 1 rshift ;
-\ : #  ( x -- x ) dup . cr ;
 : 2@ dup 1+ @ swap @ ;
 : r@ r> r @ swap >r ;
 : 0> 0 > ;
@@ -94,6 +95,8 @@ See:
 : >mark ( -- ) here 0 , ; 
 : end immediate (  A synonym for until ) postpone until ;
 : bye ( -- : quit the interpreter ) 0 r ! ;
+: pick ( xu ... x1 x0 u -- xu ... x1 x0 xu )
+	stack-start depth + swap - 1- @ ;
 
 : rdrop ( R: x -- )
 	r>           ( get caller's return address )
@@ -102,6 +105,11 @@ See:
 	>r           ( return return address )
 ;
 
+: again immediate 
+	( loop unconditionally in a begin-loop:
+		begin ... again )
+	' branch , here - , ; 
+
 ( begin...while...repeat These are defined in a very "Forth" way )
 : while immediate postpone if ( branch to repeats 'then') ;
 : repeat immediate
@@ -109,9 +117,8 @@ See:
 	postpone again  ( again jumps to begin )
 	postpone then ; ( then writes to the hole made in if )
 
-: ?exit ( x -- ) ( exit current definition if not zero ) if rdrop exit then ;
-
-( ========================== Basic Word Set ================================== )
+: never ( never...then : reserve space in word ) 
+	immediate 0 push-location , , postpone if ;
 
 : dictionary-start 
 	( The dictionary start at this location, anything before this value 
@@ -130,53 +137,12 @@ See:
 	the Forth environment and only via the C-API, however the
 	value can still change, the values correspond to:
 	Value    Input Source
-	-1        String
+	-1       String
 	0        File Input [this may be stdin] )
 	source-id-reg @
 ;
 
-: again immediate 
-	( loop unconditionally in a begin-loop:
-		begin ... again )
-	' branch , here - , 
-; 
 : 2drop ( x y -- ) drop drop ;
-: words ( -- )
-	( This function prints out all of the defined words, excluding hidden words.
-	An understanding of the layout of a Forth word helps here. The dictionary
-	contains a linked list of words, each forth word has a pointer to the previous
-	word until the first word. The layout of a Forth word looks like this:
-
-	NAME:  Forth Word - A variable length ASCII NUL terminated string
-	PWD:   Previous Word Pointer, points to the previous word
-	MISC:  Flags, code word and offset from previous word pointer to start of Forth word string
-	CODE/DATA: The body of the forth word definition, not interested in this.
-	
-	There is a register which stores the latest defined word which can be
-	accessed with the code "pwd @". In order to print out a word we need to
-	access a words MISC field, the offset to the NAME is stored here in bits
-	8 to 15 and the offset is calculated from the PWD field.
-
-	"print" expects a character address, so we need to multiply any calculated
-	address by the word size in bytes. )
-	pwd @ ( Load most recently defined word )
-	begin 
-		dup dup     ( Make some copies: pwd pwd pwd )
-		1+ @ dup    ( Load Flags fields: misc misc pwd pwd )
-		hidden? ( If the word is hidden, do not print it: hidden? pwd-1 pwd pwd ) 
-		if 
-			2drop ( pwd )
-		else 
-			256/ lsb ( offset pwd pwd )
-			- chars>  ( word-name-address pwd )
-			print tab  ( pwd )
-		then 
-		@  ( Get pointer to previous word )
-		dup dictionary-start < ( stop if pwd no longer points to a word )
-	until 
-	drop cr 
-; 
-
 : hide  ( token -- hide-token ) 
 	( This hides a word from being found by the interpreter )
 	dup 
@@ -189,6 +155,22 @@ See:
 
 : hider ( WORD -- ) ( hide with drop ) find dup if hide drop else drop then ;
 : unhide ( hide-token -- ) dup @ hidden-mask invert and swap ! ;
+
+: original-exit [ find exit ] literal ;
+
+: exit 
+	( this will define a second version of exit, ';' will
+	use the original version, whilst everything else will
+	use this version, allowing us to distinguish between
+	the end of a word definition and an early exit by other
+	means in "see" )
+	[ find exit hide ] rdrop exit [ unhide ] ;
+
+: ?exit ( x -- ) ( exit current definition if not zero ) if rdrop exit then ;
+
+( ========================== Basic Word Set ================================== )
+
+( ========================== Extended Word Set =============================== )
 : gcd ( a b -- n ) ( greatest common divisor )
 	begin
 		dup
@@ -211,7 +193,7 @@ See:
 	drop 1- 
 ;
 
-: execution-token ( previous-word-address -- execution-token )
+: xt-token ( previous-word-address -- xt-token )
 	( Given the address of the PWD field of a word this
 	function will return an execution token for the word )
 	1+    ( MISC field )
@@ -222,20 +204,25 @@ See:
 	compile-instruction = +
 ;
 
-: ['] immediate find execution-token push-location , , ;
+: ['] immediate find xt-token push-location , , ;
 
-: execute ( execution-token -- )
+: execute ( xt-token -- )
 	( given an execution token, execute the word )
 
 	( create a word that pushes the address of a hole to write to
 	a literal takes up two words, '!' takes up one )
 	1- ( execution token expects pointer to PWD field, it does not
 		care about that field however, and increments past it )
-	execution-token
+	xt-token
 	[ here 3+ literal ] 
 	!                   ( write an execution token to a hole )
 	[ 0 , ]             ( this is the hole we write )
 ;
+
+( ========================== Extended Word Set =============================== )
+
+
+( ========================== CREATE DOES> ==================================== )
 
 ( The following section defines a pair of words "create" and "does>" which 
 are a powerful set of words that can be used to make words that can create
@@ -286,16 +273,13 @@ hider state!
 	here swap !           ( patch in the code fields to point to )
 	run-instruction ,     ( write a run in )
 ;
-
 hider write-quote 
+
+( ========================== CREATE DOES> ==================================== )
 
 : array    ( length --  :create a array )           create allot does> + ;
 : variable ( initial-value -- : create a variable ) create ,     does>   ;
 : constant ( value -- : create a constant )         create ,     does> @ ;
-
-4 variable column-width
-: column ( i -- : print a cr if index is at last column )
-	column-width @ mod not if cr then ;
 
 ( do...loop could be improved, perhaps by not using the return stack
 so much )
@@ -365,17 +349,6 @@ hider addi
 	then
 ;
 
-: pick ( xu ... x1 x0 u -- xu ... x1 x0 xu )
-	stack-start depth + swap - 1- @
-;
-
-: .s    ( -- : print out the stack for debugging )
-	depth if
-		depth 0 do i pick . tab i column loop
-	then
-	cr
-;
-
 : tail 
 	( This function implements tail calls, which is just a jump
 	to the beginning of the words definition, for example this
@@ -394,28 +367,31 @@ hider addi
 
 	Would overflow the return stack. )
 	immediate
-	pwd @ execution-token 
+	pwd @ xt-token 
 	' branch ,
 	here - 1+ ,
 ;
 
-: recurse
-	immediate
+: recurse immediate
 	( This function implements recursion, although this interpreter
 	allows calling a word directly. If used incorrectly this will
 	blow up the return stack.
 
 	We can test "recurse" with this factorial function:
 	  : factorial  dup 2 < if drop 1 exit then dup 1- recurse * ;)
-	pwd @ execution-token ,
-;
+	pwd @ xt-token , ;
+
+0 variable column-counter
+4 variable column-width
+: column ( i -- )	column-width @ mod not if cr then ;
+: reset-column		0 column-counter ! ;
+: auto-column		column-counter dup @ column 1+! ;
 
 : alignment-bits [ 1 size log2 lshift 1- literal ] and ;
 : name ( PWD -- c-addr ) 
 	( given a pointer to the PWD field of a word get a pointer to the name
 	of the word )
-	dup 1+ @ 256/ lsb - chars>
-;
+	dup 1+ @ 256/ lsb - chars> ;
 
 : c@ ( character-address -- char )
 	( retrieve a character from an address )
@@ -563,8 +539,13 @@ hider delim
 
 : ok " ok" cr ;
 
+: error-no-word ( print error indicating last read in word as source )
+	"  error: word '" source drop print " ' not found" cr ;
+
 : ;hide ( should only be matched with ':hide' ) 
 	immediate " error: ';hide' without ':hide'" cr ;
+
+
 : :hide
 	( hide a list of words, the list is terminated with ";hide" )
 	begin
@@ -574,7 +555,7 @@ hider delim
 		then
 		dup 0= if ( word not found )
 			drop 
-			"  error: word '" source drop print " 'not found" cr 
+			error-no-word
 			exit 
 		then
 		hide drop
@@ -585,20 +566,18 @@ hider delim
 
 : fill ( c-addr u char -- )
 	( fill in an area of memory with a character, only if u is greater than zero )
-	swap 
+	-rot
 	0 do 2dup i + c! loop
-	2drop
+	2drop 
 ;
 
 : spaces ( n -- : print n spaces ) 0 do space loop ;
 : erase ( addr u : erase a block of memory )
-	chars> swap chars> 0 -rot fill
-;
+	chars> swap chars> swap 0 fill ;
 
 : blank ( c-addr u )
 	( given a character address and length, this fills that range with spaces )
-	bl -rot swap fill
-;
+	bl fill ;
 
 : move ( addr1 addr2 u -- )
 	( copy u words of memory from 'addr2' to 'addr1' )
@@ -632,38 +611,41 @@ Which will skip a line if a conditional is false, and compile it
 if true )
 
 ( These words really, really need refactoring )
-0 variable nest      ( level of [if] nesting )
-0 variable else-word ( this will be populated with a forward reference to [else] )
-: unless immediate ( bool -- : like 'if' but execute clause if false ) ' 0= , postpone if ;
-: endif immediate ( synonym for 'then' ) postpone then ;
-: [then] immediate ;
+0 variable      nest        ( level of [if] nesting )
+0 variable      [if]-word    ( populated later with "find [if]" )
+0 variable      [else]-word  ( populated later with "find [else]")
+: [then]        immediate ; 
+: reset-nest    1 nest ! ;
+: unnest?       [ find [then] ] literal = if nest 1-! then ;
+: nest?         [if]-word             @ = if nest 1+! then ;
+: end-nest?     nest @ 0= ;
+: match-[else]? [else]-word @ = nest @ 1 = and ; 
 
-: reset-nest 1 nest ! ;
-: [if]
+: [if] ( bool -- : conditional execution )
 	unless
 		reset-nest
 		begin
-			find ( read in a word, we'll try to process it )
-			dup [ find [if]   ] literal =     if nest 1+! then
-			dup else-word @ = nest @ 1  = and if exit then
-			    [ find [then] ] literal =     if nest 1-! then
-			nest @ 0=
+			find 
+			dup nest?
+			dup match-[else]? if drop exit then
+			    unnest?
+			end-nest?
 		until
 	then
 ;
 
-: [else]
+: [else] ( discard input until [then] encounter, nesting for [if] )
 	reset-nest
 	begin
 		find
-		dup [ find [if]   ] literal = if nest 1+! then
-		    [ find [then] ] literal = if nest 1-! then
-		nest @ 0=
+		dup nest? unnest?
+		end-nest?
 	until
 ;
+find [if] [if]-word !
+find [else] [else]-word ! 
 
-find [else] else-word ! 
-:hide else-word nest reset-nest ;hide
+:hide [if]-word [else]-word nest reset-nest unnest? match-[else]? ;hide
 
 size 2 = [if] 0x0123           variable endianess [then]
 size 4 = [if] 0x01234567       variable endianess [then]
@@ -680,39 +662,39 @@ hider endianess
 	along with dictionary pointer, always in front of it )
 	here 64 + ;
 
-: counted-column
-	( i -- : print the current counter and a cr if at column end )
-	dup column-width @ mod 
-	not if 
-		cr . " :" tab 
-	else drop 
-then ;
+0 variable counter
 
-: lister swap do i dup counted-column @ . tab loop ;
+: counted-column ( index -- )
+	( special column printing for dump )
+	counter @ column-width @ mod 
+	not if cr . " :" space else drop then
+	counter 1+! ;
 
+: lister 0 counter ! swap do i counted-column i @ . space loop ;
+
+( @todo dump should print out the data as characters as well, if printable )
 : dump  ( addr u -- : dump out 'u' cells of memory starting from 'addr' )
-	1+ over + lister cr ;
-hider lister
+	base @ >r hex 1+ over + lister r> base ! cr ;
+:hide counted-column counter lister ;hide
 
 : forgetter ( pwd-token -- : forget a found word and everything after it )
 	dup @ pwd ! h ! ;
 
-: forget ( WORD -- )
-	( given a word, forget every word defined after that
-	word and the word itself )
+: forget ( WORD -- : forget word and every word defined after it )
 	find 1- forgetter ;
 
-: marker
-	( make a word that forgets everything defined after it,
-	including itself )
+: marker ( WORD -- : make word the forgets itself and words after it)
 	:: push-location , pwd @ , ' forgetter , postpone ; ;
 hider forgetter
 
 : ?dup-if immediate ( x -- x | - ) 
 	' ?dup , 
 	' ?branch , here 0 ,
-	( compile if )
+	( postpone if )
 ;
+
+: type ( c-addr u -- : print out 'u' characters at c-addr )
+	0 do dup c@ emit 1+ loop ;
 
 : ** ( b e -- x : exponent, raise 'b' to the power of 'e')
 	dup
@@ -733,6 +715,7 @@ hider forgetter
 	c!
 ;
 hider char-alignment
+
 
 ( ==================== Random Numbers ========================= )
 
@@ -824,6 +807,7 @@ hider CSI
 	0 counter !
 	"  The primes from " dup . "  to " over . "  are: "
 	cr
+	reset-column
 	do
 		i prime?
 		if
@@ -837,6 +821,52 @@ hider counter
 ( ==================== Prime Numbers ========================== )
 
 ( ==================== Debugging info ========================= )
+
+: .s    ( -- : print out the stack for debugging )
+	depth if
+		depth 0 do i column tab i pick . tab loop
+	then
+	cr ;
+
+1 variable hide-words
+
+: words ( -- )
+	( This function prints out all of the defined words, excluding hidden words.
+	An understanding of the layout of a Forth word helps here. The dictionary
+	contains a linked list of words, each forth word has a pointer to the previous
+	word until the first word. The layout of a Forth word looks like this:
+
+	NAME:  Forth Word - A variable length ASCII NUL terminated string
+	PWD:   Previous Word Pointer, points to the previous word
+	MISC:  Flags, code word and offset from previous word pointer to start of Forth word string
+	CODE/DATA: The body of the forth word definition, not interested in this.
+	
+	There is a register which stores the latest defined word which can be
+	accessed with the code "pwd @". In order to print out a word we need to
+	access a words MISC field, the offset to the NAME is stored here in bits
+	8 to 15 and the offset is calculated from the PWD field.
+
+	"print" expects a character address, so we need to multiply any calculated
+	address by the word size in bytes. )
+	reset-column
+	pwd @ ( Load most recently defined word )
+	begin 
+		dup 
+		hidden? hide-words @ and
+		not if 
+			name
+			print tab  
+			auto-column
+		else 
+			drop 
+		then 
+		@  ( Get pointer to previous word )
+		dup dictionary-start < ( stop if pwd no longer points to a word )
+	until 
+	drop cr 
+; 
+hider hide-words
+
 : registers ( -- )
 	( print out important registers and information about the
 	virtual machine )
@@ -870,14 +900,47 @@ hider counter
 : TrueFalse if " true" else " false" then ;
 : >instruction ( extract instruction from instruction field ) 0x1f and ;
 
+: step
+	( step through a word )
+	registers
+	" .s: " .s cr
+	" -- press any key to continue -- "
+	key drop ;
+
+0 variable cf
+: code>pwd ( CODE -- bool )
+	( given a pointer to a executable code field
+	this words attempts to find the PWD field for
+	that word )
+	dup here             >= if drop 0 exit then ( cannot be a word, too small )
+	dup dictionary-start <= if drop 0 exit then ( cannot be a word, too large )
+	cf !
+	pwd @ dup @ ( p1 p2 )
+	begin
+		over ( p1 p2 p1 )
+		cf @ <= swap cf @ > and if exit then
+		dup 0=                  if exit then 
+		dup @ swap 
+	again
+;
+hider cf
+
+: end-print ( x -- ) "  => " . " )" cr ;
 : word-printer
-	( this word expects a pointer to an execution token and must determine
-	whether the word is immediate, and whether it has no name, this
-	needs to be implemented )
-	0 ;
+	( attempt to print out a word given a words code field
+	WARNING: This is a dirty hack at the moment
+	NOTE: given a pointer to somewhere in a word it is possible
+	to work out the PWD by looping through the dictionary to
+	find the PWD below it )
+	1- dup @ -1 =             if " (noname)" end-print exit then
+	   dup  " (" code>pwd dup if name print else drop " data" then 
+	        end-print ;
+hider end-print
 
 : decompile ( code-field-ptr -- )
-	( This word expects a pointer to the code field of a word, it
+	( @todo Rewrite, simplify and get this working correctly
+ 
+	This word expects a pointer to the code field of a word, it
 	decompiles a words code field, it needs a lot of work however.
 	There are several complications to implementing this decompile
 	function, ":noname", "branch", multiple "exit" commands, and literals.
@@ -890,55 +953,79 @@ hider counter
 	branch   branches are used to skip over data, but also for
 	         some branch constructs, any data in between can only
 	         be printed out generally speaking 
-	exit     It might be difficult to determine when a word actually
-	         actually stops, one way of fixing this is to write 
-	         something after the terminating exit [placed by ';'],
-	         such as all bits set, which is not something that
-	         can occur normally
+	exit     There are two definitions of exit, the one used in
+		 ';' and the one everything else uses, this is used
+		 to determine the actual end of the word
 	literals Literals can be distinguished by their low value,
 	         which cannot possibly be a word with a name, the
 	         next field is the actual literal 
+
+	Of special difficult is processing 'if' 'else' 'then' statements,
+	this will require keeping track of '?branch'.
 
 	Also of note, a number greater than "here" must be data )
 	255 0
 	do
 		tab 
-		dup @ push-location = if " literal:" tab 1+ dup @ . 1+ cr then
-		dup @ [ find branch execution-token ] literal = if " branch:" tab 1+ dup @ . 1+ cr then
-		dup @ [ find exit execution-token ] literal = if " exit" i cr leave  then
-		cr
+		dup @ push-location                      = if " (literal => " 1+ dup @ . 1+ " )" cr tab then
+		dup @ [ find branch   xt-token ] literal = if " (branch => "  1+ dup @ . " )" cr dup dup @ dump dup @ + cr tab then
+		dup @ [ original-exit xt-token ] literal = if " (exit)"  i cr leave  then
+		dup @ word-printer
 		1+
 	loop
 	cr
 	255 = if " decompile limit exceeded" cr then
 	drop ;
+
 hider word-printer
+
+: xt-instruction ( extract instruction from execution token ) 
+	xt-token @ >instruction ;
+( these words expect a pointer to the PWD field of a word )
+: defined-word?      xt-instruction run-instruction = ;
+: print-name         " name:          " name print cr ;
+: print-start        " word start:    " name chars . cr ;
+: print-previous     " previous word: " @ . cr ;
+: print-immediate    " immediate:     " 1+ @ >instruction compile-instruction <> TrueFalse cr ;
+: print-instruction  " instruction:   " xt-instruction . cr ;
+: print-defined      " defined:       " defined-word? TrueFalse cr ;
+
+: print-header ( PWD -- is-immediate-word? )
+	dup print-name
+	dup print-start
+	dup print-previous
+	dup print-immediate
+	dup print-instruction ( TODO look up instruction name )
+	print-defined ;
 
 : see 
 	( decompile a word )
 	find 
-	dup dictionary-start < if drop " word not found" cr exit then
-	1-
-	dup " name:          " name print cr
-	dup " word start:    " name chars . cr
-	dup " previous word: " @ . cr
-	dup " immediate:     " 1+ @ >instruction compile-instruction <> TrueFalse cr
-	dup " instruction:   " execution-token @ >instruction . cr ( @todo lookup instruction name )
-	dup " defined:       " execution-token @ >instruction run-instruction = dup TrueFalse cr
+	dup 0= if drop error-no-word exit then
+	1- ( move to PWD field )
+	dup print-header
+	dup defined-word?
 	if ( decompile if a compiled word )
-		execution-token 1+ ( move to code field )
-		" code field:    " cr
+		xt-token 1+ ( move to code field )
+		" code field:" cr
 		decompile
 	else ( the instruction describes the word if it is not a compiled word )
 		drop
 	then ;
-:hide decompile TrueFalse >instruction ;hide
+
+:hide 
+	decompile TrueFalse >instruction print-header 
+	print-name print-start print-previous print-immediate 
+	print-instruction xt-instruction defined-word? print-defined
+;hide
+
 
 : more ( wait for more input )
 	cr "  -- press any key to continue -- " key drop cr ;
 
 : help ( print out a short help message )
- key drop
+	page
+	key drop
 " Welcome to Forth, an imperative stack based language. It is both a low
 level and a high level language, with a very small memory footprint. Most
 of Forth is defined as a combination of various primitives.
@@ -1030,23 +1117,7 @@ For resources on Forth:
 ;
 
 ( \ Test code
-
-: ' immediate 
-	\ create a version of "'" that works at command time as well
-        \ as compile time 
-	[ 
-		hide '      \ hide this definition, we will use the hide token it produces 
-		hide ' drop \ hide the built in definition , drop the token it produces 
-	]
-	state @ 
-	if 
-		push-location , find execution-token , 
-	else 
-		find 
-	then 
-	[ unhide ] 
-;
-
+( 
 0x8000              constant hello-buffer
 hello-buffer chars  constant move-1-buffer
 move-1-buffer 0x100 + constant move-2-buffer
@@ -1119,14 +1190,37 @@ c
 31 constant a
 a . cr
 
+0 variable x
+0 variable y
+4 variable scroll-speed
+16 variable paint-speed
+10 variable wait-time
+
+: @x random 80 mod x ! x @ ;
+: @y random 40 mod y ! y @ ;
+: maybe-scroll random scroll-speed @ mod 0= if cr then ;
+: star [char] * emit ;
+: paint @x @y at-xy star ;
+: maybe-paint random paint-speed @ mod 0= if paint then ;
+: wait wait-time @ ms ;
+: screen-saver
+	page
+	hide-cursor
+	begin
+		maybe-scroll
+		maybe-paint
+		wait
+	again ;
 )
+
 
 ( clean up the environment )
 :hide
  write-string do-string accept-string ')' alignment-bits print-string '"'
  compile-instruction dictionary-start hidden? hidden-mask instruction-mask 
  max-core push-location run-instruction stack-start x x! x@ write-exit 
- mask-byte accepter max-string-length source-id-reg execution-token
+ mask-byte accepter max-string-length source-id-reg xt-token error-no-word
+ original-exit
 ;hide
 
 ( TODO
@@ -1134,8 +1228,6 @@ a . cr
 	* By adding "c@" and "c!" to the interpreter I could remove print
 	* Add unit testing to the end of this file
 	* Word, Parse, repeat, while, Case statements, other forth words
-	* Try to simplify the definitions of write-string using "create" "does>"
-	and come up with a way of reusing code for "move", "cmove" and "cmove>",
 	* Add a dump core and load core to the interpreter?
 	* add "j" if possible to get outer loop context
 	* Decompiler "see" http://lars.nocrew.org/dpans/dpans15.htm
@@ -1163,5 +1255,17 @@ a . cr
 	not very Forth like
 	* An assembler mode would execute primitives only, this would
 	require a change to the interpreter
+	* throw and exception
+	* A set of words for navigating around word definitions would be
+	help debugging words, for example:
+		compile-field code-field field-translate
+	would take a pointer to a compile field for a word and translate
+	that into the code field
+	* [ifdef] [ifundef]
+	* roll
+	* if strings were stored in word order instead of byte order
+	then external tools could translate the dictionary by swapping
+	the byte order of it
+	* store strings as length + string instead of ascii strings
 )
 

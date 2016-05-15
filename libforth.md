@@ -915,8 +915,10 @@ memory addressable by the virtual machine to only within its memory limits
 * The program command line interface could be improved by:
   - an evaluate argument that would evaluate a string
   - an environment variable to load up a start file
-  - allocate a desired virtual memory size
+  - specify forth core save file
   - ...
+* basic operating system interaction could be added, such as the "system"
+  function and file opening/closing (which could replace block).
 
 ### Notes
 

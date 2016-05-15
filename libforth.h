@@ -12,7 +12,7 @@ extern "C" {
 #include <stdio.h>
 #include <stdint.h>
 #include <inttypes.h>
-#define MINIMUM_CORE_SIZE (2048)
+#define MINIMUM_CORE_SIZE (1024)
 
 struct forth; /**< An opaque object that holds a running FORTH environment**/
 typedef struct forth forth_t;
