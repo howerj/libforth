@@ -96,27 +96,38 @@ static size_t must_block_io(struct rle *r, void *p, size_t characters, char rw)
 
 static void encode(struct rle *r)
 { /* needs more testing */
-	uint8_t buf[256];
-	for(int c, idx = 0, j, prev = EOF; (c = may_fgetc(r)) != EOF; prev = c) {
+	uint8_t buf[128];
+	int idx = 0;
+	for(int c, j, prev = EOF; (c = may_fgetc(r)) != EOF; prev = c) {
 		if(c == prev) {
 			if(idx > 1) {
 				must_fputc(r, idx+128);
 				must_block_io(r, buf, idx, 'w');
 				idx = 0;
-			}
+			} 
 			for(j = 0; (c = may_fgetc(r)) == prev && j < 128; j++)
 				;
 			must_fputc(r, j);
 			must_fputc(r, prev);
+			if(c == EOF) {
+				goto end;
+			}
 		}
 		buf[idx++] = c;
-		if(idx == 128) {
-			must_fputc(r, idx);
+		if(idx == 127) {
+			must_fputc(r, idx+128);
 			must_block_io(r, buf, idx, 'w');
 			idx = 0;
 		}
-		assert(idx < 128);
+		assert(idx < 127);
 	}
+end:
+	if(idx) {
+		must_fputc(r, idx+128);
+		must_block_io(r, buf, idx, 'w');
+		idx = 0;
+	}
+
 }
 
 int run_length_encoder(int verbose, FILE *in, FILE *out)

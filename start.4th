@@ -40,6 +40,7 @@ See:
 : false 0 ;
 : true 1 ;
 : 8* 3 lshift ;
+: *+ * + ;
 : 2- 2 - ;
 : 2+ 2 + ;
 : 3+ 3 + ;
@@ -1018,7 +1019,6 @@ hider word-printer
 	print-name print-start print-previous print-immediate 
 	print-instruction xt-instruction defined-word? print-defined
 ;hide
-
 
 : more ( wait for more input )
 	cr "  -- press any key to continue -- " key drop cr ;
