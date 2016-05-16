@@ -391,33 +391,33 @@ int forth_run(forth_t *o)
 		case PUSH:    *++S = f;     f = m[ck(I++)];          break;
 		case COMPILE: m[ck(m[DIC]++)] = pc;                  break;
 		case RUN:     m[ck(++m[RSTK])] = I; I = pc;          break;
-		case DEFINE:  m[STATE] = 1;
+		case DEFINE:  m[STATE] = 1; /* compile mode */
                               if(forth_get_word(o, (uint8_t*)(o->s)) < 0)
                                       goto end;
-                              compile(o, COMPILE, (char*)o->s);
+                              compile(o, COMPILE, (char*)o->s); 
                               m[ck(m[DIC]++)] = RUN;                 break;
 		case IMMEDIATE: 
-			      m[DIC] -= 2; 
-			      m[m[DIC]] &= ~INSTRUCTION_MASK;
-			      m[m[DIC]] |= RUN; 
-			      m[DIC]++;                              break;
+			      m[DIC] -= 2; /* move to first code field */
+			      m[m[DIC]] &= ~INSTRUCTION_MASK; /* zero instruction */
+			      m[m[DIC]] |= RUN; /* set instruction to RUN */
+			      m[DIC]++; /* compilation start here */ break;
 		case READ: 
-			m[ck(RSTK)]--;
+			m[ck(RSTK)]--; 
 			if(forth_get_word(o, o->s) < 0)
 				goto end;
 			if ((w = find(o)) > 1) {
 				pc = w;
 				if (!m[STATE] && instruction(m[ck(pc)]) == COMPILE)
-					pc++;
+					pc++; /* in command mode, execute word */
 				goto INNER;
 			} else if(!numberify(o->m[BASE], &w, (char*)o->s)) {
 				fprintf(stderr, "( error \"%s is not a word\" )\n", o->s);
 				break;
 			}
-			if (m[STATE]) { /*must be a number then*/
+			if (m[STATE]) { /* must be a number then */
 				m[m[DIC]++] = 2; /*fake word push at m[2]*/
 				m[ck(m[DIC]++)] = w;
-			} else {
+			} else { /* push word */
 				*++S = f;
 				f = w;
 			}                                            break;
@@ -494,7 +494,8 @@ void forth_set_args(forth_t *o, int argc, char **argv)
 int main_forth(int argc, char **argv) 
 {
 	FILE *in = NULL, *core_file = NULL;
-	int save = 0, readterm = 0, rval = 0, i = 1, c = 0;
+	int save = 0, readterm = 0, mset = 0, rval = 0, i = 1, c = 0;
+	static const size_t kbpc = 1024/sizeof(forth_cell_t); /*kilobytes per cell*/
 	forth_cell_t core_size = DEFAULT_CORE_SIZE;
 	forth_t *o = NULL;
 	for(i = 1; i < argc && argv[i][0] == '-'; i++)
@@ -502,14 +503,15 @@ int main_forth(int argc, char **argv)
 		case '\0': goto done; /* stop argument processing */
 		case 's':  save     = 1; break;
 		case 't':  readterm = 1; break;
-		case 'm':  if(o || i >= (argc - 1) || !numberify(10, &core_size, argv[++i]))
+		case 'm':  if(o || i > argc || !numberify(10, &core_size, argv[++i]))
 				   goto fail;
-			   if((core_size *= 1024/sizeof(forth_cell_t)) < MINIMUM_CORE_SIZE) {
-				   fprintf(stderr, "error: -m too small (minimum %zu)\n", MINIMUM_CORE_SIZE * sizeof(forth_cell_t));
+			   if((core_size *= kbpc) < MINIMUM_CORE_SIZE) {
+				   fprintf(stderr, "error: -m too small (minimum %zu)\n", MINIMUM_CORE_SIZE / kbpc);
 				   return -1;
 			   }
+			   mset = 1;
 			   break;
-		case 'l':  if(o || i >= (argc - 1))
+		case 'l':  if(o || mset || i > argc)
 				   goto fail;
 			   if(!(o = forth_load_core(core_file = fopen_or_die(argv[++i], "rb")))) {
 				   fprintf(stderr, "%s: core load failed\n", argv[i]);
@@ -519,13 +521,14 @@ int main_forth(int argc, char **argv)
 			   break;
 		default:
 		fail:
+			fprintf(stderr, "error: invalid arguments\n");
 			fprintf(stderr, "usage: %s [-st] [-m size] [-l file] [-] file...\n", argv[0]);
 			return -1;
 		}
 done:
 	readterm = i == argc || readterm; /* if no files are given, read stdin */
 	if(!o && !(o = forth_init(core_size, stdin, stdout))) {
-		fprintf(stderr, "forth initialization failed\n");
+		fprintf(stderr, "error: forth initialization failed\n");
 		return -1;
 	}
 	forth_set_args(o, argc, argv);
@@ -549,8 +552,12 @@ close:
 end:	
 	fclose_input(&in);
 	if(save) {
+		if(rval) {
+			fprintf(stderr, "error: refusing to save invalid core\n");
+			return -1;
+		}
 		if(forth_save_core(o, core_file = fopen_or_die(core_file_name, "wb"))) {
-			fprintf(stderr, "core file save to '%s' failed\n", core_file_name);
+			fprintf(stderr, "error: core file save to '%s' failed\n", core_file_name);
 			rval = -1;
 		}
 		fclose(core_file); 

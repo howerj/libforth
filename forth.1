@@ -17,7 +17,8 @@ a file as an argument.
 .TP
 .B -s
 This saves the working memory of the Forth interpreter to disk (as a file
-called "forth.core")") this file can later be loaded with the "-l" option.
+called "forth.core")") this file can later be loaded with the "-l" option. If a
+core file has been invalidated this will not be saved.
 
 .TP
 .B -t
@@ -27,7 +28,7 @@ this will make the Forth interpreter read from stdin(3), but before "-d".
 .TP
 .B -m size
 Specify the virtual machines memory size in kilobytes, overriding the default
-memory size.
+memory size. This is mutually exclusive with "-l".
 
 .TP
 .B -l file

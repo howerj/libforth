@@ -4,7 +4,9 @@
  *  @copyright  Copyright 2015,2016 Richard James Howe.
  *  @license    LGPL v2.1 or later version
  *  @email      howe.r.j.89@gmail.com 
- *  @todo       deal with endianess correctly */
+ *  @todo       deal with endianess correctly
+ *  @todo       add options for resizing a core file and making
+ *  invalid cores valid (force, attempt to fix, etc) */
 #include <assert.h>
 #include <errno.h>
 #include <stdint.h>
@@ -15,7 +17,6 @@
 #include <string.h>
 
 #define IS_BIG_ENDIAN       (!(union { uint16_t u16; unsigned char c; }){ .u16 = 1 }.c)
-
 
 static void print_hex(FILE *output, const uint8_t *p, size_t len)
 {
@@ -101,7 +102,6 @@ static void printer(void *m, char *fmt, ...)
 			putchar(f);
 		}
 	}
-finish:
 	va_end(ap);
 }
 
@@ -223,23 +223,23 @@ int v2_print_registers(FILE *file)
 	printer(h->m, "base:           %d\n", BASE);
 	printer(h->m, "pwd:            %d\n", PWD);
 	printer(h->m, "source:         %d\n", SOURCE_ID);
-	printer(h->m, "string input*:  %d\n", SIN);
-	printer(h->m, "string index*:  %d\n", SIDX);
-	printer(h->m, "string length*: %d\n", SLEN);
-	printer(h->m, "vm start addr*: %d\n", START_ADDR);
-	printer(h->m, "file input*:    %d\n", FIN);
-	printer(h->m, "file output*:   %d\n", FOUT);
-	printer(h->m, "stdin*:         %d\n", STDIN);
-	printer(h->m, "stdout*:        %d\n", STDOUT);
-	printer(h->m, "stderr*:        %d\n", STDERR);
-	printer(h->m, "argc*:          %d\n", ARGC);
-	printer(h->m, "argv*:          %d\n", ARGV);
+	printer(h->m, "string input:   %d*\n", SIN);
+	printer(h->m, "string index:   %d*\n", SIDX);
+	printer(h->m, "string length:  %d*\n", SLEN);
+	printer(h->m, "vm start addr:  %d*\n", START_ADDR);
+	printer(h->m, "file input:     %d*\n", FIN);
+	printer(h->m, "file output:    %d*\n", FOUT);
+	printer(h->m, "stdin:          %d*\n", STDIN);
+	printer(h->m, "stdout:         %d*\n", STDOUT);
+	printer(h->m, "stderr:         %d*\n", STDERR);
+	printer(h->m, "argc:           %d*\n", ARGC);
+	printer(h->m, "argv:           %d*\n", ARGV);
 	printer(h->m, "debug:          %d\n", DEBUG);
 	printer(h->m, "invalid:        %d\n", INVALID);
 	printer(h->m, "top:            %d\n", TOP);
 	printer(h->m, "instruction:    %d\n", INSTRUCTION);
 	printer(h->m, "v stack size:   %d\n", VSTACK_SIZE);
-	printer(h->m, "time*:          %d\n", START_TIME);
+	printer(h->m, "time:           %d*\n", START_TIME);
 
 	free(h);
 	return 0;

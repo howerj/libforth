@@ -29,3 +29,5 @@ latex
 *.tgz
 callgrind.*
 cachegrind.*
+*.gz
+*.xz

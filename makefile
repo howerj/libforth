@@ -48,11 +48,11 @@ ${TARGET}: main.o lib${TARGET}.a
 forth.core: ${TARGET} start.4th
 	./${TARGET} -s start.4th
 
-dist: ${TARGET} ${TARGET}.1 lib${TARGET}.[a3] lib${TARGET}.htm
+dist: ${TARGET} ${TARGET}.1 lib${TARGET}.[a3] lib${TARGET}.htm forth.core
 	tar zvcf ${TARGET}.tgz $^
 
-run: ${TARGET}
-	@./$^ -t start.4th
+run: ${TARGET} start.4th
+	./$< -t start.4th
 test: unit
 	./$^
 

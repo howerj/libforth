@@ -1,4 +1,4 @@
-#!./forth
+#!./forth -t
 ( Welcome to libforth, A dialect of Forth. Like all versions of Forth this 
 version is  a little idiosyncratic, but how the interpreter works is
 documented here and in various other files.
@@ -8,10 +8,6 @@ is executed in the C file as well which makes programming at least bearable.
 Most of Forth is programmed in itself, which may seem odd if your back
 ground in programming comes from more traditional language [such as C], 
 although decidedly less so if you know already know lisp, for example.
-
-The main contributions that this file brings on top of the normal
-interpreter are "create", "does>", "do", "loop", "hide", "words",
-"variable", "array" and "constant".
 
 For more information about this interpreter and Forth see: 
 	https://en.wikipedia.org/wiki/Forth_%28programming_language%29
@@ -154,7 +150,7 @@ See:
 	then 
 ;
 
-: hider ( WORD -- ) ( hide with drop ) find dup if hide drop else drop then ;
+: hider ( WORD -- ) ( hide with drop ) find dup if hide then drop ;
 : unhide ( hide-token -- ) dup @ hidden-mask invert and swap ! ;
 
 : original-exit [ find exit ] literal ;
@@ -909,10 +905,10 @@ hider hide-words
 	key drop ;
 
 0 variable cf
-: code>pwd ( CODE -- bool )
+: code>pwd ( CODE -- PWD/0 )
 	( given a pointer to a executable code field
 	this words attempts to find the PWD field for
-	that word )
+	that word, or return zero )
 	dup here             >= if drop 0 exit then ( cannot be a word, too small )
 	dup dictionary-start <= if drop 0 exit then ( cannot be a word, too large )
 	cf !
@@ -1256,6 +1252,7 @@ a . cr
 	* An assembler mode would execute primitives only, this would
 	require a change to the interpreter
 	* throw and exception
+	* here documents, string literals
 	* A set of words for navigating around word definitions would be
 	help debugging words, for example:
 		compile-field code-field field-translate
@@ -1267,5 +1264,8 @@ a . cr
 	then external tools could translate the dictionary by swapping
 	the byte order of it
 	* store strings as length + string instead of ascii strings
+	* '.' is meant to have a space printed out after it, for that
+	matter a lot of the number stuff could be made more standards
+	compliant
 )
 
