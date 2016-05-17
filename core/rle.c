@@ -4,10 +4,20 @@
  *  @copyright  Copyright 2016 Richard James Howe.
  *  @license    LGPL v2.1 or later version
  *  @email      howe.r.j.89@gmail.com 
- *  @warning    this is a work in progress
+ *  @bug        fix encoder so it only encodes what it has to and not any more,
+ *              this does not make the output stream invalid, only larger than
+ *              it should be, this affects large runs of bytes that are the
+ *              same
  *  @todo       add checksum, length and whether encoded succeeded (size decreased) to header
- *  @todo       turn into library (read/write to strings as well as files, unit tests, man pages)
- *  This is a run length encoder, which should be good for compressing Forth core files. */
+ *  @todo       turn into library (read/write to strings as well as files, man pages)
+ * 
+ * The encoder works on binary data, it encodes successive runs of
+ * bytes as a length and the repeated byte up to runs of 127, or
+ * a differing byte is found. This is then emitted as two bytes;
+ * the length and the byte to repeat. Input data with no runs in
+ * it is encoded as the length of the data that differs plus that
+ * data, up to 128 bytes can be encoded this way.
+ **/
 #include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
@@ -115,7 +125,7 @@ static inline void increment(struct rle *r, char rw, size_t size)
 }
 
 static inline size_t must_block_io(struct rle *r, void *p, size_t characters, char rw)
-{ /* feof? */
+{
 	errno = 0;
 	assert((rw == 'w') || (rw == 'r'));
 	FILE *file = rw == 'w' ? r->out : r->in;

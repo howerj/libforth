@@ -32,7 +32,8 @@ See:
 : push-location 2 ;       ( location of special "push" word )
 : compile-instruction 1 ; ( compile code word, threaded code interpreter instruction )
 : run-instruction 2 ;     ( run code word, threaded code interpreter instruction )
-: literal immediate push-location , , ; 
+: [literal] push-location , , ; ( this word probably needs a better name )
+: literal immediate [literal] ; 
 : false 0 ;
 : true 1 ;
 : 8* 3 lshift ;
@@ -44,7 +45,7 @@ See:
 : mod ( x u -- remainder ) 2dup / * - ;
 : */ ( n1 n2 n3 -- n4 ) * / ; ( warning: this does not use a double cell for the multiply )
 : char key drop key ;
-: [char] immediate char push-location , , ;
+: [char] immediate char [literal] ;
 : postpone immediate find , ;
 : unless immediate ( bool -- : like 'if' but execute clause if false ) ' 0= , postpone if ;
 : endif immediate ( synonym for 'then' ) postpone then ;
@@ -115,7 +116,7 @@ See:
 	postpone then ; ( then writes to the hole made in if )
 
 : never ( never...then : reserve space in word ) 
-	immediate 0 push-location , , postpone if ;
+	immediate 0 [literal] postpone if ;
 
 : dictionary-start 
 	( The dictionary start at this location, anything before this value 
@@ -123,6 +124,7 @@ See:
 	64 
 ;
 : source ( -- c-addr u ) 
+	( TODO: read registers instead )
 	[ 32 chars> ] literal ( size of input buffer, in characters )
 	[ 64 chars> ] literal ( start of input buffer, in characters )
 ;
@@ -201,7 +203,7 @@ See:
 	compile-instruction = +
 ;
 
-: ['] immediate find xt-token push-location , , ;
+: ['] immediate find xt-token [literal] ;
 
 : execute ( xt-token -- )
 	( given an execution token, execute the word )
@@ -303,7 +305,7 @@ so much )
 	>r
 ;
 
-: loop immediate push-location , 1 , ' addi , here - , ;
+: loop immediate 1 [literal] ' addi , here - , ;
 : +loop immediate ' addi , here - , ;
 hider inci 
 hider addi
@@ -377,6 +379,7 @@ hider addi
 	We can test "recurse" with this factorial function:
 	  : factorial  dup 2 < if drop 1 exit then dup 1- recurse * ;)
 	pwd @ xt-token , ;
+: myself immediate postpone recurse ;
 
 0 variable column-counter
 4 variable column-width
@@ -443,6 +446,18 @@ hider addi
 ;
 
 : unused ( -- u ) ( push the amount of core left ) max-core here - ;
+
+: roll 
+	( xu xu-1 ... x0 u -- xu-1 ... x0 xu )
+	( remove u and rotate u+1 items on the top of the stack,
+	this could be replaced with a move on the stack and
+	some magic so the return stack is used less )
+	dup 0 > 
+	if 
+		swap >r 1- roll r> swap 
+	else 
+		drop 
+	then ;
 
 0 variable delim
 : accepter
@@ -535,6 +550,70 @@ hider delim
 : ." immediate '"' do-string ;
 
 : ok " ok" cr ;
+
+( ==================== CASE statements ======================== )
+
+( for a simple case statement: 
+	see Volume 2, issue 3, page 48 of Forth Dimensions at 
+	http://www.forth.org/fd/contents.html 
+: case immediate
+	' over , ' = , postpone if ;
+
+\ Example of case usage:
+: monitor \ [ KEY -- ]
+	." START: "
+	41 case ." ASSIGN"     then 
+	44 case ." DISPLAY"    then
+	46 case ." FILL"       then
+	47 case ." GO"         then
+	53 case ." SUBSTITUTE" then
+	\  else ." INSERT"     then
+	."  :END" cr
+	drop
+;
+
+\ case with no default branch that hides case value
+: case immediate ' >r , ;
+: of= r> r> tuck >r >r = ; \ R: x of -- x of, S: y -- bool 
+: of immediate  ' of= , postpone if ;
+: endof immediate postpone then ;
+: endcase immediate ' rdrop , ; 
+)
+
+: case immediate 
+	' branch , 3 ,   ( branch over the next branch )
+	here ' branch ,  ( mark: place endof branches back to with again )
+	here swap 0 , ;  ( mark: place endcase writes jump to with then )
+
+: over= over = ; 
+: of      immediate ' over= , postpone if ;
+: endof   immediate over postpone again postpone then ;
+: endcase immediate drop postpone then  ;
+
+( 
+: monitor \ [ KEY -- ]
+
+	." START: " 
+	case 
+		." CASING "
+	[char] A of ." ASSIGN "     endof 
+	[char] D of ." DISPLAY "    endof
+	[char] F of ." FILL "       endof
+	[char] G of ." GO "         endof
+	[char] S of ." SUBSTITUTE " endof
+	           ." INSERT  " 
+	endcase
+	."  :END" cr
+;
+
+0 monitor 
+char F monitor
+char S monitor
+char A monitor
+char D monitor
+char G monitor )
+
+( ==================== CASE statements ======================== )
 
 : error-no-word ( print error indicating last read in word as source )
 	"  error: word '" source drop print " ' not found" cr ;
@@ -681,7 +760,7 @@ hider endianess
 	find 1- forgetter ;
 
 : marker ( WORD -- : make word the forgets itself and words after it)
-	:: push-location , pwd @ , ' forgetter , postpone ; ;
+	:: pwd @ [literal] ' forgetter , postpone ; ;
 hider forgetter
 
 : ?dup-if immediate ( x -- x | - ) 
@@ -825,8 +904,7 @@ hider counter
 	then
 	cr ;
 
-1 variable hide-words
-
+1 variable hide-words ( do we want to hide hidden words or not )
 : words ( -- )
 	( This function prints out all of the defined words, excluding hidden words.
 	An understanding of the layout of a Forth word helps here. The dictionary
@@ -898,7 +976,9 @@ hider hide-words
 : >instruction ( extract instruction from instruction field ) 0x1f and ;
 
 : step
-	( step through a word )
+	( step through a word: this word could be augmented
+	with commands such as "dump", "halt", and optional
+	".s" and "registers" )
 	registers
 	" .s: " .s cr
 	" -- press any key to continue -- "
@@ -1112,6 +1192,17 @@ For resources on Forth:
 " cr
 ;
 
+( clean up the environment )
+:hide
+ write-string do-string accept-string ')' alignment-bits print-string '"'
+ compile-instruction dictionary-start hidden? hidden-mask instruction-mask 
+ max-core push-location run-instruction stack-start x x! x@ write-exit 
+ mask-byte accepter max-string-length source-id-reg xt-token error-no-word
+ original-exit
+;hide
+
+
+
 ( \ Test code
 ( 
 0x8000              constant hello-buffer
@@ -1210,27 +1301,17 @@ a . cr
 )
 
 
-( clean up the environment )
-:hide
- write-string do-string accept-string ')' alignment-bits print-string '"'
- compile-instruction dictionary-start hidden? hidden-mask instruction-mask 
- max-core push-location run-instruction stack-start x x! x@ write-exit 
- mask-byte accepter max-string-length source-id-reg xt-token error-no-word
- original-exit
-;hide
-
 ( TODO
 	* Evaluate 
 	* By adding "c@" and "c!" to the interpreter I could remove print
+	and put string functionality earlier in the file
 	* Add unit testing to the end of this file
 	* Word, Parse, repeat, while, Case statements, other forth words
 	* Add a dump core and load core to the interpreter?
 	* add "j" if possible to get outer loop context
-	* Decompiler "see" http://lars.nocrew.org/dpans/dpans15.htm
 	* FORTH, VOCABULARY 
 	* "Value", "To", "Is"
 	* Check "fill", "erase", "'", other words
-	* Make signed comparison operations, and rename existing comparison
 	operations, and other operations, so they are marked as working on
 	unsigned values [which is the default].
 	* Each forth word defined here needs to be gone over to ensure compliance
@@ -1239,8 +1320,10 @@ a . cr
 	* A small block editor
 	* "list" to print out a block
 	* proper "load" and "save" 
-	* more help commands would be good, such as "help-ansi-escape",
+	* more help commands would be good, such as "help-ANSI-escape",
 	"tutorial", etc.
+	* Abort and Abort", this could be used to implement words such
+	as "abort if in compile mode", or "abort if in command mode".
 	* Todo Various different assemblers [assemble VM instructions,
 	native instructions, and cross assemblers]
 	* common words and actions should be factored out to simplify
@@ -1263,9 +1346,13 @@ a . cr
 	* if strings were stored in word order instead of byte order
 	then external tools could translate the dictionary by swapping
 	the byte order of it
-	* store strings as length + string instead of ascii strings
+	* store strings as length + string instead of ASCII strings
 	* '.' is meant to have a space printed out after it, for that
 	matter a lot of the number stuff could be made more standards
 	compliant
+	* proper booleans should be used throughout
+	* escaped strings
+	* ideally all of the functionality of main_forth would be
+	moved into this file
 )
 
