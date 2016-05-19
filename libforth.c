@@ -4,7 +4,9 @@
  *  @copyright  Copyright 2015,2016 Richard James Howe.
  *  @license    LGPL v2.1 or later version
  *  @email      howe.r.j.89@gmail.com 
- *  Please consult "libforth.md" and "start.4th" for more information **/
+ *  Please consult "libforth.md" and "start.4th" for more information 
+ *  @todo add a system for adding arbitrary C functions to the system via
+ *  plugins **/
 #include "libforth.h"
 #include <assert.h>
 #include <errno.h>
@@ -97,8 +99,8 @@ QBRANCH, PNUM, QUOTE,COMMA,EQUAL,SWAP,DUP,DROP,OVER,BSAVE,BLOAD,FIND,PRINT,
 DEPTH,CLOCK,LAST };
 
 static char *names[] = { "read","@","!","-","+","and","or","xor","invert",
-"lshift","rshift","*","/","<",">","exit","emit","key","r>",">r","branch","?branch",
-".","'", ",","=", "swap","dup","drop", "over", "save","load","find",
+"lshift","rshift","*","/","u<","u>","exit","emit","key","r>",">r","branch","?branch",
+"pnum","'", ",","=", "swap","dup","drop", "over", "bsave","bload","find",
 "print","depth", "clock", NULL }; 
 
 static int forth_get_char(forth_t *o) 
@@ -146,7 +148,7 @@ static int blockio(forth_t *o, void *p, forth_cell_t poffset, forth_cell_t id, c
 	char name[16] = {0}; /* XXXX + ".blk" + '\0' + a little spare change */
 	FILE *file = NULL;
 	size_t n;
-	if(((forth_cell_t)poffset) > (o->core_size - BLOCK_SIZE))
+	if(((forth_cell_t)poffset) > ((o->core_size * sizeof(forth_cell_t)) - BLOCK_SIZE))
 		return -1;
 	sprintf(name, "%04x.blk", (int)id);
 	if(!(file = fopen(name, rw == 'r' ? "rb" : "wb"))) {
@@ -167,10 +169,10 @@ static int numberify(int base, forth_cell_t *n, const char *s)
 	return !errno && *s != '\0' && *end == '\0';
 }
 
-static forth_cell_t find(forth_t *o) 
+forth_cell_t forth_find(forth_t *o, const char *s) 
 { /* find a word in the Forth dictionary, which is a linked list, skipping hidden words */
 	forth_cell_t *m = o->m, w = m[PWD], len = WORD_LENGTH(m[w+1]);
-	for (;w > DICTIONARY_START && (WORD_HIDDEN(m[w+1]) || strcmp((char*)o->s,(char*)(&o->m[w - len])));) {
+	for (;w > DICTIONARY_START && (WORD_HIDDEN(m[w+1]) || strcmp(s,(char*)(&o->m[w - len])));) {
 		w = m[w]; 
 		len = WORD_LENGTH(m[w+1]);
 	}
@@ -405,7 +407,7 @@ int forth_run(forth_t *o)
 			m[ck(RSTK)]--; 
 			if(forth_get_word(o, o->s) < 0)
 				goto end;
-			if ((w = find(o)) > 1) {
+			if ((w = forth_find(o, (char*)o->s)) > 1) {
 				pc = w;
 				if (!m[STATE] && instruction(m[ck(pc)]) == COMPILE)
 					pc++; /* in command mode, execute word */
@@ -459,7 +461,7 @@ int forth_run(forth_t *o)
 		case FIND:    *++S = f;
 			      if(forth_get_word(o, o->s) < 0) 
 				      goto end;
-			      f = find(o);
+			      f = forth_find(o, (char*)o->s);
 			      f = f < DICTIONARY_START ? 0 : f;      break;
 		case PRINT:   fputs(((char*)m)+f, (FILE*)(o->m[FOUT])); f = *S--; break;
 		case DEPTH:   w = S - (m + o->core_size - (2 * o->m[VSTACK_SIZE]));
@@ -500,7 +502,7 @@ int main_forth(int argc, char **argv)
 	forth_cell_t core_size = DEFAULT_CORE_SIZE;
 	forth_t *o = NULL;
 	for(i = 1; i < argc && argv[i][0] == '-'; i++)
-		switch(argv[i][1]) {
+		switch(argv[i][1]) { /**@todo add -h option */
 		case '\0': goto done; /* stop argument processing */
 		case 's':  save     = 1; break; /**@todo take an argument*/
 		case 't':  readterm = 1; break;

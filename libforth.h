@@ -17,7 +17,7 @@ extern "C" {
 struct forth; /**< An opaque object that holds a running FORTH environment**/
 typedef struct forth forth_t;
 typedef uintptr_t forth_cell_t; /**< FORTH "machine word", must be able to store a pointer*/
-#define PRIuCell PRIuPTR
+#define PRIuCell PRIdPTR
 #define PRIxCell PRIxPTR
 /** @brief   Given an input and an output this will initialize forth,
  *           allocating memory for it and setting it up so it has a few
@@ -37,6 +37,14 @@ forth_t *forth_init(size_t size, FILE *input, FILE *output);
  *  @param   o    An object to free
  *  @return  void **/
 void forth_free(forth_t *o); 
+
+/** @brief  find a forth word in its dictionary if it exists, there must
+ *          be no extra characters (apart from a terminating NUL) in the
+ *          word name, the entire string will be searched for.
+ *  @param  o initialized forth environment
+ *  @param  s a string, representing a words name, to find
+ *  @return non zero if the word has been found, zero if it has not been*/
+forth_cell_t forth_find(forth_t *o, const char *s);
 
 /** @brief  push a value onto the variable stack
  *  @param  o initialized forth environment

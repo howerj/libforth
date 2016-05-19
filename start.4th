@@ -25,6 +25,9 @@ See:
 
 ( ========================== Basic Word Set ================================== )
 ( We'll begin by defining very simple words we can use later )
+
+: < u< ; ( @todo fix this )
+: > u> ; ( @todo fix this )
 : logical ( x -- bool ) not not ;
 : hidden-mask 0x80 ( Mask for the hide bit in a words MISC field ) ;
 : instruction-mask 0x1f ( Mask for the first code word in a words MISC field ) ;
@@ -36,11 +39,16 @@ See:
 : literal immediate [literal] ; 
 : false 0 ;
 : true 1 ;
-: 8* 3 lshift ;
 : *+ * + ;
 : 2- 2 - ;
 : 2+ 2 + ;
 : 3+ 3 + ;
+: 2* 1 lshift ;
+: 2/ 1 rshift ;
+: 4* 2 lshift ;
+: 4/ 2 rshift ;
+: 8* 3 lshift ;
+: 8/ 3 rshift ;
 : 256/ 8 rshift ;
 : mod ( x u -- remainder ) 2dup / * - ;
 : */ ( n1 n2 n3 -- n4 ) * / ; ( warning: this does not use a double cell for the multiply )
@@ -51,6 +59,7 @@ See:
 : endif immediate ( synonym for 'then' ) postpone then ;
 : bl ( space character ) [char]  ; ( warning: white space is significant after [char] )
 : space bl emit ;
+: . pnum space ;
 : address-unit-bits size 8* ;
 : mask-byte ( x -- x ) 8* 0xff swap lshift ;
 : cell+ 1+ ( a-addr1 -- a-addr2 ) ;
@@ -73,8 +82,6 @@ See:
 : max ( x y -- max ) 2dup > if drop else swap drop then  ; 
 : >= ( x y -- bool ) < not ;
 : <= ( x y -- bool ) > not ;
-: 2* ( x -- x ) 1 lshift ;
-: 2/ ( x -- x ) 1 rshift ;
 : 2@ dup 1+ @ swap @ ;
 : r@ r> r @ swap >r ;
 : 0> 0 > ;
@@ -88,7 +95,7 @@ See:
 : ? ( a-addr -- : view value at address ) @ . cr ;
 : bell 7 ( ASCII BEL ) emit ;
 : b/buf  ( bytes per buffer ) 1024 ;
-: # dup ( x -- x : debug print ). cr ;
+: # dup ( x -- x : debug print ) pnum cr ;
 : compile, ' , , ;   ( A word that writes , into the dictionary )
 : >mark ( -- ) here 0 , ; 
 : end immediate (  A synonym for until ) postpone until ;
@@ -138,8 +145,7 @@ See:
 	Value    Input Source
 	-1       String
 	0        File Input [this may be stdin] )
-	source-id-reg @
-;
+	source-id-reg @ ;
 
 : 2drop ( x y -- ) drop drop ;
 : hide  ( token -- hide-token ) 
@@ -275,7 +281,8 @@ hider write-quote
 
 ( ========================== CREATE DOES> ==================================== )
 
-: array    ( length --  :create a array )           create allot does> + ;
+: array    ( length --  : create a array )          create allot does> + ;
+: table    ( length --  : create a table )          create allot does>   ;
 : variable ( initial-value -- : create a variable ) create ,     does>   ;
 : constant ( value -- : create a constant )         create ,     does> @ ;
 
@@ -332,7 +339,7 @@ hider addi
 ;
 
 : range   ( nX nY -- nX nX+1 ... nY )  swap 1+ swap do i loop ;
-: repeat  ( n0 X -- n0 ... nX )        1 do dup loop ;
+: repeater  ( n0 X -- n0 ... nX )        1 do dup loop ;
 : sum     ( n0 ... nX X -- sum<0..X> ) 1 do + loop ;
 : mul     ( n0 ... nX X -- mul<0..X> ) 1 do * loop ;
 
@@ -620,7 +627,6 @@ char G monitor )
 : ;hide ( should only be matched with ':hide' ) 
 	immediate " error: ';hide' without ':hide'" cr ;
 
-
 : :hide
 	( hide a list of words, the list is terminated with ";hide" )
 	begin
@@ -745,7 +751,7 @@ hider endianess
 	not if cr . " :" space else drop then
 	counter 1+! ;
 
-: lister 0 counter ! swap do i counted-column i @ . space loop ;
+: lister 0 counter ! swap do i counted-column i @ . loop ;
 
 ( @todo dump should print out the data as characters as well, if printable )
 : dump  ( addr u -- : dump out 'u' cells of memory starting from 'addr' )
@@ -845,9 +851,9 @@ char ; constant ';'
 	for example:
 		bright red foreground color
 	sets the foreground text to bright red )
-	CSI . if ." ;1" then ." m" ;
+	CSI pnum if ." ;1" then ." m" ;
 
-: at-xy ( x y -- ) ( set ANSI terminal cursor position to x y ) CSI . ';' emit . ." H" ;
+: at-xy ( x y -- ) ( set ANSI terminal cursor position to x y ) CSI pnum ';' emit pnum ." H" ;
 : page  ( clear ANSI terminal screen and move cursor to beginning ) CSI ." 2J" 1 1 at-xy ;
 : hide-cursor ( hide the cursor from view ) CSI ." ?25l" ;
 : show-cursor ( show the cursor )           CSI ." ?25h" ;
@@ -876,17 +882,17 @@ hider CSI
 0 variable counter
 : primes
 	0 counter !
-	"  The primes from " dup . "  to " over . "  are: "
+	"  The primes from " dup . " to " over . " are: "
 	cr
 	reset-column
 	do
 		i prime?
 		if
-			i . tab counter @ column counter 1+!
+			i . counter @ column counter 1+!
 		then
 	loop
 	cr
-	"  There are " counter @ . "  primes."
+	"  There are " counter @ . " primes."
 	cr ;
 hider counter
 ( ==================== Prime Numbers ========================== )
@@ -895,7 +901,7 @@ hider counter
 
 : .s    ( -- : print out the stack for debugging )
 	depth if
-		depth 0 do i column tab i pick . tab loop
+		depth 0 do i column tab i pick . loop
 	then
 	cr ;
 
@@ -1031,8 +1037,8 @@ hider cf
 	NOTE: given a pointer to somewhere in a word it is possible
 	to work out the PWD by looping through the dictionary to
 	find the PWD below it )
-	1- dup @ -1 =             if " (noname)" end-print exit then
-	   dup  " (" code>pwd dup if name print else drop " data" then 
+	1- dup @ -1 =             if " ( noname )" end-print exit then
+	   dup  " ( " code>pwd dup if name print else drop " data" then 
 	        end-print ;
 hider end-print
 
@@ -1066,9 +1072,9 @@ hider end-print
 	255 0
 	do
 		tab 
-		dup @ push-location                      = if " (literal => " 1+ dup @ . 1+ " )" cr tab then
-		dup @ [ find branch   xt-token ] literal = if " (branch => "  1+ dup @ . " )" cr dup dup @ dump dup @ + cr tab then
-		dup @ [ original-exit xt-token ] literal = if " (exit)"  i cr leave  then
+		dup @ push-location                      = if " ( literal => " 1+ dup @ . 1+ " )" cr tab then
+		dup @ [ find branch   xt-token ] literal = if " ( branch => "  1+ dup @ . " )" cr dup dup @ dump dup @ + cr tab then
+		dup @ [ original-exit xt-token ] literal = if " ( exit )"  i cr leave  then
 		dup @ word-printer
 		1+
 	loop
@@ -1112,11 +1118,16 @@ hider word-printer
 		drop
 	then ;
 
-:hide 
-	decompile TrueFalse >instruction print-header 
-	print-name print-start print-previous print-immediate 
-	print-instruction xt-instruction defined-word? print-defined
-;hide
+: empty-stack ( x-n ... x-0 -- : empty the variable stack )
+	begin depth while drop repeat ;
+
+r @ constant restart-address
+: quit
+	0 source-id-reg ! ( @todo store stdin in input file )
+	]
+	restart-address r ! ;
+
+: abort empty-stack quit ;
 
 : help ( print out a short help message )
 	page
@@ -1216,11 +1227,49 @@ For resources on Forth:
  write-string do-string accept-string ')' alignment-bits print-string '"'
  compile-instruction dictionary-start hidden? hidden-mask instruction-mask 
  max-core push-location run-instruction stack-start x x! x@ write-exit 
- mask-byte accepter max-string-length source-id-reg xt-token error-no-word
+ accepter max-string-length source-id-reg xt-token error-no-word
  original-exit
+ restart-address pnum
+ decompile TrueFalse >instruction print-header 
+ print-name print-start print-previous print-immediate 
+ print-instruction xt-instruction defined-word? print-defined
+
 ;hide
 
+( ==================== Blocks ================================= )
 
+( @todo process invalid blocks [anything greater or equal to 0xFFFF] )
+
+-1 variable scr-var 
+false variable dirty ( has the buffer been modified? )
+: scr ( -- x : last screen used ) scr-var @ ;
+b/buf chars table block-buffer ( block buffer - enough to store one block )
+
+: update true dirty ! ;
+: empty-buffers false dirty ! block-buffer b/buf chars erase ;
+: flush dirty @ if block-buffer chars> scr bsave drop false dirty ! then ;
+
+: list
+	flush
+	dup dup scr <> if
+		block-buffer chars> swap bload  ( load buffer into block buffer )
+		swap scr-var !
+	else
+		2drop 0
+	then
+	-1 = if exit then                 ( failed to load )
+	block-buffer chars> b/buf type ;  ( print buffer )
+
+: block ( u -- addr : load block 'u' and push address to block )
+	dup scr <> if flush block-buffer chars> swap bload then
+	-1 = if -1 else block-buffer then ;
+
+: save-buffers flush ;
+
+hider scr-var
+hider block-buffer
+
+( ==================== Blocks ================================= )
 
 ( \ Test code
 ( 
@@ -1325,20 +1374,12 @@ a . cr
 	* By adding "c@" and "c!" to the interpreter I could remove print
 	and put string functionality earlier in the file
 	* Add unit testing to the end of this file
-	* Word, Parse, repeat, while, Case statements, other forth words
+	* Word, Parse, other forth words
 	* Add a dump core and load core to the interpreter?
 	* add "j" if possible to get outer loop context
 	* FORTH, VOCABULARY 
 	* "Value", "To", "Is"
-	* Check "fill", "erase", "'", other words
-	operations, and other operations, so they are marked as working on
-	unsigned values [which is the default].
-	* Each forth word defined here needs to be gone over to ensure compliance
-	with existing standards. There is no reason to be non-standards compliant
-	for no reason.
 	* A small block editor
-	* "list" to print out a block
-	* proper "load" and "save" 
 	* more help commands would be good, such as "help-ANSI-escape",
 	"tutorial", etc.
 	* Abort and Abort", this could be used to implement words such
@@ -1361,14 +1402,10 @@ a . cr
 	would take a pointer to a compile field for a word and translate
 	that into the code field
 	* [ifdef] [ifundef]
-	* roll
 	* if strings were stored in word order instead of byte order
 	then external tools could translate the dictionary by swapping
 	the byte order of it
 	* store strings as length + string instead of ASCII strings
-	* '.' is meant to have a space printed out after it, for that
-	matter a lot of the number stuff could be made more standards
-	compliant
 	* proper booleans should be used throughout
 	* escaped strings
 	* ideally all of the functionality of main_forth would be
@@ -1376,5 +1413,8 @@ a . cr
 	* a byte code only version of the interpreter could be made,
 	experimenting with porting a portable version of the byte code
 	should also be done
+	* fill move and the like are technically not compliant as
+	they do not test if the number is negative, however that would
+	unnessarily limit the range of operation
 )
 

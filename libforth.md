@@ -481,11 +481,11 @@ Pop two values, divide 'x' by 'y' and push the result onto the stack. If 'y'
 is zero and error message is printed and 'x' and 'y' will remain on the
 stack, but execution will continue on as normal.
 
-* '\<'          ( x y -- z )
+* '\u<'         ( x y -- z )
 
-Pop two values, compare them (y < x) and push the result onto the stack.
+Pop two unsigned values, compare them (y < x) and push the result onto the stack.
 
-* '\>'          ( x y -- z )
+* '\u>'         ( x y -- z )
 
 Pop two values, compare them (y > x) and push the result onto the stack.
 
@@ -519,7 +519,7 @@ Jump unconditionally to the destination next in the instruction stream.
 Pop a value from the variable stack, if it is zero the jump to the
 destination next in the instruction stream, otherwise skip over it.
 
-* '.'           ( x -- )
+* 'pnum'           ( x -- )
 
 Pop a value from the variable stack and print it to the output either
 as a ASCII decimal or hexadecimal value depending on the BASE register.
@@ -553,16 +553,16 @@ Drop a value.
 
 Duplicate the value that is next on the stack.
 
-* 'save'        ( address block-number -- )
+* 'bsave'       ( char-address block-number -- )
 
 Given an address, attempt to write out the values addr to addr+1023 values
 out to disk, the name of the block will be 'XXXX.blk' where the 'XXXX' is
 replaced by the hexadecimal representation of *blocknum*.
 
-* 'load'        ( address block-number -- )
+* 'bload'        ( char-address block-number -- )
 
-Like *save*, but attempts to load a block of 1024 words into an address in
-memory of a likewise *blocknum* derived name as in *save*.
+Like *bsave*, but attempts to load a block of 1024 words into an address in
+memory of a likewise *blocknum* derived name as in *bsave*.
 
 * 'find'        ( -- execution-token )
 
@@ -886,7 +886,10 @@ that is non-standard (for no reason) or just outright incorrect.
 * The "check\_bounds" function, whilst useful for debugging, limits the
 memory addressable by the virtual machine to only within its memory limits
 * A way to integrate calls to arbitrary functions that can be loaded at run time
-  could be added
+  could be added, this would be technically non portable as uintptr\_t is
+  not guaranteed to be able to hold a function pointer (although it could
+  index into a table of function pointers. The interface would take a
+  pointer to the forth object, a pointer to the stack and the stack depth.
 * The program command line interface could be improved by:
   - an evaluate argument that would evaluate a string
   - an environment variable to load up a start file
@@ -894,9 +897,6 @@ memory addressable by the virtual machine to only within its memory limits
   - ...
 * basic operating system interaction could be added, such as the "system"
   function and file opening/closing (which could replace block).
-* The functionality of saving the core could be largely supplanted by
-"0 here dump", redirected to a file. Loading the file back in from a running
-forth system would be more difficult. 
 
 ### Notes
 
