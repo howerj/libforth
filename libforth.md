@@ -883,33 +883,8 @@ that is non-standard (for no reason) or just outright incorrect.
 
 ### To-Do
 * Port this to a micro controller, and a Linux kernel module device
-* Routines for saving and loading the image should be made
-* If the word size is the same as the machine size it all memory address,
-such as those passed to load and store, should be actual addresses.
-Implementing this would mean *only* supporting the machines natural
-word length. The first steps would be to change the "forth\_cell\_t" to
-"uintptr\_t" and move as many pointers into the virtual machines address
-space.
-* Experiment with different names for [FORTH][] words, shorter words could 
-be used such as:
-
-        s       swap
-        d       dup
-        D       drop
-        h       here
-        t       tuck
-        n       nip
-        o       over
-        {       begin
-        }       until
-        R       rot
-        -R      -rot
-        2d      2dup
-        2D      2drop
-
 * The "check\_bounds" function, whilst useful for debugging, limits the
 memory addressable by the virtual machine to only within its memory limits
-* A line editor could be added, although this really would not be a priority.
 * A way to integrate calls to arbitrary functions that can be loaded at run time
   could be added
 * The program command line interface could be improved by:
@@ -919,6 +894,9 @@ memory addressable by the virtual machine to only within its memory limits
   - ...
 * basic operating system interaction could be added, such as the "system"
   function and file opening/closing (which could replace block).
+* The functionality of saving the core could be largely supplanted by
+"0 here dump", redirected to a file. Loading the file back in from a running
+forth system would be more difficult. 
 
 ### Notes
 

@@ -50,7 +50,7 @@ forth_cell_t forth_pop(forth_t *o);
 
 /** @brief  get the current stack position
  *  @param  o initialized forth environment
- *  @return stack position */
+ *  @return stack position, number of items on the stack */
 forth_cell_t forth_stack_position(forth_t *o);
 
 /** @brief   Execute an initialized forth environment, this will read
@@ -118,7 +118,7 @@ void forth_set_file_input(forth_t *o, FILE *in);
 /** @brief Set the output file of an environment 'o'.
  *  @param o   An initialized FORTH environment. Caller frees. Asserted.
  *  @param out Open handle for writing; "w"/"wb". Caller closes. Asserted. **/
-void forth_set_file_output(forth_t *o, FILE *out);    
+void forth_set_file_output(forth_t *o, FILE *out);
 
 /** @brief Set the input of an environment 'o' to read from a string 's'.
  *  @param o   An initialized FORTH environment. Caller frees. Asserted.

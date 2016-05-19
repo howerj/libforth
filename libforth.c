@@ -14,6 +14,12 @@
 #include <setjmp.h>
 #include <time.h>
 
+#ifndef NDEBUG
+#define ck(c) check_bounds(o, c, __LINE__)
+#else
+#define ck(c) (c) /*disables checks and debug mode*/
+#endif
+
 #define DEFAULT_CORE_SIZE   (32 * 1024) /**< default vm size*/
 #define BLOCK_SIZE          (1024u) /**< size of forth block in bytes */
 #define STRING_OFFSET       (32u)   /**< offset into memory of string buffer*/
@@ -355,8 +361,8 @@ forth_cell_t forth_pop(forth_t *o)
 }
 
 forth_cell_t forth_stack_position(forth_t *o)
-{
-	return o->S - o->m;
+{ /* the original stack position code (everything after o->S) should be turned into a function)*/
+	return o->S - (o->m + o->core_size - (2 * o->m[VSTACK_SIZE]));
 }
 
 static forth_cell_t check_bounds(forth_t *o, forth_cell_t f, unsigned line) 
@@ -369,12 +375,6 @@ static forth_cell_t check_bounds(forth_t *o, forth_cell_t f, unsigned line)
 	}
 	return f; 
 }
-
-#ifndef NDEBUG
-#define ck(c) check_bounds(o, c, __LINE__)
-#else
-#define ck(c) (c) /*disables checks and debug mode*/
-#endif
 
 int forth_run(forth_t *o) 
 { /* this implements the Forth virtual machine; it does all the work */ 
@@ -473,7 +473,8 @@ int forth_run(forth_t *o)
 			longjmp(*o->on_error, 1);
 		}
 	}
-end:	o->m[TOP] = f;
+end:	o->S = S;
+	o->m[TOP] = f;
 	return 0;
 }
 
@@ -485,7 +486,7 @@ static void fclose_input(FILE **in)
 }
 
 void forth_set_args(forth_t *o, int argc, char **argv)
-{
+{ /* currently this is of little use to the interpreter */
 	assert(o);
 	o->m[ARGC] = argc;
 	o->m[ARGV] = (forth_cell_t)argv;
@@ -501,7 +502,7 @@ int main_forth(int argc, char **argv)
 	for(i = 1; i < argc && argv[i][0] == '-'; i++)
 		switch(argv[i][1]) {
 		case '\0': goto done; /* stop argument processing */
-		case 's':  save     = 1; break;
+		case 's':  save     = 1; break; /**@todo take an argument*/
 		case 't':  readterm = 1; break;
 		case 'm':  if(o || i > argc || !numberify(10, &core_size, argv[++i]))
 				   goto fail;

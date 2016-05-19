@@ -249,7 +249,7 @@ But this version is much more limited )
 	command-mode    ( return to command mode )
 ;
 
-: compile-mode-create
+: <build immediate
 	( @note ' command-mode-create , *nearly* works )
 	' :: ,                               ( Make the defining word compile a header )
 	write-quote push-location , compile, ( Write in push to the creating word )
@@ -260,10 +260,9 @@ But this version is much more limited )
 ;
 
 : create immediate  ( create word is quite a complex forth word )
-  state @ if compile-mode-create else command-mode-create then ;
+  state @ if postpone <build else command-mode-create then ;
 
 hider command-mode-create
-hider compile-mode-create
 hider state! 
 
 : does> ( whole-to-patch -- ) 
@@ -583,12 +582,12 @@ hider delim
 : case immediate 
 	' branch , 3 ,   ( branch over the next branch )
 	here ' branch ,  ( mark: place endof branches back to with again )
-	here swap 0 , ;  ( mark: place endcase writes jump to with then )
+	>mark swap ;     ( mark: place endcase writes jump to with then )
 
 : over= over = ; 
 : of      immediate ' over= , postpone if ;
 : endof   immediate over postpone again postpone then ;
-: endcase immediate drop postpone then  ;
+: endcase immediate postpone then drop ;
 
 ( 
 : monitor \ [ KEY -- ]
@@ -764,10 +763,7 @@ hider endianess
 hider forgetter
 
 : ?dup-if immediate ( x -- x | - ) 
-	' ?dup , 
-	' ?branch , here 0 ,
-	( postpone if )
-;
+	' ?dup , postpone if ;
 
 : type ( c-addr u -- : print out 'u' characters at c-addr )
 	0 do dup c@ emit 1+ loop ;
@@ -791,7 +787,6 @@ hider forgetter
 	c!
 ;
 hider char-alignment
-
 
 ( ==================== Random Numbers ========================= )
 
@@ -984,6 +979,33 @@ hider hide-words
 	" -- press any key to continue -- "
 	key drop ;
 
+: more ( wait for more input )
+	cr "  -- press any key to continue -- " key drop cr ;
+
+: debug-help " debug mode commands 
+	h - print help
+	q - exit containing word
+	r - print registers
+	s - print stack
+	c - continue on with execution 
+" ;
+: debug-prompt ." debug> " ;
+: debug ( a work in progress, debugging support )
+	cr
+	begin
+		debug-prompt
+		key dup '\n' <> if source accept drop then
+		case
+			[char] h of debug-help endof
+			[char] q of drop rdrop exit ( call abort when this exists ) endof
+			[char] r of registers endof
+			\ [char] d of dump endof \ implement read in number
+			[char] s of >r .s r>  endof 
+			[char] c of drop exit endof
+		endcase 
+	again ;
+hider debug-prompt
+
 0 variable cf
 : code>pwd ( CODE -- PWD/0 )
 	( given a pointer to a executable code field
@@ -1095,9 +1117,6 @@ hider word-printer
 	print-name print-start print-previous print-immediate 
 	print-instruction xt-instruction defined-word? print-defined
 ;hide
-
-: more ( wait for more input )
-	cr "  -- press any key to continue -- " key drop cr ;
 
 : help ( print out a short help message )
 	page
@@ -1354,5 +1373,8 @@ a . cr
 	* escaped strings
 	* ideally all of the functionality of main_forth would be
 	moved into this file
+	* a byte code only version of the interpreter could be made,
+	experimenting with porting a portable version of the byte code
+	should also be done
 )
 

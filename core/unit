@@ -1,4 +1,7 @@
 #!/usr/bin/env sh
+
+# Unit tests for core and hexdump should be added
+
 set -eu
 echo "=== RLE Unit Tests: Begin === "
 make rle

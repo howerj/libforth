@@ -187,10 +187,10 @@ end:
 int run_length_encoder(int headerless, int verbose, FILE *in, FILE *out)
 {
 	jmp_buf jb;
+	struct rle r = { EncodeMode, &jb, in, out, 0, 0, 0};
 	int rval;
 	if((rval = setjmp(jb)))
 		return rval;
-	struct rle r = { EncodeMode, &jb, in, out, 0, 0, 0};
 	if(!headerless)
 		must_block_io(&r, header, sizeof(header), 'w');
 	encode(&r);
@@ -218,12 +218,12 @@ static void decode(struct rle *r)
 
 int run_length_decoder(int headerless, int verbose, FILE *in, FILE *out)
 {
-	char head[sizeof(header)] = {0};
 	jmp_buf jb;
+	struct rle r = { DecodeMode, &jb, in, out, 0, 0, 0};
+	char head[sizeof(header)] = {0};
 	int rval;
 	if((rval = setjmp(jb)))
 		return rval;
-	struct rle r = { DecodeMode, &jb, in, out, 0, 0, 0};
 	if(!headerless) {
 		must_block_io(&r, head, sizeof(head), 'r');
 		if(memcmp(head, header, eEndMagic+1)) {

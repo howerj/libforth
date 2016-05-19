@@ -3,7 +3,9 @@
  *  @author   Richard Howe (2015)
  *  @license  LGPL v2.1 or Later 
  *            <https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html> 
- *  @email    howe.r.j.89@gmail.com **/
+ *  @email    howe.r.j.89@gmail.com 
+ *  @todo     The core unit testing functionality should be made into a
+ *            library so it can be used again **/
 
 /*** module to test ***/
 #include "libforth.h"
@@ -24,7 +26,7 @@ static double timer;
 static clock_t start_time, end_time;
 static time_t rawtime;
 
-int color_on = 0, jmpbuf_active = 0;
+int color_on = 0, jmpbuf_active = 0, is_silent = 0;
 jmp_buf current_test;
 unsigned current_line = 0;
 int current_result = 0;
@@ -38,24 +40,27 @@ static const char *blue(void)   { return color_on ? "\x1b[34m" : ""; }
 
 static int unit_tester(int test, const char *msg, unsigned line) 
 {
-	if(test) passed++, printf("      %sok%s:\t%s\n", green(), reset(), msg); 
-	else     failed++, printf("  %sFAILED%s:\t%s (line %d)\n", red(), reset(), msg, line);
+	if(test) passed++, is_silent || printf("      %sok%s:\t%s\n", green(), reset(), msg); 
+	else     failed++, is_silent || printf("  %sFAILED%s:\t%s (line %d)\n", red(), reset(), msg, line);
 	return test;
 }
 
 static void print_statement(char *stmt) 
 {
-	printf("   %sstate%s:\t%s\n", blue(), reset(), stmt);
+	if(!is_silent)
+		printf("   %sstate%s:\t%s\n", blue(), reset(), stmt);
 }
 
 static void print_must(char *must) 
 {
-	printf("    %smust%s:\t%s\n", blue(), reset(), must);
+	if(!is_silent)
+		printf("    %smust%s:\t%s\n", blue(), reset(), must);
 }
 
 static void print_note(char *name) 
 { 
-	printf("%s%s%s\n", yellow(), name, reset()); 
+	if(!is_silent)
+		printf("%s%s%s\n", yellow(), name, reset()); 
 }
 
 #define MAX_SIGNALS (256)
@@ -70,14 +75,17 @@ static char *(sig_lookup[]) = { /*List of C89 signals and their names*/
 };
 
 static int caught_signal;
-static void print_caught_signal_name(void) {
+static void print_caught_signal_name(void) 
+{
 	char *sig_name = "UNKNOWN SIGNAL";
 	if((caught_signal > 0) && (caught_signal < MAX_SIGNALS) && sig_lookup[caught_signal])
 		sig_name = sig_lookup[caught_signal];
-	printf("Caught %s (signal number %d)\n", sig_name, caught_signal);\
+	if(!is_silent)
+		printf("caught %s (signal number %d)\n", sig_name, caught_signal);\
 }
 
-static void sig_abrt_handler(int sig) {
+static void sig_abrt_handler(int sig) 
+{ /* catches assert() from within functions being exercised */
 	caught_signal = sig;
 	if(jmpbuf_active) {
 		jmpbuf_active = 0;
@@ -127,11 +135,12 @@ static int unit_test_start(const char *unit_name)
 {
 	time(&rawtime);
 	if(signal(SIGABRT, sig_abrt_handler) == SIG_ERR) {
-		printf("signal handler installation failed");
+		fprintf(stderr, "signal handler installation failed");
 		return -1;
 	}
 	start_time = clock();
-	printf("%s unit tests\n%sbegin:\n\n", unit_name, asctime(localtime(&rawtime)));
+	if(!is_silent)
+		printf("%s unit tests\n%sbegin:\n\n", unit_name, asctime(localtime(&rawtime)));
 	return 0;
 }
 
@@ -139,7 +148,8 @@ static unsigned unit_test_end(const char *unit_name)
 {
 	end_time = clock();
 	timer = ((double) (end_time - start_time)) / CLOCKS_PER_SEC;
-	printf("\n\n%s unit tests\npassed  %u/%u\ntime    %fs\n", unit_name, passed, passed+failed, timer);
+	if(!is_silent)
+		printf("\n\n%s unit tests\npassed  %u/%u\ntime    %fs\n", unit_name, passed, passed+failed, timer);
 	return failed;
 }
 
@@ -148,11 +158,12 @@ static unsigned unit_test_end(const char *unit_name)
 static char usage[] = "\
 libforth unit test framework\n\
 \n\
-	usage: %s [-h] [-c] [-k] [-]\n\
+	usage: %s [-h] [-c] [-k] [-s] [-]\n\
 \n\
 	-h	print this help message and exit (unsuccessfully so tests do not pass)\n\
 	-c	turn colorized output on (forced on)\n\
 	-k	keep any temporary file\n\
+	-s	silent mode\n\
 	-       stop processing command line arguments\n\
 \n\
 This program executes are series of tests to exercise the libforth library. It\n\
@@ -168,6 +179,9 @@ int main(int argc, char **argv) {
 		switch(argv[i][1]) {
 			case '\0':
 				goto done;
+			case 's':
+				is_silent = 1;
+				break;
 			case 'h': 
 				fprintf(stderr, usage, argv[0]);
 				return -1;
@@ -185,7 +199,18 @@ int main(int argc, char **argv) {
 done:
 	unit_test_start("libforth");
 	{
+		/** @todo The entire external API needs testing, as well as
+		 * parts of the internals
+		 *
+		 * The following functions still need testing:
+		 * 	- int forth_dump_core(forth_t *o, FILE *dump);
+		 * 	- void forth_set_file_output(forth_t *o, FILE *out);
+		 * 	- void forth_set_args(forth_t *o, int argc, char **argv);
+		 *	- int main_forth(int argc, char **argv); 
+		 **/
+
 		FILE *core;
+		forth_cell_t here;
 		forth_t *f, *n;
 		print_note("libforth.c");
 		state(f = forth_init(MINIMUM_CORE_SIZE, stdin, stdout));
@@ -193,30 +218,59 @@ done:
 		state(core = fopen("unit.core", "w+b"));
 		must(core);
 
-		test(forth_eval(f, "here . cr")  >= 0);
-		test(forth_eval(f, "2 2 + . cr") >= 0);
+		/* test setup, simple tests of push/pop interface */
+		test(0 == forth_stack_position(f));
+		test(forth_eval(f, "here ")  >= 0);
+		state(here = forth_pop(f));
+		state(forth_push(f, here));
+		test(forth_eval(f, "2 2 + ") >= 0);
+		test(forth_pop(f) == 4);
+		/* define a word, call that word, pop result */
 		test(forth_eval(f, ": unit-01 69 ; unit-01 ") >= 0);
 		test(forth_pop(f) == 69);
-		test(forth_save_core(f, core) >= 0);
+		test(1 == forth_stack_position(f)); /* "here" still on stack */
 
+		/* constants */
+		test(forth_define_constant(f, "constant-1", 0xAA0A) >= 0);
+		test(forth_define_constant(f, "constant-2", 0x5055) >= 0);
+		test(forth_eval(f, "constant-1 constant-2 or") >= 0);
+		test(forth_pop(f) == 0xFA5F);
+
+		/* string input */
+		state(forth_set_string_input(f, " 18 2 /"));
+		test(forth_run(f) >= 0);
+		test(forth_pop(f) == 9);
+		state(forth_set_file_input(f, stdin));
+
+		/* save core for later tests */
+		test(forth_save_core(f, core) >= 0);
 		state(rewind(core));
+
+		/* more simple tests of arithmetic */
 		state(forth_push(f, 99));
 		state(forth_push(f, 98));
 		test(forth_eval(f, "+") >= 0);
 		test(forth_pop(f) == 197);
+		test(1 == forth_stack_position(f)); /* "here" still on stack */
+		test(here == forth_pop(f));
 		state(forth_free(f));
 
 		/* test that definitions persist across core dumps */
 		state(n = forth_load_core(core));
+		/* stack position does no persist across loads, this might
+		 * change, but is the current functionality */
+		test(0 == forth_stack_position(f)); 
 		must(n);
-		test(forth_eval(n, ": unit-01 69 ; unit-01 ") >= 0);
-		test(forth_pop(n) == 69);
+		/* the word "unit-01" was defined earlier */
+		test(forth_eval(n, "unit-01 constant-1 *") >= 0);
+		test(forth_pop(n) == 69 * 0xAA0A);
+		test(0 == forth_stack_position(f));
 
 		state(forth_free(n));
 		state(fclose(core));
 		if(!keep_files)
 			state(remove("unit.core"));
 	}
-	return unit_test_end("libforth"); /*should be zero!*/
+	return !!unit_test_end("libforth");
 }
 
