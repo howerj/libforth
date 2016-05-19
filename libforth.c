@@ -4,7 +4,7 @@
  *  @copyright  Copyright 2015,2016 Richard James Howe.
  *  @license    LGPL v2.1 or later version
  *  @email      howe.r.j.89@gmail.com 
- *  Please consult "libforth.md" and "start.4th" for more information 
+ *  Please consult "readme.md" and "start.4th" for more information 
  *  @todo add a system for adding arbitrary C functions to the system via
  *  plugins **/
 #include "libforth.h"

@@ -32,8 +32,9 @@ help:
 	@echo "cc $< -c -o $@"
 	@${CC} ${CFLAGS} $< -c -o $@
 
-doc: lib${TARGET}.md
-lib${TARGET}.htm: lib${TARGET}.md
+doc: readme.htm
+
+%.htm: %.md
 	markdown $^ > $@
 
 lib${TARGET}.a: lib${TARGET}.o
@@ -48,7 +49,7 @@ ${TARGET}: main.o lib${TARGET}.a
 forth.core: ${TARGET} start.4th silent-test
 	./${TARGET} -s start.4th
 
-dist: ${TARGET} ${TARGET}.1 lib${TARGET}.[a3] lib${TARGET}.htm forth.core
+dist: ${TARGET} ${TARGET}.1 lib${TARGET}.[a3] readme.htm forth.core
 	tar zvcf ${TARGET}.tgz $^
 
 run: ${TARGET} start.4th

@@ -12,10 +12,10 @@
 	0
 	begin
 		dup dup
-		3 and if drop else  cr . tab ':' emit tab then
+		3 and if drop else  cr pnum tab ':' emit tab then
 		1+
 		key dup 
-		eof = if drop 1 else . tab 0 then
+		eof = if drop 1 else pnum tab 0 then
 	until
 	cr
 	drop

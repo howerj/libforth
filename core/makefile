@@ -9,8 +9,8 @@ all: ${TARGETS}
 	@echo "$(CC) $< -o $@"
 	@$(CC) $(CFLAGS) $< -o $@
 
-test: rle
-	./unit
+test: rle rle.unit
+	./rle.unit
 
 clean:
 	${RM} ${TARGETS} *.enc *.dec *.bin *.o *.blk

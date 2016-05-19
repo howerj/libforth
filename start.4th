@@ -11,7 +11,7 @@ although decidedly less so if you know already know lisp, for example.
 
 For more information about this interpreter and Forth see: 
 	https://en.wikipedia.org/wiki/Forth_%28programming_language%29
-	libforth.md : for more information about this interpreter
+	readme.md   : for a manual for this interpreter
 	libforth.h  : for information about the C API
 	libforth.3  : for limited information about the C API
 	libforth.c  : for the interpreter itself
@@ -1210,7 +1210,7 @@ or consult the following sources:
 
 And for a larger tutorial:
 
-	https://github.com/howerj/libforth/blob/master/libforth.md
+	https://github.com/howerj/libforth/blob/master/readme.md
 
 For resources on Forth:
 
@@ -1239,6 +1239,9 @@ For resources on Forth:
 ( ==================== Blocks ================================= )
 
 ( @todo process invalid blocks [anything greater or equal to 0xFFFF] )
+( @todo only already created blocks can be loaded, this should be
+  corrected so one is created if needed )
+( @todo better error handling )
 
 -1 variable scr-var 
 false variable dirty ( has the buffer been modified? )
