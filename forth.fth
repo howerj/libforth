@@ -36,7 +36,8 @@ See:
 : compile-instruction 1 ; ( compile code word, threaded code interpreter instruction )
 : run-instruction 2 ;     ( run code word, threaded code interpreter instruction )
 : [literal] push-location , , ; ( this word probably needs a better name )
-: literal immediate [literal] ; 
+: literal immediate [literal] ;
+: latest pwd @ ; ( get latest defined word )
 : false 0 ;
 : true 1 ;
 : *+ * + ;
@@ -98,6 +99,7 @@ See:
 : # dup ( x -- x : debug print ) pnum cr ;
 : compile, ' , , ;   ( A word that writes , into the dictionary )
 : >mark ( -- ) here 0 , ; 
+: <resolve here - , ;
 : end immediate (  A synonym for until ) postpone until ;
 : bye ( -- : quit the interpreter ) 0 r ! ;
 : pick ( xu ... x1 x0 u -- xu ... x1 x0 xu )
@@ -113,7 +115,7 @@ See:
 : again immediate 
 	( loop unconditionally in a begin-loop:
 		begin ... again )
-	' branch , here - , ; 
+	' branch , <resolve ; 
 
 ( begin...while...repeat These are defined in a very "Forth" way )
 : while immediate postpone if ( branch to repeats 'then') ;
@@ -286,8 +288,8 @@ hider write-quote
 : variable ( initial-value -- : create a variable ) create ,     does>   ;
 : constant ( value -- : create a constant )         create ,     does> @ ;
 
-( do...loop could be improved, perhaps by not using the return stack
-so much )
+( do...loop could be improved by not using the return stack so much )
+
 : do immediate
 	' swap ,      ( compile 'swap' to swap the limit and start )
 	' >r ,        ( compile to push the limit onto the return stack )
@@ -311,13 +313,12 @@ so much )
 	>r
 ;
 
-: loop immediate 1 [literal] ' addi , here - , ;
-: +loop immediate ' addi , here - , ;
+: loop immediate 1 [literal] ' addi , <resolve ;
+: +loop immediate ' addi , <resolve ;
 hider inci 
 hider addi
 
-: leave
-	( break out of a do-loop construct )
+: leave ( break out of a do-loop construct )
 	rdrop ( pop off our return address )
 	rdrop ( pop off i )
 	rdrop ( pop off the limit of i and return to the caller's caller routine )
@@ -372,7 +373,7 @@ hider addi
 
 	Would overflow the return stack. )
 	immediate
-	pwd @ xt-token 
+	latest xt-token 
 	' branch ,
 	here - 1+ ,
 ;
@@ -384,7 +385,7 @@ hider addi
 
 	We can test "recurse" with this factorial function:
 	  : factorial  dup 2 < if drop 1 exit then dup 1- recurse * ;)
-	pwd @ xt-token , ;
+	latest xt-token , ;
 : myself immediate postpone recurse ;
 
 0 variable column-counter
@@ -464,6 +465,9 @@ hider addi
 	else 
 		drop 
 	then ;
+
+: accumulator  ( " ccc" -- : make a word that increments by a value and pushes the result )
+	create , does> tuck +! @ ;
 
 0 variable delim
 : accepter
@@ -744,7 +748,6 @@ hider endianess
 	here 64 + ;
 
 0 variable counter
-
 : counted-column ( index -- )
 	( special column printing for dump )
 	counter @ column-width @ mod 
@@ -765,7 +768,7 @@ hider endianess
 	find 1- forgetter ;
 
 : marker ( WORD -- : make word the forgets itself and words after it)
-	:: pwd @ [literal] ' forgetter , postpone ; ;
+	:: latest [literal] ' forgetter , postpone ; ;
 hider forgetter
 
 : ?dup-if immediate ( x -- x | - ) 
@@ -925,7 +928,7 @@ hider counter
 	"print" expects a character address, so we need to multiply any calculated
 	address by the word size in bytes. )
 	reset-column
-	pwd @ ( Load most recently defined word )
+	latest 
 	begin 
 		dup 
 		hidden? hide-words @ and
@@ -1020,7 +1023,7 @@ hider debug-prompt
 	dup here             >= if drop 0 exit then ( cannot be a word, too small )
 	dup dictionary-start <= if drop 0 exit then ( cannot be a word, too large )
 	cf !
-	pwd @ dup @ ( p1 p2 )
+	latest dup @ ( p1 p2 )
 	begin
 		over ( p1 p2 p1 )
 		cf @ <= swap cf @ > and if exit then
@@ -1037,7 +1040,7 @@ hider cf
 	NOTE: given a pointer to somewhere in a word it is possible
 	to work out the PWD by looping through the dictionary to
 	find the PWD below it )
-	1- dup @ -1 =             if " ( noname )" end-print exit then
+	1- dup @ -1 =              if " ( noname )" end-print exit then
 	   dup  " ( " code>pwd dup if name print else drop " data" then 
 	        end-print ;
 hider end-print
@@ -1329,21 +1332,6 @@ c
 : make-triangle 1 do i make-stars loop ;
 : make-tower    dup make-triangle make-square ;
 
-: memcpy 
-  over +
-  do
-    dup @ @ swap ! 1+
-  loop
-  drop
-;
-
-: memset 
-  rot dup rot +
-  do
-    dup @ !
-  loop
-;
-
 ." constant " cr
 31 constant a
 a . cr
@@ -1418,6 +1406,6 @@ a . cr
 	should also be done
 	* fill move and the like are technically not compliant as
 	they do not test if the number is negative, however that would
-	unnessarily limit the range of operation
+	unnecessarily limit the range of operation
 )
 

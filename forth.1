@@ -4,7 +4,7 @@
 .SH NAME
 forth \- A small Forth interpreter.
 .SH SYNOPSIS
-forth [-s] [-t] [-m size] [-l forth.core] [-] file..
+forth [-s file] [-l file] [-t] [-h] [-m size] [-] file..
 .SH DESCRIPTION
 This is a small Forth interpreter, built around the libforth(3) library. It is
 an provides an idiosyncratic version of Forth with minimal effort to abide by
@@ -15,15 +15,21 @@ Command line switches must be given before any files, unless that switch takes
 a file as an argument.
 
 .TP
-.B -s
-This saves the working memory of the Forth interpreter to disk (as a file
-called "forth.core")") this file can later be loaded with the "-l" option. If a
-core file has been invalidated this will not be saved.
+.B -s file
+This saves the working memory of the Forth interpreter to a file,
+which can later be loaded with the "-l" option. If a core file has been
+invalidated this will not be saved, invalidation occurs when an unrecoverable
+error has been detected that would prevent any recovery or meaningful
+execution.
 
 .TP
 .B -t
 After all the files have been read from and any core files have been loaded
 this will make the Forth interpreter read from stdin(3), but before "-d".
+
+.TP
+.B -h
+Print out a short help message and exit unsuccessfully.
 
 .TP
 .B -m size
@@ -40,7 +46,7 @@ interpreter.
 .TP
 .B -
 Stop processing any more command line options and treat all arguments after
-this as files to be executed.
+this as files to be executed, if there are any.
 
 .TP
 .B  file...

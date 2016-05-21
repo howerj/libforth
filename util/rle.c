@@ -4,10 +4,6 @@
  *  @copyright  Copyright 2016 Richard James Howe.
  *  @license    LGPL v2.1 or later version
  *  @email      howe.r.j.89@gmail.com 
- *  @bug        fix encoder so it only encodes what it has to and not any more,
- *              this does not make the output stream invalid, only larger than
- *              it should be, this affects large runs of bytes that are the
- *              same
  *  @todo       add checksum, length and whether encoded succeeded (size decreased) to header
  *  @todo       turn into library (read/write to strings as well as files, man pages)
  * 
@@ -27,10 +23,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define  VERSION            (0x2)
+#define  VERSION            (0x2) /* version of binary output format */
 #define  INVALID_HASH       (0xFFFFu) /* fletcher16 hash can never be this value */
-#define  INVALID_SIZE_FIELD (0x0)
-#define  INVALID_HASH_FIELD (0x0)
+#define  INVALID_SIZE_FIELD (0x0) /* the size field, that follows, is invalid */
+#define  INVALID_HASH_FIELD (0x0) /* the hash field, that follows, is invalid */
 
 enum mode { InvalidMode, DecodeMode, EncodeMode };
 
@@ -44,7 +40,7 @@ enum errors {
 	ErrorInvalidHeader  =  -6  /* invalid header */
 };
 
-enum header {
+enum header { /* */
 	eMagic0,     eMagic1,     eMagic2,     eMagic3,
 	eVersion,    eReserved0,  eReserved1,  eEndMagic,
 	eSizeValid,  eHashValid,  eHash0,      eHash1,
@@ -63,7 +59,7 @@ static uint8_t header[24] = {
 	0,        0,   0,   0,    /* size */
 };
 
-struct rle {
+struct rle { /* contains bookkeeping information for encoding/decoding */
 	enum mode mode;       /* mode of operation */
 	jmp_buf *jb;          /* place to jump on error */
 	FILE *in, *out;       /* input and output files */
@@ -85,14 +81,16 @@ static inline uint16_t fletcher16(uint8_t *data, size_t count)
 }
 
 static inline int may_fgetc(struct rle *r)
-{
+{ /* if the input ends now, that is okay */
+	assert(r && r->in);
 	int rval = fgetc(r->in);
 	r->read += rval != EOF;
 	return rval;
 }
 
 static inline int expect_fgetc(struct rle *r)
-{
+{ /* we expect more input, otherwise our output will be invalid */
+	assert(r && r->in);
 	errno = 0;
 	int c = fgetc(r->in);
 	if(c == EOF) {
@@ -105,7 +103,8 @@ static inline int expect_fgetc(struct rle *r)
 }
 
 static inline int must_fputc(struct rle *r, int c)
-{
+{ /* we must be able to output a character, otherwise our output is invalid */
+	assert(r && r->out);
 	errno = 0;
 	if(c != fputc(c, r->out)) {
 		char *reason = errno ? strerror(errno) : "(unknown reason)";
@@ -117,32 +116,36 @@ static inline int must_fputc(struct rle *r, int c)
 }
 
 static inline void increment(struct rle *r, char rw, size_t size)
-{
+{ /* increment the correct counter for reading or writing */
+	assert(r && ((rw == 'w') || (rw == 'r')));
 	if(rw == 'w')
 		r->wrote += size;
 	else
 		r->read  += size;
 }
 
-static inline size_t must_block_io(struct rle *r, void *p, size_t characters, char rw)
-{
+static inline size_t must_block_io(struct rle *r, void *p, size_t size, char rw)
+{ /* the block must be written or read, otherwise something has gone wrong */
 	errno = 0;
-	assert((rw == 'w') || (rw == 'r'));
-	FILE *file = rw == 'w' ? r->out : r->in;
-	size_t ret = rw == 'w' ? fwrite(p, 1, characters, file) : fread(p, 1, characters, file);
-	if(ret != characters) {
+	assert(r && p && ((rw == 'w') || (rw == 'r')));
+	FILE *file = rw == 'w' ? 
+		r->out : 
+		r->in;
+	size_t ret = rw == 'w' ? 
+		fwrite(p, 1, size, file) : 
+		fread (p, 1, size, file);
+	increment(r, rw, ret);
+	if(ret != size) {
 		char *reason = errno ? strerror(errno) : "(unknown reason)";
 		char *type   = rw == 'w' ? "write" : "read";
 		fprintf(stderr, "error: could not %s block, %s\n", type, reason);
-		increment(r, rw, ret);
 		longjmp(*r->jb, ErrorOutEoF);
 	}
-	increment(r, rw, ret);
 	return ret;
 }
 
 static inline void must_encode_buf(struct rle *r, uint8_t *buf, int *idx)
-{
+{ /* the output block must be encoded, this is a run of literal text */
 	must_fputc(r, (*idx)+128);
 	must_block_io(r, buf, *idx, 'w');
 	*idx = 0;
@@ -159,33 +162,38 @@ static void print_results(int verbose, struct rle *r, int encode)
 }
 
 static void encode(struct rle *r)
-{ /* This, whilst producing a correct stream, produces more than it should */
-	uint8_t buf[128];
+{ 
+	uint8_t buf[128]; /* buffer to store data with no runs */
 	int idx = 0;
-	for(int c, j, prev = EOF; (c = may_fgetc(r)) != EOF; prev = c) {
-		if(c == prev) {
-			if(idx > 1)
+	int prev = EOF; /* no previously read in char can be EOF */
+	for(int c; (c = may_fgetc(r)) != EOF; prev = c) {
+		if(c == prev) { /* encode runs of data */
+			int j;  /* count of runs */
+			if(idx > 1) /* output any existing data */
 				must_encode_buf(r, buf, &idx);
+again:
 			for(j = 0; (c = may_fgetc(r)) == prev && j < 128; j++)
-				;
+				/*loop does everything*/;
 			must_fputc(r, j);
 			must_fputc(r, prev);
-			if(c == EOF) {
+			if(c == EOF)
 				goto end;
-			}
+			if(c == prev && j == 128) /**/
+				goto again;
 		}
 		buf[idx++] = c;
 		if(idx == 127)
 			must_encode_buf(r, buf, &idx);
 		assert(idx < 127);
 	}
-end:
-	if(idx)
+end: /* no more input */
+	if(idx) /* we might still have something in the buffer though */
 		must_encode_buf(r, buf, &idx);
 }
 
 int run_length_encoder(int headerless, int verbose, FILE *in, FILE *out)
 {
+	assert(in && out);
 	jmp_buf jb;
 	struct rle r = { EncodeMode, &jb, in, out, 0, 0, 0};
 	int rval;
@@ -199,18 +207,19 @@ int run_length_encoder(int headerless, int verbose, FILE *in, FILE *out)
 }
 
 static void decode(struct rle *r)
-{
+{ /* RLE decoder, the function is quite simple */
+	assert(r);
 	for(int c, count; (c = may_fgetc(r)) != EOF;) {
-		if(c > 128) {
+		if(c > 128) { /* process run of literal data */
 			count = c - 128;
 			for(int i = 0; i < count; i++) {
 				c = expect_fgetc(r);
 				must_fputc(r, c);
 			}
-		} else {
-			count = c;
+		} else { /* process repeated byte */
+			count = c + 1;
 			c = expect_fgetc(r);
-			for(int i = 0; i < count + 1; i++)
+			for(int i = 0; i < count; i++)
 				must_fputc(r, c);
 		}
 	}
@@ -218,6 +227,7 @@ static void decode(struct rle *r)
 
 int run_length_decoder(int headerless, int verbose, FILE *in, FILE *out)
 {
+	assert(in && out);
 	jmp_buf jb;
 	struct rle r = { DecodeMode, &jb, in, out, 0, 0, 0};
 	char head[sizeof(header)] = {0};
@@ -237,7 +247,8 @@ int run_length_decoder(int headerless, int verbose, FILE *in, FILE *out)
 }
 
 static FILE *fopen_or_die(char *name, char *mode)
-{
+{ /* we always want to die if cannot open an input file */
+	assert(name && mode);
 	errno = 0;
 	FILE *ret = fopen(name, mode);
 	char *reason = errno ? strerror(errno) : "could not open file (unknown reason)";
@@ -250,7 +261,7 @@ static FILE *fopen_or_die(char *name, char *mode)
 
 static void help(void)
 {
-	static const char h[] =
+	static const char help_text[] =
 "\nRun Length Encoder and Decoder\n\n\
 	-e\tencode\n\
 	-d\tdecode (mutually exclusive with '-e')\n\
@@ -264,17 +275,18 @@ The file parameters are optional, with the possible combinations:\n\
 \t1 file  specified:\n\t\tinput:  1st file\n\t\toutput: stdout\n\
 \t2 files specified:\n\t\tinput:  1st file\n\t\toutput: 2nd file\n\
 \n";
-	fputs(h, stderr);
+	fputs(help_text, stderr);
 }
 
 static void usage(char *name)
 {
+	assert(name);
 	fprintf(stderr, "usage %s [-(e|d)] [-h] [-H] [-v] [file.in] [file.out]\n", name);
 }
 
 int main(int argc, char **argv)
 { 
-	FILE *in  = stdin, *out  = stdout;
+	FILE *in  = stdin, *out  = stdout; /* default to using standard streams */
 	char *cin = NULL,  *cout = NULL;
 	int r = ErrorArg, i, verbose = 0, headerless = 0;
 	enum mode mode = InvalidMode;
@@ -290,11 +302,11 @@ int main(int argc, char **argv)
 		}
 	}
 done:
-	if(i < argc)
+	if(i < argc) /* first file argument is input file, if argument exists */
 		cin  = argv[i++];
-	if(i < argc)
+	if(i < argc) /* second file argument is output file, if argument exists */
 		cout = argv[i++];
-	if(i < argc)
+	if(i < argc) /* there should be no more arguments after this */
 		goto fail;
 	if(cin)
 		in  = fopen_or_die(cin,  "rb");
@@ -307,7 +319,6 @@ done:
 
 	if(mode == InvalidMode) /*default to encode*/
 		mode = EncodeMode;
-
 	if(mode == EncodeMode)
 		r = run_length_encoder(headerless, verbose, in, out);
 	if(mode == DecodeMode)
@@ -315,7 +326,6 @@ done:
 	fclose(in);
 	fclose(out);
 	return r;
-
 fail:
 	usage(argv[0]);
 	return ErrorArg;

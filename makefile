@@ -5,7 +5,9 @@ CFLAGS	= -Wall -Wextra -g -pedantic -std=c99 -O2
 TARGET	= forth
 RM      = rm -rf
 
-.PHONY: all shorthelp doc clean test silent-test
+FORTH_FILE = forth.fth
+
+.PHONY: all shorthelp doc clean test 
 
 all: shorthelp ${TARGET}
 
@@ -46,20 +48,17 @@ ${TARGET}: main.o lib${TARGET}.a
 	@echo "cc $^ -o $@"
 	@${CC} ${CFLAGS} $^ -o $@
 
-forth.core: ${TARGET} start.4th silent-test
-	./${TARGET} -s start.4th
+forth.core: ${TARGET} ${FORTH_FILE} test
+	./${TARGET} -s $@ ${FORTH_FILE}
 
-dist: ${TARGET} ${TARGET}.1 lib${TARGET}.[a3] readme.htm forth.core
-	tar zvcf ${TARGET}.tgz $^
-
-run: ${TARGET} start.4th
-	./$< -t start.4th
-
-silent-test: unit
-	./$^ -s
+run: ${TARGET} ${FORTH_FILE}
+	./$< -t ${FORTH_FILE}
 
 test: unit
 	./$^
+
+dist: ${TARGET} ${TARGET}.1 lib${TARGET}.[a3] readme.htm forth.core
+	tar zvcf ${TARGET}.tgz $^
 
 clean:
 	${RM} ${TARGET} unit *.blk *.core *.a *.so *.o *.log *.htm *.tgz

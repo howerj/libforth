@@ -4,7 +4,7 @@
  *  @copyright  Copyright 2015,2016 Richard James Howe.
  *  @license    LGPL v2.1 or later version
  *  @email      howe.r.j.89@gmail.com 
- *  Please consult "readme.md" and "start.4th" for more information 
+ *  Please consult "readme.md" and "forth.fth" for more information 
  *  @todo add a system for adding arbitrary C functions to the system via
  *  plugins **/
 #include "libforth.h"
@@ -36,7 +36,6 @@
 #define IS_BIG_ENDIAN       (!(union { uint16_t u16; unsigned char c; }){ .u16 = 1 }.c)
 #define CORE_VERSION        (0x02u) /**< version of the forth core file */
 
-static const char *core_file_name = "forth.core";
 static const char *initial_forth_program = "\n\
 : state 8 exit : ; immediate ' exit , 0 state ! exit : base 9 ; : pwd 10 ;\n\
 : h 6 ; : r 7 ; : here h @ ; : [ immediate 0 state ! ; : ] 1 state ! ;       \n\
@@ -67,30 +66,30 @@ struct forth { /**< FORTH environment, values marked '!!' are serialized in orde
 	forth_cell_t m[];    /**< Forth Virtual Machine memory !! (as is)*/
 };
 
-enum registers    { /* virtual machine registers */
-	DIC    = 6,      /**< dictionary pointer */
-	RSTK   = 7,      /**< return stack pointer */
-	STATE  = 8,      /**< interpreter state; compile or command mode*/
-	BASE   = 9,      /**< base conversion variable */
-	PWD    = 10,     /**< pointer to previous word */
-	SOURCE_ID = 11,  /**< input source selector */
-	SIN    = 12,     /**< string input pointer*/
-	SIDX   = 13,     /**< string input index*/
-	SLEN   = 14,     /**< string input length*/ 
-	START_ADDR = 15, /**< pointer to start of VM */
-	FIN    = 16,     /**< file input pointer */
-	FOUT   = 17,     /**< file output pointer */
-	STDIN  = 18,     /**< file pointer to stdin */
-	STDOUT = 19,     /**< file pointer to stdout */
-	STDERR = 20,     /**< file pointer to stderr */
-	ARGC   = 21,     /**< argument count */
-	ARGV   = 22,     /**< arguments */
-	DEBUG  = 23,     /**< turn debugging on/off if enabled*/
-	INVALID = 24,    /**< if non zero, this interpreter is invalid */
-	TOP    = 25,     /**< *stored* version of top of stack */
+enum registers {          /**< virtual machine registers */
+	DIC         =  6, /**< dictionary pointer */
+	RSTK        =  7, /**< return stack pointer */
+	STATE       =  8, /**< interpreter state; compile or command mode*/
+	BASE        =  9, /**< base conversion variable */
+	PWD         = 10, /**< pointer to previous word */
+	SOURCE_ID   = 11, /**< input source selector */
+	SIN         = 12, /**< string input pointer*/
+	SIDX        = 13, /**< string input index*/
+	SLEN        = 14, /**< string input length*/ 
+	START_ADDR  = 15, /**< pointer to start of VM */
+	FIN         = 16, /**< file input pointer */
+	FOUT        = 17, /**< file output pointer */
+	STDIN       = 18, /**< file pointer to stdin */
+	STDOUT      = 19, /**< file pointer to stdout */
+	STDERR      = 20, /**< file pointer to stderr */
+	ARGC        = 21, /**< argument count */
+	ARGV        = 22, /**< arguments */
+	DEBUG       = 23, /**< turn debugging on/off if enabled*/
+	INVALID     = 24, /**< if non zero, this interpreter is invalid */
+	TOP         = 25, /**< *stored* version of top of stack */
 	INSTRUCTION = 26, /**< *stored* version of instruction pointer*/
-	VSTACK_SIZE = 27, /**< size of the variable stack (special treatment compared to RSTK)*/
-	START_TIME = 28, /**< start time in milliseconds */
+	STACK_SIZE  = 27, /**< size of the stacks */
+	START_TIME  = 28, /**< start time in milliseconds */
 };
 enum input_stream { FILE_IN, STRING_IN = -1 };
 enum instructions { PUSH,COMPILE,RUN,DEFINE,IMMEDIATE,READ,LOAD,STORE,
@@ -98,10 +97,10 @@ SUB,ADD,AND,OR,XOR,INV,SHL,SHR,MUL,DIV,LESS,MORE,EXIT,EMIT,KEY,FROMR,TOR,BRANCH,
 QBRANCH, PNUM, QUOTE,COMMA,EQUAL,SWAP,DUP,DROP,OVER,BSAVE,BLOAD,FIND,PRINT,
 DEPTH,CLOCK,LAST };
 
-static char *names[] = { "read","@","!","-","+","and","or","xor","invert",
-"lshift","rshift","*","/","u<","u>","exit","emit","key","r>",">r","branch","?branch",
-"pnum","'", ",","=", "swap","dup","drop", "over", "bsave","bload","find",
-"print","depth", "clock", NULL }; 
+static const char *names[] = { "read","@","!","-","+","and","or","xor","invert",
+"lshift","rshift","*","/","u<","u>","exit","emit","key","r>",">r","branch",
+"?branch", "pnum","'", ",","=", "swap","dup","drop", "over", "bsave","bload",
+"find", "print","depth", "clock", NULL }; 
 
 static int forth_get_char(forth_t *o) 
 { /* get a char from string input or a file */
@@ -127,7 +126,7 @@ static int forth_get_word(forth_t *o, uint8_t *p)
 	}
 } 
 
-static void compile(forth_t *o, forth_cell_t code, char *str) 
+static void compile(forth_t *o, forth_cell_t code, const char *str) 
 { /* create a new forth word header */
 	assert(o && code < LAST);
 	forth_cell_t *m = o->m, header = m[DIC], l = 0;
@@ -162,7 +161,7 @@ static int blockio(forth_t *o, void *p, forth_cell_t poffset, forth_cell_t id, c
 } /*a basic FORTH block I/O interface*/
 
 static int numberify(int base, forth_cell_t *n, const char *s)  
-{ /*returns non zero if conversion was successful: add to vm*/
+{ /*returns non zero if conversion was successful*/
 	char *end = NULL;
 	errno = 0;
 	*n = strtol(s, &end, base);
@@ -225,17 +224,17 @@ int forth_define_constant(forth_t *o, const char *name, forth_cell_t c)
 static void forth_make_default(forth_t *o, size_t size, FILE *in, FILE *out)
 { /* set defaults for a forth structure for initialization or reload */
 	o->core_size     = size;
-	o->m[VSTACK_SIZE] = size / 64;
+	o->m[STACK_SIZE] = size / 64;
 	o->s             = (uint8_t*)(o->m + STRING_OFFSET); /*string store offset into CORE, skip registers*/
 	o->m[FOUT]       = (forth_cell_t)out;
 	o->m[START_ADDR] = (forth_cell_t)&(o->m);
 	o->m[STDIN]      = (forth_cell_t)stdin;
 	o->m[STDOUT]     = (forth_cell_t)stdout;
 	o->m[STDERR]     = (forth_cell_t)stderr;
-	o->m[RSTK]       = size - o->m[VSTACK_SIZE];     /*set up return stk pointer*/
+	o->m[RSTK]       = size - o->m[STACK_SIZE];     /*set up return stk pointer*/
 	o->m[START_TIME] = (1000 * clock()) / CLOCKS_PER_SEC;
 	o->m[ARGC] = o->m[ARGV] = 0;
-	o->S             = o->m + size - (2 * o->m[VSTACK_SIZE]); /*set up variable stk pointer*/
+	o->S             = o->m + size - (2 * o->m[STACK_SIZE]); /*set up variable stk pointer*/
 	sprintf(o->hex_fmt, "0x%%0%d"PRIxCell, (int)(sizeof(forth_cell_t)*2));
 	o->on_error      = calloc(sizeof(jmp_buf), 1);
 	forth_set_file_input(o, in);  /*set up input after our eval*/
@@ -260,6 +259,7 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out)
 	m = o->m;       /*a local variable only for convenience*/
 
 	o->m[PWD]   = 0;  /*special terminating pwd value*/
+	/**@todo replace recursion with branch */
 	w = m[DIC]  = DICTIONARY_START; /*initial dictionary offset, skip registers and string offset*/
 	m[m[DIC]++] = READ; /*create a special word that reads in FORTH*/
 	m[m[DIC]++] = RUN;  /*call the special word recursively*/
@@ -275,7 +275,7 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out)
 	VERIFY(forth_eval(o, initial_forth_program) >= 0);
 	/** @todo this should be replaced with an X-Macro table of constants */
 	VERIFY(forth_define_constant(o, "size",          sizeof(forth_cell_t)) >= 0);
-	VERIFY(forth_define_constant(o, "stack-start",   size - (2 * o->m[VSTACK_SIZE])) >= 0);
+	VERIFY(forth_define_constant(o, "stack-start",   size - (2 * o->m[STACK_SIZE])) >= 0);
 	VERIFY(forth_define_constant(o, "max-core",      size) >= 0);
 	VERIFY(forth_define_constant(o, "source-id-reg", SOURCE_ID) >= 0);
 
@@ -364,7 +364,7 @@ forth_cell_t forth_pop(forth_t *o)
 
 forth_cell_t forth_stack_position(forth_t *o)
 { /* the original stack position code (everything after o->S) should be turned into a function)*/
-	return o->S - (o->m + o->core_size - (2 * o->m[VSTACK_SIZE]));
+	return o->S - (o->m + o->core_size - (2 * o->m[STACK_SIZE]));
 }
 
 static forth_cell_t check_bounds(forth_t *o, forth_cell_t f, unsigned line) 
@@ -404,7 +404,7 @@ int forth_run(forth_t *o)
 			      m[m[DIC]] |= RUN; /* set instruction to RUN */
 			      m[DIC]++; /* compilation start here */ break;
 		case READ: 
-			m[ck(RSTK)]--; 
+			m[ck(RSTK)]--; /* bit of a hack */
 			if(forth_get_word(o, o->s) < 0)
 				goto end;
 			if ((w = forth_find(o, (char*)o->s)) > 1) {
@@ -464,7 +464,7 @@ int forth_run(forth_t *o)
 			      f = forth_find(o, (char*)o->s);
 			      f = f < DICTIONARY_START ? 0 : f;      break;
 		case PRINT:   fputs(((char*)m)+f, (FILE*)(o->m[FOUT])); f = *S--; break;
-		case DEPTH:   w = S - (m + o->core_size - (2 * o->m[VSTACK_SIZE]));
+		case DEPTH:   w = S - (m + o->core_size - (2 * o->m[STACK_SIZE]));
 			      *++S = f;
 			      f = w;                                 break;
 		case CLOCK:   *++S = f;
@@ -494,19 +494,44 @@ void forth_set_args(forth_t *o, int argc, char **argv)
 	o->m[ARGV] = (forth_cell_t)argv;
 }
 
+static void usage(const char *name)
+{
+	fprintf(stderr, "usage: %s [-s file] [-l file] [-t] [-h] [-m size] [-] files\n", name);
+}
+
+static void help(void)
+{
+	static const char help_text[] = "\
+Forth: A small forth interpreter build around libforth\n\n\
+\t-h       print out this help and exit unsuccessfully\n\
+\t-s file  save state of forth interpreter to file\n\
+\t-l file  load previously saved state from file\n\
+\t-m size  specify forth memory size in kilobytes (cannot be used with '-l')\n\
+\t-t       process stdin after processing forth files\n\
+\t-        stop processing options\n\n\
+Options must come before files to execute\n\n";
+	fputs(help_text, stderr);
+}
+
 int main_forth(int argc, char **argv) 
 {
-	FILE *in = NULL, *core_file = NULL;
+	FILE *in = NULL, *dump = NULL;
 	int save = 0, readterm = 0, mset = 0, rval = 0, i = 1, c = 0;
 	static const size_t kbpc = 1024/sizeof(forth_cell_t); /*kilobytes per cell*/
+	static const char *dump_name = "forth.core";
 	forth_cell_t core_size = DEFAULT_CORE_SIZE;
 	forth_t *o = NULL;
 	for(i = 1; i < argc && argv[i][0] == '-'; i++)
-		switch(argv[i][1]) { /**@todo add -h option */
+		switch(argv[i][1]) { 
 		case '\0': goto done; /* stop argument processing */
-		case 's':  save     = 1; break; /**@todo take an argument*/
+		case 'h':  usage(argv[0]); help(); return -1;
 		case 't':  readterm = 1; break;
-		case 'm':  if(o || i > argc || !numberify(10, &core_size, argv[++i]))
+		case 's':  if(i >= (argc - 1))
+				   goto fail;
+			   dump_name = argv[++i];
+			   save = 1; 
+			   break;
+		case 'm':  if(o || (i >= argc - 1) || !numberify(10, &core_size, argv[++i]))
 				   goto fail;
 			   if((core_size *= kbpc) < MINIMUM_CORE_SIZE) {
 				   fprintf(stderr, "error: -m too small (minimum %zu)\n", MINIMUM_CORE_SIZE / kbpc);
@@ -514,18 +539,18 @@ int main_forth(int argc, char **argv)
 			   }
 			   mset = 1;
 			   break;
-		case 'l':  if(o || mset || i > argc)
+		case 'l':  if(o || mset || (i >= argc - 1))
 				   goto fail;
-			   if(!(o = forth_load_core(core_file = fopen_or_die(argv[++i], "rb")))) {
+			   if(!(o = forth_load_core(dump = fopen_or_die(argv[++i], "rb")))) {
 				   fprintf(stderr, "%s: core load failed\n", argv[i]);
 				   return -1;
 			   }
-			   fclose(core_file);
+			   fclose(dump);
 			   break;
 		default:
 		fail:
 			fprintf(stderr, "error: invalid arguments\n");
-			fprintf(stderr, "usage: %s [-st] [-m size] [-l file] [-] file...\n", argv[0]);
+			usage(argv[0]);
 			return -1;
 		}
 done:
@@ -535,7 +560,7 @@ done:
 		return -1;
 	}
 	forth_set_args(o, argc, argv);
-	for(; i < argc; i++) {
+	for(; i < argc; i++) { /* process all files on command line */
 		forth_set_file_input(o, in = fopen_or_die(argv[i], "rb"));
 		if((c = fgetc(in)) == '#') /*shebang line '#!', core files could also be detected */  
 			while(((c = forth_get_char(o)) > 0) && (c != '\n'));
@@ -548,22 +573,22 @@ done:
 close:	
 		fclose_input(&in);
 	}
-	if(readterm) {
+	if(readterm) { /* if '-t' or no files given, read from stdin */
 		forth_set_file_input(o, stdin);
 		rval = forth_run(o);
 	}
 end:	
 	fclose_input(&in);
-	if(save) {
+	if(save) { /* save core file */
 		if(rval) {
 			fprintf(stderr, "error: refusing to save invalid core\n");
 			return -1;
 		}
-		if(forth_save_core(o, core_file = fopen_or_die(core_file_name, "wb"))) {
-			fprintf(stderr, "error: core file save to '%s' failed\n", core_file_name);
+		if(forth_save_core(o, dump = fopen_or_die(dump_name, "wb"))) {
+			fprintf(stderr, "error: core file save to '%s' failed\n", dump_name);
 			rval = -1;
 		}
-		fclose(core_file); 
+		fclose(dump); 
 	}
 	forth_free(o);
 	return rval;

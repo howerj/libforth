@@ -91,7 +91,7 @@ As can the code, which is small enough to be comprehensible:
 
 And the forth startup code:
 
-* [start.4th][]
+* [forth.fth][]
 
 The startup code is well commented and shows how the core interpreter is
 extended to a more function [Forth][] environment.
@@ -323,31 +323,37 @@ registers, modifying them arbitrary can cause undefined behavior to occur which
 will most likely cause the virtual machine to be terminated.
 
         NAME          LOCATION     DESCRIPTION
-                   DECIMAL  HEX
-                   0-1      0-1    Unused
-                   2-5      2-5    Push integer word
-        DIC        6        6      Dictionary pointer
-        RSTK       7        7      Return stack pointer
-        STATE      8        8      Interpreter state; compile or command mode
-        BASE       9        9      Base conversion variable
-        PWD        10       A      Pointer to last defined word 
-        SOURCE_ID  11       B      Input source selector (-1 = string input, 
-                                   0 = file input)
-        SIN        12       C      String input pointer
-        SIDX       13       D      String input index  (index into SIN)
-        SLEN       14       E      String input length (length of SIN)
-        START_ADDR 15       F      Pointer to start of VM
-        FIN        16       10     File input pointer
-        FOUT       17       11     File output pointer 
-        STDIN      18       12     File pointer to stdin, if available
-        STDOUT     19       13     File pointer to stdout, if available
-        STDERR     20       14     File pointer to stderr, if available
-        ARGC       22       15     Count of arguments passed to program,
-                                   if available
-        ARGV       23       16     An array of pointers to NUL terminated
-                                   ASCII strings, if available, of ARGC
-                                   length
-                   24-31    17-1F  Unused and reserved
+                    DECIMAL  HEX
+                    0-1      0-1    Unused
+                    2-5      2-5    Push integer word
+        DIC         6        6      Dictionary pointer
+        RSTK        7        7      Return stack pointer
+        STATE       8        8      Interpreter state; compile or command mode
+        BASE        9        9      Base conversion variable
+        PWD         10       A      Pointer to last defined word 
+        SOURCE_ID   11       B      Input source selector (-1 = string input, 
+                                    0 = file input)
+        SIN         12       C      String input pointer
+        SIDX        13       D      String input index  (index into SIN)
+        SLEN        14       E      String input length (length of SIN)
+        START_ADDR  15       F      Pointer to start of VM
+        FIN         16       10     File input pointer
+        FOUT        17       11     File output pointer 
+        STDIN       18       12     File pointer to stdin, if available
+        STDOUT      19       13     File pointer to stdout, if available
+        STDERR      20       14     File pointer to stderr, if available
+        ARGC        21       15     Count of arguments passed to program,
+                                    if available
+        ARGV        22       16     An array of pointers to NUL terminated
+                                    ASCII strings, if available, of ARGC
+                                    length
+	DEBUG       23       17     Turn debugging on/off if enabled
+	INVALID     24       18     If non zero, this interpreter is invalid 
+	TOP         25       19     Stored version of top of stack
+	INSTRUCTION 26       1A     Stored version of instruction pointer
+	STACK_SIZE  27       1B     Size of the variable stack
+	START_TIME  28       1C     Start time in milliseconds 
+                    29-31    1D-3F  Reserved / used for other purposes
 
 ### Dictionary
 
@@ -764,14 +770,20 @@ on the variable stack, in the opposite direction of "rot".
 
 Unlike ':' this is a compiling word, but performs the same function.
 
-## [start.4th][]
+## [forth.fth][]
 
-The file [start.4th][] contains many defined words, however those words are
+The file [forth.fth][] contains many defined words, however those words are
 documented within that file and so as to avoid duplication will not be
 mentioned here. This file is *not* loaded automatically, and so should be run
-like this (on Unix systems):
+like this:
 
-        ./forth start.4th /dev/stdin
+Unix:
+
+        ./forth -t forth.fth 
+
+Windows
+
+	forth.exe -t forth.fth
 
 ## Glossary of Forth terminology 
 
@@ -937,7 +949,7 @@ you should use a different language, or implementation.
 [Gforth]: https://www.gnu.org/software/gforth/
 [Reverse Polish Notation]: https://en.wikipedia.org/wiki/Reverse_Polish_notation
 [Threaded Code]: https://en.wikipedia.org/wiki/Threaded_code
-[start.4th]: start.4th
+[forth.fth]: forth.fth
 [tail calls]: https://en.wikipedia.org/wiki/Tail_call
 [forth.1]: forth.1
 [libforth.3]: libforth.3
