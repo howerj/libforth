@@ -104,6 +104,10 @@ See:
 : stack-start [ max-core `stack-size @ 2 * -  ] literal ;
 : pick ( xu ... x1 x0 u -- xu ... x1 x0 xu )
 	stack-start depth + swap - 1- @ ;
+: within ( test low high -- flag : is test between low and high )
+	over - >r - r> u< ;
+: u. ( u -- : display number in base 10, although signed for now ) 
+	base @ >r decimal pnum r> base ! ;
 
 : rdrop ( R: x -- )
 	r>           ( get caller's return address )
@@ -164,7 +168,6 @@ See:
 : unhide ( hide-token -- ) dup @ hidden-mask invert and swap ! ;
 
 : original-exit [ find exit ] literal ;
-
 : exit 
 	( this will define a second version of exit, ';' will
 	use the original version, whilst everything else will
@@ -279,6 +282,9 @@ hider state!
 	here swap !           ( patch in the code fields to point to )
 	run-instruction ,     ( write a run in )
 ;
+
+: >body ( xt -- a-addr : a-addr is data field of a CREATEd word )
+	xt-token 5 + ;
 hider write-quote 
 
 ( ========================== CREATE DOES> ==================================== )
@@ -522,8 +528,6 @@ size 1- constant aligner
 ;
 hider aligner 
 
-( string handling should really be done with PARSE, and CMOVE )
-
 0 variable delim
 : write-string ( char -- c-addr u )
 	( @todo This really needs simplifying, to do this
@@ -543,17 +547,18 @@ hider aligner
 	dup here + h !   ( update dictionary pointer with string length )
 	1+ swap !        ( write place to jump to )
 	drop             ( do not need string length anymore )
-	dolit ,  ( push next value ) 
-	1+ chars> dup >r ( calculate place to print, save it )
-	,                ( write value to push, the character address to print)
-	' print ,        ( write out print, which will print our string )
-	r> r> swap       ( restore index and address of string )
+	1+ chars>        ( calculate place to print )
+	r>               ( restore index and address of string )
 ;
 hider delim
 
+: type ( c-addr u -- : print out 'u' characters at c-addr )
+	0 do dup c@ emit 1+ loop drop ;
+
 : do-string ( char -- )
-	state @ if write-string 2drop else print-string then
-;
+	state @ if write-string swap [literal] [literal] ' type , else print-string then ;
+
+: c" immediate '"' write-string ;
 
 : "  immediate '"' do-string ;
 : .( immediate ')' do-string ;
@@ -728,9 +733,6 @@ hider forgetter
 : ?dup-if immediate ( x -- x | - ) 
 	' ?dup , postpone if ;
 
-: type ( c-addr u -- : print out 'u' characters at c-addr )
-	0 do dup c@ emit 1+ loop ;
-
 : ** ( b e -- x : exponent, raise 'b' to the power of 'e')
 	dup
 	if 
@@ -742,14 +744,6 @@ hider forgetter
 		1
 	endif
 ;
-
-0 variable char-alignment
-: c, ( char c-addr -- : write a character into the dictionary )
-	char-alignment @ dup 1+ size mod char-alignment !
-	+
-	c!
-;
-hider char-alignment
 
 ( ==================== Random Numbers ========================= )
 
@@ -785,6 +779,8 @@ size 8 = [if] 12 constant a 25 constant b 27 constant c [then]
 	see: https://en.wikipedia.org/wiki/ANSI_escape_code 
 	These codes will provide a relatively portable means of 
 	manipulating a terminal
+
+	@bug won't work if hex is set
 )
 
 27 constant 'escape'
@@ -808,9 +804,10 @@ char ; constant ';'
 	for example:
 		bright red foreground color
 	sets the foreground text to bright red )
-	CSI pnum if ." ;1" then ." m" ;
+	CSI u. if ." ;1" then ." m" ;
 
-: at-xy ( x y -- ) ( set ANSI terminal cursor position to x y ) CSI pnum ';' emit pnum ." H" ;
+: at-xy ( x y -- : set ANSI terminal cursor position to x y ) 
+	CSI u. ';' emit u. ." H" ;
 : page  ( clear ANSI terminal screen and move cursor to beginning ) CSI ." 2J" 1 1 at-xy ;
 : hide-cursor ( hide the cursor from view ) CSI ." ?25l" ;
 : show-cursor ( show the cursor )           CSI ." ?25h" ;
@@ -856,6 +853,7 @@ hider counter
 
 ( ==================== Debugging info ========================= )
 
+( string handling should really be done with PARSE, and CMOVE )
 : .s    ( -- : print out the stack for debugging )
 	depth if
 		depth 0 do i column tab i pick . loop
@@ -953,7 +951,7 @@ hider hide-words
 	c - continue on with execution 
 " ;
 : debug-prompt ." debug> " ;
-: debug ( a work in progress, debugging support )
+: debug ( a work in progress, debugging support, needs parse-word )
 	cr
 	begin
 		debug-prompt
@@ -971,7 +969,8 @@ hider debug-prompt
 
 0 variable cf
 : code>pwd ( CODE -- PWD/0 )
-	( given a pointer to a executable code field
+	( @todo simplify using "within"
+	 given a pointer to a executable code field
 	this words attempts to find the PWD field for
 	that word, or return zero )
 	dup here             >= if drop 0 exit then ( cannot be a word, too small )
@@ -1080,9 +1079,10 @@ hider word-printer
 
 r @ constant restart-address
 : quit
-	0 `source-id ! ( @todo store stdin in input file )
-	]
-	restart-address r ! ;
+	0 `source-id !  ( set source to read from file )
+	`stdin @ `fin ! ( read from stdin )
+	postpone [      ( back into command mode )
+	restart-address r ! ( restart interpreter; this needs improving ) ;
 
 : abort empty-stack quit ;
 
@@ -1186,23 +1186,6 @@ For resources on Forth:
 " cr
 ;
 
-( clean up the environment )
-:hide
- write-string do-string accept-string ')' alignment-bits print-string '"'
- compile-instruction dictionary-start hidden? hidden-mask instruction-mask 
- max-core run-instruction x x! x@ write-exit 
- accepter max-string-length xt-token error-no-word
- original-exit
- restart-address pnum
- decompile TrueFalse >instruction print-header 
- print-name print-start print-previous print-immediate 
- print-instruction xt-instruction defined-word? print-defined
- `state 
- `source-id `sin `sidx `slen `start-address `fin `fout `stdin
- `stdout `stderr `argc `argv `debug `invalid `top `instruction
- `stack-size `start-time
-;hide
-
 ( ==================== Blocks ================================= )
 
 ( @todo process invalid blocks [anything greater or equal to 0xFFFF] )
@@ -1215,11 +1198,13 @@ false variable dirty ( has the buffer been modified? )
 : scr ( -- x : last screen used ) scr-var @ ;
 b/buf chars table block-buffer ( block buffer - enough to store one block )
 
-: update true dirty ! ;
-: empty-buffers false dirty ! block-buffer b/buf chars erase ;
+: update ( mark block buffer as dirty, so it will be flushed if needed )
+	true dirty ! ;
+: empty-buffers ( discard any buffers )
+	false dirty ! block-buffer b/buf chars erase ;
 : flush dirty @ if block-buffer chars> scr bsave drop false dirty ! then ;
 
-: list
+: list ( block-number -- : display a block )
 	flush
 	dup dup scr <> if
 		block-buffer chars> swap bload  ( load buffer into block buffer )
@@ -1236,15 +1221,32 @@ b/buf chars table block-buffer ( block buffer - enough to store one block )
 
 : save-buffers flush ;
 
-: list-thru
+: list-thru ( x y -- : list blocks x through to y )
 	1+ swap 
 	key drop
 	do " screen no: " i . cr i list cr more loop ;
 
-hider scr-var
-hider block-buffer
-
 ( ==================== Blocks ================================= )
+
+( clean up the environment )
+:hide
+ scr-var block-buffer
+ write-string do-string accept-string ')' alignment-bits print-string '"'
+ compile-instruction dictionary-start hidden? hidden-mask instruction-mask 
+ max-core run-instruction x x! x@ write-exit 
+ accepter max-string-length xt-token error-no-word
+ original-exit
+ restart-address pnum
+ decompile TrueFalse >instruction print-header 
+ print-name print-start print-previous print-immediate 
+ print-instruction xt-instruction defined-word? print-defined
+ `state 
+ `source-id `sin `sidx `slen `start-address `fin `fout `stdin
+ `stdout `stderr `argc `argv `debug `invalid `top `instruction
+ `stack-size `start-time
+;hide
+
+
 
 ( 
 : actual-base base @ dup 0= if drop 10 then ;
@@ -1306,6 +1308,7 @@ hider block-buffer
 	* fill move and the like are technically not compliant as
 	they do not test if the number is negative, however that would
 	unnecessarily limit the range of operation
+	* "print" should be removed from the interpreter
 
 Some interesting links:
 	* http://www.figuk.plus.com/build/heart.htm
