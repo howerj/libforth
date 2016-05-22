@@ -1,4 +1,13 @@
+/** @file       mkblk.c
+ *  @brief      Make and manipulate forth blocks
+ *  @author     Richard James Howe.
+ *  @copyright  Copyright 2015,2016 Richard James Howe.
+ *  @license    LGPL v2.1 or later version
+ *  @email      howe.r.j.89@gmail.com 
+ *  @todo split a file into forth blocks, padding if needed 
+ *  @todo option to validate forth block length and name of an existing block*/
 #include <stdio.h>
+#include <stdint.h>
 #include <string.h>
 #include <errno.h>
 #include <stdlib.h>
@@ -6,14 +15,17 @@
 #define BLOCK_SIZE (1024)
 #define MAX_NUMBER (0xFFFFu)
 
+static int split_counter = 0;
+
 void usage(char *name)
 {
 	static const char *help = "\
 make forth blocks\n\
-usage %s [-h] [-z] [-v] number...\n\n\
+usage %s [-h] [-z] [-v] [-s file] number...\n\n\
 	-h      print this help and exit unsuccessfully\n\
 	-z      zero the block instead of writing space to it\n\
 	-v      verbose mode\n\
+	-s      split file into blocks, padded with zeros or spaces, then exit\n\
 	number  make a block named with 'number'\n\n\
 This program makes valid blocks which can be loaded by the forth\n\
 interpreter program, blocks are files containing 1024 bits of data,\n\
@@ -32,7 +44,7 @@ static void fputc_or_die(int c, FILE *out)
 	}
 }
 
-static FILE *fopen_or_die(char *name, char *mode)
+static FILE *fopen_or_die(const char *name, char *mode)
 {
 	errno = 0;
 	FILE *ret = fopen(name, mode);
@@ -44,10 +56,17 @@ static FILE *fopen_or_die(char *name, char *mode)
 	return ret;
 }
 
+static char *block_name(int blkno)
+{
+	static char name[32];
+	memset(name, 0, sizeof(name));
+	sprintf(name, "%04x.blk", (int)blkno);
+	return name;
+}
+
 static void make_block(int blkno, int zero)
 {
-	char name[32] = {0};
-	sprintf(name, "%04x.blk", (int)blkno);
+	char *name = block_name(blkno);
 	FILE *out = fopen_or_die(name, "wb");
 	if(zero) {
 		for(int i = 0; i < BLOCK_SIZE; i++)
@@ -80,17 +99,46 @@ static long number_or_die(const char *s)
 	return n;
 }
 
+static int split(const char *name, int zero)
+{
+	FILE *in = fopen_or_die(name, "rb");
+	static uint8_t blk[1024];
+
+	memset(blk, zero ? 0 : ' ', sizeof(blk));
+	while(fread(blk, 1, sizeof(blk), in))
+	{
+		char *blkname = block_name(split_counter++);
+		FILE *out = fopen_or_die(blkname, "wb");
+		if(sizeof(blk) != fwrite(blk, 1, sizeof(blk), out))
+		{
+			fprintf(stderr, "error: could not write block %s for file %s\n", blkname, name);
+			abort();
+		}
+		fclose(out);
+		memset(blk, zero ? 0 : ' ', sizeof(blk));
+	}
+	fclose(in);
+	return 0;
+}
+
 int main(int argc, char **argv)
 {
 	int i, zero = 0, verbose = 0;
 	for(i = 1; i < argc && argv[i][0] == '-'; i++)
 		switch(argv[i][1]) {
-			/**@todo option to validate forth block length and name 
-			 * of an existing block */
 			case '\0': goto done;
 			case 'h':  usage(argv[0]); return -1;
 			case 'z':  zero    = 1; break;
 			case 'v':  verbose = 1; break;
+			case 's':  
+				   if(i >= (argc - 1))
+				   {
+					   fprintf(stderr, "error: -s expects file name\n");
+					   usage(argv[0]);
+					   return -1;
+				   }
+				   return split(argv[++i], zero);
+				   break;
 			default:
 				   fprintf(stderr, "error: invalid argument '%s'\n", argv[i]);
 				   usage(argv[0]);

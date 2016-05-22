@@ -37,14 +37,13 @@
 #define CORE_VERSION        (0x02u) /**< version of the forth core file */
 
 static const char *initial_forth_program = "\n\
-: state 8 exit : ; immediate ' exit , 0 state ! exit : base 9 ; : pwd 10 ;\n\
-: h 6 ; : r 7 ; : here h @ ; : [ immediate 0 state ! ; : ] 1 state ! ;       \n\
-: :noname immediate -1 , here 2 , ] ; : if immediate ' ?branch , here 0 , ;  \n\
-: else immediate ' branch , here 0 , swap dup here swap - swap ! ; : 0= 0 = ;\n\
-: then immediate dup here swap - swap ! ; : 2dup over over ; : <> = 0= ;     \n\
+: here h @ ; : [ immediate 0 state ! ; : ] 1 state ! ; : >mark here 0 , ;      \n\
+: :noname immediate -1 , here 2 , ] ; : if immediate ' ?branch , >mark ;       \n\
+: else immediate ' branch , >mark swap dup here swap - swap ! ; : 0= 0 = ;     \n\
+: then immediate dup here swap - swap ! ; : 2dup over over ; : <> = 0= ;       \n\
 : begin immediate here ; : until immediate ' ?branch , here - , ; : '\\n' 10 ; \n\
-: not 0= ; : 1+ 1 + ; : 1- 1 - ; : ')' 41 ; : tab 9 emit ; : cr '\\n' emit ; \n\
-: ( immediate begin key ')' = until ; : rot >r swap r> swap ; : -rot rot rot ;\n\
+: not 0= ; : 1+ 1 + ; : 1- 1 - ; : ')' 41 ; : tab 9 emit ; : cr '\\n' emit ;   \n\
+: ( immediate begin key ')' = until ; : rot >r swap r> swap ; : -rot rot rot ; \n\
 : tuck swap over ; : nip swap drop ; : :: [ find : , ] ; : allot here + h ! ; ";
 
 enum header { MAGIC0, MAGIC1, MAGIC2, MAGIC4, CELL_SIZE, VERSION, ENDIAN, MAGIC7 };
@@ -91,16 +90,22 @@ enum registers {          /**< virtual machine registers */
 	STACK_SIZE  = 27, /**< size of the stacks */
 	START_TIME  = 28, /**< start time in milliseconds */
 };
+
+static const char *register_names[] = { "h", "r", "`state", "base", "pwd",
+"`source-id", "`sin", "`sidx", "`slen", "`start-address", "`fin", "`fout", "`stdin",
+"`stdout", "`stderr", "`argc", "`argv", "`debug", "`invalid", "`top", "`instruction",
+"`stack-size", "`start-time", NULL };
+
 enum input_stream { FILE_IN, STRING_IN = -1 };
 enum instructions { PUSH,COMPILE,RUN,DEFINE,IMMEDIATE,READ,LOAD,STORE,
 SUB,ADD,AND,OR,XOR,INV,SHL,SHR,MUL,DIV,LESS,MORE,EXIT,EMIT,KEY,FROMR,TOR,BRANCH,
 QBRANCH, PNUM, QUOTE,COMMA,EQUAL,SWAP,DUP,DROP,OVER,BSAVE,BLOAD,FIND,PRINT,
 DEPTH,CLOCK,LAST };
 
-static const char *names[] = { "read","@","!","-","+","and","or","xor","invert",
-"lshift","rshift","*","/","u<","u>","exit","emit","key","r>",">r","branch",
-"?branch", "pnum","'", ",","=", "swap","dup","drop", "over", "bsave","bload",
-"find", "print","depth", "clock", NULL }; 
+static const char *instruction_names[] = { "read","@","!","-","+","and","or",
+"xor","invert","lshift","rshift","*","/","u<","u>","exit","emit","key","r>",
+">r","branch","?branch", "pnum","'", ",","=", "swap","dup","drop", "over", 
+"bsave","bload", "find", "print","depth","clock", NULL }; 
 
 static int forth_get_char(forth_t *o) 
 { /* get a char from string input or a file */
@@ -269,15 +274,16 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out)
 
 	compile(o, DEFINE,    ":");         /*immediate word*/
 	compile(o, IMMEDIATE, "immediate"); /*immediate word*/
-	for(i = 0, w = READ; names[i]; i++) /*compiling words*/
-		compile(o, COMPILE, names[i]), m[m[DIC]++] = w++;
-
+	for(i = 0, w = READ; instruction_names[i]; i++) /*compiling words*/
+		compile(o, COMPILE, instruction_names[i]), m[m[DIC]++] = w++;
+	VERIFY(forth_eval(o, ": state 8 exit : ; immediate ' exit , 0 state ! exit ") >= 0);
+	for(i = 0; register_names[i]; i++) /* name all registers */
+		VERIFY(forth_define_constant(o, register_names[i], i+DIC) >= 0);
 	VERIFY(forth_eval(o, initial_forth_program) >= 0);
 	/** @todo this should be replaced with an X-Macro table of constants */
 	VERIFY(forth_define_constant(o, "size",          sizeof(forth_cell_t)) >= 0);
 	VERIFY(forth_define_constant(o, "stack-start",   size - (2 * o->m[STACK_SIZE])) >= 0);
 	VERIFY(forth_define_constant(o, "max-core",      size) >= 0);
-	VERIFY(forth_define_constant(o, "source-id-reg", SOURCE_ID) >= 0);
 
 	forth_set_file_input(o, in);  /*set up input after our eval*/
 	return o;
@@ -381,14 +387,12 @@ static forth_cell_t check_bounds(forth_t *o, forth_cell_t f, unsigned line)
 int forth_run(forth_t *o) 
 { /* this implements the Forth virtual machine; it does all the work */ 
 	assert(o);
-	forth_cell_t *m, pc, *S, I, f, w;
 	if(o->m[INVALID] || setjmp(*o->on_error))
 		return -(o->m[INVALID] = 1);
-	m = o->m, S = o->S, I = o->m[INSTRUCTION], f = o->m[TOP]; 
+	forth_cell_t *m = o->m, pc, *S = o->S, I = o->m[INSTRUCTION], f = o->m[TOP], w;
 
 	for(;(pc = m[ck(I++)]);) { /* Threaded code interpreter */
-		assert((S > m) && (S < (m + o->core_size)));
-	INNER:  
+	INNER:  assert((S > m) && (S < (m + o->core_size)));
 		switch (w = instruction(m[ck(pc++)])) {
 		case PUSH:    *++S = f;     f = m[ck(I++)];          break;
 		case COMPILE: m[ck(m[DIC]++)] = pc;                  break;
