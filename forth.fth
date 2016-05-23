@@ -499,11 +499,9 @@ hider addi
 ;
 hider delim 
 
-: '"' ( -- char : push literal " character ) [char] " ;
-: accept ( c-addr +n1 -- +n2 : see accepter definition ) swap '\n' accepter ;
+: accept ( c-addr +n1 -- +n2 : see accepter definition ) '\n' accepter ;
 
-4096 constant max-string-length 
-: accept-string max-string-length '"' accepter  ;
+0xFFFF constant max-string-length 
 
 0 variable delim
 : print-string 
@@ -558,11 +556,16 @@ hider delim
 : do-string ( char -- )
 	state @ if write-string swap [literal] [literal] ' type , else print-string then ;
 
-: c" immediate '"' write-string ;
+: c" immediate [char] " write-string ;
 
-: "  immediate '"' do-string ;
-: .( immediate ')' do-string ;
-: ." immediate '"' do-string ;
+128 table sbuf
+: s" ( "ccc<quote>" --, Run Time -- c-addr u) ) 
+	sbuf 128 [char] " accepter sbuf swap ;
+hider sbuf
+
+: "  immediate [char] " do-string ;
+: .( immediate [char] ) do-string ;
+: ." immediate [char] " do-string ;
 
 : ok " ok" cr ;
 
@@ -700,6 +703,14 @@ size 8 = [if] 0x01234567abcdef variable endianess [then]
 	[ endianess chars> c@ 0x01 = ] literal 
 ;
 hider endianess
+
+: evaluate ( c-addr u -- : evaluate a string, although this version exits after doing so )
+	`sidx !
+	`start-address @ + `sin !
+	0 `sidx ! 
+	-1 `source-id ! ;
+
+: trace ( flag -- : turn tracing on/off ) `debug ! ;
 
 : pad 
 	( the pad is used for temporary storage, and moves
@@ -855,8 +866,9 @@ hider counter
 
 ( string handling should really be done with PARSE, and CMOVE )
 : .s    ( -- : print out the stack for debugging )
+	" <" depth u. " >" space
 	depth if
-		depth 0 do i column tab i pick . loop
+		depth 0 do i column tab depth i 1+ - pick u. loop
 	then
 	cr ;
 
@@ -1226,12 +1238,37 @@ b/buf chars table block-buffer ( block buffer - enough to store one block )
 	key drop
 	do " screen no: " i . cr i list cr more loop ;
 
+
 ( ==================== Blocks ================================= )
+
+
+( ==================== Miscellaneous ========================== )
+
+: number? ( c -- f : is character a number? )
+	[char] 0 [ char 9 1+ ] literal within ;
+
+: lowercase? ( c -- f : is character lower case? )
+	[char] a [ char z 1+ ] literal within ;
+
+: uppercase? ( C -- f : is character upper case? )
+	[char] A [ char Z 1+ ] literal within ;
+
+: alpha? ( C -- f : is character part of the alphabet? )
+	dup lowercase? swap uppercase? or ;
+
+: alphanumeric? ( C -- f : is character alphabetic or a number ? )
+	dup alpha? swap number? or ;
+
+: >upper ( c -- C : convert char to uppercase iff lower case )
+	dup lowercase? if bl xor then ;
+
+: >lower ( C -- c : convert char to lowercase iff upper case )
+	dup uppercase? if bl xor then ;
 
 ( clean up the environment )
 :hide
  scr-var block-buffer
- write-string do-string accept-string ')' alignment-bits print-string '"'
+ write-string do-string ')' alignment-bits print-string 
  compile-instruction dictionary-start hidden? hidden-mask instruction-mask 
  max-core run-instruction x x! x@ write-exit 
  accepter max-string-length xt-token error-no-word
@@ -1240,32 +1277,14 @@ b/buf chars table block-buffer ( block buffer - enough to store one block )
  decompile TrueFalse >instruction print-header 
  print-name print-start print-previous print-immediate 
  print-instruction xt-instruction defined-word? print-defined
+ 
  `state 
  `source-id `sin `sidx `slen `start-address `fin `fout `stdin
  `stdout `stderr `argc `argv `debug `invalid `top `instruction
  `stack-size `start-time
-;hide
+;hide 
 
 
-
-( 
-: actual-base base @ dup 0= if drop 10 then ;
-: pnum
-	dup
-	actual-base mod [char] 0 +
-	swap actual-base / dup
-	if pnum 0 then
-	drop emit
-;
-
-: .
-	dup 0 < 
-	if
-		[char] - emit negate
-	then
-	pnum
-	space
-; )
 
 ( TODO
 	* Evaluate 
