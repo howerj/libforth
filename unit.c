@@ -262,13 +262,13 @@ done:
 		state(n = forth_load_core(core));
 		/* stack position does no persist across loads, this might
 		 * change, but is the current functionality */
-		test(0 == forth_stack_position(f)); 
+		test(0 == forth_stack_position(n)); 
 		must(n);
 		/* the word "unit-01" was defined earlier */
-		test(forth_find(f, "unit-01"));
+		test(forth_find(n, "unit-01"));
 		test(forth_eval(n, "unit-01 constant-1 *") >= 0);
 		test(forth_pop(n) == 69 * 0xAA0A);
-		test(0 == forth_stack_position(f));
+		test(0 == forth_stack_position(n));
 
 		state(forth_free(n));
 		state(fclose(core));

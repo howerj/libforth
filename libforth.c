@@ -229,7 +229,7 @@ int forth_define_constant(forth_t *o, const char *name, forth_cell_t c)
 static void forth_make_default(forth_t *o, size_t size, FILE *in, FILE *out)
 { /* set defaults for a forth structure for initialization or reload */
 	o->core_size     = size;
-	o->m[STACK_SIZE] = size / 64;
+	o->m[STACK_SIZE] = size / 64 > 64 ? size / 64 : 64;
 	o->s             = (uint8_t*)(o->m + STRING_OFFSET); /*string store offset into CORE, skip registers*/
 	o->m[FOUT]       = (forth_cell_t)out;
 	o->m[START_ADDR] = (forth_cell_t)&(o->m);
@@ -276,11 +276,10 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out)
 	compile(o, IMMEDIATE, "immediate"); /*immediate word*/
 	for(i = 0, w = READ; instruction_names[i]; i++) /*compiling words*/
 		compile(o, COMPILE, instruction_names[i]), m[m[DIC]++] = w++;
-	VERIFY(forth_eval(o, ": state 8 exit : ; immediate ' exit , 0 state ! exit ") >= 0);
-	for(i = 0; register_names[i]; i++) /* name all registers */
+	VERIFY(forth_eval(o, ": state 8 exit : ; immediate ' exit , 0 state ! ;") >= 0);
+	for(i = 0; register_names[i]; i++) /* name all registers */ 
 		VERIFY(forth_define_constant(o, register_names[i], i+DIC) >= 0);
 	VERIFY(forth_eval(o, initial_forth_program) >= 0);
-	/** @todo this should be replaced with an X-Macro table of constants */
 	VERIFY(forth_define_constant(o, "size",          sizeof(forth_cell_t)) >= 0);
 	VERIFY(forth_define_constant(o, "stack-start",   size - (2 * o->m[STACK_SIZE])) >= 0);
 	VERIFY(forth_define_constant(o, "max-core",      size) >= 0);
@@ -526,7 +525,7 @@ int main_forth(int argc, char **argv)
 	forth_cell_t core_size = DEFAULT_CORE_SIZE;
 	forth_t *o = NULL;
 	for(i = 1; i < argc && argv[i][0] == '-'; i++)
-		switch(argv[i][1]) { 
+		switch(argv[i][1]) { /**@todo there should be an -e option to evaluate string */
 		case '\0': goto done; /* stop argument processing */
 		case 'h':  usage(argv[0]); help(); return -1;
 		case 't':  readterm = 1; break;

@@ -1,14 +1,12 @@
 #!./forth
-( A simple hexdump utility : work in progress )
+( A simple hexdump utility : work in progress, no prerequisites )
 : char key drop key ;
 : literal 2 , , ;
 : ':' [ char : literal ] ;
-: file-input-reg 16 ;
-: stdin-reg 18 ;
 : eof -1 ;
 : hexdump
 	16 base !
-	stdin-reg @ file-input-reg !
+	`stdin @ `fin !
 	0
 	begin
 		dup dup
