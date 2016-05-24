@@ -499,19 +499,21 @@ void forth_set_args(forth_t *o, int argc, char **argv)
 
 static void usage(const char *name)
 {
-	fprintf(stderr, "usage: %s [-s file] [-l file] [-t] [-h] [-m size] [-] files\n", name);
+	fprintf(stderr, "usage: %s [-s file] [-e string] [-l file] [-t] [-h] [-m size] [-] files\n", name);
 }
 
 static void help(void)
 {
 	static const char help_text[] = "\
 Forth: A small forth interpreter build around libforth\n\n\
-\t-h       print out this help and exit unsuccessfully\n\
-\t-s file  save state of forth interpreter to file\n\
-\t-l file  load previously saved state from file\n\
-\t-m size  specify forth memory size in kilobytes (cannot be used with '-l')\n\
-\t-t       process stdin after processing forth files\n\
-\t-        stop processing options\n\n\
+\t-h        print out this help and exit unsuccessfully\n\
+\t-e string evaluate a string\n\
+\t-s file   save state of forth interpreter to file\n\
+\t-d        save state to 'forth.core'\n\
+\t-l file   load previously saved state from file\n\
+\t-m size   specify forth memory size in kilobytes (cannot be used with '-l')\n\
+\t-t        process stdin after processing forth files\n\
+\t-         stop processing options\n\n\
 Options must come before files to execute\n\n";
 	fputs(help_text, stderr);
 }
@@ -519,7 +521,7 @@ Options must come before files to execute\n\n";
 int main_forth(int argc, char **argv) 
 {
 	FILE *in = NULL, *dump = NULL;
-	int save = 0, readterm = 0, mset = 0, rval = 0, i = 1, c = 0;
+	int save = 0, readterm = 0, mset = 0, eval = 0, rval = 0, i = 1, c = 0;
 	static const size_t kbpc = 1024/sizeof(forth_cell_t); /*kilobytes per cell*/
 	static const char *dump_name = "forth.core";
 	forth_cell_t core_size = DEFAULT_CORE_SIZE;
@@ -529,9 +531,20 @@ int main_forth(int argc, char **argv)
 		case '\0': goto done; /* stop argument processing */
 		case 'h':  usage(argv[0]); help(); return -1;
 		case 't':  readterm = 1; break;
+		case 'e':  if(i >= (argc - 1))
+				   goto fail;
+			   if(!(o = o ? o : forth_init(core_size, stdin, stdout))) {
+				   fprintf(stderr, "error: initialization failed\n");
+				   return -1;
+			   }
+			   if(forth_eval(o, argv[++i]) < 0)
+				   goto end;
+			   eval = 1;
+			   break;
 		case 's':  if(i >= (argc - 1))
 				   goto fail;
 			   dump_name = argv[++i];
+		case 'd':  /*use default name*/
 			   save = 1; 
 			   break;
 		case 'm':  if(o || (i >= argc - 1) || !numberify(10, &core_size, argv[++i]))
@@ -545,7 +558,7 @@ int main_forth(int argc, char **argv)
 		case 'l':  if(o || mset || (i >= argc - 1))
 				   goto fail;
 			   if(!(o = forth_load_core(dump = fopen_or_die(argv[++i], "rb")))) {
-				   fprintf(stderr, "%s: core load failed\n", argv[i]);
+				   fprintf(stderr, "error: %s: core load failed\n", argv[i]);
 				   return -1;
 			   }
 			   fclose(dump);
@@ -557,7 +570,7 @@ int main_forth(int argc, char **argv)
 			return -1;
 		}
 done:
-	readterm = i == argc || readterm; /* if no files are given, read stdin */
+	readterm = (!eval && i == argc) || readterm; /* if no files are given, read stdin */
 	if(!o && !(o = forth_init(core_size, stdin, stdout))) {
 		fprintf(stderr, "error: forth initialization failed\n");
 		return -1;

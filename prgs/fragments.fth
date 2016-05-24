@@ -18,4 +18,28 @@
 	space
 ; 
 
+( HERE documents would be good to implement, see
+https://rosettacode.org/wiki/Here_document#Forth )
 
+( from https://rosettacode.org/wiki/History_variables#Forth,
+  )
+: history postpone create here cell+ , 0 , -1 , ;
+: h@ @ @ ;
+: h! swap here >r , dup @ , r> swap ! ;
+: .history @ begin dup cell+ @ -1 <> while dup ? cell+ @ repeat drop ;
+: h-- dup @ cell+ @ dup -1 = if abort ( abort" End of history" ) then swap ! ;
+
+( Example use: 
+history z  
+23 z h!  
+z h@ . 
+34 z h!  
+z h@ . 
+45 z h!  
+z h@ . 
+z .history 
+z dup h-- h@ . 
+z dup h-- h@ .
+z dup h-- h@ .
+z dup h-- h@ .
+)

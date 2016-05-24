@@ -560,7 +560,7 @@ hider delim
 
 128 table sbuf
 : s" ( "ccc<quote>" --, Run Time -- c-addr u) ) 
-	sbuf 128 [char] " accepter sbuf swap ;
+	sbuf 128 chars> [char] " accepter sbuf swap ;
 hider sbuf
 
 : "  immediate [char] " do-string ;
@@ -617,6 +617,9 @@ hider sbuf
 	0 do 2dup i + c! loop
 	2drop 
 ;
+
+: bounds ( x y -- y+x x ) 
+	over + swap ;
 
 : spaces ( n -- : print n spaces ) 0 do space loop ;
 : erase ( addr u : erase a block of memory )
@@ -1265,13 +1268,27 @@ b/buf chars table block-buffer ( block buffer - enough to store one block )
 : >lower ( C -- c : convert char to lowercase iff upper case )
 	dup uppercase? if bl xor then ;
 
+: <=> ( x y -- z : spaceship operator! )
+	2dup
+	> if 2drop -1 exit then
+	< ;
+
+: compare ( c-addr1 u1 c-addr2 u2 -- n : compare two strings, assumes strings are NUL terminated )
+	rot min
+	0 do ( should be ?do )
+		2dup
+		i + c@ swap i + c@ 
+		<=> dup if leave else drop then
+	loop
+	2drop ;
+
 ( clean up the environment )
 :hide
  scr-var block-buffer
  write-string do-string ')' alignment-bits print-string 
  compile-instruction dictionary-start hidden? hidden-mask instruction-mask 
  max-core run-instruction x x! x@ write-exit 
- accepter max-string-length xt-token error-no-word
+ max-string-length xt-token error-no-word
  original-exit
  restart-address pnum
  decompile TrueFalse >instruction print-header 
@@ -1284,10 +1301,7 @@ b/buf chars table block-buffer ( block buffer - enough to store one block )
  `stack-size `start-time
 ;hide 
 
-
-
 ( TODO
-	* Evaluate 
 	* By adding "c@" and "c!" to the interpreter I could remove print
 	and put string functionality earlier in the file
 	* Add unit testing to the end of this file
