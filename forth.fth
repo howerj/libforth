@@ -1247,6 +1247,11 @@ b/buf chars table block-buffer ( block buffer - enough to store one block )
 
 ( ==================== Miscellaneous ========================== )
 
+: time ( " ccc" -- n : time the number of milliseconds it takes to execute a word )
+	clock >r
+	find execute
+	clock r> - ;
+
 : number? ( c -- f : is character a number? )
 	[char] 0 [ char 9 1+ ] literal within ;
 

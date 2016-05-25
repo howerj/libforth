@@ -4,7 +4,7 @@
  *  @copyright  Copyright 2015,2016 Richard James Howe.
  *  @license    LGPL v2.1 or later version
  *  @email      howe.r.j.89@gmail.com 
- *  Please consult "readme.md" and "forth.fth" for more information 
+ *  Please consult "readme.md", "forth.fth" and "libforth.h" for more information 
  *  @todo add a system for adding arbitrary C functions to the system via
  *  plugins **/
 #include "libforth.h"
@@ -99,12 +99,12 @@ static const char *register_names[] = { "h", "r", "`state", "base", "pwd",
 enum input_stream { FILE_IN, STRING_IN = -1 };
 enum instructions { PUSH,COMPILE,RUN,DEFINE,IMMEDIATE,READ,LOAD,STORE,
 SUB,ADD,AND,OR,XOR,INV,SHL,SHR,MUL,DIV,LESS,MORE,EXIT,EMIT,KEY,FROMR,TOR,BRANCH,
-QBRANCH, PNUM, QUOTE,COMMA,EQUAL,SWAP,DUP,DROP,OVER,BSAVE,BLOAD,FIND,PRINT,
+QBRANCH, PNUM, QUOTE,COMMA,EQUAL,SWAP,DUP,DROP,OVER,TAIL,BSAVE,BLOAD,FIND,PRINT,
 DEPTH,CLOCK,LAST };
 
 static const char *instruction_names[] = { "read","@","!","-","+","and","or",
 "xor","invert","lshift","rshift","*","/","u<","u>","exit","emit","key","r>",
-">r","branch","?branch", "pnum","'", ",","=", "swap","dup","drop", "over", 
+">r","branch","?branch", "pnum","'", ",","=", "swap","dup","drop", "over", "tail",
 "bsave","bload", "find", "print","depth","clock", NULL }; 
 
 static int forth_get_char(forth_t *o) 
@@ -221,7 +221,7 @@ int forth_eval(forth_t *o, const char *s)
 int forth_define_constant(forth_t *o, const char *name, forth_cell_t c)
 {
 	char e[MAX_WORD_LENGTH+32] = {0};
-	assert(strlen(name) < MAX_WORD_LENGTH);
+	assert(o && strlen(name) < MAX_WORD_LENGTH);
 	sprintf(e, ": %31s %" PRIuCell " ; \n", name, c);
 	return forth_eval(o, e);
 }
@@ -254,7 +254,7 @@ static void make_header(uint8_t *dst)
 forth_t *forth_init(size_t size, FILE *in, FILE *out) 
 { 
 	assert(in && out);
-	forth_cell_t *m, i, w;
+	forth_cell_t *m, i, w, t;
 	forth_t *o;
 	VERIFY(size >= MINIMUM_CORE_SIZE);
 	if(!(o = calloc(1, sizeof(*o) + sizeof(forth_cell_t)*size))) 
@@ -265,12 +265,15 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out)
 
 	o->m[PWD]   = 0;  /*special terminating pwd value*/
 	/**@todo replace recursion with branch */
-	w = m[DIC]  = DICTIONARY_START; /*initial dictionary offset, skip registers and string offset*/
+	t = m[DIC] = DICTIONARY_START;
+	m[m[DIC]++] = TAIL;
+	w = m[DIC]; /*initial dictionary offset, skip registers and string offset*/
 	m[m[DIC]++] = READ; /*create a special word that reads in FORTH*/
 	m[m[DIC]++] = RUN;  /*call the special word recursively*/
 	o->m[INSTRUCTION] = m[DIC]; /*instruction stream points to our special word*/
-	m[m[DIC]++] = w;    /*recursive call to that word*/
-	m[m[DIC]++] = o->m[INSTRUCTION] - 1; /*execute read*/
+	m[m[DIC]++] = w;    /*call to that word*/
+	m[m[DIC]++] = t;
+	m[m[DIC]++] = o->m[INSTRUCTION] - 1; /*recurse*/
 
 	compile(o, DEFINE,    ":");         /*immediate word*/
 	compile(o, IMMEDIATE, "immediate"); /*immediate word*/
@@ -288,17 +291,6 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out)
 	return o;
 }
 
-static FILE *fopen_or_die(const char *name, char *mode) 
-{
-	errno = 0;
-	FILE *file = fopen(name, mode);
-	if(!file) {
-		fprintf(stderr, "( fatal 'file-open \"%s: %s\" )\n", name, errno ? strerror(errno): "unknown");
-		exit(EXIT_FAILURE);
-	}
-	return file;
-}
-
 int forth_dump_core(forth_t *o, FILE *dump) 
 { 
 	assert(o && dump);
@@ -310,7 +302,7 @@ int forth_save_core(forth_t *o, FILE *dump)
 { 
 	assert(o && dump);
 	uint64_t r1, r2, r3, core_size = o->core_size;
-	r1 = fwrite(o->header,  1, sizeof(o->header),    dump);
+	r1 = fwrite(o->header,  1, sizeof(o->header), dump);
 	r2 = fwrite(&core_size, sizeof(core_size), 1, dump);
 	r3 = fwrite(o->m,       1, sizeof(forth_cell_t) * o->core_size, dump);
 	if(r1 + r2 + r3 != (sizeof(o->header) + 1 + sizeof(forth_cell_t) * o->core_size))
@@ -368,7 +360,8 @@ forth_cell_t forth_pop(forth_t *o)
 }
 
 forth_cell_t forth_stack_position(forth_t *o)
-{ /* the original stack position code (everything after o->S) should be turned into a function)*/
+{ 
+	assert(o);
 	return o->S - (o->m + o->core_size - (2 * o->m[STACK_SIZE]));
 }
 
@@ -407,25 +400,26 @@ int forth_run(forth_t *o)
 			      m[m[DIC]] |= RUN; /* set instruction to RUN */
 			      m[DIC]++; /* compilation start here */ break;
 		case READ: 
-			m[ck(RSTK)]--; /* bit of a hack */
-			if(forth_get_word(o, o->s) < 0)
-				goto end;
-			if ((w = forth_find(o, (char*)o->s)) > 1) {
-				pc = w;
-				if (!m[STATE] && instruction(m[ck(pc)]) == COMPILE)
-					pc++; /* in command mode, execute word */
-				goto INNER;
-			} else if(!numberify(o->m[BASE], &w, (char*)o->s)) {
-				fprintf(stderr, "( error \"%s is not a word\" )\n", o->s);
-				break;
-			}
-			if (m[STATE]) { /* must be a number then */
-				m[m[DIC]++] = 2; /*fake word push at m[2]*/
-				m[ck(m[DIC]++)] = w;
-			} else { /* push word */
-				*++S = f;
-				f = w;
-			}                                            break;
+			do {
+				if(forth_get_word(o, o->s) < 0)
+					goto end;
+				if ((w = forth_find(o, (char*)o->s)) > 1) {
+					pc = w;
+					if (!m[STATE] && instruction(m[ck(pc)]) == COMPILE)
+						pc++; /* in command mode, execute word */
+					goto INNER;
+				} else if(!numberify(o->m[BASE], &w, (char*)o->s)) {
+					fprintf(stderr, "( error \"%s is not a word\" )\n", o->s);
+					break;
+				}
+				if (m[STATE]) { /* must be a number then */
+					m[m[DIC]++] = 2; /*fake word push at m[2]*/
+					m[ck(m[DIC]++)] = w;
+				} else { /* push word */
+					*++S = f;
+					f = w;
+				} 
+			} while(1); break;
 		case LOAD:    f = m[ck(f)];                          break;
 		case STORE:   m[ck(f)] = *S--; f = *S--;             break;
 		case SUB:     f = *S-- - f;                          break;
@@ -459,6 +453,7 @@ int forth_run(forth_t *o)
 		case DUP:     *++S = f;                              break;
 		case DROP:    f = *S--;                              break;
 		case OVER:    w = *S; *++S = f; f = w;               break;
+		case TAIL:    m[RSTK]--;                             break;
 		case BSAVE:   f = blockio(o, m, *S--, f, 'w');       break;
 		case BLOAD:   f = blockio(o, m, *S--, f, 'r');       break;
 		case FIND:    *++S = f;
@@ -495,6 +490,17 @@ void forth_set_args(forth_t *o, int argc, char **argv)
 	assert(o);
 	o->m[ARGC] = argc;
 	o->m[ARGV] = (forth_cell_t)argv;
+}
+
+static FILE *fopen_or_die(const char *name, char *mode) 
+{
+	errno = 0;
+	FILE *file = fopen(name, mode);
+	if(!file) {
+		fprintf(stderr, "( fatal 'file-open \"%s: %s\" )\n", name, errno ? strerror(errno): "unknown");
+		exit(EXIT_FAILURE);
+	}
+	return file;
 }
 
 static void usage(const char *name)
