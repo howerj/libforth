@@ -400,7 +400,6 @@ int forth_run(forth_t *o)
 			      m[m[DIC]] |= RUN; /* set instruction to RUN */
 			      m[DIC]++; /* compilation start here */ break;
 		case READ: 
-			do {
 				if(forth_get_word(o, o->s) < 0)
 					goto end;
 				if ((w = forth_find(o, (char*)o->s)) > 1) {
@@ -418,8 +417,7 @@ int forth_run(forth_t *o)
 				} else { /* push word */
 					*++S = f;
 					f = w;
-				} 
-			} while(1); break;
+				} break;
 		case LOAD:    f = m[ck(f)];                          break;
 		case STORE:   m[ck(f)] = *S--; f = *S--;             break;
 		case SUB:     f = *S-- - f;                          break;

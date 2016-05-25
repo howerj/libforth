@@ -62,6 +62,7 @@ See:
 : . pnum space ;
 : address-unit-bits size 8* ;
 : mask-byte ( x -- x ) 8* 0xff swap lshift ;
+: select-byte ( u i -- c ) 8* rshift 0xFF and ;
 : cell+ 1+ ( a-addr1 -- a-addr2 ) ;
 : cells ( n1 -- n2 ) ;
 : char+ ( c-addr1 -- c-addr2 ) 1+ ;
@@ -92,7 +93,7 @@ See:
 : sleep 1000 * ms ;
 : align immediate ( x -- x ) ; ( nop in this implementation )
 : ) immediate ;
-: ? ( a-addr -- : view value at address ) @ . cr ;
+: ? ( a-addr -- : view value at address ) @ . ;
 : bell 7 ( ASCII BEL ) emit ;
 : b/buf  ( bytes per buffer ) 1024 ;
 : # dup ( x -- x : debug print ) pnum cr ;
@@ -178,6 +179,21 @@ See:
 
 : ?exit ( x -- ) ( exit current definition if not zero ) if rdrop exit then ;
 
+: number? ( c -- f : is character a number? )
+	[char] 0 [ char 9 1+ ] literal within ;
+
+: lowercase? ( c -- f : is character lower case? )
+	[char] a [ char z 1+ ] literal within ;
+
+: uppercase? ( C -- f : is character upper case? )
+	[char] A [ char Z 1+ ] literal within ;
+
+: alpha? ( C -- f : is character part of the alphabet? )
+	dup lowercase? swap uppercase? or ;
+
+: alphanumeric? ( C -- f : is character alphabetic or a number ? )
+	dup alpha? swap number? or ;
+
 ( ========================== Basic Word Set ================================== )
 
 ( ========================== Extended Word Set =============================== )
@@ -228,6 +244,11 @@ See:
 	!                   ( write an execution token to a hole )
 	[ 0 , ]             ( this is the hole we write )
 ;
+
+: time ( " ccc" -- n : time the number of milliseconds it takes to execute a word )
+	clock >r
+	find execute
+	clock r> - ;
 
 ( ========================== Extended Word Set =============================== )
 
@@ -727,12 +748,31 @@ hider endianess
 	not if cr . " :" space else drop then
 	counter 1+! ;
 
-: lister 0 counter ! swap do i counted-column i @ . loop ;
+
+: printable? ( c -- bool : is printable, excluding new lines and tables )
+	32 127 within ;
+
+: as-chars ( x -- : print a cell out as characters )
+	size 0 
+	do 
+		dup 
+		size i 1+ - select-byte ( @todo adjust for endianess ) 
+		dup printable? not
+		if 
+			drop [char] . 
+		then 
+		emit
+	loop 
+	space
+	drop
+;
+
+: lister 0 counter ! swap do i counted-column i ? i @ as-chars loop ;
 
 ( @todo dump should print out the data as characters as well, if printable )
 : dump  ( addr u -- : dump out 'u' cells of memory starting from 'addr' )
 	base @ >r hex 1+ over + lister r> base ! cr ;
-:hide counted-column counter lister ;hide
+:hide counted-column counter lister as-chars ;hide
 
 : forgetter ( pwd-token -- : forget a found word and everything after it )
 	dup @ pwd ! h ! ;
@@ -1247,25 +1287,8 @@ b/buf chars table block-buffer ( block buffer - enough to store one block )
 
 ( ==================== Miscellaneous ========================== )
 
-: time ( " ccc" -- n : time the number of milliseconds it takes to execute a word )
-	clock >r
-	find execute
-	clock r> - ;
-
-: number? ( c -- f : is character a number? )
-	[char] 0 [ char 9 1+ ] literal within ;
-
-: lowercase? ( c -- f : is character lower case? )
-	[char] a [ char z 1+ ] literal within ;
-
-: uppercase? ( C -- f : is character upper case? )
-	[char] A [ char Z 1+ ] literal within ;
-
-: alpha? ( C -- f : is character part of the alphabet? )
-	dup lowercase? swap uppercase? or ;
-
-: alphanumeric? ( C -- f : is character alphabetic or a number ? )
-	dup alpha? swap number? or ;
+: enum ( x " ccc" -- x+1 : define a series of enumerations )
+	dup constant 1+ ; ( better would be a :enum ;enum syntax )
 
 : >upper ( c -- C : convert char to uppercase iff lower case )
 	dup lowercase? if bl xor then ;
@@ -1277,6 +1300,7 @@ b/buf chars table block-buffer ( block buffer - enough to store one block )
 	2dup
 	> if 2drop -1 exit then
 	< ;
+
 
 : compare ( c-addr1 u1 c-addr2 u2 -- n : compare two strings, assumes strings are NUL terminated )
 	rot min
