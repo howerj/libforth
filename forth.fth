@@ -88,6 +88,8 @@ See:
 : 0> 0 > ;
 : 0<> 0 <> ;
 : nand ( x x -- x : Logical NAND ) and not ;
+: odd 1 and ;
+: even odd not ;
 : nor  ( x x -- x : Logical NOR  )  or not ;
 : ms ( u -- : wait at least 'u' milliseconds ) clock +  begin dup clock < until drop ;
 : sleep 1000 * ms ;
@@ -96,7 +98,7 @@ See:
 : ? ( a-addr -- : view value at address ) @ . ;
 : bell 7 ( ASCII BEL ) emit ;
 : b/buf  ( bytes per buffer ) 1024 ;
-: # dup ( x -- x : debug print ) pnum cr ;
+: # ( x -- x : debug print ) dup . ;
 : compile, ' , , ;   ( A word that writes , into the dictionary )
 : >mark ( -- ) here 0 , ; 
 : <resolve here - , ;
@@ -193,6 +195,9 @@ See:
 
 : alphanumeric? ( C -- f : is character alphabetic or a number ? )
 	dup alpha? swap number? or ;
+
+: printable? ( c -- bool : is printable, excluding new lines and tables )
+	32 127 within ;
 
 ( ========================== Basic Word Set ================================== )
 
@@ -382,6 +387,7 @@ hider addi
 	then
 ;
 
+hider tail
 : tail 
 	( This function implements tail calls, which is just a jump
 	to the beginning of the words definition, for example this
@@ -596,6 +602,7 @@ hider sbuf
 	see Volume 2, issue 3, page 48 of Forth Dimensions at 
 	http://www.forth.org/fd/contents.html )
 
+( These case statements need improving )
 : case immediate 
 	' branch , 3 ,   ( branch over the next branch )
 	here ' branch ,  ( mark: place endof branches back to with again )
@@ -604,7 +611,7 @@ hider sbuf
 : over= over = ; 
 : of      immediate ' over= , postpone if ;
 : endof   immediate over postpone again postpone then ;
-: endcase immediate postpone then drop ;
+: endcase immediate 1+ postpone then drop ;
 
 ( ==================== CASE statements ======================== )
 
@@ -748,9 +755,6 @@ hider endianess
 	not if cr . " :" space else drop then
 	counter 1+! ;
 
-
-: printable? ( c -- bool : is printable, excluding new lines and tables )
-	32 127 within ;
 
 : as-chars ( x -- : print a cell out as characters )
 	size 0 
@@ -941,7 +945,7 @@ hider counter
 		hidden? hide-words @ and
 		not if 
 			name
-			print tab  
+			print tab
 			auto-column
 		else 
 			drop 
@@ -1013,12 +1017,12 @@ hider hide-words
 		key dup '\n' <> if source accept drop then
 		case
 			[char] h of debug-help endof
-			[char] q of drop rdrop exit ( call abort when this exists ) endof
-			[char] r of registers endof
+			[char] q of bye        endof
+			[char] r of registers  endof
 			\ [char] d of dump endof \ implement read in number
-			[char] s of >r .s r>  endof 
-			[char] c of drop exit endof
-		endcase 
+			[char] s of >r .s r>   endof 
+			[char] c of drop exit  endof
+		endcase drop
 	again ;
 hider debug-prompt
 
@@ -1028,8 +1032,7 @@ hider debug-prompt
 	 given a pointer to a executable code field
 	this words attempts to find the PWD field for
 	that word, or return zero )
-	dup here             >= if drop 0 exit then ( cannot be a word, too small )
-	dup dictionary-start <= if drop 0 exit then ( cannot be a word, too large )
+	dup dictionary-start here within not if drop 0 exit then
 	cf !
 	latest dup @ ( p1 p2 )
 	begin
@@ -1041,17 +1044,22 @@ hider debug-prompt
 ;
 hider cf
 
-: end-print ( x -- ) "  => " . " )" cr ;
+: end-print ( x -- ) "  => " . " ]" ;
 : word-printer
 	( attempt to print out a word given a words code field
 	WARNING: This is a dirty hack at the moment
 	NOTE: given a pointer to somewhere in a word it is possible
 	to work out the PWD by looping through the dictionary to
 	find the PWD below it )
-	1- dup @ -1 =              if " ( noname )" end-print exit then
-	   dup  " ( " code>pwd dup if name print else drop " data" then 
+	1- dup @ -1 =              if " [ noname ]" end-print exit then
+	   dup  " [ " code>pwd dup if name print else drop " data" then 
 	        end-print ;
 hider end-print
+
+: get-branch  [ find branch xt-token ]  literal ;
+: get-?branch [ find ?branch xt-token ] literal ;
+: get-original-exit [ original-exit xt-token ] literal ;
+: get-quote   [ find ' xt-token ] literal ;
 
 : decompile ( code-field-ptr -- )
 	( @todo Rewrite, simplify and get this working correctly
@@ -1059,11 +1067,9 @@ hider end-print
 	This word expects a pointer to the code field of a word, it
 	decompiles a words code field, it needs a lot of work however.
 	There are several complications to implementing this decompile
-	function, ":noname", "branch", multiple "exit" commands, and literals.
+	function.
 
-	This word really needs CASE statements before it can be
-	completed, as it stands the function is not complete
-
+	'        The next cell should be pushed 
 	:noname  This has a marker before its code field of -1 which
 	         cannot occur normally
 	branch   branches are used to skip over data, but also for
@@ -1080,20 +1086,21 @@ hider end-print
 	this will require keeping track of '?branch'.
 
 	Also of note, a number greater than "here" must be data )
-	255 0
-	do
+	begin
 		tab 
-		dup @ dolit                      = if " ( literal => " 1+ dup @ . 1+ " )" cr tab then
-		dup @ [ find branch   xt-token ] literal = if " ( branch => "  1+ dup @ . " )" cr dup dup @ dump dup @ + cr tab then
-		dup @ [ original-exit xt-token ] literal = if " ( exit )"  i cr leave  then
-		dup @ word-printer
-		1+
-	loop
-	cr
-	255 = if " decompile limit exceeded" cr then
-	drop ;
-
-hider word-printer
+		dup @
+		case
+			dolit             of drop dup " [ literal => " 1+ ? " ]" 2 endof
+			get-branch        of drop dup " [ branch  => " 1+ ? " ]" dup 1+ @ 1+ endof ( need to stop backwards branches )
+			get-quote         of drop dup " [ quote   => " 1+ @ word-printer "  ]" 2 endof
+			get-?branch       of drop dup " [ ?branch => " 1+ ? " ]" 2 endof
+			get-original-exit of 2drop    " [ exit ]" cr exit          endof
+			word-printer 1
+		endcase 
+		cr 
+		+
+	again ;
+:hide word-printer get-branch get-?branch get-original-exit get-quote ;hide
 
 : xt-instruction ( extract instruction from execution token ) 
 	xt-token @ >instruction ;
@@ -1310,6 +1317,40 @@ b/buf chars table block-buffer ( block buffer - enough to store one block )
 		<=> dup if leave else drop then
 	loop
 	2drop ;
+0 [if]
+ 
+: max-int [ -1 1 rshift ] literal ; 
+: < 2dup <> if max-int - u> else 0 then ; 
+: > < not ; 
+
+
+( see https://groups.google.com/forum/#!topic/comp.lang.forth/rT-79frog1g )
+ 0 constant case immediate  ( init count of ofs )
+
+ : of  ( #of -- orig #of+1 / x -- )
+    1+    ( count ofs )
+    >r    ( move off the stack in case the control-flow )
+	  ( stack is the data stack. )
+    postpone over  postpone = ( copy and test case value )
+    postpone if    ( add orig to control flow stack )
+    postpone drop  ( discards case value if = )
+    r> ;           ( we can bring count back now )
+ immediate
+
+ : endof  ( orig1 #of -- orig2 #of )
+    >r    ( move off the stack in case the control-flow )
+	  ( stack is the data stack. )
+    postpone else
+    r> ;  ( we can bring count back now )
+ immediate
+
+ : endcase ( orig 1..orign #of -- )
+    postpone drop  ( discard case value )
+    0 ?do
+      postpone then
+    loop ;
+ immediate
+[then]
 
 ( clean up the environment )
 :hide
@@ -1320,7 +1361,7 @@ b/buf chars table block-buffer ( block buffer - enough to store one block )
  max-string-length xt-token error-no-word
  original-exit
  restart-address pnum
- decompile TrueFalse >instruction print-header 
+ TrueFalse >instruction print-header 
  print-name print-start print-previous print-immediate 
  print-instruction xt-instruction defined-word? print-defined
  
@@ -1371,6 +1412,7 @@ b/buf chars table block-buffer ( block buffer - enough to store one block )
 	they do not test if the number is negative, however that would
 	unnecessarily limit the range of operation
 	* "print" should be removed from the interpreter
+	* '(' should parse words, not look for character
 
 Some interesting links:
 	* http://www.figuk.plus.com/build/heart.htm
