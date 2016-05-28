@@ -279,6 +279,7 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out)
 	compile(o, IMMEDIATE, "immediate"); /*immediate word*/
 	for(i = 0, w = READ; instruction_names[i]; i++) /*compiling words*/
 		compile(o, COMPILE, instruction_names[i]), m[m[DIC]++] = w++;
+	/* the next eval is the absolute minimum needed for a sane environment */
 	VERIFY(forth_eval(o, ": state 8 exit : ; immediate ' exit , 0 state ! ;") >= 0);
 	for(i = 0; register_names[i]; i++) /* name all registers */ 
 		VERIFY(forth_define_constant(o, register_names[i], i+DIC) >= 0);

@@ -61,10 +61,13 @@ See:
 : space bl emit ;
 : . pnum space ;
 : address-unit-bits size 8* ;
+: negative? ( x -- bool : is a number negative? )
+	[ 1 address-unit-bits 1- lshift ] literal and logical ;
 : mask-byte ( x -- x ) 8* 0xff swap lshift ;
 : select-byte ( u i -- c ) 8* rshift 0xFF and ;
 : cell+ 1+ ( a-addr1 -- a-addr2 ) ;
-: cells ( n1 -- n2 ) ;
+: cells immediate ( n1 -- n2 ) ;
+: cell 1 ( -- u : 1 cells ) ;
 : char+ ( c-addr1 -- c-addr2 ) 1+ ;
 : chars  ( n1 -- n2: convert character address to cell address ) size / ;
 : chars> ( n1 -- n2: convert cell address to character address ) size * ;
@@ -73,6 +76,7 @@ See:
 : decimal ( -- ) ( print out decimal )  0 base ! ;
 : negate ( x -- x ) -1 * ;
 : square ( x -- x ) dup * ;
+: drup ( x y -- x x ) drop dup ;
 : +! ( x addr -- ) ( add x to a value stored at addr ) tuck @ + swap ! ;
 : 1+! ( addr -- : increment a value at an address )  1 swap +! ;
 : 1-! ( addr -- : decrement a value at an address ) -1 swap +! ;
@@ -323,10 +327,10 @@ hider write-quote
 ( do...loop could be improved by not using the return stack so much )
 
 : do immediate
-	' swap ,      ( compile 'swap' to swap the limit and start )
-	' >r ,        ( compile to push the limit onto the return stack )
-	' >r ,        ( compile to push the start on the return stack )
-	here          ( save this address so we can branch back to it )
+	' swap ,       ( compile 'swap' to swap the limit and start )
+	' >r ,         ( compile to push the limit onto the return stack )
+	' >r ,         ( compile to push the start on the return stack )
+	postpone begin ( save this address so we can branch back to it )
 ;
 
 : addi 
@@ -957,23 +961,33 @@ hider counter
 ; 
 hider hide-words
 
+: TrueFalse if " true" else " false" then ;
+
 : registers ( -- )
 	( print out important registers and information about the
 	virtual machine )
-	" return stack pointer: " r@       . cr
-	" dictionary pointer    " here     . cr
-	" previous word:        " pwd   @  . cr
-	" state:                " state @  . cr
-	" base:                 " base  @  . cr
-	" depth:                " depth    . cr
-	" cell size (in bytes): " size     . cr
-	" last cell address:    " max-core . cr
-	" unused cells:         " unused   . cr
-	( We could determine if we are reading from stdin by looking
-	at the stdin register )
-	" current input source: " source-id -1 = if " string" else " file" then cr
-	( depth if " Stack: " .s then )
-	( " Raw Register Values: " cr 0 31 dump )
+	" return stack pointer:    " r@       . cr
+	" dictionary pointer       " here     . cr
+	" previous word:           " pwd      ? cr
+	" state:                   " state    ? cr
+	" base:                    " base     ? cr
+	" depth:                   " depth    . cr
+	" cell size (in bytes):    " size     . cr
+	" last cell address:       " max-core . cr
+	" unused cells:            " unused   . cr
+	" invalid:                 " `invalid @ TrueFalse cr
+	" size of variable stack:  " `stack-size ? cr
+	" size of return stack:    " `stack-size ? cr
+	" start of variable stack: " max-core `stack-size @ 2* - . cr
+	" start of return stack:   " max-core `stack-size @ - . cr
+	" current input source:    " source-id -1 = if " string" else " file" then cr
+	" reading from stdin:      " source-id 0 = `stdin @ `fin @ = and TrueFalse cr
+	" tracing on:              " `debug   @ TrueFalse cr
+	" starting word:           " `instruction ? cr
+	" real start address:      " `start-address ? cr
+( 
+ `sin `sidx `slen `fout 
+ `stdout `stderr `argc `argv `start-time )
 ;
 
 : y/n? ( -- bool : ask a yes or no question )
@@ -987,7 +1001,6 @@ hider hide-words
 		" y/n? "
 	again ;
 
-: TrueFalse if " true" else " false" then ;
 : >instruction ( extract instruction from instruction field ) 0x1f and ;
 
 : step
@@ -1051,15 +1064,31 @@ hider cf
 	NOTE: given a pointer to somewhere in a word it is possible
 	to work out the PWD by looping through the dictionary to
 	find the PWD below it )
-	1- dup @ -1 =              if " [ noname ]" end-print exit then
+	1- dup @ -1 =              if " [ noname" end-print exit then
 	   dup  " [ " code>pwd dup if name print else drop " data" then 
 	        end-print ;
 hider end-print
 
+( these words push the execution tokens for various special cases for decompilation )
 : get-branch  [ find branch xt-token ]  literal ;
 : get-?branch [ find ?branch xt-token ] literal ;
 : get-original-exit [ original-exit xt-token ] literal ;
 : get-quote   [ find ' xt-token ] literal ;
+
+: branch-increment ( addr branch -- increment : calculate decompile increment for "branch" )
+	1+ dup negative? if drop 2 else 2dup dump then ;
+
+( these words take a code field to a primitive they implement, decompile it
+and any data belonging to that operation, and push a number to increment the
+decompilers code stream pointer by )
+: decompile-literal ( code -- increment ) 
+	" [ literal => " 1+ ? " ]" 2 ;
+: decompile-branch  ( code -- increment ) 
+	" [ branch  => " 1+ ? " ]" dup 1+ @ branch-increment ;
+: decompile-quote   ( code -- increment ) 
+	" [ quote   => " 1+ @ word-printer "  ]" 2 ;
+: decompile-?branch ( code -- increment ) 
+	" [ ?branch => " 1+ ? " ]" 2 ;
 
 : decompile ( code-field-ptr -- )
 	( @todo Rewrite, simplify and get this working correctly
@@ -1071,7 +1100,7 @@ hider end-print
 
 	'        The next cell should be pushed 
 	:noname  This has a marker before its code field of -1 which
-	         cannot occur normally
+	         cannot occur normally, this is handles in word-printer
 	branch   branches are used to skip over data, but also for
 	         some branch constructs, any data in between can only
 	         be printed out generally speaking 
@@ -1090,17 +1119,20 @@ hider end-print
 		tab 
 		dup @
 		case
-			dolit             of drop dup " [ literal => " 1+ ? " ]" 2 endof
-			get-branch        of drop dup " [ branch  => " 1+ ? " ]" dup 1+ @ 1+ endof ( need to stop backwards branches )
-			get-quote         of drop dup " [ quote   => " 1+ @ word-printer "  ]" 2 endof
-			get-?branch       of drop dup " [ ?branch => " 1+ ? " ]" 2 endof
-			get-original-exit of 2drop    " [ exit ]" cr exit          endof
+			dolit             of drup decompile-literal endof
+			get-branch        of drup decompile-branch  endof 
+			get-quote         of drup decompile-quote   endof
+			get-?branch       of drup decompile-?branch endof
+			get-original-exit of 2drop " [ exit ]" cr exit  endof
 			word-printer 1
 		endcase 
-		cr 
 		+
+		cr 
 	again ;
-:hide word-printer get-branch get-?branch get-original-exit get-quote ;hide
+:hide 
+	word-printer get-branch get-?branch get-original-exit get-quote branch-increment 
+	decompile-literal decompile-branch decompile-?branch decompile-quote
+;hide
 
 : xt-instruction ( extract instruction from execution token ) 
 	xt-token @ >instruction ;
@@ -1308,7 +1340,6 @@ b/buf chars table block-buffer ( block buffer - enough to store one block )
 	> if 2drop -1 exit then
 	< ;
 
-
 : compare ( c-addr1 u1 c-addr2 u2 -- n : compare two strings, assumes strings are NUL terminated )
 	rot min
 	0 do ( should be ?do )
@@ -1317,6 +1348,12 @@ b/buf chars table block-buffer ( block buffer - enough to store one block )
 		<=> dup if leave else drop then
 	loop
 	2drop ;
+
+: welcome ( -- : print out a stupid welcome message which most interpreters seems insistent on)
+	" FORTH: libforth successfully loaded." cr
+	" Type 'help' and press return for a basic introduction." cr
+	ok ;
+
 0 [if]
  
 : max-int [ -1 1 rshift ] literal ; 

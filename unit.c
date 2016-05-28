@@ -40,8 +40,15 @@ static const char *blue(void)   { return color_on ? "\x1b[34m" : ""; }
 
 static int unit_tester(int test, const char *msg, unsigned line) 
 {
-	if(test) passed++, is_silent || printf("      %sok%s:\t%s\n", green(), reset(), msg); 
-	else     failed++, is_silent || printf("  %sFAILED%s:\t%s (line %d)\n", red(), reset(), msg, line);
+	if(test) {
+	       	passed++; 
+		if(!is_silent)
+			printf("      %sok%s:\t%s\n", green(), reset(), msg); 
+	} else { 
+		failed++;
+	       	if(!is_silent)
+			printf("  %sFAILED%s:\t%s (line %d)\n", red(), reset(), msg, line);
+	}
 	return test;
 }
 
