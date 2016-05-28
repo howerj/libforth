@@ -115,7 +115,8 @@ See:
 	over - >r - r> u< ;
 : u. ( u -- : display number in base 10, although signed for now ) 
 	base @ >r decimal pnum r> base ! ;
-
+: invalidate-forth
+	1 `invalid ! ;
 : rdrop ( R: x -- )
 	r>           ( get caller's return address )
 	r>           ( get value to drop )

@@ -155,7 +155,7 @@ static int blockio(forth_t *o, void *p, forth_cell_t poffset, forth_cell_t id, c
 	if(((forth_cell_t)poffset) > ((o->core_size * sizeof(forth_cell_t)) - BLOCK_SIZE))
 		return -1;
 	sprintf(name, "%04x.blk", (int)id);
-	if(!(file = fopen(name, rw == 'r' ? "rb" : "wb"))) {
+	if(!(file = fopen(name, rw == 'r' ? "rb" : "wb"))) { /**@todo loading should always succeed */
 		fprintf(stderr, "( error 'file-open \"%s : could not open file\" )\n", name);
 		return -1;
 	}
@@ -601,7 +601,7 @@ close:
 end:	
 	fclose_input(&in);
 	if(save) { /* save core file */
-		if(rval) {
+		if(rval || o->m[INVALID]) {
 			fprintf(stderr, "error: refusing to save invalid core\n");
 			return -1;
 		}
