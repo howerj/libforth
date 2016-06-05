@@ -1,0 +1,48 @@
+.\" Manpage for libforth C API
+.\" Contact howe.r.j.89@gmail.com to correct errors or typos.
+.TH libforth 1 "10 May 2016" "1.0.0" "Forth library man page"
+.SH NAME
+Forth \- C API for a small Forth interpreter
+.SH SYNOPSIS
+#include <libforth.h>
+.SH DESCRIPTION
+A library that implements a forth interpreter. The header "libforth.h"
+documents all of the C-function calls, so to avoid duplication (and the
+possibility that this is out of sync with the header) I will only document
+the "main_forth()" function here.
+
+If for some reason forth(1) has not been installed along side with this
+library a simple interpreter can be built using the "main_forth()" function:
+
+.RS 3
+#include <libforth.h>
+
+int main(int argc, char **argv)
+
+{
+
+        return main_forth(argc, argv); 
+
+}
+.RE
+
+.SH COPYRIGHT
+
+This program is distributed under the LGPL 2.1, or optionally any later
+version.
+
+.SH SEE ALSO
+forth(1)
+
+For more information, including a tutorial, see 
+.B https://github.com/howerj/libforth
+ 
+.SH BUGS
+It is possible to cause access invalid memory from within the Forth virtual
+machine, but only invalid Forth programs can do this (or Forth programs
+that are too large, in keeping with Forth philosophy these are also invalid).
+
+Some Forth words maybe implemented incorrectly, but given the source for
+the everything is so small it should be easy to work out why.
+.SH AUTHOR
+Richard James Howe (howe.r.j.89@gmail.com)

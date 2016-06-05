@@ -1,0 +1,107 @@
+.\" Manpage for a small Forth interpreter
+.\" Contact howe.r.j.89@gmail.com to correct errors or typos.
+.TH forth 1 "10 May 2016" "1.0.0" "Forth man page"
+.SH NAME
+forth \- A small Forth interpreter.
+.SH SYNOPSIS
+forth [-s file] [-l file] [-t] [-h] [-m size] [-] file..
+.SH DESCRIPTION
+This is a small Forth interpreter, built around the libforth(3) library. It is
+an provides an idiosyncratic version of Forth with minimal effort to abide by
+standards. Good luck!
+.SH OPTIONS
+
+Command line switches must be given before any files, unless that switch takes
+a file as an argument.
+
+.TP
+.B -s file
+This saves the working memory of the Forth interpreter to a file,
+which can later be loaded with the "-l" option. If a core file has been
+invalidated this will not be saved, invalidation occurs when an unrecoverable
+error has been detected that would prevent any recovery or meaningful
+execution.
+
+.TP
+.B -t
+After all the files have been read from and any core files have been loaded
+this will make the Forth interpreter read from stdin(3), but before "-d".
+
+.TP
+.B -h
+Print out a short help message and exit unsuccessfully.
+
+.TP
+.B -m size
+Specify the virtual machines memory size in kilobytes, overriding the default
+memory size. This is mutually exclusive with "-l".
+
+.TP
+.B -l file
+This option loads a forth core file generated from the "-d" option of a
+previous run. This core file is not portable and must be generated on the same
+platform as it was generated. It can only be specified once per run of the
+interpreter.
+
+.TP
+.B -
+Stop processing any more command line options and treat all arguments after
+this as files to be executed, if there are any.
+
+.TP
+.B  file...
+
+If a file, or list of files, is given, read from them one after another
+and execute them. The dictionary and any stored Forth blocks will persist 
+between files but values on the stacks will not.
+
+If no files are given to execute stdin(3) will be read from.
+
+.SH EXAMPLES
+
+.B
+	./forth 
+
+Execute any commands given from stdin(3).
+
+.B
+	./forth -t file1.4th file2.4th
+
+Execute file "file1.4th", then "file2.4th", then read from stdin(3).
+
+.B
+	./forth file1.4th
+
+Execute file "file1.4th".
+
+.B
+	./forth -s file1.4th
+
+Execute file "file1.4th", the produce a "forth.core" save file.
+
+.B
+	./forth -s -l forth.core
+
+Load a "forth.core" file, read from stdin(3) and execute any commands given,
+then dump the new core file to "forth.core".
+
+.SH COPYRIGHT
+
+This program is distributed under the LGPL 2.1, or optionally any later
+version.
+
+.SH EXIT STATUS
+
+This command returns zero on success and non zero on failure.
+
+.SH SEE ALSO
+libforth(3)
+
+For more information, including a tutorial, see 
+.B https://github.com/howerj/libforth
+ 
+
+.SH BUGS
+Yes, see libforth(3) for a list.
+.SH AUTHOR
+Richard James Howe (howe.r.j.89@gmail.com)

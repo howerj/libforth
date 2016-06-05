@@ -1,0 +1,10 @@
+*.o
+*.log
+*.bin
+*.enc
+*.dec
+hexdump
+core
+rle
+mkblk
+forth

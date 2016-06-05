@@ -1,0 +1,35 @@
+#!/usr/bin/env sh
+
+# Unit tests for core and hexdump should be added
+
+set -eu
+echo "=== RLE Unit Tests: Begin === "
+make rle
+
+echo "Text Encoding I"
+./rle -v -e hexdump.c hexdump.enc
+./rle -v -d hexdump.enc hexdump.dec
+diff hexdump.c hexdump.dec
+
+echo "Text Encoding II"
+./rle -v -e rle.c rle.enc
+./rle -v -d rle.enc rle.dec
+diff rle.c rle.dec
+
+#echo "Forth Code Encoding"
+#./rle -v -e ../forth.core forth.enc
+#./rle -v -d forth.enc forth.dec
+#cmp -l ../forth.core forth.dec
+
+echo "Encoding Zeros"
+dd if=/dev/zero of=zero.bin count=512
+./rle -v -e zero.bin zero.enc
+./rle -v -d zero.enc zero.dec
+cmp zero.bin zero.dec
+
+echo "Encoding Random Data"
+dd if=/dev/urandom of=random.bin count=512
+./rle -v -e random.bin random.enc
+./rle -v -d random.enc random.dec
+cmp random.bin random.dec
+echo "=== RLE Unit Tests: End === "
