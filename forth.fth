@@ -320,10 +320,14 @@ hider write-quote
 
 ( ========================== CREATE DOES> ==================================== )
 
-: array    ( length --  : create a array )          create allot does> + ;
-: table    ( length --  : create a table )          create allot does>   ;
-: variable ( initial-value -- : create a variable ) create ,     does>   ;
-: constant ( value -- : create a constant )         create ,     does> @ ;
+: array     create allot does> + ;
+: table     create allot does>   ;
+: variable  create ,     does>   ;
+: constant  create ,     does> @ ;
+
+( @todo replace all instances of table with itable )
+: itable     create dup , allot does> dup @ ;
+: char-table create dup , chars allot does> dup @ swap 1+ chars> swap ;
 
 ( do...loop could be improved by not using the return stack so much )
 
@@ -1450,7 +1454,10 @@ b/buf chars table block-buffer ( block buffer - enough to store one block )
 	they do not test if the number is negative, however that would
 	unnecessarily limit the range of operation
 	* "print" should be removed from the interpreter
-	* '(' should parse words, not look for character
+	* :inline ; to inline a words
+	* Split the interpreter into two branches, one that keeps everything
+	small, another larger version
+	* merge this repository with my other C-forth repository
 
 Some interesting links:
 	* http://www.figuk.plus.com/build/heart.htm

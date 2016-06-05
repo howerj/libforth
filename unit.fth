@@ -44,21 +44,28 @@ s" Hello, World" nip 13 = assert
 
 ( @todo unit( should store its string so end-unit can print it out )
 ( @todo if evaluate worked correctly, it could be used for better error printing )
+( @todo optional color support )
 :hide assert ;hide
 : assert 0= if invalidate-forth " assertion failed" cr bye then ; 
 : pass " Tests Completed Successfully" cr ;
-: unit( " Testing Unit: " postpone .( cr ;
+: unit( " Testing Unit: " cr tab postpone .( cr ;
 : end-unit " Unit Test Completed" cr ;
 
 ( ========================== Better tests ==================================== )
+
+.( Starting libforth unit tests for forth code ) cr
+.( 	For tests against the C API, see unit.c ) cr
+.( 	For documentation about the interpreter see 'readme.md' ) cr
 
 ( ========================== Basic Words ===================================== )
 ( so far we have assumed that most of the basic words work anyway, but there is
 no harm in adding tests here, they can always be moved around if there any problems
 in terms of dependencies )
-unit( Testing Basic Words ) 
+unit( Basic Words ) 
 
 1 assert
+0 not assert
+
 char a 97 = assert ( assumes ASCII )
 bl 32 = assert ( assumes ASCII )
 -1 negative? assert
@@ -80,11 +87,29 @@ char L lowercase? not assert
 16 15 mod 1 = assert
 
 98 4 min 4 = assert
+1  5 min 1 = assert
 55 3 max 55 = assert
+3 10 max 10 = assert
 
 -2 negate 2 = assert
+0  negate 0 = assert
+
+3 2 4 within assert
+2 2 4 within assert
+4 2 4 within not assert
 
 end-unit
 ( ========================== Basic Words ===================================== )
 
+( ========================== Move Words ====================================== )
+unit( Move words )
+marker move-tests
+128 table t1
+128 table t2
+
+( @todo implement these tests )
+
+move-tests
+end-unit
+( ========================== Move Words ====================================== )
 pass
