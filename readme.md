@@ -877,9 +877,10 @@ Instead of how this interpreter does it:
         : word immediate ... ;
 
 
-This behavior will not be changed.
+This behavior will not be changed for the foreseeable future, although it is
+the biggest difference.
 
-* recursion
+* recursion and definition hiding
 
 A word can be called immediately before the terminating semi-colon has been
 reached, in the middle of a word definition. This makes the recurse keyword
@@ -891,7 +892,8 @@ should be made more compliant.
 
 Most Forths are case insensitive, however this forth is not, and by default all
 core words are lower case, this will not be changed to be more compliant and is
-by design.
+by design. Case insensitivity adds extra complexity to the interpreter and is
+sensitive to the character encoding used.
 
 * ok
 
@@ -920,13 +922,9 @@ memory addressable by the virtual machine to only within its memory limits
   not guaranteed to be able to hold a function pointer (although it could
   index into a table of function pointers. The interface would take a
   pointer to the forth object, a pointer to the stack and the stack depth.
-* The program command line interface could be improved by:
-  - an evaluate argument that would evaluate a string
-  - an environment variable to load up a start file
-  - specify forth core save file
-  - ...
-* basic operating system interaction could be added, such as the "system"
-  function and file opening/closing (which could replace block).
+* A few environment variables could be used to specify start up files for the
+interpreter and user specific startup files.
+* For a more complete "To-Do" list see the end of the file [forth.fth][].
 
 ### Notes
 

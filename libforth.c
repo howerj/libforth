@@ -55,14 +55,14 @@ static const uint8_t header[MAGIC7+1] = {
 	0xFF                  /* end header */
 };
 
-struct forth { /**< FORTH environment, values marked '!!' are serialized in order*/
-	uint8_t header[sizeof(header)]; /**< header !! (byte order)*/
-	forth_cell_t core_size;  /**< size of VM !! (converted to uint64_t)*/
+struct forth { /**< FORTH environment, values marked '~~' are serialized in order*/
+	uint8_t header[sizeof(header)]; /**< ~~ header for reloadable core file */
+	forth_cell_t core_size;  /**< ~~ size of VM (converted to uint64_t for serialization)*/
 	jmp_buf *on_error;   /**< place to jump to on error */
 	uint8_t *s;          /**< convenience pointer for string input buffer */
 	char hex_fmt[16];    /**< calculated hex format*/
 	forth_cell_t *S;     /**< stack pointer */
-	forth_cell_t m[];    /**< Forth Virtual Machine memory !! (as is)*/
+	forth_cell_t m[];    /**< ~~ Forth Virtual Machine memory */
 };
 
 enum registers {          /**< virtual machine registers */
@@ -91,21 +91,22 @@ enum registers {          /**< virtual machine registers */
 	START_TIME  = 28, /**< start time in milliseconds */
 };
 
+enum input_stream { FILE_IN, STRING_IN = -1 };
+
 static const char *register_names[] = { "h", "r", "`state", "base", "pwd",
 "`source-id", "`sin", "`sidx", "`slen", "`start-address", "`fin", "`fout", "`stdin",
 "`stdout", "`stderr", "`argc", "`argv", "`debug", "`invalid", "`top", "`instruction",
 "`stack-size", "`start-time", NULL };
 
-enum input_stream { FILE_IN, STRING_IN = -1 };
 enum instructions { PUSH,COMPILE,RUN,DEFINE,IMMEDIATE,READ,LOAD,STORE,
 SUB,ADD,AND,OR,XOR,INV,SHL,SHR,MUL,DIV,LESS,MORE,EXIT,EMIT,KEY,FROMR,TOR,BRANCH,
 QBRANCH, PNUM, QUOTE,COMMA,EQUAL,SWAP,DUP,DROP,OVER,TAIL,BSAVE,BLOAD,FIND,PRINT,
-DEPTH,CLOCK,LAST };
+DEPTH,CLOCK,LAST }; /* all virtual machine instructions */
 
 static const char *instruction_names[] = { "read","@","!","-","+","and","or",
 "xor","invert","lshift","rshift","*","/","u<","u>","exit","emit","key","r>",
 ">r","branch","?branch", "pnum","'", ",","=", "swap","dup","drop", "over", "tail",
-"bsave","bload", "find", "print","depth","clock", NULL }; 
+"bsave","bload", "find", "print","depth","clock", NULL }; /* named VM instructions */
 
 static int forth_get_char(forth_t *o) 
 { /* get a char from string input or a file */
@@ -263,16 +264,16 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out)
 	make_header(o->header);
 	m = o->m;       /*a local variable only for convenience*/
 
+	/* The next section creates a word that calls READ, then TAIL, then itself*/
 	o->m[PWD]   = 0;  /*special terminating pwd value*/
-	/**@todo replace recursion with branch */
-	t = m[DIC] = DICTIONARY_START;
-	m[m[DIC]++] = TAIL;
-	w = m[DIC]; /*initial dictionary offset, skip registers and string offset*/
+	t = m[DIC] = DICTIONARY_START; /*initial dictionary offset, skip registers and string offset*/
+	m[m[DIC]++] = TAIL; /*Add a TAIL instruction that can be called*/
+	w = m[DIC];         /*Save current offset, it will contain the READ instruction */
 	m[m[DIC]++] = READ; /*create a special word that reads in FORTH*/
 	m[m[DIC]++] = RUN;  /*call the special word recursively*/
 	o->m[INSTRUCTION] = m[DIC]; /*instruction stream points to our special word*/
-	m[m[DIC]++] = w;    /*call to that word*/
-	m[m[DIC]++] = t;
+	m[m[DIC]++] = w;    /*call to READ word*/
+	m[m[DIC]++] = t;    /*call to TAIL*/
 	m[m[DIC]++] = o->m[INSTRUCTION] - 1; /*recurse*/
 
 	compile(o, DEFINE,    ":");         /*immediate word*/
@@ -378,7 +379,7 @@ static forth_cell_t check_bounds(forth_t *o, forth_cell_t f, unsigned line)
 }
 
 int forth_run(forth_t *o) 
-{ /* this implements the Forth virtual machine; it does all the work */ 
+{ /* Forth virtual machine; it does the work, everything else is just fluff*/ 
 	assert(o);
 	if(o->m[INVALID] || setjmp(*o->on_error))
 		return -(o->m[INVALID] = 1);
