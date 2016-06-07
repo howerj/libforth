@@ -1,4 +1,5 @@
-#!./forth forth.fth
+#!./forth 
+
 
 ( Forth Unit Tests
 This fill contains the tests for words and functionality defined in
@@ -101,15 +102,37 @@ char L lowercase? not assert
 end-unit
 ( ========================== Basic Words ===================================== )
 
+( ========================== Jump Tables ===================================== )
+
+unit( Jump tables ) 
+marker cleanup
+: j1 1 ;
+: j2 2 ;
+: j3 3 ;
+: j4 4 ;
+create jtable find j1 , find j2 , find j3 , find j4 ,
+
+: jump 0 3 limit jtable + @ execute ;
+0 jump j1 = assert
+1 jump j2 = assert
+2 jump j3 = assert
+3 jump j4 = assert
+4 jump j4 = assert ( check limit )
+
+cleanup
+end-unit
+
+( ========================== Jump Tables ===================================== )
+
 ( ========================== Move Words ====================================== )
 unit( Move words )
-marker move-tests
+marker cleanup
 128 table t1
 128 table t2
 
 ( @todo implement these tests )
 
-move-tests
+cleanup
 end-unit
 ( ========================== Move Words ====================================== )
 pass

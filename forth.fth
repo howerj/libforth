@@ -33,7 +33,7 @@ See:
 : hidden? ( PWD -- PWD bool ) dup 1+ @ hidden-mask and logical ;
 : dolit 2 ;       ( location of special "push" word )
 : compile-instruction 1 ; ( compile code word, threaded code interpreter instruction )
-: run-instruction 2 ;     ( run code word, threaded code interpreter instruction )
+: dolist 2 ;      ( run code word, threaded code interpreter instruction )
 : [literal] dolit , , ; ( this word probably needs a better name )
 : literal immediate [literal] ;
 : latest pwd @ ; ( get latest defined word )
@@ -311,7 +311,7 @@ hider state!
 	immediate
 	write-exit  ( we don't want the defining to exit, but the *defined* word to )
 	here swap !           ( patch in the code fields to point to )
-	run-instruction ,     ( write a run in )
+	dolist ,     ( write a run in )
 ;
 
 : >body ( xt -- a-addr : a-addr is data field of a CREATEd word )
@@ -319,6 +319,9 @@ hider state!
 hider write-quote 
 
 ( ========================== CREATE DOES> ==================================== )
+
+: limit ( x min max -- x : limit x with a minimum and maximum ) 
+	rot min max ;
 
 : array     create allot does> + ;
 : table     create allot does>   ;
@@ -557,9 +560,8 @@ hider delim
 hider delim 
 
 size 1- constant aligner 
-: aligned 
-	aligner + aligner invert and
-;
+: aligned ( unaligned -- aligned : align a pointer )
+	aligner + aligner invert and ;
 hider aligner 
 
 0 variable delim
@@ -595,8 +597,8 @@ hider delim
 : c" immediate [char] " write-string ;
 
 128 table sbuf
-: s" ( "ccc<quote>" --, Run Time -- c-addr u) ) 
-	sbuf 128 chars> [char] " accepter sbuf swap ;
+: s" ( "ccc<quote>" --, Run Time -- c-addr u ) 
+	sbuf chars> 128 chars> [char] " accepter sbuf swap ;
 hider sbuf
 
 : "  immediate [char] " do-string ;
@@ -782,7 +784,6 @@ hider endianess
 
 : lister 0 counter ! swap do i counted-column i ? i @ as-chars loop ;
 
-( @todo dump should print out the data as characters as well, if printable )
 : dump  ( addr u -- : dump out 'u' cells of memory starting from 'addr' )
 	base @ >r hex 1+ over + lister r> base ! cr ;
 :hide counted-column counter lister as-chars ;hide
@@ -790,6 +791,7 @@ hider endianess
 : forgetter ( pwd-token -- : forget a found word and everything after it )
 	dup @ pwd ! h ! ;
 
+( @bug will not work for immediate defined words )
 : forget ( WORD -- : forget word and every word defined after it )
 	find 1- forgetter ;
 
@@ -986,7 +988,7 @@ hider hide-words
 	" start of variable stack: " max-core `stack-size @ 2* - . cr
 	" start of return stack:   " max-core `stack-size @ - . cr
 	" current input source:    " source-id -1 = if " string" else " file" then cr
-	" reading from stdin:      " source-id 0 = `stdin @ `fin @ = and TrueFalse cr
+	" reading from stdin:      " source-id 0 = `stdin @ `fin @ = and TrueFalse cr 
 	" tracing on:              " `debug   @ TrueFalse cr
 	" starting word:           " `instruction ? cr
 	" real start address:      " `start-address ? cr
@@ -1020,6 +1022,7 @@ hider hide-words
 : more ( wait for more input )
 	"  -- press any key to continue -- " key drop cr ;
 
+( this is not quite ready for prime time )
 : debug-help " debug mode commands 
 	h - print help
 	q - exit containing word
@@ -1029,6 +1032,7 @@ hider hide-words
 " ;
 : debug-prompt ." debug> " ;
 : debug ( a work in progress, debugging support, needs parse-word )
+	key drop
 	cr
 	begin
 		debug-prompt
@@ -1062,7 +1066,7 @@ hider debug-prompt
 ;
 hider cf
 
-: end-print ( x -- ) "  => " . " ]" ;
+: end-print ( x -- ) "		=> " . " ]" ;
 : word-printer
 	( attempt to print out a word given a words code field
 	WARNING: This is a dirty hack at the moment
@@ -1087,16 +1091,16 @@ hider end-print
 and any data belonging to that operation, and push a number to increment the
 decompilers code stream pointer by )
 : decompile-literal ( code -- increment ) 
-	" [ literal => " 1+ ? " ]" 2 ;
+	" [ literal	=> " 1+ ? " ]" 2 ;
 : decompile-branch  ( code -- increment ) 
-	" [ branch  => " 1+ ? " ]" dup 1+ @ branch-increment ;
+	" [ branch	=> " 1+ ? " ]" dup 1+ @ branch-increment ;
 : decompile-quote   ( code -- increment ) 
-	" [ quote   => " 1+ @ word-printer "  ]" 2 ;
+	" [ '	=> " 1+ @ word-printer "  ]" 2 ;
 : decompile-?branch ( code -- increment ) 
-	" [ ?branch => " 1+ ? " ]" 2 ;
+	" [ ?branch	=> " 1+ ? " ]" 2 ;
 
 : decompile ( code-field-ptr -- )
-	( @todo Rewrite, simplify and get this working correctly
+	( @todo decompile :noname, make the output look better
  
 	This word expects a pointer to the code field of a word, it
 	decompiles a words code field, it needs a lot of work however.
@@ -1142,7 +1146,7 @@ decompilers code stream pointer by )
 : xt-instruction ( extract instruction from execution token ) 
 	xt-token @ >instruction ;
 ( these words expect a pointer to the PWD field of a word )
-: defined-word?      xt-instruction run-instruction = ;
+: defined-word?      xt-instruction dolist = ;
 : print-name         " name:          " name print cr ;
 : print-start        " word start:    " name chars . cr ;
 : print-previous     " previous word: " @ . cr ;
@@ -1331,6 +1335,11 @@ b/buf chars table block-buffer ( block buffer - enough to store one block )
 
 ( ==================== Miscellaneous ========================== )
 
+
+( @todo use check-within in various primitives like "array" )
+: check-within ( x min max -- : abort if x is not within a range ) 
+	within not if " limit exceeded" cr abort then ;
+
 : enum ( x " ccc" -- x+1 : define a series of enumerations )
 	dup constant 1+ ; ( better would be a :enum ;enum syntax )
 
@@ -1399,33 +1408,35 @@ b/buf chars table block-buffer ( block buffer - enough to store one block )
  scr-var block-buffer
  write-string do-string ')' alignment-bits print-string 
  compile-instruction dictionary-start hidden? hidden-mask instruction-mask 
- max-core run-instruction x x! x@ write-exit 
+ max-core dolist x x! x@ write-exit 
  max-string-length xt-token error-no-word
  original-exit
  restart-address pnum
  TrueFalse >instruction print-header 
  print-name print-start print-previous print-immediate 
  print-instruction xt-instruction defined-word? print-defined
- 
  `state 
  `source-id `sin `sidx `slen `start-address `fin `fout `stdin
  `stdout `stderr `argc `argv `debug `invalid `top `instruction
- `stack-size `start-time
+ `stack-size `start-time 
 ;hide 
+
+
 
 ( TODO
 	* By adding "c@" and "c!" to the interpreter I could remove print
 	and put string functionality earlier in the file
-	* Add unit testing to the end of this file
 	* Word, Parse, other forth words
-	* Add a dump core and load core to the interpreter?
 	* add "j" if possible to get outer loop context
 	* FORTH, VOCABULARY 
 	* "Value", "To", "Is"
+	* The interpreter should use character based addresses, instead of
+	word based, and use values that are actual valid pointers, this
+	will allow easier interaction with the world outside the virtual machine
 	* A small block editor
 	* more help commands would be good, such as "help-ANSI-escape",
 	"tutorial", etc.
-	* Abort and Abort", this could be used to implement words such
+	* Abort", this could be used to implement words such
 	as "abort if in compile mode", or "abort if in command mode".
 	* Todo Various different assemblers [assemble VM instructions,
 	native instructions, and cross assemblers]
@@ -1441,11 +1452,9 @@ b/buf chars table block-buffer ( block buffer - enough to store one block )
 		compile-field code-field field-translate
 	would take a pointer to a compile field for a word and translate
 	that into the code field
-	* [ifdef] [ifundef]
 	* if strings were stored in word order instead of byte order
 	then external tools could translate the dictionary by swapping
 	the byte order of it
-	* store strings as length + string instead of ASCII strings
 	* proper booleans should be used throughout
 	* escaped strings
 	* ideally all of the functionality of main_forth would be
@@ -1455,9 +1464,6 @@ b/buf chars table block-buffer ( block buffer - enough to store one block )
 	unnecessarily limit the range of operation
 	* "print" should be removed from the interpreter
 	* :inline ; to inline a words
-	* Split the interpreter into two branches, one that keeps everything
-	small, another larger version
-	* merge this repository with my other C-forth repository
 
 Some interesting links:
 	* http://www.figuk.plus.com/build/heart.htm

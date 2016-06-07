@@ -389,7 +389,7 @@ int forth_run(forth_t *o)
 	INNER:  assert((S > m) && (S < (m + o->core_size)));
 		switch (w = instruction(m[ck(pc++)])) {
 		case PUSH:    *++S = f;     f = m[ck(I++)];          break;
-		case COMPILE: m[ck(m[DIC]++)] = pc;                  break;
+		case COMPILE: m[ck(m[DIC]++)] = pc;                  break; /* this needs to be moved into READ */
 		case RUN:     m[ck(++m[RSTK])] = I; I = pc;          break;
 		case DEFINE:  m[STATE] = 1; /* compile mode */
                               if(forth_get_word(o, (uint8_t*)(o->s)) < 0)
