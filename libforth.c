@@ -463,8 +463,9 @@ int forth_run(forth_t *o)
 				      goto end;
 			      f = forth_find(o, (char*)o->s);
 			      f = f < DICTIONARY_START ? 0 : f;      break;
-		case PRINT:   fputs(((char*)m)+f, (FILE*)(o->m[FOUT])); f = *S--; break;
-		case DEPTH:   w = S - (m + o->core_size - (2 * o->m[STACK_SIZE]));
+		case PRINT:   fputs(((char*)m)+f, (FILE*)(o->m[FOUT])); 
+			      f = *S--;                              break;
+		case DEPTH:   w = forth_stack_position(o);
 			      *++S = f;
 			      f = w;                                 break;
 		case CLOCK:   *++S = f;

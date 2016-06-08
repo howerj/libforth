@@ -598,9 +598,9 @@ hider delim
 
 : c" immediate [char] " write-string ;
 
-128 table sbuf
+128 char-table sbuf
 : s" ( "ccc<quote>" --, Run Time -- c-addr u ) 
-	sbuf chars> 128 chars> [char] " accepter sbuf swap ;
+	sbuf [char] " accepter sbuf drop swap ;
 hider sbuf
 
 : "  immediate [char] " do-string ;
