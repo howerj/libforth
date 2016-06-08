@@ -6,7 +6,9 @@
  *  @email      howe.r.j.89@gmail.com 
  *  Please consult "readme.md", "forth.fth" and "libforth.h" for more information 
  *  @todo add a system for adding arbitrary C functions to the system via
- *  plugins **/
+ *  plugins 
+ *  @todo Add file access utilities
+ *  @todo Turn this file into a literate-style document, as in Jonesforth**/
 #include "libforth.h"
 #include <assert.h>
 #include <errno.h>

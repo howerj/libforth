@@ -70,7 +70,9 @@ See:
 : cell 1 ( -- u : 1 cells ) ;
 : char+ ( c-addr1 -- c-addr2 ) 1+ ;
 : chars  ( n1 -- n2: convert character address to cell address ) size / ;
+: 2chars ( x y -- x y: ) chars swap chars swap ;
 : chars> ( n1 -- n2: convert cell address to character address ) size * ;
+: 2chars> chars> swap chars> swap ;
 : hex     ( -- ) ( print out hex )     16 base ! ;
 : octal   ( -- ) ( print out octal )    8 base ! ;
 : decimal ( -- ) ( print out decimal )  0 base ! ;
@@ -662,7 +664,7 @@ hider sbuf
 
 : spaces ( n -- : print n spaces ) 0 do space loop ;
 : erase ( addr u : erase a block of memory )
-	chars> swap chars> swap 0 fill ;
+	2chars> 0 fill ;
 
 : blank ( c-addr u )
 	( given a character address and length, this fills that range with spaces )

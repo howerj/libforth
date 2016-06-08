@@ -127,11 +127,13 @@ end-unit
 ( ========================== Move Words ====================================== )
 unit( Move words )
 marker cleanup
-128 table t1
-128 table t2
-
+128 constant len
+len char-table t1
+len char-table t2
+t1 2chars erase
+t1 accept 	accept test passed
+t1 type cr
 ( @todo implement these tests )
-
 cleanup
 end-unit
 ( ========================== Move Words ====================================== )
