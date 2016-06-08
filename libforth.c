@@ -11,6 +11,7 @@
  *  @todo Turn this file into a literate-style document, as in Jonesforth**/
 #include "libforth.h"
 #include <assert.h>
+#include <ctype.h>
 #include <errno.h>
 #include <limits.h>
 #include <stdlib.h>
@@ -176,10 +177,17 @@ static int numberify(int base, forth_cell_t *n, const char *s)
 	return !errno && *s != '\0' && *end == '\0';
 }
 
+static int istrcmp(const uint8_t *a, const uint8_t *b)
+{ /* case insensitive string comparison */
+	for(; ((*a == *b) || (tolower(*a) == tolower(*b))) && *a && *b; a++, b++)
+		;
+	return tolower(*a) - tolower(*b);
+}
+
 forth_cell_t forth_find(forth_t *o, const char *s) 
 { /* find a word in the Forth dictionary, which is a linked list, skipping hidden words */
 	forth_cell_t *m = o->m, w = m[PWD], len = WORD_LENGTH(m[w+1]);
-	for (;w > DICTIONARY_START && (WORD_HIDDEN(m[w+1]) || strcmp(s,(char*)(&o->m[w - len])));) {
+	for (;w > DICTIONARY_START && (WORD_HIDDEN(m[w+1]) || istrcmp((uint8_t*)s,(uint8_t*)(&o->m[w - len])));) {
 		w = m[w]; 
 		len = WORD_LENGTH(m[w+1]);
 	}
@@ -465,7 +473,7 @@ int forth_run(forth_t *o)
 			      f = f < DICTIONARY_START ? 0 : f;      break;
 		case PRINT:   fputs(((char*)m)+f, (FILE*)(o->m[FOUT])); 
 			      f = *S--;                              break;
-		case DEPTH:   w = forth_stack_position(o);
+		case DEPTH:   w = S - (m + o->core_size - (2 * o->m[STACK_SIZE]));
 			      *++S = f;
 			      f = w;                                 break;
 		case CLOCK:   *++S = f;
