@@ -4,6 +4,7 @@ CC	= gcc
 CFLAGS	= -Wall -Wextra -g -pedantic -std=c99 -O2
 TARGET	= forth
 RM      = rm -rf
+CTAGS  ?= ctags
 
 FORTH_FILE = forth.fth
 
@@ -56,6 +57,9 @@ run: ${TARGET} ${FORTH_FILE}
 
 test: unit
 	./$^
+
+tags: lib${TARGET}.c lib${TARGET}.h unit.c main.c
+	${CTAGS} $^
 
 dist: ${TARGET} ${TARGET}.1 lib${TARGET}.[a3] readme.htm forth.core
 	tar zvcf ${TARGET}.tgz $^

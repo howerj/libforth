@@ -1,15 +1,85 @@
 /** @file       libforth.c
- *  @brief      A FORTH library, based on <www.ioccc.org/1992/buzzard.2.c>
+ *  @brief      A FORTH library, written in a literate style
  *  @author     Richard James Howe.
  *  @copyright  Copyright 2015,2016 Richard James Howe.
  *  @license    LGPL v2.1 or later version
  *  @email      howe.r.j.89@gmail.com 
- *  Please consult "readme.md", "forth.fth" and "libforth.h" for more information 
  *  @todo add a system for adding arbitrary C functions to the system via
  *  plugins 
  *  @todo Add file access utilities
- *  @todo Turn this file into a literate-style document, as in Jonesforth**/
-#include "libforth.h"
+ *  @todo Turn this file into a literate-style document, as in Jonesforth
+ *  @todo Change license?
+ *
+ *  This file implements the core Forth interpreter, it is written in portable
+ *  C99. The file contains a virtual machine that can interpret threaded Forth
+ *  code and a simple compiler for the virtual machine, which is one of its
+ *  instructions. The interpreter can be embedded in another application and
+ *  there should be no problem instantiating multiple instances of the
+ *  interpreter.
+ *
+ *  For more information about Forth see:
+ *
+ *  - https://en.wikipedia.org/wiki/Forth_%28programming_language%29
+ *  - Thinking Forth by Leo Brodie
+ *  - Starting Forth by Leo Brodie
+ *
+ *  The antecedent of this interpreter:
+ *  - http://www.ioccc.org/1992/buzzard.2.c
+ *
+ *  cxxforth, a literate Forth written in C++
+ *  - https://github.com/kristopherjohnson/cxxforth
+ *
+ *  Jones Forth, a literate Forth written in x86 assembly:
+ *  - https://rwmj.wordpress.com/2010/08/07/jonesforth-git-repository/
+ *  - https://github.com/AlexandreAbreu/jonesforth (backup)
+ *
+ *  A Forth processor:
+ *  - http://www.excamera.com/sphinx/fpga-j1.html
+ *  And my Forth processor based on this one:
+ *  - https://github.com/howerj/fyp
+ *
+ *  The repository should also contain:
+ *  
+ *  - "readme.md"  : a Forth manual, and generic project information
+ *  - "forth.fth"  : basic Forth routines and startup code
+ *  - "libforth.h" : The header contains the API documentation
+ *
+ *  The structure of this file is as follows:
+ *
+ *  1) Headers and configuration macros
+ *  2) Enumerations and constants
+ *  3) Helping functions for the compiler
+ *  4) API related functions and Initialization code
+ *  5) The Forth virtual machine itself
+ *  6) An example main function called main_forth and support
+ *  functions
+ *
+ *  Each section will be explained in detail as it is encountered.
+ *
+ *  Glossary of Terms:
+ *
+ *  VM   - Virtual Machine
+ *  Cell - The Virtual Machines natural Word Size, on a 32 bit
+ *         machine the Cell will be 32 bits wide
+ *  Word - In Forth a Word refers to a function, and not the
+ *         usual meaning of an integer that is the same size as
+ *         the machines underlying word size, this can cause confusion
+ *  API  - Application Program Interface
+ **/
+
+/* ============================ Section 1 ================================== */
+/*                     Headers and configurations macros                     */
+
+/* This file implements a Forth library, so a Forth interpreter can be embedded
+ * in another application, as such many of the functions in this file are
+ * exported, and are documented in the "libforth.h" header */
+#include "libforth.h" 
+
+/* We try to make good use of the C library as even microcontrollers
+ * have enough space for a reasonable implementation of it, although
+ * it might require some setup. The only time allocations are explicitly
+ * done is when the virtual machine image is initialized, after this
+ * the VM does not allocate any more memory. */
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
@@ -19,13 +89,22 @@
 #include <setjmp.h>
 #include <time.h>
 
+/* Traditionally Forth implementations were the only program running on
+ * the (micro)computer, running on processors orders of magnitude slower
+ * than this one, as such checks to make sure memory access was in bounds
+ * did not make sense and the implementation had to have access to the
+ * entire machines limited memory.
+ *
+ * To aide debugging and to help ensure correctness the "ck" macro, a wrapper
+ * around the function "check_bounds", is called for most memory accesses
+ * that the virtual machine makes. */
 #ifndef NDEBUG
 #define ck(c) check_bounds(o, c, __LINE__)
 #else
 #define ck(c) (c) /*disables checks and debug mode*/
 #endif
 
-#define DEFAULT_CORE_SIZE   (32 * 1024) /**< default vm size*/
+#define DEFAULT_CORE_SIZE   (32 * 1024) /**< default VM size*/
 #define BLOCK_SIZE          (1024u) /**< size of forth block in bytes */
 #define STRING_OFFSET       (32u)   /**< offset into memory of string buffer*/
 #define MAX_WORD_LENGTH     (32u)   /**< max word length, must be < 255 */
@@ -39,25 +118,128 @@
 #define IS_BIG_ENDIAN       (!(union { uint16_t u16; unsigned char c; }){ .u16 = 1 }.c)
 #define CORE_VERSION        (0x02u) /**< version of the forth core file */
 
-static const char *initial_forth_program = "\n\
-: here h @ ; : [ immediate 0 state ! ; : ] 1 state ! ; : >mark here 0 , ;      \n\
-: :noname immediate -1 , here 2 , ] ; : if immediate ' ?branch , >mark ;       \n\
-: else immediate ' branch , >mark swap dup here swap - swap ! ; : 0= 0 = ;     \n\
-: then immediate dup here swap - swap ! ; : 2dup over over ; : <> = 0= ;       \n\
-: begin immediate here ; : until immediate ' ?branch , here - , ; : '\\n' 10 ; \n\
-: not 0= ; : 1+ 1 + ; : 1- 1 - ; : ')' 41 ; : tab 9 emit ; : cr '\\n' emit ;   \n\
-: ( immediate begin key ')' = until ; : rot >r swap r> swap ; : -rot rot rot ; \n\
-: tuck swap over ; : nip swap drop ; : :: [ find : , ] ; : allot here + h ! ; ";
+/* ============================ Section 2 ================================== */
+/*                     Enumerations and Constants                            */
 
-enum header { MAGIC0, MAGIC1, MAGIC2, MAGIC4, CELL_SIZE, VERSION, ENDIAN, MAGIC7 };
-static const uint8_t header[MAGIC7+1] = {
-	0xFF, '4','T','H',    /* file magic number */
-	sizeof(forth_cell_t), /* size is needed for parsing rest of header if dumped */
-	CORE_VERSION,         /* version of forth core*/
-	-1,                   /* endianess of platform, filled in later*/
-	0xFF                  /* end header */
+/**
+ * This following string is a forth program that gets called when creating a
+ * new Forth environment, it is not actually the very first program that gets
+ * run, but it is run before the user gets a chance to do anything. 
+ *
+ * The program is kept as small as possible, but is dependent on the virtual
+ * machine image being set up correctly with a few other words being defined
+ * first, they will be described as they are encountered. Suffice to say,
+ * before this program is executed the following happens:
+ *   1) The virtual machine image is initialized
+ *   2) All the virtual machine primitives are defined
+ *   3) All registers are named and some constants defined
+ *   4) ";" is defined
+ *
+ * Of note, words such as "if", "else", "then", and even comments - "(" -, are
+ * not actually Forth primitives, there are defined in terms of other Forth
+ * words.
+ *
+ * @todo Explain Forth word evaluation here
+ * @todo Explain as many definitions as possible
+ *
+ **/
+static const char *initial_forth_program = "                       \n\
+: here h @ ;                                                       \n\
+: [ immediate 0 state ! ;                                          \n\
+: ] 1 state ! ;                                                    \n\
+: >mark here 0 , ;                                                 \n\
+: :noname immediate -1 , here 2 , ] ;                              \n\
+: if immediate ' ?branch , >mark ;                                 \n\
+: else immediate ' branch , >mark swap dup here swap - swap ! ;    \n\
+: then immediate dup here swap - swap ! ;                          \n\
+: 2dup over over ;                                                 \n\
+: begin immediate here ;                                           \n\
+: until immediate ' ?branch , here - , ;                           \n\
+: '\\n' 10 ;                                                       \n\
+: ')' 41 ;                                                         \n\
+: cr '\\n' emit ;                                                  \n\
+: ( immediate begin key ')' = until ; ( We can now use comments! ) \n\
+: rot >r swap r> swap ;                                            \n\
+: -rot rot rot ;                                                   \n\
+: tuck swap over ;                                                 \n\
+: nip swap drop ;                                                  \n\
+: :: [ find : , ] ;                                                \n\
+: allot here + h ! ; ";
+
+/* We can serialize the Forth virtual machine image, saving it to disk so we
+ * can load it again later. When saving the image to disk it is important
+ * to be able to identify the file somehow, and to identify various
+ * properties of the image.
+ *
+ * Unfortunately each image is not portable to machines with different
+ * cell sizes (determined by "sizeof(forth_cell_t)") and different endianess,
+ * and it is not trivial to convert them due to implementation details.
+ *
+ * "enum header" names all of the different fields in the header.
+ *
+ * The first four fields (MAGIC0...MAGIC3) are magic numbers which identify 
+ * the file format, so utilities like "file" on Unix systems can differentiate
+ * binary formats from each other.
+ *
+ * CELL_SIZE is the size of the virtual machine cell used to create the image.
+ *
+ * VERSION is used to both represent the version of the Forth interpreter and
+ * the version of the file format.
+ *
+ * ENDIAN is the endianess of the VM
+ *
+ * MAGIC7 is the last magic number.
+ *
+ * When loading the image the magic numbers are checked as well as
+ * compatibility between the saved image and the compiled Forth interpreter. */
+enum header { 
+	MAGIC0, 
+	MAGIC1, 
+	MAGIC2, 
+	MAGIC3, 
+	CELL_SIZE, 
+	VERSION, 
+	ENDIAN, 
+	MAGIC7 
 };
 
+/* The header itself, this will be copied into the forth_t structure on
+ * initialization, the ENDIAN field is filled in then as it seems impossible
+ * to determine the endianess of the target at compile time. */
+static const uint8_t header[MAGIC7+1] = {
+	[MAGIC0]    = 0xFF,
+	[MAGIC1]    = '4',
+	[MAGIC2]    = 'T',
+	[MAGIC3]    = 'H',
+	[CELL_SIZE] = sizeof(forth_cell_t), 
+	[VERSION]   = CORE_VERSION,
+	[ENDIAN]    = -1,       
+	[MAGIC7]    = 0xFF
+};
+
+/* This is the main structure used by the virtual machine
+ * 
+ * The structure is defined here and not in the header to hide the
+ * implementation details it, all API functions are passed an opaque pointer to
+ * the structure (see https://en.wikipedia.org/wiki/Opaque_pointer).
+ *
+ * Only three fields are serialized to the file saved to disk:
+ *
+ *   1) header
+ *   2) core_size
+ *   3) m
+ *
+ * And they are done so in that order, "core_size" and "m" are save in whatever
+ * endianess the machine doing the saving is done in, however "core_size" is
+ * converted to a "uint64_t" before being save to disk so it is not of a
+ * variable size. "m" is a flexible array member "core_size" number of members.
+ *
+ * The "m" field is the virtual machines working memory, it has its own
+ * internal structure which includes registers, stacks and a dictionary of
+ * defined words.
+ *
+ * @todo Explain more about the structure of "m"
+ */
 struct forth { /**< FORTH environment, values marked '~~' are serialized in order*/
 	uint8_t header[sizeof(header)]; /**< ~~ header for reloadable core file */
 	forth_cell_t core_size;  /**< ~~ size of VM (converted to uint64_t for serialization)*/
@@ -68,6 +250,14 @@ struct forth { /**< FORTH environment, values marked '~~' are serialized in orde
 	forth_cell_t m[];    /**< ~~ Forth Virtual Machine memory */
 };
 
+enum input_stream { 
+	FILE_IN, 
+	STRING_IN = -1 
+};
+
+/* There are a number of registers available to the virtual machine, they are
+ * actually indexes into the virtual machines main memory, put there so it can
+ * access them. */
 enum registers {          /**< virtual machine registers */
 	DIC         =  6, /**< dictionary pointer */
 	RSTK        =  7, /**< return stack pointer */
@@ -94,8 +284,9 @@ enum registers {          /**< virtual machine registers */
 	START_TIME  = 28, /**< start time in milliseconds */
 };
 
-enum input_stream { FILE_IN, STRING_IN = -1 };
-
+/* Instead of using numbers to refer to registers, it is better to refer to
+ * them by name instead, these strings each correspond in turn to enumeration
+ * called "registers" */
 static const char *register_names[] = { "h", "r", "`state", "base", "pwd",
 "`source-id", "`sin", "`sidx", "`slen", "`start-address", "`fin", "`fout", "`stdin",
 "`stdout", "`stderr", "`argc", "`argv", "`debug", "`invalid", "`top", "`instruction",
@@ -111,6 +302,9 @@ static const char *instruction_names[] = { "read","@","!","-","+","and","or",
 ">r","branch","?branch", "pnum","'", ",","=", "swap","dup","drop", "over", "tail",
 "bsave","bload", "find", "print","depth","clock", NULL }; /* named VM instructions */
 
+/* ============================ Section 3 ================================== */
+/*                  Helping Functions For The Compiler                       */
+
 static int forth_get_char(forth_t *o) 
 { /* get a char from string input or a file */
 	switch(o->m[SOURCE_ID]) {
@@ -120,6 +314,10 @@ static int forth_get_char(forth_t *o)
 	}
 } 
 
+/* This function reads in a space delimited word, limited to MAX_WORD_LENGTH,
+ * the word is put into the pointer "*p", due to the simple nature of Forth
+ * this is as complex as parsing and lexing gets. It can either read from
+ * a file handle or a string, like forth_get_char() */
 static int forth_get_word(forth_t *o, uint8_t *p) 
 { /*get a word (space delimited, up to 31 chars) from a FILE* or string-in*/ 
 	int n = 0;
@@ -135,6 +333,9 @@ static int forth_get_word(forth_t *o, uint8_t *p)
 	}
 } 
 
+/*
+ *
+ */
 static void compile(forth_t *o, forth_cell_t code, const char *str) 
 { /* create a new forth word header */
 	assert(o && code < LAST);
@@ -151,6 +352,17 @@ static void compile(forth_t *o, forth_cell_t code, const char *str)
 	m[m[DIC]++] = (l << WORD_LENGTH_OFFSET) | code; /*1: size of words name and code field */
 }
 
+/* Forth traditionally uses blocks as its method of storing data and code to
+ * disk, each block is BLOCK_SIZE characters long (which should be 1024
+ * characters). The reason for such a simple method is that many early Forth
+ * systems ran on microcomputers which did not have an operating system as
+ * they are now known, but only a simple monitor program and a programming 
+ * language, as such there was no file system either. Each block was loaded 
+ * from disk and then evaluated.
+ *
+ * The "blockio" function implements this simple type of interface, and can
+ * load and save blocks to disk. 
+ */
 static int blockio(forth_t *o, void *p, forth_cell_t poffset, forth_cell_t id, char rw) 
 { /* simple block I/O, could be replaced with making fopen/fclose available to interpreter */
 	char name[16] = {0}; /* XXXX + ".blk" + '\0' + a little spare change */
@@ -199,6 +411,9 @@ static int print_cell(forth_t *o, forth_cell_t f)
 	char *fmt = o->m[BASE] == 16 ? o->hex_fmt : "%" PRIuCell;
 	return fprintf((FILE*)(o->m[FOUT]), fmt, f);
 }
+
+/* ============================ Section 4 ================================== */
+/*              API related functions and Initialization code                */
 
 void forth_set_file_input(forth_t *o, FILE *in) 
 {
@@ -303,6 +518,9 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out)
 	return o;
 }
 
+/* This is a crude method that should only be used for debugging purposes, it
+ * simply dumps the forth structure to disk, including any padding which the
+ * compiler might have inserted. This dump cannot be reloaded */
 int forth_dump_core(forth_t *o, FILE *dump) 
 { 
 	assert(o && dump);
@@ -377,6 +595,11 @@ forth_cell_t forth_stack_position(forth_t *o)
 	return o->S - (o->m + o->core_size - (2 * o->m[STACK_SIZE]));
 }
 
+/* "check_bounds" is used to both check that a memory access performed by the
+ * virtual machine is within range and as a crude method of debugging the
+ * interpreter (if it is enabled). The function is not called directly but
+ * is instead wrapped in with the "ck" macro, it can be removed completely
+ * with compile time defines, removing the check and the debugging code. */
 static forth_cell_t check_bounds(forth_t *o, forth_cell_t f, unsigned line) 
 {
 	if(o->m[DEBUG])
@@ -388,8 +611,18 @@ static forth_cell_t check_bounds(forth_t *o, forth_cell_t f, unsigned line)
 	return f; 
 }
 
+/* ============================ Section 5 ================================== */
+/*                      The Forth Virtual Machine                            */
+
+/* The largest function in the file, which implements the forth virtual
+ * machine, everything else in this file is just fluff and support for this
+ * function. This is the Forth virtual machine, it implements a threaded
+ * code interpreter (see https://en.wikipedia.org/wiki/Threaded_code, and
+ * https://www.complang.tuwien.ac.at/forth/threaded-code.html).
+ *
+ */
 int forth_run(forth_t *o) 
-{ /* Forth virtual machine; it does the work, everything else is just fluff*/ 
+{ 
 	assert(o);
 	if(o->m[INVALID] || setjmp(*o->on_error))
 		return -(o->m[INVALID] = 1);
@@ -402,7 +635,7 @@ int forth_run(forth_t *o)
 		case COMPILE: m[ck(m[DIC]++)] = pc;                  break; /* this needs to be moved into READ */
 		case RUN:     m[ck(++m[RSTK])] = I; I = pc;          break;
 		case DEFINE:  m[STATE] = 1; /* compile mode */
-                              if(forth_get_word(o, (uint8_t*)(o->s)) < 0)
+                              if(forth_get_word(o, o->s) < 0)
                                       goto end;
                               compile(o, COMPILE, (char*)o->s); 
                               m[ck(m[DIC]++)] = RUN;                 break;
@@ -489,6 +722,9 @@ end:	o->S = S;
 	return 0;
 }
 
+/* ============================ Section 6 ================================== */
+/*    An example main function called main_forth and support functions       */
+
 static void fclose_input(FILE **in)
 {
 	if(*in && (*in != stdin))
@@ -535,6 +771,29 @@ Options must come before files to execute\n\n";
 	fputs(help_text, stderr);
 }
 
+/* "main_forth" is the second largest function is this file, but is not as
+ * complex as forth_run (currently the largest and most complex function), it
+ * brings together all the API functions offered by this library and provides
+ * a quick way for programmers to implement a working Forth interpreter for
+ * testing purposes.
+ *
+ * This make implementing a Forth interpreter as simple as:
+ *
+ * ==== main.c =============================
+ *
+ *   #include "libforth.h"
+ *
+ *   int main(int argc, char **argv) 
+ *   {
+ * 	  return main_forth(argc, argv);
+ *   }
+ *
+ * ==== main.c =============================
+ *
+ * To keep things simple options are parsed first then arguments like files,
+ * although some options take arguments immediately after them.
+ *
+ */
 int main_forth(int argc, char **argv) 
 {
 	FILE *in = NULL, *dump = NULL;
@@ -544,7 +803,7 @@ int main_forth(int argc, char **argv)
 	forth_cell_t core_size = DEFAULT_CORE_SIZE;
 	forth_t *o = NULL;
 	for(i = 1; i < argc && argv[i][0] == '-'; i++)
-		switch(argv[i][1]) { /**@todo there should be an -e option to evaluate string */
+		switch(argv[i][1]) { 
 		case '\0': goto done; /* stop argument processing */
 		case 'h':  usage(argv[0]); help(); return -1;
 		case 't':  readterm = 1; break;

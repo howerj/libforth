@@ -25,6 +25,12 @@ See:
 
 ( ========================== Basic Word Set ================================== )
 ( We'll begin by defining very simple words we can use later )
+: 1+ 1 + ;
+: 1- 1 - ;
+: tab 9 emit ;
+: 0= 0 = ; 
+: not 0= ; 
+: <> = 0= ;
 : < u< ; ( @todo fix this )
 : > u> ; ( @todo fix this )
 : logical ( x -- bool ) not not ;

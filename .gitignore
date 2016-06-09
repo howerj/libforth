@@ -31,3 +31,4 @@ callgrind.*
 cachegrind.*
 *.gz
 *.xz
+tags
