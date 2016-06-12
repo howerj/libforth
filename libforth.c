@@ -9,6 +9,8 @@
  *  @todo Add file access utilities
  *  @todo Turn this file into a literate-style document, as in Jonesforth
  *  @todo Change license?
+ *  @todo Add in as many checks as possible, such as checks to make sure the
+ *  dictionary pointer does not cross into the stack space.
  *
  *  This file implements the core Forth interpreter, it is written in portable
  *  C99. The file contains a virtual machine that can interpret threaded Forth
@@ -68,7 +70,8 @@
  *  such as threaded code, the dictionary, RPN, 
  *  @todo Talk about how Forth programs achieve compactness with implicit
  *  behavior (like AWK and Perl do), by taking their input from a default
- *  source and by how it does parameter passing
+ *  source and by how it does parameter passing. It also achieves compactness
+ *  with threaded code and by factoring words.
  *
  *  Glossary of Terms:
  *
@@ -86,7 +89,8 @@
  *                 has to be done explicitly), but the interpreter is interactive 
  *                 which is the important point
  *  RPN            - Reverse Polish Notation (see 
- *                   https://en.wikipedia.org/wiki/Reverse_Polish_notation)
+ *                 https://en.wikipedia.org/wiki/Reverse_Polish_notation).
+ *                 The Forth interpreter uses RPN to enter expressions.
  *  The stack      - Forth implementations have at least two stacks, one for
  *                 storing variables and another for control flow and temporary
  *                 variables, when the term "stack" is used on its own and with
@@ -96,6 +100,18 @@
  *  Return stack   - Most programming languages have a call stack, C has one
  *                 but not one that the programmer can directly access, in
  *                 Forth manipulating the return stack is often used. 
+ *  factor         - factoring is splitting words into smaller words that
+ *                 perform a specific function. To say a word is a natural
+ *                 factor of another word is to say that it makes sense to take
+ *                 some functionality of the word to be factored and to create
+ *                 a new word that encapsulates that functionality. Forth
+ *                 encourages heavy factoring of definitions.
+ *  Command mode   - This mode executes both compiling words and immediate
+ *                 words as they are encountered 
+ *  Compile mode   - This mode executes immediate words as they are
+ *                 encountered, but compiling words are compiled into the
+ *                 dictionary.
+ *  Primitive      - A word whose instruction is built into the VM.
  **/
 
 /* ============================ Section 1 ================================== */
@@ -146,23 +162,33 @@
  * defined later, the offset is a multiple of cells and not chars.  */
 #define STRING_OFFSET       (32u)   /**< offset into memory of string buffer*/
 
-#define MAX_WORD_LENGTH     (32u)   /**< max word length, must be < 255 */
+#define MAXIMUM_WORD_LENGTH (32u)   /**< max word length, must be < 255 */
 
-#define DICTIONARY_START    (STRING_OFFSET + MAX_WORD_LENGTH) /**< start of dic */
+/* minimum stack size of both the variable and return stack */
+#define MINIMUM_STACK_SIZE  (64u)   /**< absolute minimum stack size */
+
+/* The start of the dictionary is after the registers and the STRING_OFFSET,
+ * this is the area where Forth definitions are placed. */
+#define DICTIONARY_START    (STRING_OFFSET + MAXIMUM_WORD_LENGTH) /**< start of dic */
 
 /* Later we will encounter a field called MISC, a field in every Word
  * definition and is always present in the Words header. This field contains
  * multiple values at different bit offsets, only the lower 16 bits of this
- * cell are ever used. */
+ * cell are ever used. The next macros are helper to extract information from
+ * the MISC field. */
 
 #define WORD_LENGTH_OFFSET  (8)  /**< bit offset for word length start*/
 #define WORD_LENGTH(FIELD1) (((FIELD1) >> WORD_LENGTH_OFFSET) & 0xff)
 #define WORD_HIDDEN(FIELD1) ((FIELD1) & 0x80) /**< is a forth word hidden? */
 
+/* The lower 7 bits of the MISC field are used for the VM instruction */
 #define INSTRUCTION_MASK    (0x7f)
 
+/* a mask that the VM uses to extract the instruction */
 #define instruction(k)      ((k) & INSTRUCTION_MASK)
 
+/* VERIFY is our assert macro that will always been defined regardless of
+ * whether NDEBUG is defined */
 #define VERIFY(X)           do { if(!(X)) { abort(); } } while(0)
 
 /* The IS_BIG_ENDIAN macro looks complicated, however all it does is determine
@@ -464,7 +490,7 @@ static int forth_get_char(forth_t *o)
 	}
 } 
 
-/* This function reads in a space delimited word, limited to MAX_WORD_LENGTH,
+/* This function reads in a space delimited word, limited to MAXIMUM_WORD_LENGTH,
  * the word is put into the pointer "*p", due to the simple nature of Forth
  * this is as complex as parsing and lexing gets. It can either read from
  * a file handle or a string, like forth_get_char() */
@@ -472,7 +498,7 @@ static int forth_get_word(forth_t *o, uint8_t *p)
 { /*get a word (space delimited, up to 31 chars) from a FILE* or string-in*/ 
 	int n = 0;
 	char fmt[16] = { 0 };
-	sprintf(fmt, "%%%ds%%n", MAX_WORD_LENGTH - 1);
+	sprintf(fmt, "%%%ds%%n", MAXIMUM_WORD_LENGTH - 1);
 	switch(o->m[SOURCE_ID]) {
 	case FILE_IN:   return fscanf((FILE*)(o->m[FIN]), fmt, p, &n);
 	case STRING_IN:
@@ -546,7 +572,8 @@ static int forth_get_word(forth_t *o, uint8_t *p)
  *   definition when it is found and how to interpret "CODE-2" and the 
  *   "Data Field" if they exist.
  *       
- *   @todo More explanation, hidden words, ...                   
+ *   @todo More explanation, hidden words, ...
+ *   @todo Add hidden words to compile
  */
 static void compile(forth_t *o, forth_cell_t code, const char *str) 
 { /* create a new forth word header */
@@ -703,16 +730,29 @@ int forth_eval(forth_t *o, const char *s)
 
 int forth_define_constant(forth_t *o, const char *name, forth_cell_t c)
 {
-	char e[MAX_WORD_LENGTH+32] = {0};
-	assert(o && strlen(name) < MAX_WORD_LENGTH);
+	char e[MAXIMUM_WORD_LENGTH+32] = {0};
+	assert(o && strlen(name) < MAXIMUM_WORD_LENGTH);
 	sprintf(e, ": %31s %" PRIuCell " ; \n", name, c);
 	return forth_eval(o, e);
 }
 
+/** @brief default all the registers of a forth environment
+ *  @param o     the forth environment to set up
+ *  @param size  the size of the "m" field in "o"
+ *  @param in    the input file
+ *  @param out   the output file
+ *
+ *  "forth_make_default" default is called by "forth_init" and
+ *  "forth_load_core", it is a routine which deals that sets up registers for
+ *  the virtual machines memory, and especially with values that may only be
+ *  valid for a limited period (such as pointers to stdin).
+ */
 static void forth_make_default(forth_t *o, size_t size, FILE *in, FILE *out)
 { /* set defaults for a forth structure for initialization or reload */
 	o->core_size     = size;
-	o->m[STACK_SIZE] = size / 64 > 64 ? size / 64 : 64;
+	o->m[STACK_SIZE] = size / MINIMUM_STACK_SIZE > MINIMUM_STACK_SIZE ? 
+				size / MINIMUM_STACK_SIZE : 
+				MINIMUM_STACK_SIZE;
 	o->s             = (uint8_t*)(o->m + STRING_OFFSET); /*string store offset into CORE, skip registers*/
 	o->m[FOUT]       = (forth_cell_t)out;
 	o->m[START_ADDR] = (forth_cell_t)&(o->m);
@@ -731,22 +771,78 @@ static void forth_make_default(forth_t *o, size_t size, FILE *in, FILE *out)
 static void make_header(uint8_t *dst)
 {
 	memcpy(dst, header, sizeof(header));
-	dst[ENDIAN] = !IS_BIG_ENDIAN; /*fill in endianess*/
+	/*fill in endianess, needs to be done at run time*/
+	dst[ENDIAN] = !IS_BIG_ENDIAN; 
 }
 
+/* "forth_init" is a complex function that returns a fully initialized forth
+ * environment we can start executing Forth in, it does the usual task of
+ * allocating memory for the object to be returned, but it also does has the
+ * task of getting the object into a runnable state so we can pass it to
+ * "forth_run" and do useful work.
+ */
 forth_t *forth_init(size_t size, FILE *in, FILE *out) 
 { 
 	assert(in && out);
 	forth_cell_t *m, i, w, t;
 	forth_t *o;
+	/* There is a minimum requirement on the "m" field in the "forth_t"
+	 * structure which is not apparent in its definition (and cannot be
+	 * made apparent given how flexible array members work). We need enough
+	 * memory to store the registers (32 cells), the parse area for a word
+	 * (MAXIMUM_WORD_LENGTH cells), the initial start up program (about 6
+	 * cells), the initial built in and defined word set (about 600-700 cells)
+	 * and the variable and return stacks (MINIMUM_STACK_SIZE cells each, 
+	 * as minimum). 
+	 *
+	 * If we add these together we come up with an absolute 
+	 * minimum, although that would not allow us define new words or do 
+	 * anything useful. We use MINIMUM_STACK_SIZE to define a useful
+	 * minimum, albeit a restricted on, it is not a minimum large enough to
+	 * store all the definitions in "forth.fth" (a file within the project
+	 * containing a lot of Forth code) but it is large enough for embedded
+	 * systems, for testing the interpreter and for the unit tests within
+	 * the "unit.c" file.
+	 *
+	 * We VERIFY that the size has been passed in is equal to or about
+	 * minimum as this has been documented as being a requirement to this
+	 * function in the C API, if we are passed a lower number the
+	 * programmer has made a mistake somewhere and should be informed of
+	 * this problem. */
 	VERIFY(size >= MINIMUM_CORE_SIZE);
 	if(!(o = calloc(1, sizeof(*o) + sizeof(forth_cell_t)*size))) 
 		return NULL;
+
+	/* default the registers, and input and output streams */
 	forth_make_default(o, size, in, out);
+
+	/* o->header needs setting up, but has no effect on the run time
+	 * behavior of the interpreter */
 	make_header(o->header);
+
 	m = o->m;       /*a local variable only for convenience*/
 
-	/* The next section creates a word that calls READ, then TAIL, then itself*/
+	/* The next section creates a word that calls READ, then TAIL, 
+	 * then itself. This is what the virtual machine will run at startup so
+	 * that we can start reading in and executing Forth code. It creates a
+	 * word that looks like this:
+	 * 
+	 *    | <-- start of dictionary          |
+	 *    .------.------.-----.----.----.----.
+	 *    | TAIL | READ | RUN | P1 | P2 | P2 | Rest of dictionary ...
+	 *    .------.------.-----.----.----.----.
+	 *    |     end of this special word --> |
+	 *
+	 *    P1 is a pointer to READ
+	 *    P2 is a pointer to TAIL
+	 *    P2 is a pointer to RUN
+	 * 
+	 * The effect of this can be described as "make a function which
+	 * performs a READ then calls itself tail recursively". The first
+	 * instruction run is "RUN" which we save in "o->m[INSTRUCTION]" and
+	 * restore when we enter "forth_run".
+	 *
+	 */
 	o->m[PWD]   = 0;  /*special terminating pwd value*/
 	t = m[DIC] = DICTIONARY_START; /*initial dictionary offset, skip registers and string offset*/
 	m[m[DIC]++] = TAIL; /*Add a TAIL instruction that can be called*/
@@ -758,19 +854,62 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out)
 	m[m[DIC]++] = t;    /*call to TAIL*/
 	m[m[DIC]++] = o->m[INSTRUCTION] - 1; /*recurse*/
 
-	compile(o, DEFINE,    ":");         /*immediate word*/
-	compile(o, IMMEDIATE, "immediate"); /*immediate word*/
-	for(i = 0, w = READ; instruction_names[i]; i++) /*compiling words*/
-		compile(o, COMPILE, instruction_names[i]), m[m[DIC]++] = w++;
-	/* the next eval is the absolute minimum needed for a sane environment */
+	/* DEFINE and IMMEDIATE are two immediate words, the only two immediate
+	 * words that are also virtual machine instructions, we can make them
+	 * immediate by passing in their code word to "compile". The created
+	 * word looks like this
+	 *
+	 * .------.-----.------.
+	 * | NAME | PWD | MISC |
+	 * .------.-----.------.
+	 *
+	 * The MISC field here contains either DEFINE or IMMEDIATE, as well as
+	 * the hidden bit field and an offset to the beginning of name.
+	 */
+	compile(o, DEFINE,    ":");
+	compile(o, IMMEDIATE, "immediate"); 
+
+	/* All of the other built in words that use a virtual machine
+	 * instruction to do work are instead compiling words, and because
+	 * there are lots of them we can initialize them in a loop 
+	 * 
+	 * The created word looks like this:
+	 *
+	 * .------.-----.------.----------------.
+	 * | NAME | PWD | MISC | VM-INSTRUCTION |
+	 * .------.-----.------.----------------.
+	 *
+	 * The MISC field here contains the COMPILE instructions, which will
+	 * compile a pointer to the VM-INSTRUCTION, as well as the other fields
+	 * it usually contains.
+	 */
+	for(i = 0, w = READ; instruction_names[i]; i++) {
+		compile(o, COMPILE, instruction_names[i]);
+	       	m[m[DIC]++] = w++; /*This adds the actual VM instruction*/
+	}
+	/* The next eval is the absolute minimum needed for a sane environment,
+	 * it defines two words "state" and ";" */
 	VERIFY(forth_eval(o, ": state 8 exit : ; immediate ' exit , 0 state ! ;") >= 0);
-	for(i = 0; register_names[i]; i++) /* name all registers */ 
+
+	/* We now name all the registers so we can refer to them by name
+	 * instead of by number, this is not strictly necessary but is good
+	 * practice */
+	for(i = 0; register_names[i]; i++) 
 		VERIFY(forth_define_constant(o, register_names[i], i+DIC) >= 0);
+
+	/* Now we finally are in a state to load the slightly inaccurately
+	 * named "initial_forth_program", which will give us basic looping and
+	 * conditional constructs */
 	VERIFY(forth_eval(o, initial_forth_program) >= 0);
+
+	/* A few more constants are now defined, nothing special here */
 	VERIFY(forth_define_constant(o, "size",          sizeof(forth_cell_t)) >= 0);
 	VERIFY(forth_define_constant(o, "stack-start",   size - (2 * o->m[STACK_SIZE])) >= 0);
 	VERIFY(forth_define_constant(o, "max-core",      size) >= 0);
 
+	/* all of the calls to "forth_eval" and "forth_define_constant" have
+	 * set the input streams to point to a string, we need to reset them
+	 * to they point to the file "in" */
 	forth_set_file_input(o, in);  /*set up input after our eval*/
 	return o;
 }
@@ -837,9 +976,12 @@ fail:
 	return NULL;
 }
 
+/* free the Forth interpreter we make sure to invalidate the interpreter
+ * in case there is a use after free */
 void forth_free(forth_t *o) 
 { 
 	assert(o); 
+	o->m[INVALID] = 1; /* a sufficiently "smart" compiler might optimize this out */
 	free(o->on_error);
 	free(o); 
 }
@@ -915,28 +1057,83 @@ int forth_run(forth_t *o)
 	forth_cell_t *m = o->m, pc, *S = o->S, I = o->m[INSTRUCTION], f = o->m[TOP], w;
 
 	/* The for loop and the switch statement here form the basis of our
-	 * thread code interpreter*/
+	 * thread code interpreter along with the program counter register (pc)
+	 * and the instruction pointer register (I).
+	 *
+	 * @todo explain execution of a threaded code interpreter
+	 */
 	for(;(pc = m[ck(I++)]);) { 
-
 	INNER:  assert((S > m) && (S < (m + o->core_size)));
-
 		switch (w = instruction(m[ck(pc++)])) {
+
+		/* When explaining words with example Forth code the
+		 * instructions enumeration will not be used (such as ADD or
+		 * SUB), but its name will be used instead (such as '+' or '-)*/
+
 		case PUSH:    *++S = f;     f = m[ck(I++)];          break;
 		case COMPILE: m[ck(m[DIC]++)] = pc;                  break; /* this needs to be moved into READ */
 		case RUN:     m[ck(++m[RSTK])] = I; I = pc;          break;
 		case DEFINE:  
 			/* DEFINE backs the Forth word ':', which is an 
 			 * immediate word, it reads in a new word name, creates
-			 * a header for that word and enters into COMPILE mode,
+			 * a header for that word and enters into compile mode,
 			 * where all words (baring immediate words) are
 			 * compiled into the dictionary instead of being
-			 * executed. */
+			 * executed. 
+			 *
+			 * The created header looks like this:
+			 *  .------.-----.------.-----.----
+			 *  | NAME | PWD | MISC | RUN |    ...  
+			 *  .------.-----.------.-----.----
+			 *                               ^
+			 *                               |
+			 *                             Dictionary Pointer
+			 */
 			      m[STATE] = 1; /* compile mode */
                               if(forth_get_word(o, o->s) < 0)
                                       goto end;
                               compile(o, COMPILE, (char*)o->s); 
                               m[ck(m[DIC]++)] = RUN;                 break;
 		case IMMEDIATE: 
+			/*  IMMEDIATE makes the current word definition execute
+			 *  regardless of whether we are in compile or command
+			 *  mode. Unlike most Forths this needs to go right
+			 *  after the word to be defined name instead of after
+			 *  the word definition itself. I prefer this behavior,
+			 *  however the reason for this is due to
+			 *  implementation reasons and not because of this
+			 *  preference.
+			 *
+			 *  So our interpreter defines immediate words:
+			 *  
+			 *  : name immediate ... ;
+			 *
+			 *  versus, as is expected:
+			 *
+			 *  : name ... ; immediate
+			 *
+			 *  The way this word works is when DEFINE (or ":")
+			 *  runs it creates a word header that looks like this:
+			 *
+			 *  .------.-----.------.-----.----
+			 *  | NAME | PWD | MISC | RUN |    ...  
+			 *  .------.-----.------.-----.----
+			 *                               ^
+			 *                               |
+			 *                             Dictionary Pointer
+			 *
+			 *
+			 *  Where the MISC field contains COMPILE, we want it
+			 *  to look like this:
+			 *
+			 *  .------.-----.------.----
+			 *  | NAME | PWD | MISC |    ...
+			 *  .------.-----.------.----
+			 *                         ^
+			 *                         |
+			 *                         Dictionary Pointer
+			 *
+			 *  With the MISC field containing RUN. */
 			      m[DIC] -= 2; /* move to first code field */
 			      m[m[DIC]] &= ~INSTRUCTION_MASK; /* zero instruction */
 			      m[m[DIC]] |= RUN; /* set instruction to RUN */
@@ -1036,6 +1233,17 @@ int forth_run(forth_t *o)
 		case DUP:     *++S = f;                              break;
 		case DROP:    f = *S--;                              break;
 		case OVER:    w = *S; *++S = f; f = w;               break;
+		/* TAIL is a crude method of doing tail recursion, it should
+		 * not be used generally but is quite useful at startup, there
+		 * are a number of limitations when using it in word
+		 * definitions.
+		 *
+		 * @todo Explain the following:
+		 *
+		 * : (gcd) ?dup if dup rot rot mod tail (gcd) then ;
+		 * : gcd (gcd) ;
+		 *
+		 */
 		case TAIL:    m[RSTK]--;                             break;
 		/* The blockio function interface has been made specially so
 		 * that it is easy to add block functionality to the Forth 
@@ -1119,7 +1327,6 @@ end:	o->S = S;
  * or by printing a banner at start up (which would contain no useful
  * information whatsoever). It is simple, and only does one thing (but does it 
  * do it well?).*/
-
 static void fclose_input(FILE **in)
 {
 	if(*in && (*in != stdin))

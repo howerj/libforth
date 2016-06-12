@@ -65,5 +65,5 @@ dist: ${TARGET} ${TARGET}.1 lib${TARGET}.[a3] readme.htm forth.core
 	tar zvcf ${TARGET}.tgz $^
 
 clean:
-	${RM} ${TARGET} unit *.blk *.core *.a *.so *.o *.log *.htm *.tgz
+	${RM} ${TARGET} unit *.blk *.core *.a *.so *.o *.log *.htm *.tgz tags
 
