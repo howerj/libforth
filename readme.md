@@ -652,6 +652,17 @@ Push the current dictionary pointer (equivalent to "h @").
 
 Immediately switch into command mode.
 
+* '\]'          ( -- )
+
+Switch into compile mode
+
+* '\>mark'      ( -- location )
+
+Write zero into the head of the dictionary and advance the dictionary pointer,
+push a address to the zero written into the dictionary. This is usually used
+after in a word definition that changes the control flow, after a branch for
+example.
+
 * ':noname'     ( -- execution-token )
 
 This creates a word header for a word without a name and switches to compile
@@ -697,25 +708,9 @@ This marks the beginning of a loop.
 Loop back to the corresponding 'begin' if the top of the stack is zero, continue
 on otherwise.
 
-* '0='          ( x -- bool )
-
-Is the top of the stack zero?
-
-* 'not'         ( x -- bool )
-
-Equivalent to '0='
-
 * "')'"         ( -- char )
 
 Push the number representing the ')' character onto the stack.
-
-* '1+'          ( x -- x )
-
-Add one to the top of the stack.
-
-* '1-'          ( x -- x )
-
-Subtract one from the top of the stack.
 
 * 'tab'         ( -- )
 
@@ -724,20 +719,6 @@ Print a tab.
 * 'cr'          ( -- )
 
 Prints a newline.
-
-* '.('          ( -- )
-
-Print out the characters in the input stream, until a ')' is encountered.
-
-        .( Hello, World)
-
-Will print:
-
-        Hello, World
-
-* '2dup'        ( x y -- x y x y )
-
-Duplicate two items on the stack.
 
 * '('           ( -- )
 
@@ -887,13 +868,6 @@ reached, in the middle of a word definition. This makes the recurse keyword
 redundant but means using a previous definition of a word with the same name
 more difficult (but can be done). This might be a candidate for behavior that
 should be made more compliant.
-
-* case sensitivity
-
-Most Forths are case insensitive, however this forth is not, and by default all
-core words are lower case, this will not be changed to be more compliant and is
-by design. Case insensitivity adds extra complexity to the interpreter and is
-sensitive to the character encoding used.
 
 * ok
 

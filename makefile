@@ -5,6 +5,7 @@ CFLAGS	= -Wall -Wextra -g -pedantic -std=c99 -O2
 TARGET	= forth
 RM      = rm -rf
 CTAGS  ?= ctags
+COLOR   = 
 
 FORTH_FILE = forth.fth
 
@@ -56,7 +57,7 @@ run: ${TARGET} ${FORTH_FILE}
 	./$< -t ${FORTH_FILE}
 
 test: unit
-	./$^
+	./$^ ${COLOR}
 
 tags: lib${TARGET}.c lib${TARGET}.h unit.c main.c
 	${CTAGS} $^

@@ -5,7 +5,8 @@
  *            <https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html> 
  *  @email    howe.r.j.89@gmail.com 
  *  @todo     The core unit testing functionality should be made into a
- *            library so it can be used again **/
+ *            library so it can be used again 
+ *  @todo     Make this file literate! **/
 
 /*** module to test ***/
 #include "libforth.h"
@@ -218,11 +219,11 @@ done:
 
 		FILE *core;
 		forth_cell_t here;
-		forth_t *f, *n;
+		forth_t *f;
 		print_note("libforth.c");
 		state(f = forth_init(MINIMUM_CORE_SIZE, stdin, stdout));
 		must(f);
-		state(core = fopen("unit.core", "w+b"));
+		state(core = fopen("unit.core", "wb"));
 		must(core);
 
 		/* test setup, simple tests of push/pop interface */
@@ -254,7 +255,7 @@ done:
 
 		/* save core for later tests */
 		test(forth_save_core(f, core) >= 0);
-		state(rewind(core));
+		state(fclose(core));
 
 		/* more simple tests of arithmetic */
 		state(forth_push(f, 99));
@@ -265,22 +266,114 @@ done:
 		test(here == forth_pop(f));
 		state(forth_free(f));
 
+	}
+	{
+		/* Test the persistence of word definitions across core loads*/
+		FILE *core;
+		forth_t *f;
+		state(core = fopen("unit.core", "rb"));
+		must(core);
+
 		/* test that definitions persist across core dumps */
-		state(n = forth_load_core(core));
+		state(f = forth_load_core(core));
 		/* stack position does no persist across loads, this might
 		 * change, but is the current functionality */
-		test(0 == forth_stack_position(n)); 
-		must(n);
+		test(0 == forth_stack_position(f)); 
+		must(f);
 		/* the word "unit-01" was defined earlier */
-		test(forth_find(n, "unit-01"));
-		test(forth_eval(n, "unit-01 constant-1 *") >= 0);
-		test(forth_pop(n) == 69 * 0xAA0A);
-		test(0 == forth_stack_position(n));
+		test(forth_find(f, "unit-01"));
+		test(forth_eval(f, "unit-01 constant-1 *") >= 0);
+		test(forth_pop(f) == 69 * 0xAA0A);
+		test(0 == forth_stack_position(f));
 
-		state(forth_free(n));
+		state(forth_free(f));
 		state(fclose(core));
 		if(!keep_files)
 			state(remove("unit.core"));
+	}
+	{
+		/* test the built in words, there is a set of built in words
+		 * that are defined in the interpreter, these must be tested 
+		 *
+		 * The following words need testing:
+		 * 	[ ] :noname 
+		 * 	'\n' ')' cr :: 
+		 */
+		forth_t *f;
+		state(f = forth_init(MINIMUM_CORE_SIZE, stdin, stdout));
+		must(f);
+
+		/* here we test if...else...then statements and hex conversion,
+		 * this also tests >mark indirectly */
+		test(forth_eval(f, ": if-test if 0x55 else 0xAA then ;") >= 0);
+		test(forth_eval(f, "0 if-test") >= 0);
+		test(forth_pop(f) == 0xAA);
+		state(forth_push(f, 1));
+		test(forth_eval(f, "if-test") >= 0);
+		test(forth_pop(f) == 0x55);
+
+		/* simple loop tests */
+		test(forth_eval(f, " : loop-test begin 1 + dup 10 u> until ;") >= 0);
+		test(forth_eval(f, " 1 loop-test") >= 0);
+		test(forth_pop(f) == 11);
+		test(forth_eval(f, " 39 loop-test") >= 0);
+		test(forth_pop(f) == 40);
+
+		/* rot and comments */
+		test(forth_eval(f, " 1 2 3 rot ( 1 2 3 -- 2 3 1 )") >= 0);
+		test(forth_pop(f) == 1);
+		test(forth_pop(f) == 3);
+		test(forth_pop(f) == 2);
+
+		/* -rot */
+		test(forth_eval(f, " 1 2 3 -rot ") >= 0);
+		test(forth_pop(f) == 2);
+		test(forth_pop(f) == 1);
+		test(forth_pop(f) == 3);
+
+		/* nip */
+		test(forth_eval(f, " 3 4 5 nip ") >= 0);
+		test(forth_pop(f) == 5);
+		test(forth_pop(f) == 3);
+
+		/* allot */
+		test(forth_eval(f, " here 32 allot here swap - ") >= 0);
+		test(forth_pop(f) == 32);
+
+		/* tuck */
+		test(forth_eval(f, " 67 23 tuck ") >= 0);
+		test(forth_pop(f) == 23);
+		test(forth_pop(f) == 67);
+		test(forth_pop(f) == 23);
+
+
+		state(forth_free(f));
+	}
+	{
+		/* test the forth interpreter internals */
+		forth_t *f;
+		state(f = forth_init(MINIMUM_CORE_SIZE, stdin, stdout));
+		must(f);
+
+		/* base should be set to zero, this is a special value
+		 * that allows hexadecimal, octal and decimal to be read
+		 * in if formatted correctly;
+		 * 	- hex     0x[0-9a-fA-F]*
+		 * 	- octal   0[0-7]*
+		 * 	- decimal [1-9][0-9]* 
+		 */
+		test(forth_eval(f, " base @ 0 = ") >= 0);
+		test(forth_pop(f) > 0);
+
+		/* the invalid flag should not be set */
+		test(forth_eval(f, " `invalid @ 0 = ") >= 0);
+		test(forth_pop(f) > 0);
+
+		/* source id should be -1 (reading from string) */
+		test(forth_eval(f, " `source-id @ -1 = ") >= 0);
+		test(forth_pop(f) > 0);
+
+		state(forth_free(f));
 	}
 	return !!unit_test_end("libforth");
 }

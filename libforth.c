@@ -229,7 +229,37 @@
  * not actually Forth primitives, there are defined in terms of other Forth
  * words.
  *
- * @todo Explain Forth word evaluation here
+ * The Forth interpreter is a very simple loop that does the following:
+ *
+ *   Start the interpreter loop <-----------<-----------------<---.
+ *   Get a space delimited word                                    \
+ *   Attempt to look up that word in the dictionary                 \
+ *   Was the word found?                                             ^
+ *   |-Yes:                                                          |
+ *   |   Are we in compile mode?                                     |
+ *   |   |-Yes:                                                      ^
+ *   |   | \-Is the Word an Immediate word?                          |
+ *   |   |   |-Yes:                                                  |
+ *   |   |   | \-Execute the word >--------->----------------->----->.
+ *   |   |   \-No:                                                   |
+ *   |   |     \-Compile the word into the dictionary -------->----->.
+ *   |   \-No:                                                       |
+ *   |     \-Execute the word >------------->----------------->----->.
+ *   \-No:                                                           ^
+ *     \-Can the word be treated as a number?                        |
+ *       |-Yes:                                                      |
+ *       | \-Are we in compile mode?                                 |
+ *       |   |-Yes:                                                  |
+ *       |   | \-Compile a literal into the dictionary >------>----->.
+ *       |   \-No:                                                   |
+ *       |     \-Push the number to the variable stack >------>----->.
+ *       \-No:                                                       | 
+ *         \-An Error has occurred, print out an error message >---->.
+ *
+ *  As you can see, there is not too much too it, however there are still a lot
+ *  of details left out, such as how exactly the virtual machine executes words
+ *  and how this loop is formed.
+ *
  * @todo Explain as many definitions as possible
  *
  **/
@@ -242,7 +272,6 @@ static const char *initial_forth_program = "                       \n\
 : if immediate ' ?branch , >mark ;                                 \n\
 : else immediate ' branch , >mark swap dup here swap - swap ! ;    \n\
 : then immediate dup here swap - swap ! ;                          \n\
-: 2dup over over ;                                                 \n\
 : begin immediate here ;                                           \n\
 : until immediate ' ?branch , here - , ;                           \n\
 : '\\n' 10 ;                                                       \n\
@@ -1056,12 +1085,137 @@ int forth_run(forth_t *o)
 	
 	forth_cell_t *m = o->m, pc, *S = o->S, I = o->m[INSTRUCTION], f = o->m[TOP], w;
 
-	/* The for loop and the switch statement here form the basis of our
+	/* The following section will explain how the threaded virtual machine
+	 * interpreter works. Threaded code is quite a simple concept and
+	 * Forths typically compile their code to threaded code, it suites
+	 * Forth implementations as word definitions consist of juxtaposition
+	 * of previously defined words until they reach a set of primitives.
+	 *
+	 * This means a function like "square" will be implemented like this:
+	 *
+	 *   call dup   <- duplicate the top item on the variable stack
+	 *   call *     <- push the result of multiplying the top two items
+	 *   call exit  <- exit the definition of square
+	 *
+	 * Each word definition is like this, a series of calls to other
+	 * functions. We can optimize this by removing the explicit "call" and
+	 * just having a series of code address to jump to, which will become:
+	 *
+	 *   address of "dup"
+	 *   address of "*"
+	 *   address of "exit"
+	 *
+	 * @todo Continue explanation of threaded code
+	 *
+	 * We now have the problem we cannot just jump to the beginning of the
+	 * definition of "square" in our virtual machine.
+	 *
+	 * The for loop and the switch statement here form the basis of our
 	 * thread code interpreter along with the program counter register (pc)
 	 * and the instruction pointer register (I).
 	 *
-	 * @todo explain execution of a threaded code interpreter
+	 * To explain how execution proceeds it will help to refer to the
+	 * internal structure of a word and how words are compiled into the
+	 * dictionary.
+	 *
+	 * Above we saw that a words layout looked like this:
+	 *
+	 *    .-----------.-----.------.--------.------------.
+	 *    | Word Name | PWD | MISC | CODE-2 | Data Field |
+	 *    .-----------.-----.------.--------.------------.
+	 *   
+	 * During execution we do not care about the "Word Name" field and
+	 * "PWD" field. Also during execution we do not care about the top bits
+	 * of the MISC field, only what instruction it contains.
+	 *
+	 * Immediate words looks like this:
+	 *
+	 *   .-------------.---------------------.
+	 *   | Instruction | Optional Data Field |
+	 *   .-------------.---------------------.
+	 *
+	 * And compiling words look like this:
+	 *
+	 *   .---------.-------------.---------------------.
+	 *   | COMPILE | Instruction | Optional Data Field |
+	 *   .---------.-------------.---------------------.
+	 *
+	 * If the data field exists, the "Instruction" field will contain
+	 * "RUN". For words that only implement a single virtual machine
+	 * instruction the "Instruction" field will contain only that single
+	 * instruction (such as ADD, or SUB).
+	 * 
+	 * Let us define a series of words and see how the resulting word
+	 * definitions are laid out, discounting the "Word Name", "PWD" and the
+	 * top bits of the "MISC" field.
+	 *
+	 * We will define two words "square" (which takes a number off the
+	 * stack, multiplies it by itself and pushes the result onto the stack) and
+	 * "sum-of-products" (which takes two numbers off the stack, squares
+	 * each one, adds the two results together and pushes the result onto
+	 * the stack):
+	 *
+	 *    : square           dup * ;
+	 *    : sum-of-products  square swap square + ;
+	 *
+	 * Executing these:
+	 *
+	 *  9 square .            => prints '81 '
+	 *  3 4 sum-of-products . => prints '25 '
+	 *
+	 * "square" refers to two built in words "dup" and "*",
+	 * "sum-of-products" to the word we just defined and two built in words
+	 * "swap" and "+". We have also used the immediate word ":" and ";". 
+	 *
+	 * Definition of "dup", a compiling word:
+	 * .---------.------.
+	 * | COMPILE | DUP  |
+	 * .---------.------.
+	 * Definition of "+", a compiling word:
+	 * .---------.------.
+	 * | COMPILE | +    |
+	 * .---------.------.
+	 * Definition of "swap", a compiling word:
+	 * .---------.------.
+	 * | COMPILE | SWAP |
+	 * .---------.------.
+	 * Definition of "exit", a compiling word:
+	 * .---------.------.
+	 * | COMPILE | EXIT |
+	 * .---------.------.
+	 * Definition of ":", an immediate word:
+	 * .---.
+	 * | : |
+	 * .---.
+	 * Definition of ";", a defined immediate word:
+	 * .-----.----.-------.----.-----------.--------.-------.
+	 * | RUN | $' | $exit | $, | literal 0 | $state | $exit |
+	 * .-----.----.-------.----.-----------.--------.-------.
+	 * Definition of "square", a defined compiling word:
+	 * .---------.-----.------.----.-------.
+	 * | COMPILE | RUN | $dup | $* | $exit |
+	 * .---------.-----.------.----.-------.
+	 * Definition of "sum-of-products", a defined compiling word:
+	 * .---------.-----.---------.-------.---------.----.-------.
+	 * | COMPILE | RUN | $square | $swap | $square | $+ | $exit |
+	 * .---------.-----.---------.-------.---------.----.-------.
+	 *
+	 * All of these words are defined in the dictionary, which is a
+	 * separate data structure from the variable stack. In the above
+	 * definitions we use "$square" or "$*" to mean a pointer to the words
+	 * run time behavior, this is never the "COMPILE" field. "literal 0"
+	 * means that at run time the number 0 is pushed to the variable stack,
+	 * also the definition of "state" is not shown, as that would
+	 * complicate things.
+	 *
+	 * Imagine we have just typed in "sum-of-products" with "3 4" on the
+	 * variable stack. Our "pc" register is now pointing the "RUN" field of
+	 * sum of products. 
+	 *
+	 * @todo Continue explanation
+	 *
 	 */
+
 	for(;(pc = m[ck(I++)]);) { 
 	INNER:  assert((S > m) && (S < (m + o->core_size)));
 		switch (w = instruction(m[ck(pc++)])) {

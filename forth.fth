@@ -56,6 +56,7 @@ See:
 : 8* 3 lshift ;
 : 8/ 3 rshift ;
 : 256/ 8 rshift ;
+: 2dup over over ;
 : mod ( x u -- remainder ) 2dup / * - ;
 : */ ( n1 n2 n3 -- n4 ) * / ; ( warning: this does not use a double cell for the multiply )
 : char key drop key ;
