@@ -151,8 +151,8 @@ See:
 : dictionary-start 
 	( The dictionary start at this location, anything before this value 
 	is not a defined word ) 
-	64 
-;
+	64 ;
+
 : source ( -- c-addr u ) 
 	( TODO: read registers instead )
 	[ 32 chars> ] literal ( size of input buffer, in characters )
@@ -178,8 +178,7 @@ See:
 		dup @ hidden-mask or swap tuck ! 
 	else 
 		drop 0 
-	then 
-;
+	then ;
 
 : hider ( WORD -- ) ( hide with drop ) find dup if hide then drop ;
 : unhide ( hide-token -- ) dup @ hidden-mask invert and swap ! ;
@@ -225,8 +224,7 @@ See:
 			1
 		then
 	until
-	drop
-;
+	drop ;
 
 : log2 ( x -- log2 ) 
 	( Computes the binary integer logarithm of a number,
@@ -235,8 +233,7 @@ See:
 	begin 
 		swap 1+ swap 2/ dup 0= 
 	until 
-	drop 1- 
-;
+	drop 1- ;
 
 : xt-token ( previous-word-address -- xt-token )
 	( Given the address of the PWD field of a word this
@@ -246,8 +243,7 @@ See:
 	@     ( Contents of MISC field )
 	instruction-mask and  ( Mask off the instruction )
 	( If the word is not an immediate word, execution token pointer ) 
-	compile-instruction = +
-;
+	compile-instruction = + ;
 
 : ['] immediate find xt-token [literal] ;
 
@@ -363,8 +359,7 @@ hider write-quote
 	r> 1+
 	rdrop
 	rdrop
-	>r
-;
+	>r ;
 
 : loop immediate 1 [literal] ' addi , <resolve ;
 : +loop immediate ' addi , <resolve ;
@@ -382,8 +377,7 @@ hider addi
 		rdrop ( pop off our return address )
 		rdrop ( pop off i )
 		rdrop ( pop off the limit of i and return to the caller's caller routine )
-	then
-;
+	then ;
 
 : i ( -- i ) 
 	( Get current, or innermost, loop index in do-loop construct )
@@ -405,8 +399,7 @@ hider addi
 		1
 	else ( This is obviously super space inefficient )
  		dup >r 1 range r> mul
-	then
-;
+	then ;
 
 hider tail
 : tail 
@@ -429,8 +422,7 @@ hider tail
 	immediate
 	latest xt-token 
 	' branch ,
-	here - 1+ ,
-;
+	here - 1+ , ;
 
 : recurse immediate
 	( This function implements recursion, although this interpreter
@@ -462,8 +454,7 @@ hider tail
 		dup 
 		mask-byte 
 	r> 
-	and swap 8* rshift
-;
+	and swap 8* rshift ;
 
 : c! ( char character-address -- )
 	( store a character at an address )
@@ -474,8 +465,7 @@ hider tail
 	dup chars @ ( new* addr old )
 	over        ( new* addr old addr ) 
 	alignment-bits mask-byte invert and ( new* addr old* )
-	rot or swap chars !
-;
+	rot or swap chars ! ;
 
 0 variable x
 : x! ( x -- ) x ! ;
@@ -543,8 +533,7 @@ hider tail
 	loop
 	begin ( read until delimiter )
 		key delim @ =
-	until
-;
+	until ;
 hider delim 
 
 : accept ( c-addr +n1 -- +n2 : see accepter definition ) '\n' accepter ;
@@ -564,8 +553,7 @@ hider delim
 			drop exit 
 		then 
 		emit 0 
-	until 
-;
+	until ;
 hider delim 
 
 size 1- constant aligner 
@@ -654,8 +642,7 @@ hider sbuf
 			exit 
 		then
 		hide drop
-	again
-;
+	again ;
 
 : count ( c-addr1 -- c-addr2 u ) dup c@ swap 1+ swap ;
 
@@ -663,8 +650,7 @@ hider sbuf
 	( fill in an area of memory with a character, only if u is greater than zero )
 	-rot
 	0 do 2dup i + c! loop
-	2drop 
-;
+	2drop ;
 
 : bounds ( x y -- y+x x ) 
 	over + swap ;
@@ -682,8 +668,7 @@ hider sbuf
 	0 do
 		2dup i + @ swap i + !
 	loop
-	2drop
-;
+	2drop ;
 
 ( It would be nice if move and cmove could share more code, as they do exactly
   the same thing but with different load and store functions, cmove>  )
@@ -692,8 +677,7 @@ hider sbuf
 	0 do
 		2dup i + c@ swap i + c!
 	loop
-	2drop
-;
+	2drop ;
 
 ( The words "[if]", "[else]" and "[then]" implement conditional compilation,
 they can be nested as well
@@ -729,8 +713,7 @@ if true )
 			    unnest?
 			end-nest?
 		until
-	then
-;
+	then ;
 
 : [else] ( discard input until [then] encounter, nesting for [if] )
 	reset-nest
@@ -738,8 +721,8 @@ if true )
 		find
 		dup nest? unnest?
 		end-nest?
-	until
-;
+	until ;
+
 find [if] [if]-word !
 find [else] [else]-word ! 
 
@@ -755,13 +738,12 @@ size 8 = [if] 0x01234567abcdef variable endianess [then]
 ;
 hider endianess
 
-: evaluate ( c-addr u -- : evaluate a string, although this version exits after doing so )
-	`sidx !
-	`start-address @ + `sin !
-	0 `sidx ! 
-	-1 `source-id ! ;
+: evaluate ( c-addr u -- : evaluate a NUL terminated string )
+	drop evaluator ;
 
-: trace ( flag -- : turn tracing on/off ) `debug ! ;
+
+: trace ( flag -- : turn tracing on/off ) 
+	`debug ! ;
 
 : pad 
 	( the pad is used for temporary storage, and moves
@@ -1196,7 +1178,8 @@ r @ constant restart-address
 	postpone [      ( back into command mode )
 	restart-address r ! ( restart interpreter; this needs improving ) ;
 
-: abort empty-stack quit ;
+: abort 
+	empty-stack quit ;
 
 ( These help messages could be moved to blocks, the blocks could then
   be loaded from disk and printed instead of defining the help here,
@@ -1430,8 +1413,6 @@ b/buf chars table block-buffer ( block buffer - enough to store one block )
  `stack-size `start-time 
 ;hide 
 
-
-
 ( TODO
 	* By adding "c@" and "c!" to the interpreter I could remove print
 	and put string functionality earlier in the file
@@ -1473,6 +1454,8 @@ b/buf chars table block-buffer ( block buffer - enough to store one block )
 	unnecessarily limit the range of operation
 	* "print" should be removed from the interpreter
 	* :inline ; to inline a words
+	* words should be made for debugging the return stack [such as
+	printing it out like .s]
 
 Some interesting links:
 	* http://www.figuk.plus.com/build/heart.htm

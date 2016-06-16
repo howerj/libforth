@@ -610,6 +610,12 @@ can be used for timing and implementing sleep functionality, the counter
 will not increase the interpreter is blocking and waiting for input, although
 this is implementation dependent.
 
+* 'evaluator'   ( char-address -- x )
+
+This word is a primitive used to implement 'evaluate'. It takes a pointer to a
+string to be evaluated as if it had been typed in. It pushes a status code,
+zero on success, anything else on failure of some sort.
+
 ### Defined words
 
 Defined words are ones which have been created with the ':' word, some words

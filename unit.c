@@ -363,15 +363,15 @@ done:
 		 * 	- decimal [1-9][0-9]* 
 		 */
 		test(forth_eval(f, " base @ 0 = ") >= 0);
-		test(forth_pop(f) > 0);
+		test(forth_pop(f));
 
 		/* the invalid flag should not be set */
 		test(forth_eval(f, " `invalid @ 0 = ") >= 0);
-		test(forth_pop(f) > 0);
+		test(forth_pop(f));
 
 		/* source id should be -1 (reading from string) */
 		test(forth_eval(f, " `source-id @ -1 = ") >= 0);
-		test(forth_pop(f) > 0);
+		test(forth_pop(f));
 
 		state(forth_free(f));
 	}
