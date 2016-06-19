@@ -68,3 +68,10 @@ dist: ${TARGET} ${TARGET}.1 lib${TARGET}.[a3] readme.htm forth.core
 clean:
 	${RM} ${TARGET} unit *.blk *.core *.a *.so *.o *.log *.htm *.tgz tags
 
+# .PHONY: test.log
+# test.log: unit ${TARGET} forth.fth unit.fth
+# 	${RM} $@
+# 	./unit ${COLOR} > $@
+# 	./${TARGET} -t forth.fth unit.fth < /dev/null >> $@
+
+

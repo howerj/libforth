@@ -15,12 +15,64 @@ For more information about this interpreter and Forth see:
 	libforth.h  : for information about the C API
 	libforth.3  : for limited information about the C API
 	libforth.c  : for the interpreter itself
+	unit.c      : a series of unit tests against libforth.c
+	unit.fth    : a series of unit tests against this file
 
 The interpreter and this code originally descend from a Forth interpreter
 written in 1992 for the International obfuscated C Coding Competition 
 
 See:
 	http://www.ioccc.org/1992/buzzard.2.design
+
+
+TODO
+	* This file should be made to be literate
+
+	* By adding "c@" and "c!" to the interpreter I could remove print
+	and put string functionality earlier in the file
+	* Word, Parse, other forth words
+	* add "j" if possible to get outer loop context
+	* FORTH, VOCABULARY 
+	* "Value", "To", "Is"
+	* The interpreter should use character based addresses, instead of
+	word based, and use values that are actual valid pointers, this
+	will allow easier interaction with the world outside the virtual machine
+	* A small block editor
+	* more help commands would be good, such as "help-ANSI-escape",
+	"tutorial", etc.
+	* Abort", this could be used to implement words such
+	as "abort if in compile mode", or "abort if in command mode".
+	* Todo Various different assemblers [assemble VM instructions,
+	native instructions, and cross assemblers]
+	* common words and actions should be factored out to simplify
+	definitions of other words, their standards compliant version found
+	if any
+	* An assembler mode would execute primitives only, this would
+	require a change to the interpreter
+	* throw and exception
+	* here documents, string literals
+	* A set of words for navigating around word definitions would be
+	help debugging words, for example:
+		compile-field code-field field-translate
+	would take a pointer to a compile field for a word and translate
+	that into the code field
+	* proper booleans should be used throughout
+	* escaped strings
+	* ideally all of the functionality of main_forth would be
+	moved into this file
+	* fill move and the like are technically not compliant as
+	they do not test if the number is negative, however that would
+	unnecessarily limit the range of operation
+	* "print" should be removed from the interpreter
+	* :inline ; to inline a words
+	* words should be made for debugging the return stack [such as
+	printing it out like .s]
+
+Some interesting links:
+	* http://www.figuk.plus.com/build/heart.htm
+	* https://groups.google.com/forum/#!msg/comp.lang.forth/NS2icrCj1jQ/1btBCkOWr9wJ
+	* http://newsgroups.derkeiler.com/Archive/Comp/comp.lang.forth/2005-09/msg00337.html
+	* https://stackoverflow.com/questions/407987/what-are-the-primitive-forth-operators
 )
 
 ( ========================== Basic Word Set ================================== )
@@ -34,12 +86,15 @@ See:
 : < u< ; ( @todo fix this )
 : > u> ; ( @todo fix this )
 : logical ( x -- bool ) not not ;
+: :: [ find : , ] ;
+: '\n' 10 ;
+: cr '\n' emit ;
 : hidden-mask 0x80 ( Mask for the hide bit in a words MISC field ) ;
 : instruction-mask 0x1f ( Mask for the first code word in a words MISC field ) ;
 : hidden? ( PWD -- PWD bool ) dup 1+ @ hidden-mask and logical ;
-: dolit 2 ;       ( location of special "push" word )
 : compile-instruction 1 ; ( compile code word, threaded code interpreter instruction )
 : dolist 2 ;      ( run code word, threaded code interpreter instruction )
+: dolit 2 ;       ( location of special "push" word )
 : [literal] dolit , , ; ( this word probably needs a better name )
 : literal immediate [literal] ;
 : latest pwd @ ; ( get latest defined word )
@@ -64,9 +119,6 @@ See:
 : postpone immediate find , ;
 : unless immediate ( bool -- : like 'if' but execute clause if false ) ' 0= , postpone if ;
 : endif immediate ( synonym for 'then' ) postpone then ;
-: bl ( space character ) [char]  ; ( warning: white space is significant after [char] )
-: space bl emit ;
-: . pnum space ;
 : address-unit-bits size 8* ;
 : negative? ( x -- bool : is a number negative? )
 	[ 1 address-unit-bits 1- lshift ] literal and logical ;
@@ -265,6 +317,9 @@ See:
 	find execute
 	clock r> - ;
 
+: rdepth 
+	max-core `stack-size @ - r @ swap - ;
+
 ( ========================== Extended Word Set =============================== )
 
 
@@ -332,7 +387,6 @@ hider write-quote
 : table     create allot does>   ;
 : variable  create ,     does>   ;
 : constant  create ,     does> @ ;
-
 ( @todo replace all instances of table with itable )
 : itable     create dup , allot does> dup @ ;
 : char-table create dup , chars allot does> dup @ swap 1+ chars> swap ;
@@ -340,11 +394,10 @@ hider write-quote
 ( do...loop could be improved by not using the return stack so much )
 
 : do immediate
-	' swap ,       ( compile 'swap' to swap the limit and start )
-	' >r ,         ( compile to push the limit onto the return stack )
-	' >r ,         ( compile to push the start on the return stack )
-	postpone begin ( save this address so we can branch back to it )
-;
+	' swap ,         ( compile 'swap' to swap the limit and start )
+	' >r ,           ( compile to push the limit onto the return stack )
+	' >r ,           ( compile to push the start on the return stack )
+	postpone begin ; ( save this address so we can branch back to it )
 
 : addi 
 	( @todo simplify )
@@ -446,27 +499,6 @@ hider tail
 	of the word )
 	dup 1+ @ 256/ lsb - chars> ;
 
-: c@ ( character-address -- char )
-	( retrieve a character from an address )
-	dup chars @
-	>r 
-		alignment-bits 
-		dup 
-		mask-byte 
-	r> 
-	and swap 8* rshift ;
-
-: c! ( char character-address -- )
-	( store a character at an address )
-	dup 
-	>r          ( new addr -- addr )
-		alignment-bits 8* lshift ( shift character into correct byte )
-	r>          ( new* addr )
-	dup chars @ ( new* addr old )
-	over        ( new* addr old addr ) 
-	alignment-bits mask-byte invert and ( new* addr old* )
-	rot or swap chars ! ;
-
 0 variable x
 : x! ( x -- ) x ! ;
 : x@ ( -- x ) x @ ;
@@ -520,6 +552,7 @@ hider tail
 	the number of characters stored is returned )
 	key drop ( drop first key after word )
 	delim !  ( store delimiter used to stop string storage when encountered)
+	
 	0
 	do
 		key dup delim @ <>
@@ -585,6 +618,15 @@ hider aligner
 ;
 hider delim
 
+: length ( c-addr u -- u : )
+  tuck 0 do dup c@ 0= if 2drop i leave then 1+ loop ;
+
+: asciiz?
+	tuck length <> ;
+
+: asciiz
+	2dup length nip ;
+
 : type ( c-addr u -- : print out 'u' characters at c-addr )
 	0 do dup c@ emit 1+ loop drop ;
 
@@ -593,9 +635,15 @@ hider delim
 
 : c" immediate [char] " write-string ;
 
+: fill ( c-addr u char -- )
+	( fill in an area of memory with a character, only if u is greater than zero )
+	-rot
+	0 do 2dup i + c! loop
+	2drop ;
+
 128 char-table sbuf
 : s" ( "ccc<quote>" --, Run Time -- c-addr u ) 
-	sbuf [char] " accepter sbuf drop swap ;
+	sbuf 0 fill sbuf [char] " accepter sbuf drop swap ;
 hider sbuf
 
 : "  immediate [char] " do-string ;
@@ -645,12 +693,6 @@ hider sbuf
 	again ;
 
 : count ( c-addr1 -- c-addr2 u ) dup c@ swap 1+ swap ;
-
-: fill ( c-addr u char -- )
-	( fill in an area of memory with a character, only if u is greater than zero )
-	-rot
-	0 do 2dup i + c! loop
-	2drop ;
 
 : bounds ( x y -- y+x x ) 
 	over + swap ;
@@ -940,15 +982,13 @@ hider counter
 
 	"print" expects a character address, so we need to multiply any calculated
 	address by the word size in bytes. )
-	reset-column
 	latest 
 	begin 
 		dup 
 		hidden? hide-words @ and
 		not if 
 			name
-			print tab
-			auto-column
+			print space
 		else 
 			drop 
 		then 
@@ -1203,6 +1243,7 @@ more " The built in words that accessible are:
 	immediate         make latest defined word immediate
 	read              read in a word, execute in command mode else compile 
 	@ !               fetch, store
+	c@ c!             character based fetch and store
 	- + * /           standard arithmetic operations,
 	and or xor invert standard bit operations
 	lshift rshift     left and right bit shift
@@ -1214,7 +1255,7 @@ more " The built in words that accessible are:
 	find              find a word in the dictionary and push the location
 	'                 store the address of the following word on the stack
 	,                 write the top of the stack to the dictionary
-	save load         save or load a block at address to indexed file
+	bsave bload       save or load a block at address to indexed file
 	swap              swap first two values on the stack
 	dup               duplicate the top of the stack
 	drop              pop and drop a value
@@ -1223,6 +1264,8 @@ more " The built in words that accessible are:
 	print             print a NUL terminated string at a character address
 	depth             get the current stack depth
 	clock             get the time since execution start in milliseconds
+	evaluator         evaluate a string
+	system            execute a system command
 
  "
 
@@ -1355,9 +1398,37 @@ b/buf chars table block-buffer ( block buffer - enough to store one block )
 	loop
 	2drop ;
 
+: license ( -- : print out license information )
+" 
+The MIT License (MIT)
+
+Copyright (c) 2016 Richard James Howe
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the 'Software'),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE.
+
+"
+;
+
 : welcome ( -- : print out a stupid welcome message which most interpreters seems insistent on)
 	" FORTH: libforth successfully loaded." cr
 	" Type 'help' and press return for a basic introduction." cr
+	" Type 'license' and press return to see the license. (MIT license)." cr
 	ok ;
 
 0 [if]
@@ -1393,6 +1464,14 @@ b/buf chars table block-buffer ( block buffer - enough to store one block )
       postpone then
     loop ;
  immediate
+
+: .r
+	" <" rdepth u. " >" space
+	rdepth if
+		rdepth 0 do i column tab i r @ + @ u. loop
+	then
+	cr ;
+
 [then]
 
 ( clean up the environment )
@@ -1412,55 +1491,4 @@ b/buf chars table block-buffer ( block buffer - enough to store one block )
  `stdout `stderr `argc `argv `debug `invalid `top `instruction
  `stack-size `start-time 
 ;hide 
-
-( TODO
-	* By adding "c@" and "c!" to the interpreter I could remove print
-	and put string functionality earlier in the file
-	* Word, Parse, other forth words
-	* add "j" if possible to get outer loop context
-	* FORTH, VOCABULARY 
-	* "Value", "To", "Is"
-	* The interpreter should use character based addresses, instead of
-	word based, and use values that are actual valid pointers, this
-	will allow easier interaction with the world outside the virtual machine
-	* A small block editor
-	* more help commands would be good, such as "help-ANSI-escape",
-	"tutorial", etc.
-	* Abort", this could be used to implement words such
-	as "abort if in compile mode", or "abort if in command mode".
-	* Todo Various different assemblers [assemble VM instructions,
-	native instructions, and cross assemblers]
-	* common words and actions should be factored out to simplify
-	definitions of other words, their standards compliant version found
-	if any
-	* An assembler mode would execute primitives only, this would
-	require a change to the interpreter
-	* throw and exception
-	* here documents, string literals
-	* A set of words for navigating around word definitions would be
-	help debugging words, for example:
-		compile-field code-field field-translate
-	would take a pointer to a compile field for a word and translate
-	that into the code field
-	* if strings were stored in word order instead of byte order
-	then external tools could translate the dictionary by swapping
-	the byte order of it
-	* proper booleans should be used throughout
-	* escaped strings
-	* ideally all of the functionality of main_forth would be
-	moved into this file
-	* fill move and the like are technically not compliant as
-	they do not test if the number is negative, however that would
-	unnecessarily limit the range of operation
-	* "print" should be removed from the interpreter
-	* :inline ; to inline a words
-	* words should be made for debugging the return stack [such as
-	printing it out like .s]
-
-Some interesting links:
-	* http://www.figuk.plus.com/build/heart.htm
-	* https://groups.google.com/forum/#!msg/comp.lang.forth/NS2icrCj1jQ/1btBCkOWr9wJ
-	* http://newsgroups.derkeiler.com/Archive/Comp/comp.lang.forth/2005-09/msg00337.html
-	* https://stackoverflow.com/questions/407987/what-are-the-primitive-forth-operators
-)
 

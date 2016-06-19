@@ -18,6 +18,8 @@ project a [C][] compiler is needed, and a copy of [Make][], type:
 
 For a list of build options. 
 
+This implementation is released under the [MIT][] license.
+
 # Manual
 
 [Forth][] is an odd language that has a loyal following groups, but it
@@ -935,6 +937,7 @@ you should use a different language, or implementation.
 [libforth.h]: libforth.h
 [ANS Forth]: http://lars.nocrew.org/dpans/dpans.htm
 [musl]: https://www.musl-libc.org/
+[MIT]: https://opensource.org/licenses/MIT
 
 <style type="text/css">body{margin:40px auto;max-width:850px;line-height:1.6;font-size:16px;color:#444;padding:0 10px}h1,h2,h3{line-height:1.2}</style>
 

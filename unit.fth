@@ -1,11 +1,10 @@
 #!./forth 
 
-
 ( Forth Unit Tests
 This fill contains the tests for words and functionality defined in
-forth.fth. The mechanism to test whether the tests have asserted would
+forth.fth. The mechanism to test whether the tests have tested would
 include looking at the core dump generated from executing this file, if
-the forth interpreter has been invalidated then the tests have asserted. The
+the forth interpreter has been invalidated then the tests have tested. The
 core will not be saved [it will refuse to save an invalidated core], but
 the exit status of the interpreter will indicate an error has occurred.
 
@@ -18,39 +17,91 @@ arithmetic, and control flow, are already done in other tests or are
 assumed to work )
 
 ( first simple test bench, this will be redefined later )
-: assert 0= if invalidate-forth bye then ;
+: test 0= if invalidate-forth bye then ;
 
 ( example usage of the test bench, this will exit and invalidate
- the core if it asserts )
-2 2 + 4 = assert
+ the core if it tests )
+2 2 + 4 = test
 
 ( @todo Test as many words as possible )
 
 ( ========================== Hiding Words ==================================== )
 
-: test01 2 2 + ; test01 4 = assert
-find test01 0 <> assert
+: test01 2 2 + ; test01 4 = test
+find test01 0 <> test
 :hide test01 ;hide
-find test01 0 = assert
+find test01 0 = test
 
 ( ========================== Hiding Words ==================================== )
 
 ( ========================== Strings ========================================= )
 
-s" Hello, World" nip 13 = assert
+s" Hello, World" nip 13 = test
 
 ( ========================== Strings ========================================= )
 
 ( ========================== Better tests ==================================== )
 
 ( @todo unit( should store its string so end-unit can print it out )
-( @todo if evaluate worked correctly, it could be used for better error printing )
-( @todo optional color support )
-:hide assert ;hide
-: assert 0= if invalidate-forth " assertion failed" cr bye then ; 
-: pass " Tests Completed Successfully" cr ;
-: unit( " Testing Unit: " cr tab postpone .( cr ;
-: end-unit " Unit Test Completed" cr ;
+
+true variable unit-color-on
+0    variable unit-pass
+0    variable unit-fail
+
+: unit-colorize ( color -- : given a color, optionally colorize the unit test )
+	unit-color-on @ if bright swap foreground color else drop then ;
+
+: fail-color ( -- : set terminal color to indicate failure )
+	red unit-colorize ;
+
+: pass-color ( -- : set terminal color to indicate success )
+	green unit-colorize ;
+
+: info-color ( -- : set terminal color to for information purposes )
+	yellow unit-colorize ;
+
+: unit-reset-color ( -- : reset color to normal )
+	unit-color-on @ if reset-color then ;
+
+: fail ( -- addr : push address to increment for failure )
+	fail-color
+	" FAILED: " 
+	unit-fail ;
+
+: pass ( -- addr : push address to increment for pass )
+	pass-color
+	" ok:     " 
+	unit-pass ;
+
+: pass-fail ( bool -- : increment pass or fail value, zero is pass )
+	tab 0= 
+	if fail else pass then 1+!
+	unit-reset-color ;
+
+:hide test ;hide
+: test ( c-addr u -- : evaluate a string that should push a pass/fail value )
+	2dup evaluate drop
+	pass-fail
+	type cr ;
+
+: print-ratio ( x y -- : print x/x+y )
+	2dup + nip swap u. " /" u. ;
+
+: summary ( -- : print summary of unit tests and exit if there are problems )
+	" passed: " unit-pass @ unit-fail @ print-ratio cr
+	unit-fail @ if " test suite failed" cr invalidate-forth bye then ;
+
+128 char-table current-test
+: fill-current-test 
+	current-test 0 fill current-test [char] ) accepter ;
+
+: unit(    " unit:   " fill-current-test current-test type cr ;
+: end-unit " end:    " current-test type cr ;
+
+:hide  
+ unit-pass unit-fail unit-colorize fail-color pass-color info-color 
+ unit-reset-color current-test pass-fail print-ratio fill-current-test
+;hide
 
 ( ========================== Better tests ==================================== )
 
@@ -64,40 +115,40 @@ no harm in adding tests here, they can always be moved around if there any probl
 in terms of dependencies )
 unit( Basic Words ) 
 
-1 assert
-0 not assert
+s" 1 " test
+s" 0 not " test
 
-char a 97 = assert ( assumes ASCII )
-bl 32 = assert ( assumes ASCII )
--1 negative? assert
--40494 negative? assert
-46960 negative? not assert
-0 negative? not assert
+s" char a 97 = " test ( assumes ASCII is used )
+s" bl 32 = " test ( assumes ASCII is used )
+s" -1 negative? " test
+s" -40494 negative? " test
+s" 46960 negative? not " test
+s" 0 negative? not " test
 
-char / number? not assert
-char : number? not assert
-char 0 number? assert
-char 3 number? assert
-char 9 number? assert
-char 9 number? assert
-char x number? not assert
-char l lowercase? assert
-char L lowercase? not assert
+s" char / number? not " test
+s" char : number? not " test
+s" char 0 number? " test
+s" char 3 number? " test
+s" char 9 number? " test
+s" char 9 number? " test
+s" char x number? not " test
+s" char l lowercase? " test
+s" char L lowercase? not " test
 
-5  5  mod 0 = assert
-16 15 mod 1 = assert
+s" 5  5  mod 0 = " test
+s" 16 15 mod 1 = " test
 
-98 4 min 4 = assert
-1  5 min 1 = assert
-55 3 max 55 = assert
-3 10 max 10 = assert
+s" 98 4 min 4 = " test
+s" 1  5 min 1 = " test
+s" 55 3 max 55 = " test
+s" 3 10 max 10 = " test
 
--2 negate 2 = assert
-0  negate 0 = assert
+s" -2 negate 2 = " test
+s" 0  negate 0 = " test
 
-3 2 4 within assert
-2 2 4 within assert
-4 2 4 within not assert
+s" 3 2 4 within " test
+s" 2 2 4 within " test
+s" 4 2 4 within not " test
 
 end-unit
 ( ========================== Basic Words ===================================== )
@@ -113,11 +164,11 @@ marker cleanup
 create jtable find j1 , find j2 , find j3 , find j4 ,
 
 : jump 0 3 limit jtable + @ execute ;
-0 jump j1 = assert
-1 jump j2 = assert
-2 jump j3 = assert
-3 jump j4 = assert
-4 jump j4 = assert ( check limit )
+s" 0 jump j1 = " test
+s" 1 jump j2 = " test
+s" 2 jump j3 = " test
+s" 3 jump j4 = " test
+s" 4 jump j4 = " test ( check limit )
 
 cleanup
 end-unit
@@ -137,4 +188,4 @@ t1 type cr
 cleanup
 end-unit
 ( ========================== Move Words ====================================== )
-pass
+summary
