@@ -1,4 +1,4 @@
-# readme.md
+# readme.md {#mainpage}
 
 This small [Forth][] interpreter is based on a de-obfuscated entrant
 into the [IOCCC][] by *buzzard*. The entry described a [Forth][]
@@ -938,12 +938,11 @@ you should use a different language, or implementation.
 [ANS Forth]: http://lars.nocrew.org/dpans/dpans.htm
 [musl]: https://www.musl-libc.org/
 [MIT]: https://opensource.org/licenses/MIT
-
-<style type="text/css">body{margin:40px auto;max-width:850px;line-height:1.6;font-size:16px;color:#444;padding:0 10px}h1,h2,h3{line-height:1.2}</style>
-
-
 [Forth]: https://en.wikipedia.org/wiki/Forth_%28programming_language%29
 [IOCCC]: http://ioccc.org/winners.html
 [Make]: https://en.wikipedia.org/wiki/Make_%28software%29
 [C]: https://en.wikipedia.org/wiki/C_%28programming_language%29
 [liblisp.md]: liblisp.md
+
+<style type="text/css">body{margin:40px auto;max-width:850px;line-height:1.6;font-size:16px;color:#444;padding:0 10px}h1,h2,h3{line-height:1.2}</style>
+

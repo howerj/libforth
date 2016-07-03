@@ -1,7 +1,7 @@
 ECHO	= echo
 AR	= ar
 CC	= gcc
-CFLAGS	= -Wall -Wextra -g -pedantic -std=c99 -O2
+CFLAGS	= -Wall -Wextra -g -pedantic -std=c99 -O2 
 TARGET	= forth
 RM      = rm -rf
 CTAGS  ?= ctags
@@ -9,7 +9,7 @@ COLOR   =
 
 FORTH_FILE = forth.fth
 
-.PHONY: all shorthelp doc clean test 
+.PHONY: all shorthelp doc clean test profile
 
 all: shorthelp ${TARGET}
 
@@ -30,16 +30,12 @@ help:
 	@${ECHO} "      lib${TARGET}.a      make a static ${TARGET} library"
 	@${ECHO} "      clean           remove generated files"
 	@${ECHO} "      dist            create a distribution archive"
+	@${ECHO} "      profile         generate lots of profiling information"
 	@${ECHO} ""
 
 %.o: %.c *.h
 	@echo "cc $< -c -o $@"
 	@${CC} ${CFLAGS} $< -c -o $@
-
-doc: readme.htm
-
-%.htm: %.md
-	markdown $^ > $@
 
 lib${TARGET}.a: lib${TARGET}.o
 	${AR} rcs $@ $<
@@ -65,13 +61,29 @@ tags: lib${TARGET}.c lib${TARGET}.h unit.c main.c
 dist: ${TARGET} ${TARGET}.1 lib${TARGET}.[a3] readme.htm forth.core
 	tar zvcf ${TARGET}.tgz $^
 
+%.htm: %.md
+	markdown $^ > $@
+
+doc: readme.htm
+
+doxygen: *.c *.h *.md
+	doxygen -g
+	doxygen 2> doxygen_warnings.log
+
+# CFLAGS: Add "-save-temps" to keep temporary files around
+# objdump: Add "-M intel" for a more sensible assembly output
+profile: CFLAGS += -pg -g -O2 -DNDEBUG -fprofile-arcs -ftest-coverage 
+profile: ${TARGET}
+	./$< forth.fth unit.fth
+	gprof $< gmon.out > profile.log
+	gcov lib${TARGET}.c
+	objdump -d -S lib${TARGET}.o > libforth.s
+
 clean:
-	${RM} ${TARGET} unit *.blk *.core *.a *.so *.o *.log *.htm *.tgz tags
-
-# .PHONY: test.log
-# test.log: unit ${TARGET} forth.fth unit.fth
-# 	${RM} $@
-# 	./unit ${COLOR} > $@
-# 	./${TARGET} -t forth.fth unit.fth < /dev/null >> $@
-
+	${RM} ${TARGET} unit *.a *.so *.o
+	${RM} *.log *.htm *.tgz 
+	${RM} *.blk *.core
+	${RM} tags
+	${RM} *.i *.s *.gcov *.gcda *.gcno *.out
+	${RM} html latex Doxyfile *.db *.bak
 

@@ -27,11 +27,13 @@ static double timer;
 static clock_t start_time, end_time;
 static time_t rawtime;
 
-int color_on = 0, jmpbuf_active = 0, is_silent = 0;
-jmp_buf current_test;
-unsigned current_line = 0;
-int current_result = 0;
-const char *current_expr;
+static int color_on = 0,      /**< Is colorized output on?*/
+    jmpbuf_active = 0, /**< Have we setup the longjmp buffer or not? */
+    is_silent = 0      /**< Silent mode on? The programs return code is used to determine success*/;
+static jmp_buf current_test; /**< current unit tests jump buffer */
+static unsigned current_line = 0; /**< current line number of unit test being executed */
+static int current_result = 0;    /**< result of latest test execution */
+static const char *current_expr;  /**< string representation of expression being executed */
 
 static const char *reset(void)  { return color_on ? "\x1b[0m"  : ""; }
 static const char *red(void)    { return color_on ? "\x1b[31m" : ""; }
@@ -71,7 +73,7 @@ static void print_note(char *name)
 		printf("%s%s%s\n", yellow(), name, reset()); 
 }
 
-#define MAX_SIGNALS (256)
+#define MAX_SIGNALS (256) /**< maximum number of signals to decode */
 static char *(sig_lookup[]) = { /*List of C89 signals and their names*/
 	[SIGABRT]       = "SIGABRT",
 	[SIGFPE]        = "SIGFPE",
@@ -122,6 +124,9 @@ static void sig_abrt_handler(int sig)
 		jmpbuf_active = 0;\
 	} while(0)
 
+/**@brief This advances the test suite like the test macro, however this test
+ * must be executed otherwise the test suite will not continue
+ * @param EXPR The expression should yield non zero on success */
 #define must(EXPR)\
 	do {\
 		print_must(#EXPR);\
@@ -211,6 +216,7 @@ done:
 		 * parts of the internals
 		 *
 		 * The following functions still need testing:
+		 *
 		 * 	- int forth_dump_core(forth_t *o, FILE *dump);
 		 * 	- void forth_set_file_output(forth_t *o, FILE *out);
 		 * 	- void forth_set_args(forth_t *o, int argc, char **argv);

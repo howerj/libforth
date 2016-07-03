@@ -12,13 +12,17 @@ extern "C" {
 #include <stdio.h>
 #include <stdint.h>
 #include <inttypes.h>
+
+/**@brief This is the absolute minimum size the Forth virtual machine can be in
+ * Forth cells, not bytes. */
 #define MINIMUM_CORE_SIZE (1024)
 
 struct forth; /**< An opaque object that holds a running FORTH environment**/
 typedef struct forth forth_t;
 typedef uintptr_t forth_cell_t; /**< FORTH "machine word", must be able to store a pointer*/
-#define PRIuCell PRIdPTR
-#define PRIxCell PRIxPTR
+
+#define PRIdCell PRIdPTR /**< Signed decimal format specifier for a Forth word */
+#define PRIxCell PRIxPTR /**< Hex format specifier for a Forth word */
 /** @brief   Given an input and an output this will initialize forth,
  *           allocating memory for it and setting it up so it has a few
  *           FORTH words predefined. The returned object must be free'd

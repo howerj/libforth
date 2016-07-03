@@ -28,8 +28,6 @@ See:
 TODO
 	* This file should be made to be literate
 
-	* By adding "c@" and "c!" to the interpreter I could remove print
-	and put string functionality earlier in the file
 	* Word, Parse, other forth words
 	* add "j" if possible to get outer loop context
 	* FORTH, VOCABULARY 
@@ -47,8 +45,6 @@ TODO
 	* common words and actions should be factored out to simplify
 	definitions of other words, their standards compliant version found
 	if any
-	* An assembler mode would execute primitives only, this would
-	require a change to the interpreter
 	* throw and exception
 	* here documents, string literals
 	* A set of words for navigating around word definitions would be
@@ -439,10 +435,10 @@ hider addi
 	>r >r ( restore return stack ) 
 ;
 
-: range   ( nX nY -- nX nX+1 ... nY )  swap 1+ swap do i loop ;
-: repeater  ( n0 X -- n0 ... nX )        1 do dup loop ;
-: sum     ( n0 ... nX X -- sum<0..X> ) 1 do + loop ;
-: mul     ( n0 ... nX X -- mul<0..X> ) 1 do * loop ;
+: range    ( nX nY -- nX nX+1 ... nY )  swap 1+ swap do i loop ;
+: repeater ( n0 X -- n0 ... nX )        1 do dup loop ;
+: sum      ( n0 ... nX X -- sum<0..X> ) 1 do + loop ;
+: mul      ( n0 ... nX X -- mul<0..X> ) 1 do * loop ;
 
 : factorial ( n -- n! )
 	( This factorial is only here to test range, mul, do and loop )
@@ -782,7 +778,6 @@ hider endianess
 
 : evaluate ( c-addr u -- : evaluate a NUL terminated string )
 	drop evaluator ;
-
 
 : trace ( flag -- : turn tracing on/off ) 
 	`debug ! ;
@@ -1492,3 +1487,13 @@ OTHER DEALINGS IN THE SOFTWARE.
  `stack-size `start-time 
 ;hide 
 
+( Heres an interesting piece of code from
+  http://c2.com/cgi/wiki?ForthSimplicity
+
+ : IMMEDIATE?	-1 = ;
+ : NEXTWORD	BL WORD FIND ;
+ : NUMBER,	NUMBER POSTPONE LITERAL ;
+ : COMPILEWORD	DUP IF IMMEDIATE? IF EXECUTE ELSE COMPILE, THEN ELSE NUMBER, THEN ;
+ : ]	BEGIN NEXTWORD COMPILEWORD AGAIN ;
+ : [	R> R> 2DROP ; IMMEDIATE	\ Breaks out of compiler into interpret mode again 
+)

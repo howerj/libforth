@@ -32,3 +32,12 @@ cachegrind.*
 *.gz
 *.xz
 tags
+*.out
+*.gcda
+*.gcno
+*.gcov
+*.S
+*.s
+*.i
+Doxyfile
+*.bak

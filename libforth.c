@@ -4,13 +4,10 @@
  *  @copyright  Copyright 2015,2016 Richard James Howe.
  *  @license    MIT (see https://opensource.org/licenses/MIT)
  *  @email      howe.r.j.89@gmail.com 
- *  @todo Add file access utilities
- *  @todo Change license?
+ *  @todo Add file access functions
  *  @todo Add in as many checks as possible, such as checks to make sure the
  *  dictionary pointer does not cross into the stack space.
  *  @todo Throw exception when word not found or on divide by zero
- *  @todo Add functions for saving and restoring interpreter state, such as
- *  current input stream.
  *  @todo Make the C API more compatible with Forth words by accepting a
  *  length as well as a pointer to a string.
  *  @todo cxxforth (see https://github.com/kristopherjohnson/cxxforth) uses
@@ -249,26 +246,37 @@
  * around the function "check_bounds", is called for most memory accesses
  * that the virtual machine makes. */
 #ifndef NDEBUG
+/**@brief This is a wrapper around check_bounds, so we do not have to keep
+ * typing in the line number, as so the name is shorter (and hence the checks
+ * are out of the way visually when reading the code).
+ * @param c expression to bounds check */
 #define ck(c) check_bounds(o, c, __LINE__)
 #else
-#define ck(c) (c) /*disables checks and debug mode */
+/**@brief This removes the bounds check and debugging code
+ * @param c do nothing */
+#define ck(c) (c) 
 #endif
 
 #define DEFAULT_CORE_SIZE   (32 * 1024) /**< default VM size */
 
-/* Blocks will be encountered and explained later, they have a fixed size which
- * has been standardized to 1024 */
-#define BLOCK_SIZE          (1024u) /**< size of forth block in bytes */
+/**@brief Blocks will be encountered and explained later, they have a fixed 
+ * size which has been standardized to 1024 */
+#define BLOCK_SIZE          (1024u) 
 
-/* When we are reading input to be parsed we need a space to hold that
+/**@brief When we are reading input to be parsed we need a space to hold that
  * input, the offset to this area is into a field called "m" in "struct forth", 
  * defined later, the offset is a multiple of cells and not chars.  */
-#define STRING_OFFSET       (32u)   /**< offset into memory of string buffer */
+#define STRING_OFFSET       (32u)  
 
-#define MAXIMUM_WORD_LENGTH (32u)   /**< max word length, must be < 255 */
+/**@brief This defines the maximum length of a Forth words name, that is the
+ * string that represents a Forth word, this number is in cells (or machine
+ * words). */
+#define MAXIMUM_WORD_LENGTH (32u)   
 
-/* minimum stack size of both the variable and return stack */
-#define MINIMUM_STACK_SIZE  (64u)   /**< absolute minimum stack size */
+/**@brief minimum stack size of both the variable and return stack, the stack
+ * size should not be made smaller than this otherwise the built in code and
+ * code in "forth.fth" will not work */
+#define MINIMUM_STACK_SIZE  (64u) 
 
 /* The start of the dictionary is after the registers and the STRING_OFFSET,
  * this is the area where Forth definitions are placed. */
@@ -281,21 +289,29 @@
  * the MISC field. */
 
 #define WORD_LENGTH_OFFSET  (8)  /**< bit offset for word length start */
-#define WORD_LENGTH(FIELD1) (((FIELD1) >> WORD_LENGTH_OFFSET) & 0xff)
-#define WORD_HIDDEN(FIELD1) ((FIELD1) & 0x80) /**< is a forth word hidden? */
 
-/* The lower 7 bits of the MISC field are used for the VM instruction */
+/**@brief WORD_LENGTH extracts the length of a Forth words name so we know
+ * where it is relative to the PWD field of a word
+ * @param MISC This should be the MISC field of a word */
+#define WORD_LENGTH(MISC) (((MISC) >> WORD_LENGTH_OFFSET) & 0xff)
+#define WORD_HIDDEN(MISC) ((MISC) & 0x80) /**< is a forth word hidden? */
+
+/**@brief The lower 7 bits of the MISC field are used for the VM instruction,
+ * limiting the number of instructions the virtual machine can have in it, the
+ * higher bits are used for other purposes */
 #define INSTRUCTION_MASK    (0x7f)
 
-/* a mask that the VM uses to extract the instruction */
+/**@brief A mask that the VM uses to extract the instruction
+ * @param k This MISC, or a CODE Field of a Forth word */
 #define instruction(k)      ((k) & INSTRUCTION_MASK)
 
-/* VERIFY is our assert macro that will always been defined regardless of
- * whether NDEBUG is defined */
+/**@brief VERIFY is our assert macro that will always been defined regardless of
+ * whether NDEBUG is defined 
+ * @param X expression to verify*/
 #define VERIFY(X)           do { if(!(X)) { abort(); } } while(0)
 
-/* The IS_BIG_ENDIAN macro looks complicated, however all it does is determine
- * the endianess of the machine using trickery.
+/**@brief The IS_BIG_ENDIAN macro looks complicated, however all it does is 
+ * determine the endianess of the machine using trickery.
  *
  * See:
  * - https://stackoverflow.com/questions/2100331/c-macro-definition-to-determine-big-endian-or-little-endian-machine
@@ -303,12 +319,12 @@
  */
 #define IS_BIG_ENDIAN       (!(union { uint16_t u16; unsigned char c; }){ .u16 = 1 }.c)
 
-/* When designing a binary format, which this interpreter uses and saves to
- * disk, it is imperative that certain information is saved to disk - one of
- * those pieces of information is the version of the interpreter. Something
- * such as this may seem trivial, but only once you start to deploy
- * applications to different machines and to different users does it become
- * apparent how important this is. */
+/**@brief When designing a binary format, which this interpreter uses and 
+ * saves to disk, it is imperative that certain information is saved to 
+ * disk - one of those pieces of information is the version of the 
+ * interpreter. Something such as this may seem trivial, but only once you 
+ * start to deploy applications to different machines and to different users 
+ * does it become apparent how important this is. */
 #define CORE_VERSION        (0x02u) /**< version of the forth core file */
 
 /* ============================ Section 2 ================================== */
@@ -413,7 +429,9 @@ static const char *initial_forth_program = "                       \n\
 : space bl emit ;                                                  \n\
 : . pnum space ; ";
 
-/* We can serialize the Forth virtual machine image, saving it to disk so we
+/**@brief An enumeration describing a save Forth images header
+ *
+ * We can serialize the Forth virtual machine image, saving it to disk so we
  * can load it again later. When saving the image to disk it is important
  * to be able to identify the file somehow, and to identify various
  * properties of the image.
@@ -440,14 +458,14 @@ static const char *initial_forth_program = "                       \n\
  * When loading the image the magic numbers are checked as well as
  * compatibility between the saved image and the compiled Forth interpreter. */
 enum header { 
-	MAGIC0, 
-	MAGIC1, 
-	MAGIC2, 
-	MAGIC3, 
-	CELL_SIZE, 
-	VERSION, 
-	ENDIAN, 
-	MAGIC7 
+	MAGIC0,     /**< Magic number used to identify file type */
+	MAGIC1,     /**< Magic number ... */
+	MAGIC2,     /**< Magic number ... */
+	MAGIC3,     /**< Magic number ...  */
+	CELL_SIZE,  /**< Size of a Forth cell, or virtual machine word */
+	VERSION,    /**< Version of the image */
+	ENDIAN,     /**< Endianess of the interpreter */
+	MAGIC7      /**< Final magic number */
 };
 
 /* The header itself, this will be copied into the forth_t structure on
@@ -464,7 +482,7 @@ static const uint8_t header[MAGIC7+1] = {
 	[MAGIC7]    = 0xFF
 };
 
-/* This is the main structure used by the virtual machine
+/**@brief This is the main structure used by the virtual machine
  * 
  * The structure is defined here and not in the header to hide the
  * implementation details it, all API functions are passed an opaque pointer to
@@ -485,27 +503,43 @@ static const uint8_t header[MAGIC7+1] = {
  * internal structure which includes registers, stacks and a dictionary of
  * defined words.
  *
- * @todo Explain more about the structure of "m"
- */
+ * The "m" field is laid out as follows, assuming the size of the virtual
+ * machine is 32768 cells big:
+ *
+ *       .-----------------------------------------------.
+ *      | 0-3F      | 40-7BFF       |7C00-7DFF|7E00-7FFF|
+ *      .-----------------------------------------------.
+ *      | Registers | Dictionary... | V stack | R stack |
+ *      .-----------------------------------------------.
+ *
+ *       V stack = The Variable Stack
+ *       R stack = The Return Stack
+ *
+ * The dictionary has its own complex structure, and it always starts just
+ * after the registers. It includes scratch areas for parsing words, start up
+ * code and empty space yet to be consumed before the variable stack. The sizes
+ * of the variable and returns stack change depending on the virtual machine
+ * size. The structures within the dictionary will be described later on.*/
 struct forth { /**< FORTH environment, values marked '~~' are serialized in order */
 	uint8_t header[sizeof(header)]; /**< ~~ header for reloadable core file */
 	forth_cell_t core_size;  /**< ~~ size of VM (converted to uint64_t for serialization) */
 	jmp_buf *on_error;   /**< place to jump to on error */
 	uint8_t *s;          /**< convenience pointer for string input buffer */
-	char hex_fmt[16];    /**< calculated hex format */
+	char hex_fmt[16];    /**< calculated hex format so recalculation is not needed later */
 	forth_cell_t *S;     /**< stack pointer */
 	forth_cell_t m[];    /**< ~~ Forth Virtual Machine memory */
 };
 
-/* There are a number of registers available to the virtual machine, they are
+/**@brief A list of all the registers placed in the "m" field of "struct forth"
+ *
+ * There are a number of registers available to the virtual machine, they are
  * actually indexes into the virtual machines main memory, this is so that the
  * programs running on the virtual machine can access them. There are other
  * registers that are in use that the virtual machine cannot access directly
  * (such as the program counter or instruction pointer). Some of these
  * registers correspond directly to well known Forth concepts, such as the
  * dictionary and return stack pointers, others are just implementation
- * details.
- */
+ * details. */
 enum registers {          /**< virtual machine registers */
 	DIC         =  6, /**< dictionary pointer */
 	RSTK        =  7, /**< return stack pointer */
@@ -562,7 +596,7 @@ enum input_stream {
 	STRING_IN = -1 
 };
 
-/* Instead of using numbers to refer to registers, it is better to refer to
+/**@brief Instead of using numbers to refer to registers, it is better to refer to
  * them by name instead, these strings each correspond in turn to enumeration
  * called "registers" */
 static const char *register_names[] = { "h", "r", "`state", "base", "pwd",
@@ -589,7 +623,7 @@ SUB,ADD,AND,OR,XOR,INV,SHL,SHR,MUL,DIV,LESS,MORE,EXIT,EMIT,KEY,FROMR,TOR,BRANCH,
 QBRANCH, PNUM, QUOTE,COMMA,EQUAL,SWAP,DUP,DROP,OVER,TAIL,BSAVE,BLOAD,FIND,PRINT,
 DEPTH,CLOCK,EVALUATOR,SYSTEM,LAST }; 
 
-/** @brief names of all named instructions, with a few exceptions
+/**@brief names of all named instructions, with a few exceptions
  *
  * So that we can compile programs we need ways of referring to the basic
  * programming constructs provided by the virtual machine, theses words are fed
@@ -606,9 +640,7 @@ DEPTH,CLOCK,EVALUATOR,SYSTEM,LAST };
  * separately from the rest of the instructions.
  *
  * LAST is not an instruction, but only a marker of the last enumeration used
- * in "enum instructions", so it does not get a name.
- * 
- */
+ * in "enum instructions", so it does not get a name. */
 static const char *instruction_names[] = { "read","@","!","c@","c!","-","+","and","or",
 "xor","invert","lshift","rshift","*","/","u<","u>","exit","emit","key","r>",
 ">r","branch","?branch", "pnum","'", ",","=", "swap","dup","drop", "over", "tail",
@@ -854,7 +886,7 @@ forth_cell_t forth_find(forth_t *o, const char *s)
  * @todo   print out bases other than 10 and 16 */
 static int print_cell(forth_t *o, forth_cell_t f)
 {
-	char *fmt = o->m[BASE] == 16 ? o->hex_fmt : "%" PRIuCell;
+	char *fmt = o->m[BASE] == 16 ? o->hex_fmt : "%" PRIdCell;
 	return fprintf((FILE*)(o->m[FOUT]), fmt, f);
 }
 
@@ -894,7 +926,7 @@ int forth_define_constant(forth_t *o, const char *name, forth_cell_t c)
 {
 	char e[MAXIMUM_WORD_LENGTH+32] = {0};
 	assert(o && strlen(name) < MAXIMUM_WORD_LENGTH);
-	sprintf(e, ": %31s %" PRIuCell " ; \n", name, c);
+	sprintf(e, ": %31s %" PRIdCell " ; \n", name, c);
 	return forth_eval(o, e);
 }
 
@@ -1199,7 +1231,7 @@ static forth_cell_t check_bounds(forth_t *o, forth_cell_t f, unsigned line)
 	if(o->m[DEBUG])
 		debug(o, f, line);
 	if(((forth_cell_t)f) >= o->core_size) {
-		fprintf(stderr, "( fatal \"bounds check failed: %" PRIuCell " >= %zu\" )\n", f, (size_t)o->core_size);
+		fprintf(stderr, "( fatal \"bounds check failed: %" PRIdCell " >= %zu\" )\n", f, (size_t)o->core_size);
 		longjmp(*o->on_error, 1);
 	}
 	return f; 
@@ -1646,7 +1678,7 @@ int forth_run(forth_t *o)
 		/*This should never happen, and if it does it is an indication
 		* that virtual machine memory has been corrupted somehow */
 		default:      
-			fprintf(stderr, "( fatal 'illegal-op %" PRIuCell " )\n", w);
+			fprintf(stderr, "( fatal 'illegal-op %" PRIdCell " )\n", w);
 			longjmp(*o->on_error, 1);
 		}
 	}
