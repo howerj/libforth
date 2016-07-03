@@ -52,7 +52,7 @@ forth.core: ${TARGET} ${FORTH_FILE} test
 run: ${TARGET} ${FORTH_FILE}
 	./$< -t ${FORTH_FILE}
 
-test: unit
+test: unit 
 	./$^ ${COLOR}
 
 tags: lib${TARGET}.c lib${TARGET}.h unit.c main.c
@@ -73,9 +73,9 @@ doxygen: *.c *.h *.md
 # CFLAGS: Add "-save-temps" to keep temporary files around
 # objdump: Add "-M intel" for a more sensible assembly output
 profile: CFLAGS += -pg -g -O2 -DNDEBUG -fprofile-arcs -ftest-coverage 
-profile: ${TARGET}
-	./$< forth.fth unit.fth
-	gprof $< gmon.out > profile.log
+profile: clean ${TARGET}
+	./${TARGET} forth.fth unit.fth
+	gprof ${TARGET} gmon.out > profile.log
 	gcov lib${TARGET}.c
 	objdump -d -S lib${TARGET}.o > libforth.s
 

@@ -171,7 +171,7 @@ Some interesting links:
 : within ( test low high -- flag : is test between low and high )
 	over - >r - r> u< ;
 : u. ( u -- : display number in base 10, although signed for now ) 
-	base @ >r decimal pnum r> base ! ;
+	base @ >r decimal pnum drop r> base ! ;
 : invalidate-forth
 	1 `invalid ! ;
 : rdrop ( R: x -- )
@@ -1471,6 +1471,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 
 ( clean up the environment )
 :hide
+ _emit
  scr-var block-buffer
  write-string do-string ')' alignment-bits print-string 
  compile-instruction dictionary-start hidden? hidden-mask instruction-mask 
@@ -1486,6 +1487,8 @@ OTHER DEALINGS IN THE SOFTWARE.
  `stdout `stderr `argc `argv `debug `invalid `top `instruction
  `stack-size `start-time 
 ;hide 
+
+
 
 ( Heres an interesting piece of code from
   http://c2.com/cgi/wiki?ForthSimplicity

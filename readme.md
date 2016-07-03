@@ -520,9 +520,10 @@ Pop two values, compare them (y > x) and push the result onto the stack.
 Pop the return stack and set the instruction stream pointer to that
 value.
 
-* 'emit'        ( char -- )
+* '\_emit'        ( char -- status )
 
-Pop a value and emit the character to the output.
+Pop a value and emit the character to the output. This pushes return status,
+negative means failure of some sort.
 
 * 'key'         ( -- char )
 
@@ -545,10 +546,13 @@ Jump unconditionally to the destination next in the instruction stream.
 Pop a value from the variable stack, if it is zero the jump to the
 destination next in the instruction stream, otherwise skip over it.
 
-* 'pnum'           ( x -- )
+* 'pnum'           ( x -- status )
 
 Pop a value from the variable stack and print it to the output either
-as a ASCII decimal or hexadecimal value depending on the BASE register.
+as a ASCII decimal or hexadecimal value depending on the BASE register. A
+return status is pushed onto the stack, greater or equal to zero is a success,
+negative is a failure. Failure can occur because of an invalid base in the BASE
+register, or because the output could not be written to.
 
 * '''           ( -- )
 
@@ -755,9 +759,10 @@ on the variable stack.
 The stack comment documents this word entirely. This word rotates three items
 on the variable stack, in the opposite direction of "rot".
 
-* '::'          ( -- )
+* 'emit'        ( x -- )
 
-Unlike ':' this is a compiling word, but performs the same function.
+The is like "\_emit", it writes a single character out to the output stream,
+however it drops the resulting status.
 
 ## [forth.fth][]
 
