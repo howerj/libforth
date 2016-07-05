@@ -460,6 +460,20 @@ Pop an address and push the value at that address onto the stack.
 
 Given an address and a value, store that value at that address.
 
+* 'c@'          ( char-address -- char )
+
+Pop a character address and push the character value at that address onto the
+stack. Note that this access is not checked for being within range of the
+virtual machines memory, but it is still relative to the start address of
+virtual machine memory. This can be used to access memory outside of the
+interpreters memory range, although this access is unsafe.
+
+* 'c!'          ( char char-address -- )
+
+Given a character address, store a character value at that address, like 'c@'
+the address is relative to the virtual machines starting address and it is
+unchecked - so it is also an unsafe operation.
+
 * '-'           ( x y -- z )
 
 Pop two values, subtract 'y' from 'x' and push the result onto the stack.

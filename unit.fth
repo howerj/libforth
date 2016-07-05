@@ -42,8 +42,6 @@ s" Hello, World" nip 13 = test
 
 ( ========================== Better tests ==================================== )
 
-( @todo unit( should store its string so end-unit can print it out )
-
 true variable unit-color-on
 0    variable unit-pass
 0    variable unit-fail
@@ -59,6 +57,9 @@ true variable unit-color-on
 
 : info-color ( -- : set terminal color to for information purposes )
 	yellow unit-colorize ;
+
+: state-color
+	blue unit-colorize ;
 
 : unit-reset-color ( -- : reset color to normal )
 	unit-color-on @ if reset-color then ;
@@ -95,8 +96,11 @@ true variable unit-color-on
 : fill-current-test 
 	current-test 0 fill current-test [char] ) accepter ;
 
-: unit(    " unit:   " fill-current-test current-test type cr ;
-: end-unit " end:    " current-test type cr ;
+( @todo forget everything declared after this test )
+: unit(    ( -- : Mark the beginning of a unit test )   
+	state-color " unit:   " unit-reset-color fill-current-test current-test type cr ;
+: end-unit ( -- : Mark the end of a unit test )
+	state-color " end:    " unit-reset-color current-test type cr ;
 
 :hide  
  unit-pass unit-fail unit-colorize fail-color pass-color info-color 

@@ -1,19 +1,17 @@
-/** @file       libforth.c
- *  @brief      A FORTH library, written in a literate style
- *  @author     Richard James Howe.
- *  @copyright  Copyright 2015,2016 Richard James Howe.
- *  @license    MIT (see https://opensource.org/licenses/MIT)
- *  @email      howe.r.j.89@gmail.com
- *  @todo Add file access functions
- *  @todo Add in as many checks as possible, such as checks to make sure the
- *  dictionary pointer does not cross into the stack space.
- *  @todo Throw exception when word not found or on divide by zero
- *  @todo Make the C API more compatible with Forth words by accepting a
- *  length as well as a pointer to a string.
- *  @todo cxxforth (see https://github.com/kristopherjohnson/cxxforth) uses
- *  a preprocessor to turn a literate C++ file into markdown, this project
- *  should do the same.
- *  @todo Operations should check stack depth
+/**@file       libforth.c
+ * @brief      A FORTH library, written in a literate style
+ * @author     Richard James Howe.
+ * @copyright  Copyright 2015,2016 Richard James Howe.
+ * @license    MIT (see https://opensource.org/licenses/MIT)
+ * @email      howe.r.j.89@gmail.com
+ * @todo Add file access functions
+ * @todo Add in as many checks as possible, such as checks to make sure the
+ * dictionary pointer does not cross into the stack space.
+ * @todo Make the C API more compatible with Forth words by accepting a
+ * length as well as a pointer to a string.
+ * @todo cxxforth (see https://github.com/kristopherjohnson/cxxforth) uses
+ * a preprocessor to turn a literate C++ file into markdown, this project
+ * should do the same.
  *
  * The MIT License (MIT)
  *
@@ -212,7 +210,7 @@
  *                 encountered, but compiling words are compiled into the
  *                 dictionary.
  *  Primitive      - A word whose instruction is built into the VM.
- * */
+ **/
 
 /* ============================ Section 1 ================================== */
 /*                     Headers and configurations macros                     */
@@ -251,10 +249,18 @@
  * are out of the way visually when reading the code).
  * @param c expression to bounds check */
 #define ck(c) check_bounds(o, c, __LINE__)
+
+/**@brief This is a wrapper around check_depth, to make checking the depth
+ * short and simple.
+ * @param depth */
+#define cd(depth) check_depth(o, S, depth)
 #else
 /**@brief This removes the bounds check and debugging code
  * @param c do nothing */
 #define ck(c) (c)
+/**@brief This is a wrapper around check_depth
+ * @param depth do nothing */
+#define cd(depth) ((void)depth)
 #endif
 
 #define DEFAULT_CORE_SIZE   (32 * 1024) /**< default VM size */
@@ -315,8 +321,7 @@
  *
  * See:
  * - https://stackoverflow.com/questions/2100331/c-macro-definition-to-determine-big-endian-or-little-endian-machine
- * - https://en.wikipedia.org/wiki/Endianness
- */
+ * - https://en.wikipedia.org/wiki/Endianness */
 #define IS_BIG_ENDIAN       (!(union { uint16_t u16; unsigned char c; }){ .u16 = 1 }.c)
 
 /**@brief When designing a binary format, which this interpreter uses and
@@ -361,7 +366,7 @@
  *   |   |   |-Yes:                                                  |
  *   |   |   | \-Execute the word >--------->----------------->----->.
  *   |   |   \-No:                                                   |
- *   |   |     \-Compile the word into the dictionary -------->----->.
+ *   |   |     \-Compile the word into the dictionary >------->----->.
  *   |   \-No:                                                       |
  *   |     \-Execute the word >------------->----------------->----->.
  *   \-No:                                                           ^
@@ -404,9 +409,7 @@
  *  allot     - allocate space in the dictionary
  *  bl        - push the space character to the stack
  *  space     - print a space
- *  .         - print out current top of stack, followed by a space
- *
- * */
+ *  .         - print out current top of stack, followed by a space **/
 static const char *initial_forth_program = "                       \n\
 : here h @ ;                                                       \n\
 : [ immediate 0 state ! ;                                          \n\
@@ -433,6 +436,14 @@ static const char *initial_forth_program = "                       \n\
 /**@brief This is a string used in number to string conversion in
  * number_printer, which is dependent on the current base*/
 static const char conv[] = "0123456789abcdefghijklmnopqrstuvwxzy";
+
+/**@brief The following are different reactions errors can take */
+enum errors
+{
+	OK,          /**< no error, do nothing */
+	FATAL,       /**< fatal error, this invalidates the Forth image */
+	RECOVERABLE, /**< recoverable error, this will reset the interpreter */
+};
 
 /**@brief An enumeration describing a save Forth images header
  *
@@ -530,7 +541,11 @@ struct forth { /**< FORTH environment, values marked '~~' are serialized in orde
 	forth_cell_t core_size;  /**< ~~ size of VM (converted to uint64_t for serialization) */
 	jmp_buf *on_error;   /**< place to jump to on error */
 	uint8_t *s;          /**< convenience pointer for string input buffer */
+	char hex_fmt[16];    /**< calculated hex format */
+	char word_fmt[16];   /**< calculated word format */
 	forth_cell_t *S;     /**< stack pointer */
+	forth_cell_t *vstart;/**< index into m[] where the variable stack starts*/
+	forth_cell_t *vend;  /**< index into m[] where the variable stack ends*/
 	forth_cell_t m[];    /**< ~~ Forth Virtual Machine memory */
 };
 
@@ -596,8 +611,8 @@ enum registers {          /**< virtual machine registers */
  *  interpreter defaults to being as silent as possible.
  */
 enum input_stream {
-	FILE_IN,
-	STRING_IN = -1
+	FILE_IN,       /**< file input; this could be interactive input */
+	STRING_IN = -1 /**< string input */
 };
 
 /**@brief Instead of using numbers to refer to registers, it is better to refer to
@@ -645,38 +660,37 @@ DEPTH,CLOCK,EVALUATOR,SYSTEM,LAST };
  *
  * LAST is not an instruction, but only a marker of the last enumeration used
  * in "enum instructions", so it does not get a name. */
-static const char *instruction_names[] = { "read","@","!","c@","c!","-","+","and","or",
-"xor","invert","lshift","rshift","*","/","u<","u>","exit","_emit","key","r>",
+static const char *instruction_names[] = { "read","@","!","c@","c!","-","+","and",
+"or","xor","invert","lshift","rshift","*","/","u<","u>","exit","_emit","key","r>",
 ">r","branch","?branch", "pnum","'", ",","=", "swap","dup","drop", "over", "tail",
 "bsave","bload", "find", "print","depth","clock","evaluator","system", NULL };
 
 /* ============================ Section 3 ================================== */
 /*                  Helping Functions For The Compiler                       */
 
-/** @brief  get a char from string input or a file
- *  @param  o   forth image containing information about current input stream
- *  @return int same value as fgetc or getchar
+/**@brief  get a char from string input or a file
+ * @param  o   forth image containing information about current input stream
+ * @return int same value as fgetc or getchar
  *
- *  This Forth interpreter only has a few mechanisms for I/O, one of these is
- *  to fetch an individual character of input from either a string or a file
- *  which can be set either with knowledge of the implementation from within
- *  the virtual machine, or via the API presented to the programmer. The C
- *  functions "forth_init", "forth_set_file_input" and
- *  "forth_set_string_input" set up and manipulate the input of the
- *  interpreter. These functions act on the following registers:
+ * This Forth interpreter only has a few mechanisms for I/O, one of these is
+ * to fetch an individual character of input from either a string or a file
+ * which can be set either with knowledge of the implementation from within
+ * the virtual machine, or via the API presented to the programmer. The C
+ * functions "forth_init", "forth_set_file_input" and
+ * "forth_set_string_input" set up and manipulate the input of the
+ * interpreter. These functions act on the following registers:
  *
- *  SOURCE_ID - The current input source (SIN or FIN)
- *  SIN       - String INput
- *  SIDX      - String InDeX
- *  SLEN      - String LENgth
- *  FIN       - File   INput
+ * SOURCE_ID - The current input source (SIN or FIN)
+ * SIN       - String INput
+ * SIDX      - String InDeX
+ * SLEN      - String LENgth
+ * FIN       - File   INput
  *
- *  Note that either SIN or FIN might not both be valid, one will be but the
- *  other might not, this makes manipulating these values hazardous. The input
- *  functions "forth_get_char" and "forth_get_word" both take their input
- *  streams implicitly via the registers contained within the Forth execution
- *  environment passed in to those functions.
- */
+ * Note that either SIN or FIN might not both be valid, one will be but the
+ * other might not, this makes manipulating these values hazardous. The input
+ * functions "forth_get_char" and "forth_get_word" both take their input
+ * streams implicitly via the registers contained within the Forth execution
+ * environment passed in to those functions.*/
 static int forth_get_char(forth_t *o)
 {
 	switch(o->m[SOURCE_ID]) {
@@ -698,12 +712,10 @@ static int forth_get_char(forth_t *o)
 static int forth_get_word(forth_t *o, uint8_t *p)
 {
 	int n = 0;
-	char fmt[16] = { 0 };
-	sprintf(fmt, "%%%ds%%n", MAXIMUM_WORD_LENGTH - 1);
 	switch(o->m[SOURCE_ID]) {
-	case FILE_IN:   return fscanf((FILE*)(o->m[FIN]), fmt, p, &n);
+	case FILE_IN:   return fscanf((FILE*)(o->m[FIN]), o->word_fmt, p, &n);
 	case STRING_IN:
-		if(sscanf((char *)&(((char*)(o->m[SIN]))[o->m[SIDX]]), fmt, p, &n) < 0)
+		if(sscanf((char *)&(((char*)(o->m[SIN]))[o->m[SIDX]]), o->word_fmt, p, &n) < 0)
 			return EOF;
 		return o->m[SIDX] += n, n;
 	default:       return EOF;
@@ -856,8 +868,7 @@ static int numberify(int base, forth_cell_t *n, const char *s)
  *
  *  This comparison function, istrcmp, is only used in one place however, in
  *  the C function "forth_find", replacing it with "strcmp" will bring back the
- *  more logical, case sensitive, behavior.
- */
+ *  more logical, case sensitive, behavior. */
 static int istrcmp(const uint8_t *a, const uint8_t *b)
 {
 	for(; ((*a == *b) || (tolower(*a) == tolower(*b))) && *a && *b; a++, b++)
@@ -911,6 +922,8 @@ static int print_cell(forth_t *o, forth_cell_t f)
 	unsigned base = o->m[BASE];
 	if(base == 10 || base == 0)
 		return fprintf((FILE*)(o->m[FOUT]), "%"PRIdCell, f);
+	if(base == 16)
+		return fprintf((FILE*)(o->m[FOUT]), o->hex_fmt, f);
 	if(base == 1 || base > 36)
 		return -1;
 	return print_unsigned_number(f, base, (FILE*)(o->m[FOUT]));
@@ -965,7 +978,7 @@ int forth_define_constant(forth_t *o, const char *name, forth_cell_t c)
  *  "forth_make_default" default is called by "forth_init" and
  *  "forth_load_core", it is a routine which deals that sets up registers for
  *  the virtual machines memory, and especially with values that may only be
- *  valid for a limited period (such as pointers to stdin).*/
+ *  valid for a limited period (such as pointers to stdin). */
 static void forth_make_default(forth_t *o, size_t size, FILE *in, FILE *out)
 {
 	o->core_size     = size;
@@ -982,7 +995,11 @@ static void forth_make_default(forth_t *o, size_t size, FILE *in, FILE *out)
 	o->m[START_TIME] = (1000 * clock()) / CLOCKS_PER_SEC;
 	o->m[ARGC] = o->m[ARGV] = 0;
 	o->S             = o->m + size - (2 * o->m[STACK_SIZE]); /* set up variable stk pointer */
+	o->vstart        = o->m + size - (2 * o->m[STACK_SIZE]);
+	o->vend          = o->vstart + o->m[STACK_SIZE];
 	o->on_error      = calloc(sizeof(jmp_buf), 1);
+	sprintf(o->hex_fmt, "0x%%0%d"PRIxCell, (int)sizeof(forth_cell_t)*2);
+	sprintf(o->word_fmt, "%%%ds%%n", MAXIMUM_WORD_LENGTH - 1);
 	forth_set_file_input(o, in);  /* set up input after our eval */
 }
 
@@ -1000,8 +1017,7 @@ static void make_header(uint8_t *dst)
  * environment we can start executing Forth in, it does the usual task of
  * allocating memory for the object to be returned, but it also does has the
  * task of getting the object into a runnable state so we can pass it to
- * "forth_run" and do useful work.
- */
+ * "forth_run" and do useful work. */
 forth_t *forth_init(size_t size, FILE *in, FILE *out)
 {
 	assert(in && out);
@@ -1101,8 +1117,7 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out)
 	*
 	* The MISC field here contains the COMPILE instructions, which will
 	* compile a pointer to the VM-INSTRUCTION, as well as the other fields
-	* it usually contains.
-	 */
+	* it usually contains. */
 	for(i = 0, w = READ; instruction_names[i]; i++) {
 		compile(o, COMPILE, instruction_names[i]);
 		m[m[DIC]++] = w++; /*This adds the actual VM instruction */
@@ -1239,7 +1254,7 @@ forth_cell_t forth_pop(forth_t *o)
 forth_cell_t forth_stack_position(forth_t *o)
 {
 	assert(o);
-	return o->S - (o->m + o->core_size - (2 * o->m[STACK_SIZE]));
+	return o->S - o->vstart;
 }
 
 static void debug(forth_t *o, forth_cell_t f, unsigned line)
@@ -1259,9 +1274,22 @@ static forth_cell_t check_bounds(forth_t *o, forth_cell_t f, unsigned line)
 		debug(o, f, line);
 	if(((forth_cell_t)f) >= o->core_size) {
 		fprintf(stderr, "( fatal \"bounds check failed: %" PRIdCell " >= %zu\" )\n", f, (size_t)o->core_size);
-		longjmp(*o->on_error, 1);
+		longjmp(*o->on_error, FATAL);
 	}
 	return f;
+}
+
+/* "check_depth" is used to check that there are enough values on the stack
+ * before an operation takes place. It is wrapped up in the "cd" macro. */
+static void check_depth(forth_t *o, forth_cell_t *S, forth_cell_t expected)
+{
+	if((uintptr_t)(S - o->vstart) < expected) {
+		fprintf(stderr, "( error \"stack underflow\" )\n");
+		longjmp(*o->on_error, RECOVERABLE);
+	} else if(S > o->vend) {
+		fprintf(stderr, "( error \"stack overflow\" )\n");
+		longjmp(*o->on_error, RECOVERABLE);
+	}
 }
 
 /* ============================ Section 5 ================================== */
@@ -1271,18 +1299,16 @@ static forth_cell_t check_bounds(forth_t *o, forth_cell_t f, unsigned line)
  * machine, everything else in this file is just fluff and support for this
  * function. This is the Forth virtual machine, it implements a threaded
  * code interpreter (see https://en.wikipedia.org/wiki/Threaded_code, and
- * https://www.complang.tuwien.ac.at/forth/threaded-code.html).
- *
- */
+ * https://www.complang.tuwien.ac.at/forth/threaded-code.html). */
 int forth_run(forth_t *o)
 {
 	assert(o);
 	if(o->m[INVALID]) {
-		fprintf(stderr, "error: refusing to run an invalid forth\n");
+		fprintf(stderr, "fatal: refusing to run an invalid forth\n");
 		return -1;
 	}
 
-	if(o->m[INVALID] || setjmp(*o->on_error))
+	if (setjmp(*o->on_error) == FATAL || o->m[INVALID])
 		return -(o->m[INVALID] = 1);
 	
 	forth_cell_t *m = o->m, pc, *S = o->S, I = o->m[INSTRUCTION], f = o->m[TOP], w;
@@ -1417,20 +1443,22 @@ int forth_run(forth_t *o)
 	*
 	* Imagine we have just typed in "sum-of-products" with "3 4" on the
 	* variable stack. Our "pc" register is now pointing the "RUN" field of
-	* sum of products.
+	* sum of products, the virtual machine will next execute the "RUN"
+	* instruction, saving the instruction pointer to the return stack for
+	* when we finally exit "sum-of-products" back to the interpreter. 
 	*
 	* @todo Continue explanation */
 
-	for(;(pc = m[ck(I++)]);) {
+	for(;(pc = m[ck(I++)]);) { 
 	INNER:  assert((S > m) && (S < (m + o->core_size)));
-		switch (w = instruction(m[ck(pc++)])) {
+		switch (w = instruction(m[ck(pc++)])) { 
 
 		/*When explaining words with example Forth code the
 		* instructions enumeration will not be used (such as ADD or
 		* SUB), but its name will be used instead (such as '+' or '-) */
 
 		case PUSH:    *++S = f;     f = m[ck(I++)];          break;
-		case COMPILE: m[ck(m[DIC]++)] = pc;                  break; /* this needs to be moved into READ */
+		case COMPILE: m[ck(m[DIC]++)] = pc;                  break; 
 		case RUN:     m[ck(++m[RSTK])] = I; I = pc;          break;
 		case DEFINE:
 			/*DEFINE backs the Forth word ':', which is an
@@ -1531,8 +1559,7 @@ int forth_run(forth_t *o)
 			* such there is a driver for the interpreter
 			* which must be made and initialized in
 			* "forth_init", a simple word that calls READ in
-			* a loop (actually tail recursively).
-			 */
+			* a loop (actually tail recursively). */
 			if(forth_get_word(o, o->s) < 0)
 				goto end;
 			if ((w = forth_find(o, (char*)o->s)) > 1) {
@@ -1542,6 +1569,7 @@ int forth_run(forth_t *o)
 				goto INNER;
 			} else if(!numberify(o->m[BASE], &w, (char*)o->s)) {
 				fprintf(stderr, "( error \"%s is not a word\" )\n", o->s);
+				longjmp(*o->on_error, RECOVERABLE);
 				break;
 			}
 			if (m[STATE]) { /* must be a number then */
@@ -1561,43 +1589,46 @@ int forth_run(forth_t *o)
 		* circumstances some of the can be used is a different matter,
 		* the COMMA and TAIL word will require some explaining, but
 		* ADD, SUB and DIV will not. */
-		case LOAD:    f = m[ck(f)];                          break;
-		case STORE:   m[ck(f)] = *S--; f = *S--;             break;
-		/**@warning CLOAD and CSTORE are unsafe */
-		case CLOAD:   f = *(((char*)m) + f);                 break;
-		case CSTORE:  ((char*)m)[f] = *S--; f = *S--;        break;
-		case SUB:     f = *S-- - f;                          break;
-		case ADD:     f = *S-- + f;                          break;
-		case AND:     f = *S-- & f;                          break;
-		case OR:      f = *S-- | f;                          break;
-		case XOR:     f = *S-- ^ f;                          break;
-		case INV:     f = ~f;                                break;
-		case SHL:     f = *S-- << f;                         break;
-		case SHR:     f = (forth_cell_t)*S-- >> f;           break;
-		case MUL:     f = *S-- * f;                          break;
+		case LOAD:    cd(1); f = m[ck(f)];                   break;
+		case STORE:   cd(2); m[ck(f)] = *S--; f = *S--;      break;
+		/**@warning CLOAD and CSTORE are unsafe - by design! */
+		case CLOAD:   cd(1); f = *(((char*)m) + f);          break;
+		case CSTORE:  cd(2); ((char*)m)[f] = *S--; f = *S--; break;
+		case SUB:     cd(2); f = *S-- - f;                   break;
+		case ADD:     cd(2); f = *S-- + f;                   break;
+		case AND:     cd(2); f = *S-- & f;                   break;
+		case OR:      cd(2); f = *S-- | f;                   break;
+		case XOR:     cd(2); f = *S-- ^ f;                   break;
+		case INV:     cd(1); f = ~f;                         break;
+		case SHL:     cd(2); f = *S-- << f;                  break;
+		case SHR:     cd(2); f = (forth_cell_t)*S-- >> f;    break;
+		case MUL:     cd(2); f = *S-- * f;                   break;
 		case DIV:
-			if(f)
+			cd(2);
+			if(f) {
 				f = *S-- / f;
-			else /** @todo should throw exception */
-				fputs("( error \"x/0\" )\n", stderr);
+			} else {
+				fputs("( error \" divide by zero\" )\n", stderr);
+				longjmp(*o->on_error, RECOVERABLE);
+			} 
 			break;
-		case LESS:    f = *S-- < f;                          break;
-		case MORE:    f = *S-- > f;                          break;
+		case LESS:    cd(2); f = *S-- < f;                   break;
+		case MORE:    cd(2); f = *S-- > f;                   break;
 		case EXIT:    I = m[ck(m[RSTK]--)];                  break;
-		case EMIT:    f = fputc(f, (FILE*)(o->m[FOUT]));     break;
+		case EMIT:    cd(1); f = fputc(f, (FILE*)(o->m[FOUT])); break;
 		case KEY:     *++S = f; f = forth_get_char(o);       break;
 		case FROMR:   *++S = f; f = m[ck(m[RSTK]--)];        break;
-		case TOR:     m[ck(++m[RSTK])] = f; f = *S--;        break;
+		case TOR:     cd(1); m[ck(++m[RSTK])] = f; f = *S--; break;
 		case BRANCH:  I += m[ck(I)];                         break;
-		case QBRANCH: I += f == 0 ? m[I] : 1; f = *S--;      break;
-		case PNUM:    f = print_cell(o, f);                  break;
+		case QBRANCH: cd(1); I += f == 0 ? m[I] : 1; f = *S--; break;
+		case PNUM:    cd(1); f = print_cell(o, f);           break;
 		case QUOTE:   *++S = f;     f = m[ck(I++)];          break;
-		case COMMA:   m[ck(m[DIC]++)] = f; f = *S--;         break;
-		case EQUAL:   f = *S-- == f;                         break;
-		case SWAP:    w = f;  f = *S--;   *++S = w;          break;
-		case DUP:     *++S = f;                              break;
-		case DROP:    f = *S--;                              break;
-		case OVER:    w = *S; *++S = f; f = w;               break;
+		case COMMA:   cd(1); m[ck(m[DIC]++)] = f; f = *S--;  break;
+		case EQUAL:   cd(2); f = *S-- == f;                  break;
+		case SWAP:    cd(2); w = f;  f = *S--;   *++S = w;   break;
+		case DUP:     cd(1); *++S = f;                       break;
+		case DROP:    cd(1); f = *S--;                       break;
+		case OVER:    cd(2); w = *S; *++S = f; f = w;        break;
 		/*TAIL is a crude method of doing tail recursion, it should
 		* not be used generally but is quite useful at startup, there
 		* are a number of limitations when using it in word
@@ -1632,9 +1663,11 @@ int forth_run(forth_t *o)
 		* that it is easy to add block functionality to the Forth
 		* interpreter. */
 		case BSAVE:
+			cd(2);
 			f = blockio(o, *S--, f, 'w');
 			break;
 		case BLOAD:
+			cd(2);
 			f = blockio(o, *S--, f, 'r');
 			break;
 		/*FIND is a natural factor of READ, we add it to the Forth
@@ -1663,6 +1696,7 @@ int forth_run(forth_t *o)
 		* NUL terminate strings in Forth code even if they are stored
 		* with their length */
 		case PRINT:
+			cd(1);
 			fputs(((char*)m)+f, (FILE*)(o->m[FOUT]));
 			f = *S--;
 			break;
@@ -1673,7 +1707,7 @@ int forth_run(forth_t *o)
 		 * Forth words such as ".s" - which prints out all the items on
 		 * the stack. */
 		case DEPTH:
-			w = S - (m + o->core_size - (2 * o->m[STACK_SIZE]));
+			w = S - o->vstart;
 			*++S = f;
 			f = w;
 			break;
@@ -1695,6 +1729,7 @@ int forth_run(forth_t *o)
 			forth_cell_t sin    = o->m[SIN],  sidx = o->m[SIDX],
 				slen   = o->m[SLEN], fin  = o->m[FIN],
 				source = o->m[SOURCE_ID], r = m[RSTK];
+			cd(1);
 			w = f;
 			f = *S--;
 			/* save the stack variables */
@@ -1718,21 +1753,22 @@ int forth_run(forth_t *o)
 		break;
 		/**@todo system should accept a forth string */
 		case SYSTEM:
+			cd(1);
 			f = system(((char*)m) + f);
 		break;
 		/*This should never happen, and if it does it is an indication
-		* that virtual machine memory has been corrupted somehow */
+		 *that virtual machine memory has been corrupted somehow */
 		default:
 			fprintf(stderr, "( fatal 'illegal-op %" PRIdCell " )\n", w);
-			longjmp(*o->on_error, 1);
+			longjmp(*o->on_error, FATAL);
 		}
 	}
 	/*We must save the stack pointer and the top of stack when we exit the
-	* interpreter so the C functions like "forth_pop" work correctly. If the
-	* forth_t object has been invalidated (because something when very
-	* wrong), we do not have to jump to "end" as functions like
-	* "forth_pop" should not be called on the invalidated object any
-	* longer. */
+	 * interpreter so the C functions like "forth_pop" work correctly. If the
+	 * forth_t object has been invalidated (because something when very
+	 * wrong), we do not have to jump to "end" as functions like
+	 * "forth_pop" should not be called on the invalidated object any
+	 * longer. */
 end:	o->S = S;
 	o->m[TOP] = f;
 	return 0;
@@ -1863,7 +1899,7 @@ int main_forth(int argc, char **argv)
 			if(i >= (argc - 1))
 				goto fail;
 			if(!(o = o ? o : forth_init(core_size, stdin, stdout))) {
-				fprintf(stderr, "error: initialization failed\n");
+				fprintf(stderr, "fatal: initialization failed\n");
 				return -1;
 			}
 			if(forth_eval(o, argv[++i]) < 0)
@@ -1881,7 +1917,7 @@ int main_forth(int argc, char **argv)
 			if(o || (i >= argc - 1) || !numberify(10, &core_size, argv[++i]))
 				goto fail;
 			if((core_size *= kbpc) < MINIMUM_CORE_SIZE) {
-				fprintf(stderr, "error: -m too small (minimum %zu)\n", MINIMUM_CORE_SIZE / kbpc);
+				fprintf(stderr, "fatal: -m too small (minimum %zu)\n", MINIMUM_CORE_SIZE / kbpc);
 				return -1;
 			}
 			mset = 1;
@@ -1890,21 +1926,21 @@ int main_forth(int argc, char **argv)
 			if(o || mset || (i >= argc - 1))
 				goto fail;
 			if(!(o = forth_load_core(dump = fopen_or_die(argv[++i], "rb")))) {
-				fprintf(stderr, "error: %s: core load failed\n", argv[i]);
+				fprintf(stderr, "fatal: %s: core load failed\n", argv[i]);
 				return -1;
 			}
 			fclose(dump);
 			break;
 		default:
 		fail:
-			fprintf(stderr, "error: invalid arguments\n");
+			fprintf(stderr, "fatal: invalid arguments\n");
 			usage(argv[0]);
 			return -1;
 		}
 done:
 	readterm = (!eval && i == argc) || readterm; /* if no files are given, read stdin */
 	if(!o && !(o = forth_init(core_size, stdin, stdout))) {
-		fprintf(stderr, "error: forth initialization failed\n");
+		fprintf(stderr, "fatal: forth initialization failed\n");
 		return -1;
 	}
 	forth_set_args(o, argc, argv);
@@ -1933,11 +1969,11 @@ end:
 	 * valid previously saved state with invalid data. */
 	if(save) { /* save core file */
 		if(rval || o->m[INVALID]) {
-			fprintf(stderr, "error: refusing to save invalid core\n");
+			fprintf(stderr, "fatal: refusing to save invalid core\n");
 			return -1;
 		}
 		if(forth_save_core(o, dump = fopen_or_die(dump_name, "wb"))) {
-			fprintf(stderr, "error: core file save to '%s' failed\n", dump_name);
+			fprintf(stderr, "fatal: core file save to '%s' failed\n", dump_name);
 			rval = -1;
 		}
 		fclose(dump);
