@@ -1,5 +1,7 @@
 #!./forth 
 
+( @todo These tests fail to run on a 32-bit platform, if "unit(" is used )
+
 ( Forth Unit Tests
 This fill contains the tests for words and functionality defined in
 forth.fth. The mechanism to test whether the tests have tested would
@@ -104,7 +106,7 @@ true variable unit-color-on
 
 :hide  
  unit-pass unit-fail unit-colorize fail-color pass-color info-color 
- unit-reset-color current-test pass-fail print-ratio fill-current-test
+ unit-reset-color pass-fail print-ratio fill-current-test current-test
 ;hide
 
 ( ========================== Better tests ==================================== )
@@ -117,9 +119,10 @@ true variable unit-color-on
 ( so far we have assumed that most of the basic words work anyway, but there is
 no harm in adding tests here, they can always be moved around if there any problems
 in terms of dependencies )
-unit( Basic Words ) 
 
-s" 1 " test
+\ unit( Basic Words ) 
+
+s" 1 " test 
 s" 0 not " test
 
 s" char a 97 = " test ( assumes ASCII is used )
@@ -154,12 +157,12 @@ s" 3 2 4 within " test
 s" 2 2 4 within " test
 s" 4 2 4 within not " test
 
-end-unit
+\ end-unit
 ( ========================== Basic Words ===================================== )
 
 ( ========================== Jump Tables ===================================== )
 
-unit( Jump tables ) 
+\ unit( Jump tables ) 
 marker cleanup
 : j1 1 ;
 : j2 2 ;
@@ -175,21 +178,21 @@ s" 3 jump j4 = " test
 s" 4 jump j4 = " test ( check limit )
 
 cleanup
-end-unit
+\ end-unit
 
 ( ========================== Jump Tables ===================================== )
 
 ( ========================== Move Words ====================================== )
-unit( Move words )
+\ unit( Move words )
 marker cleanup
 128 constant len
 len char-table t1
 len char-table t2
 t1 2chars erase
-t1 accept 	accept test passed
 t1 type cr
 ( @todo implement these tests )
 cleanup
-end-unit
+\ end-unit
 ( ========================== Move Words ====================================== )
 summary
+

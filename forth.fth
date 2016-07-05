@@ -56,6 +56,9 @@ TODO
 	* escaped strings
 	* ideally all of the functionality of main_forth would be
 	moved into this file
+	* most of the file access functions can now be implemented in terms
+	of the built in set of functions, such as "INCLUDE-FILE" or "READ-LINE".
+	The block I/O functions can also be implemented this way.
 	* fill move and the like are technically not compliant as
 	they do not test if the number is negative, however that would
 	unnecessarily limit the range of operation
@@ -627,9 +630,10 @@ hider delim
 	0 do dup c@ emit 1+ loop drop ;
 
 : do-string ( char -- )
-	state @ if write-string swap [literal] [literal] ' type , else print-string then ;
+	write-string state @ if swap [literal] [literal] then ;
 
-: c" immediate [char] " write-string ;
+: c" immediate 
+	[char] " do-string ;
 
 : fill ( c-addr u char -- )
 	( fill in an area of memory with a character, only if u is greater than zero )
@@ -642,9 +646,11 @@ hider delim
 	sbuf 0 fill sbuf [char] " accepter sbuf drop swap ;
 hider sbuf
 
-: "  immediate [char] " do-string ;
-: .( immediate [char] ) do-string ;
-: ." immediate [char] " do-string ;
+: type, ' type , ;
+: "  immediate [char] " do-string type, ;
+: .( immediate [char] ) do-string type, ;
+: ." immediate [char] " do-string type, ;
+hider type,
 
 : ok " ok" cr ;
 
@@ -1324,6 +1330,40 @@ For resources on Forth:
 " cr
 ;
 
+
+( ==================== Files ================================== )
+
+( @todo implement the other file access methods in terms of the
+  built in ones [see http://forth.sourceforge.net/std/dpans/dpans11.htm]
+
+	FILE-SIZE    [ use file-positions ]
+	INCLUDE-FILE 
+	INCLUDED
+	READ-LINE
+	WRITE-LINE
+	FILE-STATUS
+
+  Also of note:	
+  * Source ID needs extending.
+  * The file access methods should take up only one cell, they currently
+  use a string and take up two cells. )
+
+: w/o c" wb" ;
+: r/w c" r+b" ;
+: r/o c" rb" ;
+
+: resize-file  ( ud fileid -- ior : attempt to resize a file )
+	( There is no portable way to truncate a file :C )
+	2drop -1 ( -1 to indicate failure ) ;
+
+: bin ( fam1 -- fam2 : modify a file access method to be binary not line oriented ) 
+	( Do nothing, all file access methods are binary, although of note
+	the already opened files stdin, stdout and stderr are opened in text
+	mode on Windows platforms. )
+	;
+
+( ==================== Files ================================== )
+
 ( ==================== Blocks ================================= )
 
 ( @todo process invalid blocks [anything greater or equal to 0xFFFF] )
@@ -1501,8 +1541,6 @@ OTHER DEALINGS IN THE SOFTWARE.
  `stdout `stderr `argc `argv `debug `invalid `top `instruction
  `stack-size `start-time
 ;hide
-
-
 
 ( Heres an interesting piece of code from
   http://c2.com/cgi/wiki?ForthSimplicity

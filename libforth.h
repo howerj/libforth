@@ -15,7 +15,7 @@ extern "C" {
 
 /**@brief This is the absolute minimum size the Forth virtual machine can be in
  * Forth cells, not bytes. */
-#define MINIMUM_CORE_SIZE (1024)
+#define MINIMUM_CORE_SIZE (2048)
 
 struct forth; /**< An opaque object that holds a running FORTH environment**/
 typedef struct forth forth_t;

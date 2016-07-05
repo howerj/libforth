@@ -636,6 +636,59 @@ This word is a primitive used to implement 'evaluate'. It takes a pointer to a
 string to be evaluated as if it had been typed in. It pushes a status code,
 zero on success, anything else on failure of some sort.
 
+* 'system'      ( c-addr u -- status )
+
+Execute a command with the systems command interpreter.
+
+##### File Access Words
+
+The following compiling words are part of the File Access Word set, a few of
+the fields need explaining in the stack comments. "fileid" refers to a
+previously opened file as returned by "open-file", "ior" refers to a return
+status provided by the file operations. "fam" is a file access method, 
+
+* 'close-file'  ( fileid -- ior )
+
+Close an already opened file.
+
+* 'open-file'   ( c-addr u fam -- fileid ior )
+
+Open a file, given a Forth string (the 'c-addr' and the 'u' arguments), and a
+file access method, which is defined within "forth.fth". Possible file access
+methods are "w/o", "r/w" and "r/o" for read only, read-write and write only
+respectively.
+
+* 'delete-file' ( c-addr u -- ior )
+
+Delete a file on the file system given a Forth string.
+
+* 'read-file'   ( c-addr u fileid -- ior )
+
+Read in 'u' characters into 'c-addr' given a file identifier.
+
+* 'write-file'  ( c-addr u fileid -- ior )
+
+Write 'u' characters from 'c-addr' to a given file identifier.
+
+* 'file-position'   ( fileid -- ud ior )
+
+Get the file position offset from the beginning of the file given a file
+identifier.
+
+* 'reposition-file' ( ud fileid -- ior )
+
+Reposition a files offset relative to the beginning of the file given a file
+identifier.
+
+* flush-file ( fileid -- ior )
+
+Attempt to flush any buffered information written to a file.
+
+* rename-file ( c-addr1 u1 c-addr2 u2 -- ior )
+
+Rename a file on the file system named by the first string ('c-addr1' and 'u1')
+to the second string ('c-addr2' and 'u2').
+
 ### Defined words
 
 Defined words are ones which have been created with the ':' word, some words

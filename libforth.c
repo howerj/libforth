@@ -4,14 +4,16 @@
  * @copyright  Copyright 2015,2016 Richard James Howe.
  * @license    MIT (see https://opensource.org/licenses/MIT)
  * @email      howe.r.j.89@gmail.com
- * @todo Add file access functions
  * @todo Add in as many checks as possible, such as checks to make sure the
  * dictionary pointer does not cross into the stack space.
- * @todo Make the C API more compatible with Forth words by accepting a
- * length as well as a pointer to a string.
  * @todo cxxforth (see https://github.com/kristopherjohnson/cxxforth) uses
  * a preprocessor to turn a literate C++ file into markdown, this project
  * should do the same.
+ * @todo The file access functions need improving, SOURCE-ID needs extending
+ * and some Forth words can be reimplemented in terms of the file access
+ * functions. The file access methods (or 'fam's) should also only take up one
+ * cell in size, they currently take up two.
+ * @todo Add halt on error mode
  *
  * The MIT License (MIT)
  *
@@ -640,7 +642,8 @@ static const char *register_names[] = { "h", "r", "`state", "base", "pwd",
 enum instructions { PUSH,COMPILE,RUN,DEFINE,IMMEDIATE,READ,LOAD,STORE,CLOAD,CSTORE,
 SUB,ADD,AND,OR,XOR,INV,SHL,SHR,MUL,DIV,LESS,MORE,EXIT,EMIT,KEY,FROMR,TOR,BRANCH,
 QBRANCH, PNUM, QUOTE,COMMA,EQUAL,SWAP,DUP,DROP,OVER,TAIL,BSAVE,BLOAD,FIND,PRINT,
-DEPTH,CLOCK,EVALUATOR,SYSTEM,LAST };
+DEPTH,CLOCK,EVALUATOR,SYSTEM,FCLOSE,FOPEN,FDELETE,FREAD,FWRITE,FPOS,FSEEK,FFLUSH,
+FRENAME,LAST };
 
 /**@brief names of all named instructions, with a few exceptions
  *
@@ -663,7 +666,9 @@ DEPTH,CLOCK,EVALUATOR,SYSTEM,LAST };
 static const char *instruction_names[] = { "read","@","!","c@","c!","-","+","and",
 "or","xor","invert","lshift","rshift","*","/","u<","u>","exit","_emit","key","r>",
 ">r","branch","?branch", "pnum","'", ",","=", "swap","dup","drop", "over", "tail",
-"bsave","bload", "find", "print","depth","clock","evaluator","system", NULL };
+"bsave","bload","find","print","depth","clock","evaluator","system","close-file",
+"open-file","delete-file","read-file","write-file","file-position", 
+"reposition-file","flush-file","rename-file", NULL };
 
 /* ============================ Section 3 ================================== */
 /*                  Helping Functions For The Compiler                       */
@@ -882,7 +887,7 @@ static int istrcmp(const uint8_t *a, const uint8_t *b)
  * hidden bit in the MISC field of a word is set. The structure of the
  * dictionary has already been explained, so there should be no surprises in
  * this word. Any improvements to the speed of this word would speed up the
- * interpreter a lot */
+ * interpreter a lot. */
 forth_cell_t forth_find(forth_t *o, const char *s)
 {
 	forth_cell_t *m = o->m, w = m[PWD], len = WORD_LENGTH(m[w+1]);
@@ -1273,7 +1278,7 @@ static forth_cell_t check_bounds(forth_t *o, forth_cell_t f, unsigned line)
 	if(o->m[DEBUG])
 		debug(o, f, line);
 	if(((forth_cell_t)f) >= o->core_size) {
-		fprintf(stderr, "( fatal \"bounds check failed: %" PRIdCell " >= %zu\" )\n", f, (size_t)o->core_size);
+		fprintf(stderr, "( fatal \" bounds check failed: %" PRIdCell " >= %zu\" )\n", f, (size_t)o->core_size);
 		longjmp(*o->on_error, FATAL);
 	}
 	return f;
@@ -1284,12 +1289,37 @@ static forth_cell_t check_bounds(forth_t *o, forth_cell_t f, unsigned line)
 static void check_depth(forth_t *o, forth_cell_t *S, forth_cell_t expected)
 {
 	if((uintptr_t)(S - o->vstart) < expected) {
-		fprintf(stderr, "( error \"stack underflow\" )\n");
+		fprintf(stderr, "( error \" stack underflow\" )\n");
 		longjmp(*o->on_error, RECOVERABLE);
 	} else if(S > o->vend) {
-		fprintf(stderr, "( error \"stack overflow\" )\n");
+		fprintf(stderr, "( error \" stack overflow\" )\n");
 		longjmp(*o->on_error, RECOVERABLE);
 	}
+}
+
+/* This checks that a Forth string is NUL terminated, as required by most C
+ * functions, which should be the last character in string (which is s+end).
+ * There is a bit of a mismatch between Forth strings (which are pointer
+ * to the string and a length) and C strings, which a pointer to the string and
+ * are NUL terminated. This function helps to correct that. */
+static void check_is_asciiz(forth_t *o, char *s, forth_cell_t end)
+{
+	if(*(s + end) != '\0') {
+		fprintf(stderr, "( error \" Not an ASCIIZ string\")\n");
+		longjmp(*o->on_error, RECOVERABLE);
+	}
+}
+
+/* This function gets a string off the Forth stack, checking that the string is
+ * NUL terminated. It is a helper function used when a Forth string has to be
+ * converted to a C string so it can be passed to a C function. */
+static char *get_forth_string(forth_t *o, forth_cell_t **S, forth_cell_t f)
+{
+	forth_cell_t length = f;
+	char *string = ((char*)o->m) + **S;
+	(*S)--;
+	check_is_asciiz(o, string, length);
+	return string;
 }
 
 /* ============================ Section 5 ================================== */
@@ -1568,7 +1598,7 @@ int forth_run(forth_t *o)
 					pc++; /* in command mode, execute word */
 				goto INNER;
 			} else if(!numberify(o->m[BASE], &w, (char*)o->s)) {
-				fprintf(stderr, "( error \"%s is not a word\" )\n", o->s);
+				fprintf(stderr, "( error \" %s is not a word\" )\n", o->s);
 				longjmp(*o->on_error, RECOVERABLE);
 				break;
 			}
@@ -1751,10 +1781,50 @@ int forth_run(forth_t *o)
 			o->m[SOURCE_ID] = source;
 		}
 		break;
-		/**@todo system should accept a forth string */
-		case SYSTEM:
-			cd(1);
-			f = system(((char*)m) + f);
+		case SYSTEM:  cd(2); f = system(get_forth_string(o, &S, f)); break;
+		case FCLOSE:  cd(1); f = fclose((FILE*)f);                   break;
+		case FDELETE: cd(2); f = remove(get_forth_string(o, &S, f)); break;
+		case FPOS:    cd(1); f = ftell((FILE*)f);                    break;
+		case FSEEK:   cd(2); f = fseek((FILE*)f, *S--, SEEK_SET);    break;
+		case FFLUSH:  cd(1); f = fflush((FILE*)f);                   break;
+		case FRENAME:  
+			cd(4); 
+			{
+				char *f1 = get_forth_string(o, &S, f);
+				f = *S--;
+				char *f2 = get_forth_string(o, &S, f);
+				f = rename(f2, f1);
+			}
+			break;
+		case FOPEN: 
+			cd(4);
+			{
+				char *fam = get_forth_string(o, &S, f);
+				f = *S--;
+				char *file = get_forth_string(o, &S, f);
+				f = (forth_cell_t)fopen(file, fam);
+			}
+			break;
+		case FREAD:
+			cd(3);
+			{
+				FILE *file = (FILE*)f;
+				forth_cell_t count = *S--;
+				forth_cell_t offset = *S--;
+				*S++ = fread(((char*)m)+offset, 1, count, file);
+				f = ferror(file);
+			}
+			break;
+		case FWRITE:
+			cd(3);
+			{
+				FILE *file = (FILE*)f;
+				forth_cell_t count = *S--;
+				forth_cell_t offset = *S--;
+				*S++ = fwrite(((char*)m)+offset, 1, count, file);
+				f = ferror(file);
+			}
+			break;
 		break;
 		/*This should never happen, and if it does it is an indication
 		 *that virtual machine memory has been corrupted somehow */

@@ -60,7 +60,8 @@ unit.test: unit
 # A side effect of failing the tests in "unit.fth" is the fact that saving to
 # "forth.core" will fail, making this test fail.
 forth.test: forth unit.test forth.fth unit.fth
-	./$< -s forth.core forth.fth unit.fth
+	./$< -s forth_test.core forth.fth unit.fth
+	${RM} forth_test.core
 
 test: unit.test forth.test
 
