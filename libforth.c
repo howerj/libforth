@@ -551,6 +551,18 @@ struct forth { /**< FORTH environment, values marked '~~' are serialized in orde
 	forth_cell_t m[];    /**< ~~ Forth Virtual Machine memory */
 };
 
+/**@brief actions to take on error, this does not override the behavior of the
+ * virtual machine when it detects an error that cannot be recovered from, only
+ * when it encounters an error such as a divide by zero or a word not being
+ * found, not when the virtual machine executes and invalid instruction (which
+ * should never normally happen unless something has been corrupted). */
+enum actions_on_error
+{
+	ERROR_RECOVER,    /**< recover when an error happens, like a call to ABORT */
+	ERROR_HALT,       /**< halt on error */
+	ERROR_INVALIDATE, /**< halt on error and invalid the Forth interpreter */
+};
+
 /**@brief A list of all the registers placed in the "m" field of "struct forth"
  *
  * There are a number of registers available to the virtual machine, they are
@@ -585,6 +597,7 @@ enum registers {          /**< virtual machine registers */
 	INSTRUCTION = 26, /**< start up instruction */
 	STACK_SIZE  = 27, /**< size of the stacks */
 	START_TIME  = 28, /**< start time in milliseconds */
+	ERROR_HANDLER = 29, /**< actions to take on error */
 };
 
 /** @brief enum input_stream contains the possible value of the SOURCE_ID
@@ -623,7 +636,7 @@ enum input_stream {
 static const char *register_names[] = { "h", "r", "`state", "base", "pwd",
 "`source-id", "`sin", "`sidx", "`slen", "`start-address", "`fin", "`fout", "`stdin",
 "`stdout", "`stderr", "`argc", "`argv", "`debug", "`invalid", "`top", "`instruction",
-"`stack-size", "`start-time", NULL };
+"`stack-size", "`start-time", "`error-handler", NULL };
 
 /** @brief enum for all virtual machine instructions
  *
@@ -1332,14 +1345,36 @@ static char *get_forth_string(forth_t *o, forth_cell_t **S, forth_cell_t f)
  * https://www.complang.tuwien.ac.at/forth/threaded-code.html). */
 int forth_run(forth_t *o)
 {
+	int errorval = 0;
 	assert(o);
 	if(o->m[INVALID]) {
 		fprintf(stderr, "fatal: refusing to run an invalid forth\n");
 		return -1;
 	}
 
-	if (setjmp(*o->on_error) == FATAL || o->m[INVALID])
-		return -(o->m[INVALID] = 1);
+	/* The following code handles errors, if an error occurs, the
+	 * interpreter will jump back to here. */
+	if ((errorval = setjmp(*o->on_error)) || o->m[INVALID]) {
+		/* If the interpreter gets into an invalid state we always
+		 * exit, which */
+		if(o->m[INVALID])
+			return -1;
+		switch(errorval) {
+			default:
+			case FATAL:
+				return -(o->m[INVALID] = 1);
+			/* recoverable errors depend on o->m[ERROR_HANDLER],
+			 * a register which can be set within the running
+			 * virtual machine. */
+			case RECOVERABLE:
+				switch(o->m[ERROR_HANDLER]) {
+				case ERROR_INVALIDATE: o->m[INVALID] = 1;
+				case ERROR_HALT:       return -(o->m[INVALID]);
+				case ERROR_RECOVER:
+						       break;
+				}
+		}
+	}
 	
 	forth_cell_t *m = o->m, pc, *S = o->S, I = o->m[INSTRUCTION], f = o->m[TOP], w;
 
@@ -1504,8 +1539,7 @@ int forth_run(forth_t *o)
 			*  .------.-----.------.-----.----
 			*                               ^
 			*                               |
-			*                             Dictionary Pointer
-			 */
+			*                             Dictionary Pointer */
 			m[STATE] = 1; /* compile mode */
 			if(forth_get_word(o, o->s) < 0)
 				goto end;

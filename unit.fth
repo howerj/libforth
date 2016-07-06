@@ -94,7 +94,7 @@ true variable unit-color-on
 	" passed: " unit-pass @ unit-fail @ print-ratio cr
 	unit-fail @ if " test suite failed" cr invalidate-forth bye then ;
 
-128 char-table current-test
+256 char-table current-test
 : fill-current-test 
 	current-test 0 fill current-test [char] ) accepter ;
 
@@ -106,7 +106,7 @@ true variable unit-color-on
 
 :hide  
  unit-pass unit-fail unit-colorize fail-color pass-color info-color 
- unit-reset-color pass-fail print-ratio fill-current-test current-test
+ unit-reset-color pass-fail print-ratio 
 ;hide
 
 ( ========================== Better tests ==================================== )
@@ -120,7 +120,7 @@ true variable unit-color-on
 no harm in adding tests here, they can always be moved around if there any problems
 in terms of dependencies )
 
-\ unit( Basic Words ) 
+unit( Basic Words ) 
 
 s" 1 " test 
 s" 0 not " test
@@ -157,12 +157,12 @@ s" 3 2 4 within " test
 s" 2 2 4 within " test
 s" 4 2 4 within not " test
 
-\ end-unit
+end-unit
 ( ========================== Basic Words ===================================== )
 
 ( ========================== Jump Tables ===================================== )
 
-\ unit( Jump tables ) 
+unit( Jump tables ) 
 marker cleanup
 : j1 1 ;
 : j2 2 ;
@@ -178,12 +178,12 @@ s" 3 jump j4 = " test
 s" 4 jump j4 = " test ( check limit )
 
 cleanup
-\ end-unit
+end-unit
 
 ( ========================== Jump Tables ===================================== )
 
 ( ========================== Move Words ====================================== )
-\ unit( Move words )
+unit( Move words )
 marker cleanup
 128 constant len
 len char-table t1
@@ -192,7 +192,7 @@ t1 2chars erase
 t1 type cr
 ( @todo implement these tests )
 cleanup
-\ end-unit
+end-unit
 ( ========================== Move Words ====================================== )
 summary
 

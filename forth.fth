@@ -551,21 +551,21 @@ hider tail
 	the number of characters stored is returned )
 	key drop ( drop first key after word )
 	delim !  ( store delimiter used to stop string storage when encountered)
-	
 	0
 	do
 		key dup delim @ <>
 		if
-			over c! 1+
-		else ( too many characters read in )
-			0 swap c! drop
+			over  c! 1+
+		else ( terminate string )
+			drop 0 swap c! 
 			i 1+
 			leave
 		then
 	loop
 	begin ( read until delimiter )
 		key delim @ =
-	until ;
+	until 
+;
 hider delim
 
 : accept ( c-addr +n1 -- +n2 : see accepter definition ) '\n' accepter ;
@@ -609,11 +609,11 @@ hider aligner
 	dup 1+ chars>   ( calculate address to write to )
 	max-string-length delim @ accepter dup >r ( write string into dictionary, save index )
 	aligned 2dup size / ( stack: length hole char-len hole )
-	dup here + h !   ( update dictionary pointer with string length )
-	1+ swap !        ( write place to jump to )
-	drop             ( do not need string length anymore )
-	1+ chars>        ( calculate place to print )
-	r>               ( restore index and address of string )
+	1+ dup allot   ( update dictionary pointer with string length )
+	1+ swap !      ( write place to jump to )
+	drop           ( do not need string length anymore )
+	1+ chars>      ( calculate place to print )
+	r>             ( restore index and address of string )
 ;
 hider delim
 
@@ -632,9 +632,6 @@ hider delim
 : do-string ( char -- )
 	write-string state @ if swap [literal] [literal] then ;
 
-: c" immediate 
-	[char] " do-string ;
-
 : fill ( c-addr u char -- )
 	( fill in an area of memory with a character, only if u is greater than zero )
 	-rot
@@ -646,9 +643,11 @@ hider delim
 	sbuf 0 fill sbuf [char] " accepter sbuf drop swap ;
 hider sbuf
 
-: type, ' type , ;
+( @todo these strings really need rethinking )
+: type, state @ if ' type , else type then ;
+: c" immediate [char] " do-string ;
 : "  immediate [char] " do-string type, ;
-: .( immediate [char] ) do-string type, ;
+: .( immediate [char] ) print-string ;
 : ." immediate [char] " do-string type, ;
 hider type,
 
@@ -1116,7 +1115,7 @@ hider cf
 hider end-print
 
 ( these words push the execution tokens for various special cases for decompilation )
-: get-branch  [ find branch xt-token ]  literal ;
+: get-branch  [ find branch  xt-token ] literal ;
 : get-?branch [ find ?branch xt-token ] literal ;
 : get-original-exit [ original-exit xt-token ] literal ;
 : get-quote   [ find ' xt-token ] literal ;
@@ -1156,6 +1155,9 @@ decompilers code stream pointer by )
 	literals Literals can be distinguished by their low value,
 	         which cannot possibly be a word with a name, the
 	         next field is the actual literal
+
+	@todo addi also needs handling, it is another special case used by
+	"do...loop" [which should be replaced].
 
 	Of special difficult is processing 'if' 'else' 'then' statements,
 	this will require keeping track of '?branch'.
@@ -1447,6 +1449,9 @@ b/buf chars table block-buffer ( block buffer - enough to store one block )
 : poke ( char c-addr -- : poke a real memory address  )
 	>real-address c! ;
 
+: on-error ( x -- )
+	`error-handler ! ;
+
 : license ( -- : print out license information )
 "
 The MIT License (MIT)
@@ -1539,7 +1544,7 @@ OTHER DEALINGS IN THE SOFTWARE.
  `state
  `source-id `sin `sidx `slen `start-address `fin `fout `stdin
  `stdout `stderr `argc `argv `debug `invalid `top `instruction
- `stack-size `start-time
+ `stack-size `start-time `error-handler
 ;hide
 
 ( Heres an interesting piece of code from
