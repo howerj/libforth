@@ -13,7 +13,6 @@
  * and some Forth words can be reimplemented in terms of the file access
  * functions. The file access methods (or 'fam's) should also only take up one
  * cell in size, they currently take up two.
- * @todo Add halt on error mode
  *
  * The MIT License (MIT)
  *
@@ -655,7 +654,7 @@ static const char *register_names[] = { "h", "r", "`state", "base", "pwd",
 enum instructions { PUSH,COMPILE,RUN,DEFINE,IMMEDIATE,READ,LOAD,STORE,CLOAD,CSTORE,
 SUB,ADD,AND,OR,XOR,INV,SHL,SHR,MUL,DIV,LESS,MORE,EXIT,EMIT,KEY,FROMR,TOR,BRANCH,
 QBRANCH, PNUM, QUOTE,COMMA,EQUAL,SWAP,DUP,DROP,OVER,TAIL,BSAVE,BLOAD,FIND,PRINT,
-DEPTH,CLOCK,EVALUATOR,SYSTEM,FCLOSE,FOPEN,FDELETE,FREAD,FWRITE,FPOS,FSEEK,FFLUSH,
+DEPTH,CLOCK,EVALUATE,SYSTEM,FCLOSE,FOPEN,FDELETE,FREAD,FWRITE,FPOS,FSEEK,FFLUSH,
 FRENAME,LAST };
 
 /**@brief names of all named instructions, with a few exceptions
@@ -679,7 +678,7 @@ FRENAME,LAST };
 static const char *instruction_names[] = { "read","@","!","c@","c!","-","+","and",
 "or","xor","invert","lshift","rshift","*","/","u<","u>","exit","_emit","key","r>",
 ">r","branch","?branch", "pnum","'", ",","=", "swap","dup","drop", "over", "tail",
-"bsave","bload","find","print","depth","clock","evaluator","system","close-file",
+"bsave","bload","find","print","depth","clock","evaluate","system","close-file",
 "open-file","delete-file","read-file","write-file","file-position", 
 "reposition-file","flush-file","rename-file", NULL };
 
@@ -1787,21 +1786,21 @@ int forth_run(forth_t *o)
 		* which we do not usually need to do when the interpreter is
 		* not running (the usual case for forth_eval when called from
 		* C) */
-		case EVALUATOR:
-		{
+		case EVALUATE:
+		{ 
 			/* save current input */
 			forth_cell_t sin    = o->m[SIN],  sidx = o->m[SIDX],
 				slen   = o->m[SLEN], fin  = o->m[FIN],
 				source = o->m[SOURCE_ID], r = m[RSTK];
-			cd(1);
-			w = f;
+			cd(2);
+			char *s = get_forth_string(o, &S, f);
 			f = *S--;
 			/* save the stack variables */
 			o->S = S;
 			o->m[TOP] = f;
 			/* push a fake call to forth_eval */
 			m[RSTK]++;
-			w = forth_eval(o, ((char*)m) + w);
+			w = forth_eval(o, s);
 			/* restore stack variables */
 			m[RSTK] = r;
 			S = o->S;
@@ -1815,6 +1814,10 @@ int forth_run(forth_t *o)
 			o->m[SOURCE_ID] = source;
 		}
 		break;
+		/* Whilst loathe to put these in here as virtual machine
+		 * instructions (instead a better mechanism should be found),
+		 * this is the simplest way of adding file access words to our
+		 * Forth interpreter */
 		case SYSTEM:  cd(2); f = system(get_forth_string(o, &S, f)); break;
 		case FCLOSE:  cd(1); f = fclose((FILE*)f);                   break;
 		case FDELETE: cd(2); f = remove(get_forth_string(o, &S, f)); break;
@@ -1977,9 +1980,7 @@ Options must come before files to execute\n\n";
  * ==== main.c =============================
  *
  * To keep things simple options are parsed first then arguments like files,
- * although some options take arguments immediately after them.
- *
- */
+ * although some options take arguments immediately after them. */
 int main_forth(int argc, char **argv)
 {
 	FILE *in = NULL, *dump = NULL;

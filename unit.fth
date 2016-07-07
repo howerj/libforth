@@ -94,15 +94,16 @@ true variable unit-color-on
 	" passed: " unit-pass @ unit-fail @ print-ratio cr
 	unit-fail @ if " test suite failed" cr invalidate-forth bye then ;
 
+0 variable #current-test
 256 char-table current-test
 : fill-current-test 
-	current-test 0 fill current-test [char] ) accepter ;
+	current-test 0 fill current-test [char] ) accepter #current-test ! ;
 
 ( @todo forget everything declared after this test )
 : unit(    ( -- : Mark the beginning of a unit test )   
-	state-color " unit:   " unit-reset-color fill-current-test current-test type cr ;
+	state-color " unit:   " unit-reset-color fill-current-test current-test drop #current-test @ type cr ;
 : end-unit ( -- : Mark the end of a unit test )
-	state-color " end:    " unit-reset-color current-test type cr ;
+	state-color " end:    " unit-reset-color current-test drop #current-test @ type cr ;
 
 :hide  
  unit-pass unit-fail unit-colorize fail-color pass-color info-color 
@@ -185,11 +186,11 @@ end-unit
 ( ========================== Move Words ====================================== )
 unit( Move words )
 marker cleanup
-128 constant len
-len char-table t1
-len char-table t2
-t1 2chars erase
-t1 type cr
+\ 128 constant len
+\ len char-table t1
+\ len char-table t2
+\ t1 2chars erase
+\ t1 type cr
 ( @todo implement these tests )
 cleanup
 end-unit

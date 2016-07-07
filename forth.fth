@@ -614,6 +614,7 @@ hider aligner
 	drop           ( do not need string length anymore )
 	1+ chars>      ( calculate place to print )
 	r>             ( restore index and address of string )
+	1-
 ;
 hider delim
 
@@ -784,9 +785,6 @@ size 8 = [if] 0x01234567abcdef variable endianess [then]
 	[ endianess chars> c@ 0x01 = ] literal
 ;
 hider endianess
-
-: evaluate ( c-addr u -- : evaluate a NUL terminated string )
-	drop evaluator ;
 
 : trace ( flag -- : turn tracing on/off )
 	`debug ! ;
@@ -1224,7 +1222,7 @@ r @ constant restart-address
 	0 `source-id !  ( set source to read from file )
 	`stdin @ `fin ! ( read from stdin )
 	postpone [      ( back into command mode )
-	restart-address r ! ( restart interpreter; this needs improving ) ;
+	restart-address r ! ( restart interpreter; this needs fixing ) ;
 
 : abort
 	empty-stack quit ;
@@ -1269,12 +1267,22 @@ more " The built in words that accessible are:
 	drop              pop and drop a value
 	over              copy the second stack value over the first
 	.                 pop the top of the stack and print it
+" 
+more " 
 	print             print a NUL terminated string at a character address
 	depth             get the current stack depth
 	clock             get the time since execution start in milliseconds
-	evaluator         evaluate a string
+	evaluate          evaluate a string
 	system            execute a system command
-
+	close-file        close a file handle
+	open-file         open a file handle
+	delete-file       delete a file off disk given a string
+	read-file         read in characters from a file
+	write-file        write characters to a file
+	file-position     get the file offset
+	reposition-file   reposition the file pointer
+	flush-file        flush a file to disk
+	rename-file       rename a file on disk
  "
 
 more " All of the other words in the interpreter are built from these
