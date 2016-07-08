@@ -94,7 +94,8 @@ Some interesting links:
 : compile-instruction 1 ; ( compile code word, threaded code interpreter instruction )
 : dolist 2 ;      ( run code word, threaded code interpreter instruction )
 : dolit 2 ;       ( location of special "push" word )
-: [literal] dolit , , ; ( this word probably needs a better name )
+: 2, , , ;
+: [literal] dolit 2, ; ( this word probably needs a better name )
 : literal immediate [literal] ;
 : latest pwd @ ; ( get latest defined word )
 : false 0 ;
@@ -131,9 +132,10 @@ Some interesting links:
 : 2chars ( x y -- x y: ) chars swap chars swap ;
 : chars> ( n1 -- n2: convert cell address to character address ) size * ;
 : 2chars> chars> swap chars> swap ;
-: hex     ( -- ) ( print out hex )     16 base ! ;
-: octal   ( -- ) ( print out octal )    8 base ! ;
-: decimal ( -- ) ( print out decimal )  0 base ! ;
+: hex     ( -- : print out hex )     16 base ! ;
+: octal   ( -- : print out octal )    8 base ! ;
+: binary  ( -- : print out binary )   2 base ! ;
+: decimal ( -- : print out decimal )  0 base ! ;
 : negate ( x -- x ) -1 * ;
 : square ( x -- x ) dup * ;
 : drup ( x y -- x x ) drop dup ;
@@ -639,12 +641,15 @@ hider delim
 	0 do 2dup i + c! loop
 	2drop ;
 
+: /string ( c-addr1 u1 n -- c-addr2 u2 )
+	over min rot over + -rot - ;
+
 128 char-table sbuf
 : s" ( "ccc<quote>" --, Run Time -- c-addr u )
 	sbuf 0 fill sbuf [char] " accepter sbuf drop swap ;
 hider sbuf
 
-( @todo these strings really need rethinking )
+( @todo these strings really need rethinking, state awareness needs to be removed... )
 : type, state @ if ' type , else type then ;
 : c" immediate [char] " do-string ;
 : "  immediate [char] " do-string type, ;
@@ -957,6 +962,8 @@ hider counter
 ( ==================== Debugging info ========================= )
 
 ( string handling should really be done with PARSE, and CMOVE )
+
+hider .s
 : .s    ( -- : print out the stack for debugging )
 	" <" depth u. " >" space
 	depth if
@@ -1460,6 +1467,19 @@ b/buf chars table block-buffer ( block buffer - enough to store one block )
 : on-error ( x -- )
 	`error-handler ! ;
 
+( restart-word! and warm need rethinking )
+: restart-word!
+	`instruction ! ;	
+: warm
+	restart ;
+
+: stdin  ( -- fileid ) `stdin  @ ;
+: stdout ( -- fileid ) `stdout @ ;
+: stderr ( -- fileid ) `stderr @ ;
+
+: 2nip   ( n1 n2 n3 n4 -- n3 n4) 
+	>r >r 2drop r> r> ;
+
 : license ( -- : print out license information )
 "
 The MIT License (MIT)
@@ -1492,49 +1512,6 @@ OTHER DEALINGS IN THE SOFTWARE.
 	" Type 'help' and press return for a basic introduction." cr
 	" Type 'license' and press return to see the license. (MIT license)." cr
 	ok ;
-
-0 [if]
-
-: max-int [ -1 1 rshift ] literal ;
-: < 2dup <> if max-int - u> else 0 then ;
-: > < not ;
-
-
-( see https://groups.google.com/forum/#!topic/comp.lang.forth/rT-79frog1g )
- 0 constant case immediate  ( init count of ofs )
-
- : of  ( #of -- orig #of+1 / x -- )
-    1+    ( count ofs )
-    >r    ( move off the stack in case the control-flow )
-	  ( stack is the data stack. )
-    postpone over  postpone = ( copy and test case value )
-    postpone if    ( add orig to control flow stack )
-    postpone drop  ( discards case value if = )
-    r> ;           ( we can bring count back now )
- immediate
-
- : endof  ( orig1 #of -- orig2 #of )
-    >r    ( move off the stack in case the control-flow )
-	  ( stack is the data stack. )
-    postpone else
-    r> ;  ( we can bring count back now )
- immediate
-
- : endcase ( orig 1..orign #of -- )
-    postpone drop  ( discard case value )
-    0 ?do
-      postpone then
-    loop ;
- immediate
-
-: .r
-	" <" rdepth u. " >" space
-	rdepth if
-		rdepth 0 do i column tab i r @ + @ u. loop
-	then
-	cr ;
-
-[then]
 
 ( clean up the environment )
 :hide

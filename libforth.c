@@ -13,6 +13,8 @@
  * and some Forth words can be reimplemented in terms of the file access
  * functions. The file access methods (or 'fam's) should also only take up one
  * cell in size, they currently take up two.
+ * @todo Add save-core, number, word (or parse), load-core, more-core to the
+ * virtual machine.
  *
  * The MIT License (MIT)
  *
@@ -254,7 +256,13 @@
 /**@brief This is a wrapper around check_depth, to make checking the depth
  * short and simple.
  * @param depth */
-#define cd(depth) check_depth(o, S, depth)
+#define cd(depth) check_depth(o, S, depth, __LINE__)
+/**@brief This performs tracing
+ * @param ENV forth environment
+ * @param INSTRUCTION instruction to print out
+ * @param STK stack pointer
+ * @param TOP current top of stack to print out*/
+#define TRACE(ENV,INSTRUCTION,STK,TOP) trace(ENV,INSTRUCTION,STK,TOP)
 #else
 /**@brief This removes the bounds check and debugging code
  * @param c do nothing */
@@ -262,6 +270,12 @@
 /**@brief This is a wrapper around check_depth
  * @param depth do nothing */
 #define cd(depth) ((void)depth)
+/**@brief This removes tracing
+ * @param ENV
+ * @param INSTRUCTION
+ * @param STK
+ * @param TOP */
+#define TRACE(ENV, INSTRUCTION, STK, TOP)
 #endif
 
 #define DEFAULT_CORE_SIZE   (32 * 1024) /**< default VM size */
@@ -438,9 +452,11 @@ static const char *initial_forth_program = "                       \n\
  * number_printer, which is dependent on the current base*/
 static const char conv[] = "0123456789abcdefghijklmnopqrstuvwxzy";
 
-/**@brief The following are different reactions errors can take */
+/**@brief The following are different reactions errors can take when
+ * using longjmp to a previous setjump*/
 enum errors
 {
+	INITIALIZED, /**< setjmp returns zero if returning directly */
 	OK,          /**< no error, do nothing */
 	FATAL,       /**< fatal error, this invalidates the Forth image */
 	RECOVERABLE, /**< recoverable error, this will reset the interpreter */
@@ -562,6 +578,14 @@ enum actions_on_error
 	ERROR_INVALIDATE, /**< halt on error and invalid the Forth interpreter */
 };
 
+/**@brief These are the possible options for the debug registers.*/
+enum trace_level
+{
+	DEBUG_OFF,         /**< tracing is off */
+	DEBUG_INSTRUCTION, /**< instructions and stack are traced */
+	DEBUG_CHECKS       /**< bounds checks are printed out */
+};
+
 /**@brief A list of all the registers placed in the "m" field of "struct forth"
  *
  * There are a number of registers available to the virtual machine, they are
@@ -654,33 +678,24 @@ static const char *register_names[] = { "h", "r", "`state", "base", "pwd",
 enum instructions { PUSH,COMPILE,RUN,DEFINE,IMMEDIATE,READ,LOAD,STORE,CLOAD,CSTORE,
 SUB,ADD,AND,OR,XOR,INV,SHL,SHR,MUL,DIV,LESS,MORE,EXIT,EMIT,KEY,FROMR,TOR,BRANCH,
 QBRANCH, PNUM, QUOTE,COMMA,EQUAL,SWAP,DUP,DROP,OVER,TAIL,BSAVE,BLOAD,FIND,PRINT,
-DEPTH,CLOCK,EVALUATE,SYSTEM,FCLOSE,FOPEN,FDELETE,FREAD,FWRITE,FPOS,FSEEK,FFLUSH,
-FRENAME,LAST };
+DEPTH,CLOCK,EVALUATE,PSTK,RESTART,SYSTEM,FCLOSE,FOPEN,FDELETE,FREAD,FWRITE,FPOS,
+FSEEK,FFLUSH,FRENAME,LAST };
 
 /**@brief names of all named instructions, with a few exceptions
  *
  * So that we can compile programs we need ways of referring to the basic
  * programming constructs provided by the virtual machine, theses words are fed
- * into the C function "compile" in a process described later. They do not name
- * all virtual machine instructions, PUSH, COMPILE, RUN, DEFINE, IMMEDIATE and
- * LAST are missing (the first five virtual machine instructions and the very
- * last pseudo instruction).
- *
- * PUSH, COMPILE, and RUN are all "invisible words", they are instructions that
- * do not have a name as they are not needed directly but are used by the
- * execution environment internally.
- *
- * DEFINE and IMMEDIATE are both immediate words, they will have to be compiled
- * separately from the rest of the instructions.
+ * into the C function "compile" in a process described later.
  *
  * LAST is not an instruction, but only a marker of the last enumeration used
  * in "enum instructions", so it does not get a name. */
-static const char *instruction_names[] = { "read","@","!","c@","c!","-","+","and",
-"or","xor","invert","lshift","rshift","*","/","u<","u>","exit","_emit","key","r>",
-">r","branch","?branch", "pnum","'", ",","=", "swap","dup","drop", "over", "tail",
-"bsave","bload","find","print","depth","clock","evaluate","system","close-file",
-"open-file","delete-file","read-file","write-file","file-position", 
-"reposition-file","flush-file","rename-file", NULL };
+static const char *instruction_names[] = { "push","compile","run","define", 
+"immediate","read","@","!","c@","c!","-","+","and","or","xor","invert","lshift",
+"rshift","*","/","u<","u>","exit","_emit","key","r>",">r","branch","?branch",
+"pnum","'", ",","=", "swap","dup","drop", "over", "tail","bsave","bload",
+"find","print","depth","clock","evaluate",".s","restart","system","close-file",
+"open-file","delete-file","read-file","write-file","file-position","reposition-file",
+"flush-file","rename-file", NULL };
 
 /* ============================ Section 3 ================================== */
 /*                  Helping Functions For The Compiler                       */
@@ -934,16 +949,107 @@ static int print_unsigned_number(forth_cell_t u, forth_cell_t base, FILE *out)
  *               output streams)
  * @param  f     value to print out
  * @return int   zero or positive on success, negative on failure */
-static int print_cell(forth_t *o, forth_cell_t f)
+static int print_cell(forth_t *o, FILE *output, forth_cell_t f)
 {
 	unsigned base = o->m[BASE];
 	if(base == 10 || base == 0)
-		return fprintf((FILE*)(o->m[FOUT]), "%"PRIdCell, f);
+		return fprintf(output, "%"PRIdCell, f);
 	if(base == 16)
-		return fprintf((FILE*)(o->m[FOUT]), o->hex_fmt, f);
+		return fprintf(output, o->hex_fmt, f);
 	if(base == 1 || base > 36)
 		return -1;
-	return print_unsigned_number(f, base, (FILE*)(o->m[FOUT]));
+	return print_unsigned_number(f, base, output);
+}
+
+static void debug_checks(forth_t *o, forth_cell_t f, unsigned line)
+{
+	(void)o;
+	fprintf(stderr, "\t( debug\t0x%" PRIxCell "\t%u )\n", f, line);
+}
+
+/* "check_bounds" is used to both check that a memory access performed by the
+ * virtual machine is within range and as a crude method of debugging the
+ * interpreter (if it is enabled). The function is not called directly but
+ * is instead wrapped in with the "ck" macro, it can be removed completely
+ * with compile time defines, removing the check and the debugging code. */
+static forth_cell_t check_bounds(forth_t *o, forth_cell_t f, unsigned line)
+{
+	if(o->m[DEBUG] >= DEBUG_CHECKS)
+		debug_checks(o, f, line);
+	if(((forth_cell_t)f) >= o->core_size) {
+		fprintf(stderr, "( fatal \" bounds check failed: %" PRIdCell " >= %zu\" )\n", f, (size_t)o->core_size);
+		longjmp(*o->on_error, FATAL);
+	}
+	return f;
+}
+
+/* "check_depth" is used to check that there are enough values on the stack
+ * before an operation takes place. It is wrapped up in the "cd" macro. */
+static void check_depth(forth_t *o, forth_cell_t *S, forth_cell_t expected, unsigned line)
+{
+	if(o->m[DEBUG] >= DEBUG_CHECKS)
+		debug_checks(o, (forth_cell_t)(S - o->vstart), line);
+	if((uintptr_t)(S - o->vstart) < expected) {
+		fprintf(stderr, "( error \" stack underflow\" )\n");
+		longjmp(*o->on_error, RECOVERABLE);
+	} else if(S > o->vend) {
+		fprintf(stderr, "( error \" stack overflow\" )\n");
+		longjmp(*o->on_error, RECOVERABLE);
+	}
+}
+
+/* This checks that a Forth string is NUL terminated, as required by most C
+ * functions, which should be the last character in string (which is s+end).
+ * There is a bit of a mismatch between Forth strings (which are pointer
+ * to the string and a length) and C strings, which a pointer to the string and
+ * are NUL terminated. This function helps to correct that. */
+static void check_is_asciiz(forth_t *o, char *s, forth_cell_t end)
+{
+	if(*(s + end) != '\0') {
+		fprintf(stderr, "( error \" Not an ASCIIZ string\")\n");
+		longjmp(*o->on_error, RECOVERABLE);
+	}
+}
+
+/* This function gets a string off the Forth stack, checking that the string is
+ * NUL terminated. It is a helper function used when a Forth string has to be
+ * converted to a C string so it can be passed to a C function. */
+static char *get_forth_string(forth_t *o, forth_cell_t **S, forth_cell_t f)
+{
+	forth_cell_t length = f;
+	char *string = ((char*)o->m) + **S;
+	(*S)--;
+	check_is_asciiz(o, string, length);
+	return string;
+}
+
+/* This prints out the Forth stack, which is useful for debugging. */
+static void print_stack(forth_t *o, FILE *output, forth_cell_t *S, forth_cell_t f)
+{ /**@todo print out stack the other way around */
+	forth_cell_t depth = (forth_cell_t)(S - o->vstart);
+	fprintf(output, "%"PRIdCell": ", depth);
+	if(!depth)
+		return;
+	print_cell(o, output, f);
+	fputc(' ', output);
+	while(o->vstart + 1 < S) {
+		print_cell(o, output, *(S--));
+		fputc(' ', output);
+	}
+}
+
+/* This function allows for some more detailed tracing to take place */
+static void trace(forth_t *o, forth_cell_t instruction, forth_cell_t *S, forth_cell_t f)
+{
+	if(o->m[DEBUG] < DEBUG_INSTRUCTION)
+		return;
+	if(instruction > LAST) {
+		fprintf(stderr, "traced invalid instruction!\n");
+		return;
+	}
+	fprintf(stderr, "\t( %s\t ", instruction_names[instruction]);
+	print_stack(o, stderr, S, f);
+	fputs(" )\n", stderr);
 }
 
 /* ============================ Section 4 ================================== */
@@ -1135,7 +1241,7 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out)
 	* The MISC field here contains the COMPILE instructions, which will
 	* compile a pointer to the VM-INSTRUCTION, as well as the other fields
 	* it usually contains. */
-	for(i = 0, w = READ; instruction_names[i]; i++) {
+	for(i = READ, w = READ; instruction_names[i]; i++) {
 		compile(o, COMPILE, instruction_names[i]);
 		m[m[DIC]++] = w++; /*This adds the actual VM instruction */
 	}
@@ -1274,66 +1380,6 @@ forth_cell_t forth_stack_position(forth_t *o)
 	return o->S - o->vstart;
 }
 
-static void debug(forth_t *o, forth_cell_t f, unsigned line)
-{
-	(void)o;
-	fprintf(stderr, "\t( debug\t0x%" PRIxCell "\t%u )\n", f, line);
-}
-
-/* "check_bounds" is used to both check that a memory access performed by the
- * virtual machine is within range and as a crude method of debugging the
- * interpreter (if it is enabled). The function is not called directly but
- * is instead wrapped in with the "ck" macro, it can be removed completely
- * with compile time defines, removing the check and the debugging code. */
-static forth_cell_t check_bounds(forth_t *o, forth_cell_t f, unsigned line)
-{
-	if(o->m[DEBUG])
-		debug(o, f, line);
-	if(((forth_cell_t)f) >= o->core_size) {
-		fprintf(stderr, "( fatal \" bounds check failed: %" PRIdCell " >= %zu\" )\n", f, (size_t)o->core_size);
-		longjmp(*o->on_error, FATAL);
-	}
-	return f;
-}
-
-/* "check_depth" is used to check that there are enough values on the stack
- * before an operation takes place. It is wrapped up in the "cd" macro. */
-static void check_depth(forth_t *o, forth_cell_t *S, forth_cell_t expected)
-{
-	if((uintptr_t)(S - o->vstart) < expected) {
-		fprintf(stderr, "( error \" stack underflow\" )\n");
-		longjmp(*o->on_error, RECOVERABLE);
-	} else if(S > o->vend) {
-		fprintf(stderr, "( error \" stack overflow\" )\n");
-		longjmp(*o->on_error, RECOVERABLE);
-	}
-}
-
-/* This checks that a Forth string is NUL terminated, as required by most C
- * functions, which should be the last character in string (which is s+end).
- * There is a bit of a mismatch between Forth strings (which are pointer
- * to the string and a length) and C strings, which a pointer to the string and
- * are NUL terminated. This function helps to correct that. */
-static void check_is_asciiz(forth_t *o, char *s, forth_cell_t end)
-{
-	if(*(s + end) != '\0') {
-		fprintf(stderr, "( error \" Not an ASCIIZ string\")\n");
-		longjmp(*o->on_error, RECOVERABLE);
-	}
-}
-
-/* This function gets a string off the Forth stack, checking that the string is
- * NUL terminated. It is a helper function used when a Forth string has to be
- * converted to a C string so it can be passed to a C function. */
-static char *get_forth_string(forth_t *o, forth_cell_t **S, forth_cell_t f)
-{
-	forth_cell_t length = f;
-	char *string = ((char*)o->m) + **S;
-	(*S)--;
-	check_is_asciiz(o, string, length);
-	return string;
-}
-
 /* ============================ Section 5 ================================== */
 /*                      The Forth Virtual Machine                            */
 
@@ -1372,6 +1418,7 @@ int forth_run(forth_t *o)
 				case ERROR_RECOVER:
 						       break;
 				}
+			case OK: break;
 		}
 	}
 	
@@ -1514,8 +1561,10 @@ int forth_run(forth_t *o)
 	* @todo Continue explanation */
 
 	for(;(pc = m[ck(I++)]);) { 
-	INNER:  assert((S > m) && (S < (m + o->core_size)));
-		switch (w = instruction(m[ck(pc++)])) { 
+	INNER:  
+		w = instruction(m[ck(pc++)]);
+		TRACE(o, w, S, f);
+		switch (w) { 
 
 		/*When explaining words with example Forth code the
 		* instructions enumeration will not be used (such as ADD or
@@ -1675,23 +1724,24 @@ int forth_run(forth_t *o)
 				longjmp(*o->on_error, RECOVERABLE);
 			} 
 			break;
-		case LESS:    cd(2); f = *S-- < f;                   break;
-		case MORE:    cd(2); f = *S-- > f;                   break;
-		case EXIT:    I = m[ck(m[RSTK]--)];                  break;
-		case EMIT:    cd(1); f = fputc(f, (FILE*)(o->m[FOUT])); break;
-		case KEY:     *++S = f; f = forth_get_char(o);       break;
-		case FROMR:   *++S = f; f = m[ck(m[RSTK]--)];        break;
-		case TOR:     cd(1); m[ck(++m[RSTK])] = f; f = *S--; break;
-		case BRANCH:  I += m[ck(I)];                         break;
-		case QBRANCH: cd(1); I += f == 0 ? m[I] : 1; f = *S--; break;
-		case PNUM:    cd(1); f = print_cell(o, f);           break;
-		case QUOTE:   *++S = f;     f = m[ck(I++)];          break;
-		case COMMA:   cd(1); m[ck(m[DIC]++)] = f; f = *S--;  break;
-		case EQUAL:   cd(2); f = *S-- == f;                  break;
-		case SWAP:    cd(2); w = f;  f = *S--;   *++S = w;   break;
-		case DUP:     cd(1); *++S = f;                       break;
-		case DROP:    cd(1); f = *S--;                       break;
-		case OVER:    cd(2); w = *S; *++S = f; f = w;        break;
+		case LESS:    cd(2); f = *S-- < f;                       break;
+		case MORE:    cd(2); f = *S-- > f;                       break;
+		case EXIT:    I = m[ck(m[RSTK]--)];                      break;
+		case EMIT:    cd(1); f = fputc(f, (FILE*)(o->m[FOUT]));  break;
+		case KEY:     *++S = f; f = forth_get_char(o);           break;
+		case FROMR:   *++S = f; f = m[ck(m[RSTK]--)];            break;
+		case TOR:     cd(1); m[ck(++m[RSTK])] = f; f = *S--;     break;
+		case BRANCH:  I += m[ck(I)];                             break;
+		case QBRANCH: cd(1); I += f == 0 ? m[I] : 1; f = *S--;   break;
+		case PNUM:    cd(1); 
+			      f = print_cell(o, (FILE*)(o->m[FOUT]), f); break;
+		case QUOTE:   *++S = f;     f = m[ck(I++)];              break;
+		case COMMA:   cd(1); m[ck(m[DIC]++)] = f; f = *S--;      break;
+		case EQUAL:   cd(2); f = *S-- == f;                      break;
+		case SWAP:    cd(2); w = f;  f = *S--;   *++S = w;       break;
+		case DUP:     cd(1); *++S = f;                           break;
+		case DROP:    cd(1); f = *S--;                           break;
+		case OVER:    cd(2); w = *S; *++S = f; f = w;            break;
 		/*TAIL is a crude method of doing tail recursion, it should
 		* not be used generally but is quite useful at startup, there
 		* are a number of limitations when using it in word
@@ -1818,6 +1868,8 @@ int forth_run(forth_t *o)
 		 * instructions (instead a better mechanism should be found),
 		 * this is the simplest way of adding file access words to our
 		 * Forth interpreter */
+		case PSTK:    print_stack(o, (FILE*)(o->m[STDOUT]), S, f);   break;
+		case RESTART: longjmp(*o->on_error, OK);                     break;
 		case SYSTEM:  cd(2); f = system(get_forth_string(o, &S, f)); break;
 		case FCLOSE:  cd(1); f = fclose((FILE*)f);                   break;
 		case FDELETE: cd(2); f = remove(get_forth_string(o, &S, f)); break;
