@@ -86,32 +86,36 @@ Some interesting links:
 : > u> ; ( @todo fix this )
 : logical ( x -- bool ) not not ;
 : :: [ find : , ] ;
-: '\n' 10 ;
+: '\n' 10 ( -- n : push the newline character ) ;
 : cr '\n' emit ;
 : hidden-mask 0x80 ( Mask for the hide bit in a words MISC field ) ;
 : instruction-mask 0x1f ( Mask for the first code word in a words MISC field ) ;
-: hidden? ( PWD -- PWD bool ) dup 1+ @ hidden-mask and logical ;
+: hidden? ( PWD -- PWD bool : is a word hidden, given the words PWD field ) 
+	dup 1+ @ hidden-mask and logical ;
 : compile-instruction 1 ; ( compile code word, threaded code interpreter instruction )
-: dolist 2 ;      ( run code word, threaded code interpreter instruction )
-: dolit 2 ;       ( location of special "push" word )
-: 2, , , ;
+: dolist 2 ;      ( -- n : run code word, threaded code interpreter instruction )
+: dolit 2 ;       ( -- n : location of special "push" word )
+: 2, , , ;        ( n n -- : write two values into the dictionary )
 : [literal] dolit 2, ; ( this word probably needs a better name )
 : literal immediate [literal] ;
 : latest pwd @ ; ( get latest defined word )
-: false 0 ;
-: true 1 ;
-: *+ * + ;
-: 2- 2 - ;
-: 2+ 2 + ;
-: 3+ 3 + ;
-: 2* 1 lshift ;
-: 2/ 1 rshift ;
-: 4* 2 lshift ;
-: 4/ 2 rshift ;
-: 8* 3 lshift ;
-: 8/ 3 rshift ;
-: 256/ 8 rshift ;
-: 2dup over over ;
+: stdin  ( -- fileid ) `stdin  @ ;
+: stdout ( -- fileid ) `stdout @ ;
+: stderr ( -- fileid ) `stderr @ ;
+: false 0 ( -- n ) ;
+: true 1 ( -- n ) ;
+: *+ * + ( n1 n2 n3 -- n ) ;
+: 2- 2 - ( n -- n ) ;
+: 2+ 2 + ( n -- n ) ;
+: 3+ 3 + ( n -- n ) ;
+: 2* 1 lshift ( n -- n ) ;
+: 2/ 1 rshift ( n -- n ) ;
+: 4* 2 lshift ( n -- n ) ;
+: 4/ 2 rshift ( n -- n ) ;
+: 8* 3 lshift ( n -- n ) ;
+: 8/ 3 rshift ( n -- n ) ;
+: 256/ 8 rshift ( n -- n ) ;
+: 2dup over over ( n1 n2 -- n1 n2 n1 n2 : duplicate two values ) ;
 : mod ( x u -- remainder ) 2dup / * - ;
 : */ ( n1 n2 n3 -- n4 ) * / ; ( warning: this does not use a double cell for the multiply )
 : char key drop key ;
@@ -149,7 +153,8 @@ Some interesting links:
 : max ( x y -- max ) 2dup > if drop else swap drop then  ;
 : >= ( x y -- bool ) < not ;
 : <= ( x y -- bool ) > not ;
-: 2@ dup 1+ @ swap @ ;
+: 2@ dup 1+ @ swap @ ( a-addr -- n1 n2 : load two consecutive memory cells ) ;
+: 2! 2dup ! nip 1+ ! ( n1 n2 a-addr -- : store two values as two consecutive memory cells ) ;
 : r@ r> r @ swap >r ;
 : 0> 0 > ;
 : 0<> 0 <> ;
@@ -323,7 +328,6 @@ Some interesting links:
 
 ( ========================== Extended Word Set =============================== )
 
-
 ( ========================== CREATE DOES> ==================================== )
 
 ( The following section defines a pair of words "create" and "does>" which
@@ -433,8 +437,7 @@ hider addi
 		rdrop ( pop off the limit of i and return to the caller's caller routine )
 	then ;
 
-: i ( -- i )
-	( Get current, or innermost, loop index in do-loop construct )
+: i ( -- i : Get current, or innermost, loop index in do-loop construct )
 	r> r> ( pop off return address and i )
 	tuck  ( tuck i away )
 	>r >r ( restore return stack )
@@ -1471,14 +1474,27 @@ b/buf chars table block-buffer ( block buffer - enough to store one block )
 : restart-word!
 	`instruction ! ;	
 : warm
-	restart ;
-
-: stdin  ( -- fileid ) `stdin  @ ;
-: stdout ( -- fileid ) `stdout @ ;
-: stderr ( -- fileid ) `stderr @ ;
+	1 restart ;
 
 : 2nip   ( n1 n2 n3 n4 -- n3 n4) 
 	>r >r 2drop r> r> ;
+
+: 2over ( n1 n2 n3 n4 – n1 n2 n3 n4 n1 n2 )
+	>r >r 2dup r> swap >r swap r> r> -rot ;
+
+: 2swap ( n1 n2 n3 n4 – n3 n4 n1 n2 )
+	>r -rot r> -rot ;
+
+: 2tuck (  n1 n2 n3 n4 – n3 n4 n1 n2 n3 n4 )
+	2swap 2over ;
+
+\ : 2rot (  n1 n2 n3 n4 n5 n6 – n3 n4 n5 n6 n1 n2 )
+\	2r> 2>r ;
+\ 1 2 3 4 5 6 .s
+\ 2rot .s
+\ 
+\ : 2-rot
+\	2rot 2rot ;
 
 : license ( -- : print out license information )
 "

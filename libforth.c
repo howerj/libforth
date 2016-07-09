@@ -15,6 +15,9 @@
  * cell in size, they currently take up two.
  * @todo Add save-core, number, word (or parse), load-core, more-core to the
  * virtual machine.
+ * @todo Add loading in a Forth image from a memory structure, this will need
+ * to be in a portable Format.
+ * @todo Add a C FFI and methods of adding C functions to the interpreter.
  *
  * The MIT License (MIT)
  *
@@ -1869,7 +1872,7 @@ int forth_run(forth_t *o)
 		 * this is the simplest way of adding file access words to our
 		 * Forth interpreter */
 		case PSTK:    print_stack(o, (FILE*)(o->m[STDOUT]), S, f);   break;
-		case RESTART: longjmp(*o->on_error, OK);                     break;
+		case RESTART: cd(1); longjmp(*o->on_error, f);               break;
 		case SYSTEM:  cd(2); f = system(get_forth_string(o, &S, f)); break;
 		case FCLOSE:  cd(1); f = fclose((FILE*)f);                   break;
 		case FDELETE: cd(2); f = remove(get_forth_string(o, &S, f)); break;
