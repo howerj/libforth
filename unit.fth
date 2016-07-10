@@ -143,6 +143,16 @@ s" char x number? not " test
 s" char l lowercase? " test
 s" char L lowercase? not " test
 
+s" 9 log2 3 = " test
+s" 8 log2 3 = " test
+s" 4 log2 2 = " test
+s" 2 log2 1 = " test
+s" 1 log2 0 = " test
+s" 0 log2 0 = " test ( not ideal behavior - but then again, what do you expect? )
+
+s" 50 25 gcd 25 = " test
+s" 13 23 gcd 1  = " test
+
 s" 5  5  mod 0 = " test
 s" 16 15 mod 1 = " test
 

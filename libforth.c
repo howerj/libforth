@@ -11,8 +11,7 @@
  * should do the same.
  * @todo The file access functions need improving, SOURCE-ID needs extending
  * and some Forth words can be reimplemented in terms of the file access
- * functions. The file access methods (or 'fam's) should also only take up one
- * cell in size, they currently take up two.
+ * functions. 
  * @todo Add save-core, number, word (or parse), load-core, more-core to the
  * virtual machine.
  * @todo Add loading in a Forth image from a memory structure, this will need
@@ -455,6 +454,19 @@ static const char *initial_forth_program = "                       \n\
  * number_printer, which is dependent on the current base*/
 static const char conv[] = "0123456789abcdefghijklmnopqrstuvwxzy";
 
+/**@brief These are the file access methods available for use when the virtual
+ * machine is up and running, they are passed to the built in primitives that
+ * deal with file input and output (such as open-file) */
+static const char *fams[] = { "wb", "rb", "r+b", NULL };
+
+/**@brief int to char* map for file access methods */
+enum fams { 
+	FAM_WO,   /**< write only */
+	FAM_RO,   /**< read only */
+	FAM_RW,   /**< read write */
+	LAST_FAM  /**< marks last file access method */
+};
+
 /**@brief The following are different reactions errors can take when
  * using longjmp to a previous setjump*/
 enum errors
@@ -682,7 +694,7 @@ enum instructions { PUSH,COMPILE,RUN,DEFINE,IMMEDIATE,READ,LOAD,STORE,CLOAD,CSTO
 SUB,ADD,AND,OR,XOR,INV,SHL,SHR,MUL,DIV,LESS,MORE,EXIT,EMIT,KEY,FROMR,TOR,BRANCH,
 QBRANCH, PNUM, QUOTE,COMMA,EQUAL,SWAP,DUP,DROP,OVER,TAIL,BSAVE,BLOAD,FIND,PRINT,
 DEPTH,CLOCK,EVALUATE,PSTK,RESTART,SYSTEM,FCLOSE,FOPEN,FDELETE,FREAD,FWRITE,FPOS,
-FSEEK,FFLUSH,FRENAME,LAST };
+FSEEK,FFLUSH,FRENAME,LAST_INSTRUCTION };
 
 /**@brief names of all named instructions, with a few exceptions
  *
@@ -690,8 +702,8 @@ FSEEK,FFLUSH,FRENAME,LAST };
  * programming constructs provided by the virtual machine, theses words are fed
  * into the C function "compile" in a process described later.
  *
- * LAST is not an instruction, but only a marker of the last enumeration used
- * in "enum instructions", so it does not get a name. */
+ * LAST_INSTRUCTION is not an instruction, but only a marker of the last 
+ * enumeration used in "enum instructions", so it does not get a name. */
 static const char *instruction_names[] = { "push","compile","run","define", 
 "immediate","read","@","!","c@","c!","-","+","and","or","xor","invert","lshift",
 "rshift","*","/","u<","u>","exit","_emit","key","r>",">r","branch","?branch",
@@ -823,7 +835,7 @@ static int forth_get_word(forth_t *o, uint8_t *p)
  *   "Data Field" if they exist. */
 static void compile(forth_t *o, forth_cell_t code, const char *str)
 { /* create a new forth word header */
-	assert(o && code < LAST);
+	assert(o && code < LAST_INSTRUCTION);
 	forth_cell_t *m = o->m, header = m[DIC], l = 0;
 	/*FORTH header structure */
 	strcpy((char *)(o->m + header), str); /* 0: Copy the new FORTH word into the new header */
@@ -1017,13 +1029,22 @@ static void check_is_asciiz(forth_t *o, char *s, forth_cell_t end)
 /* This function gets a string off the Forth stack, checking that the string is
  * NUL terminated. It is a helper function used when a Forth string has to be
  * converted to a C string so it can be passed to a C function. */
-static char *get_forth_string(forth_t *o, forth_cell_t **S, forth_cell_t f)
+static char *forth_get_string(forth_t *o, forth_cell_t **S, forth_cell_t f)
 {
 	forth_cell_t length = f;
 	char *string = ((char*)o->m) + **S;
 	(*S)--;
 	check_is_asciiz(o, string, length);
 	return string;
+}
+
+static const char* forth_get_fam(forth_t *o, forth_cell_t f)
+{
+	if(f >= LAST_FAM) {
+		fprintf(stderr, "( error \" Invalid file access method\" %"PRIdCell")\n", f);
+		longjmp(*o->on_error, RECOVERABLE);
+	}
+	return fams[f];
 }
 
 /* This prints out the Forth stack, which is useful for debugging. */
@@ -1046,7 +1067,7 @@ static void trace(forth_t *o, forth_cell_t instruction, forth_cell_t *S, forth_c
 {
 	if(o->m[DEBUG] < DEBUG_INSTRUCTION)
 		return;
-	if(instruction > LAST) {
+	if(instruction > LAST_INSTRUCTION) {
 		fprintf(stderr, "traced invalid instruction!\n");
 		return;
 	}
@@ -1264,9 +1285,12 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out)
 	VERIFY(forth_eval(o, initial_forth_program) >= 0);
 
 	/*A few more constants are now defined, nothing special here */
-	VERIFY(forth_define_constant(o, "size",          sizeof(forth_cell_t)) >= 0);
-	VERIFY(forth_define_constant(o, "stack-start",   size - (2 * o->m[STACK_SIZE])) >= 0);
-	VERIFY(forth_define_constant(o, "max-core",      size) >= 0);
+	VERIFY(forth_define_constant(o, "size",        sizeof(forth_cell_t)) >= 0);
+	VERIFY(forth_define_constant(o, "stack-start", size - (2 * o->m[STACK_SIZE])) >= 0);
+	VERIFY(forth_define_constant(o, "max-core",    size) >= 0);
+	VERIFY(forth_define_constant(o, "r/o",         FAM_RO) >= 0);
+	VERIFY(forth_define_constant(o, "w/o",         FAM_WO) >= 0);
+	VERIFY(forth_define_constant(o, "r/w",         FAM_RW) >= 0);
 
 	/*All of the calls to "forth_eval" and "forth_define_constant" have
 	* set the input streams to point to a string, we need to reset them
@@ -1326,6 +1350,7 @@ forth_t *forth_load_core(FILE *dump)
 	if(!(o = calloc(w, 1)))
 		goto fail; /* object too big */
 	w = sizeof(forth_cell_t) * core_size;
+	/**@todo succeed if o->m[DIC] bytes read in?*/
 	if(w != fread(o->m, 1, w, dump))
 		goto fail; /* not enough bytes in file */
 	o->core_size = core_size;
@@ -1730,6 +1755,8 @@ int forth_run(forth_t *o)
 		case LESS:    cd(2); f = *S-- < f;                       break;
 		case MORE:    cd(2); f = *S-- > f;                       break;
 		case EXIT:    I = m[ck(m[RSTK]--)];                      break;
+		/* @note key and emit could be replaced by the file 
+		 * primitives defined later */
 		case EMIT:    cd(1); f = fputc(f, (FILE*)(o->m[FOUT]));  break;
 		case KEY:     *++S = f; f = forth_get_char(o);           break;
 		case FROMR:   *++S = f; f = m[ck(m[RSTK]--)];            break;
@@ -1846,7 +1873,7 @@ int forth_run(forth_t *o)
 				slen   = o->m[SLEN], fin  = o->m[FIN],
 				source = o->m[SOURCE_ID], r = m[RSTK];
 			cd(2);
-			char *s = get_forth_string(o, &S, f);
+			char *s = forth_get_string(o, &S, f);
 			f = *S--;
 			/* save the stack variables */
 			o->S = S;
@@ -1873,27 +1900,27 @@ int forth_run(forth_t *o)
 		 * Forth interpreter */
 		case PSTK:    print_stack(o, (FILE*)(o->m[STDOUT]), S, f);   break;
 		case RESTART: cd(1); longjmp(*o->on_error, f);               break;
-		case SYSTEM:  cd(2); f = system(get_forth_string(o, &S, f)); break;
+		case SYSTEM:  cd(2); f = system(forth_get_string(o, &S, f)); break;
 		case FCLOSE:  cd(1); f = fclose((FILE*)f);                   break;
-		case FDELETE: cd(2); f = remove(get_forth_string(o, &S, f)); break;
+		case FDELETE: cd(2); f = remove(forth_get_string(o, &S, f)); break;
 		case FPOS:    cd(1); f = ftell((FILE*)f);                    break;
 		case FSEEK:   cd(2); f = fseek((FILE*)f, *S--, SEEK_SET);    break;
 		case FFLUSH:  cd(1); f = fflush((FILE*)f);                   break;
 		case FRENAME:  
-			cd(4); 
+			cd(3); 
 			{
-				char *f1 = get_forth_string(o, &S, f);
+				const char *f1 = forth_get_fam(o, f);
 				f = *S--;
-				char *f2 = get_forth_string(o, &S, f);
+				char *f2 = forth_get_string(o, &S, f);
 				f = rename(f2, f1);
 			}
 			break;
 		case FOPEN: 
-			cd(4);
+			cd(3);
 			{
-				char *fam = get_forth_string(o, &S, f);
+				const char *fam = forth_get_fam(o, f);
 				f = *S--;
-				char *file = get_forth_string(o, &S, f);
+				char *file = forth_get_string(o, &S, f);
 				f = (forth_cell_t)fopen(file, fam);
 			}
 			break;

@@ -27,7 +27,6 @@ See:
 
 TODO
 	* This file should be made to be literate
-
 	* Word, Parse, other forth words
 	* add "j" if possible to get outer loop context
 	* FORTH, VOCABULARY
@@ -40,8 +39,6 @@ TODO
 	"tutorial", etc.
 	* Abort", this could be used to implement words such
 	as "abort if in compile mode", or "abort if in command mode".
-	* Todo Various different assemblers [assemble VM instructions,
-	native instructions, and cross assemblers]
 	* common words and actions should be factored out to simplify
 	definitions of other words, their standards compliant version found
 	if any
@@ -54,18 +51,15 @@ TODO
 	that into the code field
 	* proper booleans should be used throughout
 	* escaped strings
-	* ideally all of the functionality of main_forth would be
-	moved into this file
-	* most of the file access functions can now be implemented in terms
-	of the built in set of functions, such as "INCLUDE-FILE" or "READ-LINE".
-	The block I/O functions can also be implemented this way.
-	* fill move and the like are technically not compliant as
 	they do not test if the number is negative, however that would
 	unnecessarily limit the range of operation
 	* "print" should be removed from the interpreter
-	* :inline ; to inline a words
 	* words should be made for debugging the return stack [such as
 	printing it out like .s]
+	* virtual machines could be made in other languages than C that will
+	run the core files generated...The virtual machine has higher level
+	functions in it that it probably should not have, like "read" and
+	"system", these belong elsewhere - but where?
 
 Some interesting links:
 	* http://www.figuk.plus.com/build/heart.htm
@@ -623,28 +617,27 @@ hider aligner
 ;
 hider delim
 
-: length ( c-addr u -- u : )
+: length ( c-addr u -- u : push the length of an ASCIIZ string )
   tuck 0 do dup c@ 0= if 2drop i leave then 1+ loop ;
 
-: asciiz?
+: asciiz? ( c-addr u -- : is a Forth string also a ASCIIZ string )
 	tuck length <> ;
 
-: asciiz
+: asciiz ( c-addr u -- : trim a string until NUL terminator )
 	2dup length nip ;
 
 : type ( c-addr u -- : print out 'u' characters at c-addr )
 	0 do dup c@ emit 1+ loop drop ;
 
-: do-string ( char -- )
+: do-string ( char -- : write a string into the dictionary reading it until char is encountered )
 	write-string state @ if swap [literal] [literal] then ;
 
-: fill ( c-addr u char -- )
-	( fill in an area of memory with a character, only if u is greater than zero )
+: fill ( c-addr u char -- : fill in an area of memory with a character, only if u is greater than zero )
 	-rot
 	0 do 2dup i + c! loop
 	2drop ;
 
-: /string ( c-addr1 u1 n -- c-addr2 u2 )
+: /string ( c-addr1 u1 n -- c-addr2 u2 : advance a string by n characters )
 	over min rot over + -rot - ;
 
 128 char-table sbuf
@@ -668,18 +661,20 @@ hider type,
 	see Volume 2, issue 3, page 48 of Forth Dimensions at
 	http://www.forth.org/fd/contents.html )
 
-( These case statements need improving )
+( These case statements need improving, it is not standards compliant )
 : case immediate
 	' branch , 3 ,   ( branch over the next branch )
 	here ' branch ,  ( mark: place endof branches back to with again )
 	>mark swap ;     ( mark: place endcase writes jump to with then )
 
-: over= ( x y -- x bool :  )
+: over= ( x y -- x bool : over ... then = )
 	over = ;
 : of
 	immediate ' over= , postpone if ;
+
 : endof
 	immediate over postpone again postpone then ;
+
 : endcase
 	immediate 1+ postpone then drop ;
 
@@ -691,8 +686,7 @@ hider type,
 : ;hide ( should only be matched with ':hide' )
 	immediate " error: ';hide' without ':hide'" cr ;
 
-: :hide
-	( hide a list of words, the list is terminated with ";hide" )
+: :hide ( -- : hide a list of words, the list is terminated with ";hide" )
 	begin
 		find ( find next word )
 		dup [ find ;hide ] literal = if
@@ -706,21 +700,23 @@ hider type,
 		hide drop
 	again ;
 
-: count ( c-addr1 -- c-addr2 u ) dup c@ swap 1+ swap ;
+: count ( c-addr1 -- c-addr2 u : advance string pointer ) 
+	dup c@ swap 1+ swap ;
 
-: bounds ( x y -- y+x x )
+: bounds ( x y -- y+x x : make an upper and lower bound )
 	over + swap ;
 
-: spaces ( n -- : print n spaces ) 0 do space loop ;
+: spaces ( n -- : print n spaces ) 
+	0 do space loop ;
+
 : erase ( addr u : erase a block of memory )
 	2chars> 0 fill ;
 
-: blank ( c-addr u )
-	( given a character address and length, this fills that range with spaces )
+: blank ( c-addr u : fills a string with spaces )
 	bl fill ;
 
-: move ( addr1 addr2 u -- )
-	( copy u words of memory from 'addr2' to 'addr1' )
+( move should check that u is not negative )
+: move ( addr1 addr2 u -- : copy u words of memory from 'addr2' to 'addr1' )
 	0 do
 		2dup i + @ swap i + !
 	loop
@@ -728,8 +724,7 @@ hider type,
 
 ( It would be nice if move and cmove could share more code, as they do exactly
   the same thing but with different load and store functions, cmove>  )
-: cmove ( c-addr1 c-addr2 u -- )
-	( copy u characters of memory from 'c-addr2' to 'c-addr1' )
+: cmove ( c-addr1 c-addr2 u -- : copy u characters of memory from 'c-addr2' to 'c-addr1' )
 	0 do
 		2dup i + c@ swap i + c!
 	loop
@@ -788,10 +783,8 @@ size 2 = [if] 0x0123           variable endianess [then]
 size 4 = [if] 0x01234567       variable endianess [then]
 size 8 = [if] 0x01234567abcdef variable endianess [then]
 
-: endian ( -- bool )
-	( returns the endianess of the processor )
-	[ endianess chars> c@ 0x01 = ] literal
-;
+: endian ( -- bool : returns the endianess of the processor )
+	[ endianess chars> c@ 0x01 = ] literal ;
 hider endianess
 
 : trace ( flag -- : turn tracing on/off )
@@ -803,12 +796,10 @@ hider endianess
 	here 64 + ;
 
 0 variable counter
-: counted-column ( index -- )
-	( special column printing for dump )
+: counted-column ( index -- : special column printing for dump )
 	counter @ column-width @ mod
 	not if cr . " :" space else drop then
 	counter 1+! ;
-
 
 : as-chars ( x -- : print a cell out as characters )
 	size 0
@@ -822,8 +813,7 @@ hider endianess
 		emit
 	loop
 	space
-	drop
-;
+	drop ;
 
 : lister 0 counter ! swap do i counted-column i ? i @ as-chars loop ;
 
@@ -854,8 +844,7 @@ hider forgetter
 	else
 		drop
 		1
-	endif
-;
+	endif ;
 
 ( ==================== Random Numbers ========================= )
 
@@ -1063,7 +1052,7 @@ hider hide-words
 	key drop ;
 
 : more ( wait for more input )
-	"  -- press any key to continue -- " key drop cr ;
+	"  -- press any key to continue -- " key drop cr page ;
 
 ( this is not quite ready for prime time )
 : debug-help " debug mode commands
@@ -1364,13 +1353,21 @@ For resources on Forth:
 	FILE-STATUS
 
   Also of note:	
-  * Source ID needs extending.
-  * The file access methods should take up only one cell, they currently
-  use a string and take up two cells. )
+  * Source ID needs extending. )
 
-: w/o c" wb" ;
-: r/w c" r+b" ;
-: r/o c" rb" ;
+: read-char ( c-addr fileid -- u2 ior )
+	1 swap read-file swap drop ;
+
+: read-line ( c-addr u1 fileid -- u2 flag ior )
+	-rot over + swap 
+	do 
+		dup i read-char
+		i c@ '\n' = if 
+		then
+	loop ;
+
+: write-line  ( c-addr u fileid -- ior )
+;
 
 : resize-file  ( ud fileid -- ior : attempt to resize a file )
 	( There is no portable way to truncate a file :C )
@@ -1495,6 +1492,10 @@ b/buf chars table block-buffer ( block buffer - enough to store one block )
 \ 
 \ : 2-rot
 \	2rot 2rot ;
+
+( a non portable way of making the terminal input raw )
+: raw c" /bin/stty raw" system ;
+: cooked c" /bin/stty cooked" system ;
 
 : license ( -- : print out license information )
 "
