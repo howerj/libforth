@@ -1,5 +1,7 @@
 #!./forth 
 
+marker unit-test-framework
+
 ( @todo These tests fail to run on a 32-bit platform, if "unit(" is used )
 
 ( Forth Unit Tests
@@ -193,6 +195,30 @@ end-unit
 
 ( ========================== Jump Tables ===================================== )
 
+( ========================== Match tests ===================================== )
+unit( Match )
+marker cleanup
+
+: typist ( c-addr u -- c-addr u : print out a string leaving the string on the stack )
+	2dup type cr ;
+
+.(  Match str:	) c" hello" typist drop constant matchme
+.(  Pattern 1:	) c" h?ll?" typist drop constant pat1
+.(  Pattern 2:	) c" h*lo"  typist drop constant pat2
+.(  Pattern 3:	) c" hxllo" typist drop constant pat3
+.(  Pattern 4:	) c" *"     typist drop constant pat4
+.(  Pattern 5:	) c" h*llx" typist drop constant pat5
+
+s" matchme pat1 match 1 = " test
+s" matchme pat2 match 1 = " test
+s" matchme pat3 match 0 = " test
+s" matchme pat4 match 1 = " test
+s" matchme pat5 match 0 = " test 
+
+cleanup
+end-unit
+( ========================== Match tests ===================================== )
+
 ( ========================== Move Words ====================================== )
 unit( Move words )
 marker cleanup
@@ -207,3 +233,4 @@ end-unit
 ( ========================== Move Words ====================================== )
 summary
 
+unit-test-framework

@@ -11,12 +11,14 @@
  * should do the same.
  * @todo The file access functions need improving, SOURCE-ID needs extending
  * and some Forth words can be reimplemented in terms of the file access
- * functions. 
+ * functions. The bsave and bload can be removed.
  * @todo Add save-core, number, word (or parse), load-core, more-core to the
  * virtual machine.
  * @todo Add loading in a Forth image from a memory structure, this will need
  * to be in a portable Format.
  * @todo Add a C FFI and methods of adding C functions to the interpreter.
+ * @todo Error handling could be improved - the latest word definition should be
+ * erased if an error occurs before the terminating ';'.
  *
  * The MIT License (MIT)
  *
@@ -1802,9 +1804,9 @@ int forth_run(forth_t *o)
 		case TAIL:
 			m[RSTK]--;
 			break;
-		/*The blockio function interface has been made specially so
-		* that it is easy to add block functionality to the Forth
-		* interpreter. */
+		/* These two primitives implement block IO, they could be
+		 * implemented in terms of the file primitives later, and so
+		 * they may be removed. */
 		case BSAVE:
 			cd(2);
 			f = blockio(o, *S--, f, 'w');
@@ -1813,10 +1815,10 @@ int forth_run(forth_t *o)
 			cd(2);
 			f = blockio(o, *S--, f, 'r');
 			break;
-		/*FIND is a natural factor of READ, we add it to the Forth
-		* interpreter as it already exits, it looks up a Forth word in
-		* the dictionary and returns a pointer to that word if it
-		* found. */
+		/* FIND is a natural factor of READ, we add it to the Forth
+		 * interpreter as it already exits, it looks up a Forth word in
+		 * the dictionary and returns a pointer to that word if it
+		 * found. */
 		case FIND:
 			*++S = f;
 			if(forth_get_word(o, o->s) < 0)
@@ -1824,20 +1826,20 @@ int forth_run(forth_t *o)
 			f = forth_find(o, (char*)o->s);
 			f = f < DICTIONARY_START ? 0 : f;
 			break;
-		/*PRINT is a word that could be removed from the interpreter,
-		* as it could be implemented in terms of looping and emit, it
-		* prints out an ASCII delimited string to the output stream.
-		*
-		* There is a bit of an impedance mismatch between how Forth
-		* treats strings and how most programming languages treat
-		* them. Most higher level languages are built upon the C
-		* runtime, so at some level support NUL terminated strings,
-		* however Forth uses strings that include a pointer to the
-		* string and the strings length instead. As more C functions
-		* are added the difference in string treatment will become
-		* more apparent. Due to this difference it is always best to
-		* NUL terminate strings in Forth code even if they are stored
-		* with their length */
+		/* PRINT is a word that could be removed from the interpreter,
+		 * as it could be implemented in terms of looping and emit, it
+		 * prints out an ASCII delimited string to the output stream.
+		 *
+		 * There is a bit of an impedance mismatch between how Forth
+		 * treats strings and how most programming languages treat
+		 * them. Most higher level languages are built upon the C
+		 * runtime, so at some level support NUL terminated strings,
+		 * however Forth uses strings that include a pointer to the
+		 * string and the strings length instead. As more C functions
+		 * are added the difference in string treatment will become
+		 * more apparent. Due to this difference it is always best to
+		 * NUL terminate strings in Forth code even if they are stored
+		 * with their length */
 		case PRINT:
 			cd(1);
 			fputs(((char*)m)+f, (FILE*)(o->m[FOUT]));
@@ -1854,18 +1856,18 @@ int forth_run(forth_t *o)
 			*++S = f;
 			f = w;
 			break;
-		/*CLOCK allows for a very primitive and wasteful (depending on
-		* how the C library implements "clock") timing mechanism, it
-		* has the advantage of being largely portable */
+		/* CLOCK allows for a very primitive and wasteful (depending on
+		 * how the C library implements "clock") timing mechanism, it
+		 * has the advantage of being largely portable */
 		case CLOCK:
 			*++S = f;
 			f = ((1000 * clock()) - o->m[START_TIME]) / CLOCKS_PER_SEC;
 			break;
-		/*EVALUATOR is another complex word needs to be implemented in
-		* the virtual machine. It mostly just saves and restores state
-		* which we do not usually need to do when the interpreter is
-		* not running (the usual case for forth_eval when called from
-		* C) */
+		/* EVALUATOR is another complex word needs to be implemented in
+		 * the virtual machine. It mostly just saves and restores state
+		 * which we do not usually need to do when the interpreter is
+		 * not running (the usual case for forth_eval when called from
+		 * C) */
 		case EVALUATE:
 		{ 
 			/* save current input */

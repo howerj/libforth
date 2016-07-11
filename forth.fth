@@ -26,6 +26,7 @@ See:
 
 
 TODO
+	* Rewrite starting word using "restart-word!"
 	* This file should be made to be literate
 	* Word, Parse, other forth words
 	* add "j" if possible to get outer loop context
@@ -223,6 +224,15 @@ Some interesting links:
 	`source-id @ ;
 
 : 2drop ( x y -- ) drop drop ;
+: 2nip   ( n1 n2 n3 n4 -- n3 n4) 
+	>r >r 2drop r> r> ;
+: 2over ( n1 n2 n3 n4 – n1 n2 n3 n4 n1 n2 )
+	>r >r 2dup r> swap >r swap r> r> -rot ;
+: 2swap ( n1 n2 n3 n4 – n3 n4 n1 n2 )
+	>r -rot r> -rot ;
+: 2tuck (  n1 n2 n3 n4 – n3 n4 n1 n2 n3 n4 )
+	2swap 2over ;
+
 : hide  ( token -- hide-token )
 	( This hides a word from being found by the interpreter )
 	dup
@@ -263,6 +273,17 @@ Some interesting links:
 
 : printable? ( c -- bool : is printable, excluding new lines and tables )
 	32 127 within ;
+
+: >upper ( c -- C : convert char to uppercase iff lower case )
+	dup lowercase? if bl xor then ;
+
+: >lower ( C -- c : convert char to lowercase iff upper case )
+	dup uppercase? if bl xor then ;
+
+: <=> ( x y -- z : spaceship operator! )
+	2dup
+	> if 2drop -1 exit then
+	< ;
 
 ( ========================== Basic Word Set ================================== )
 
@@ -320,6 +341,17 @@ Some interesting links:
 : rdepth
 	max-core `stack-size @ - r @ swap - ;
 
+( defer...is is probably not standards compliant, it is still neat! Also, there
+  is no error handling if "find" fails... )
+: (do-defer) ( -- self : pushes the location into which it is compiled )
+	r> dup >r 1- ;
+: defer  ( " ccc" -- , Run Time -- location : 
+	creates a word that pushes a location to write an execution token into )
+	:: ' (do-defer) , postpone ; ;
+: is ( location " ccc" -- : make a deferred word execute a word ) 
+	find xt-token swap ! ;
+hider (do-defer)
+
 ( ========================== Extended Word Set =============================== )
 
 ( ========================== CREATE DOES> ==================================== )
@@ -344,16 +376,14 @@ But this version is much more limited )
 
 : command-mode-create   ( create a new work that pushes its data field )
 	::              ( compile a word )
-	dolit , ( write push into new word )
+	dolit ,         ( write push into new word )
 	here 2+ ,       ( push a pointer to data field )
-	['] exit ,      ( write in an exit to new word data field is after exit )
-	command-mode    ( return to command mode )
-;
+	postpone ; ;    ( write exit and switch to command mode )
 
 : <build immediate
 	( @note ' command-mode-create , *nearly* works )
 	' :: ,                               ( Make the defining word compile a header )
-	write-quote dolit , compile, ( Write in push to the creating word )
+	write-quote dolit , compile,         ( Write in push to the creating word )
 	' here , ' 3+ , compile,             ( Write in the number we want the created word to push )
 	write-quote >mark compile,           ( Write in a place holder 0 and push a pointer to to be used by does> )
 	write-quote write-exit compile,      ( Write in an exit in the word we're compiling. )
@@ -389,6 +419,8 @@ hider write-quote
 ( @todo replace all instances of table with itable )
 : itable     create dup , allot does> dup @ ;
 : char-table create dup , chars allot does> dup @ swap 1+ chars> swap ;
+: 2constant create , ,   does> dup 1+ @ swap @ ;
+: 2variable create , ,   does> ;
 
 ( do...loop could be improved by not using the return stack so much )
 
@@ -419,10 +451,9 @@ hider inci
 hider addi
 
 : leave ( break out of a do-loop construct )
-	rdrop ( pop off our return address )
-	rdrop ( pop off i )
-	rdrop ( pop off the limit of i and return to the caller's caller routine )
-;
+	rdrop   ( pop off our return address )
+	rdrop   ( pop off i )
+	rdrop ; ( pop off the limit of i and return to the caller's caller routine )
 
 : ?leave ( x -- : conditional leave )
 	if
@@ -1216,12 +1247,11 @@ decompilers code stream pointer by )
 : empty-stack ( x-n ... x-0 -- : empty the variable stack )
 	begin depth while drop repeat ;
 
-r @ constant restart-address
 : quit
 	0 `source-id !  ( set source to read from file )
 	`stdin @ `fin ! ( read from stdin )
 	postpone [      ( back into command mode )
-	restart-address r ! ( restart interpreter; this needs fixing ) ;
+	1 restart       ( restart the interpreter ) ;    
 
 : abort
 	empty-stack quit ;
@@ -1373,10 +1403,14 @@ For resources on Forth:
 	( There is no portable way to truncate a file :C )
 	2drop -1 ( -1 to indicate failure ) ;
 
+: create-file ( c-addr u fam -- fileid ior )
+	open-file ;
+
 : bin ( fam1 -- fam2 : modify a file access method to be binary not line oriented ) 
 	( Do nothing, all file access methods are binary, although of note
 	the already opened files stdin, stdout and stderr are opened in text
-	mode on Windows platforms. )
+	mode on Windows platforms, but they are not file access methods, they
+	are fileids  )
 	;
 
 ( ==================== Files ================================== )
@@ -1433,17 +1467,6 @@ b/buf chars table block-buffer ( block buffer - enough to store one block )
 : enum ( x " ccc" -- x+1 : define a series of enumerations )
 	dup constant 1+ ; ( better would be a :enum ;enum syntax )
 
-: >upper ( c -- C : convert char to uppercase iff lower case )
-	dup lowercase? if bl xor then ;
-
-: >lower ( C -- c : convert char to lowercase iff upper case )
-	dup uppercase? if bl xor then ;
-
-: <=> ( x y -- z : spaceship operator! )
-	2dup
-	> if 2drop -1 exit then
-	< ;
-
 : compare ( c-addr1 u1 c-addr2 u2 -- n : compare two strings, assumes strings are NUL terminated )
 	rot min
 	0 do ( should be ?do )
@@ -1463,42 +1486,23 @@ b/buf chars table block-buffer ( block buffer - enough to store one block )
 	>real-address c@ ;
 : poke ( char c-addr -- : poke a real memory address  )
 	>real-address c! ;
-
 : on-error ( x -- )
 	`error-handler ! ;
 
-( restart-word! and warm need rethinking )
-: restart-word!
+: set-starting-word ( xt-token -- : set the word to execute at startup )
 	`instruction ! ;	
 : warm
 	1 restart ;
 
-: 2nip   ( n1 n2 n3 n4 -- n3 n4) 
-	>r >r 2drop r> r> ;
-
-: 2over ( n1 n2 n3 n4 – n1 n2 n3 n4 n1 n2 )
-	>r >r 2dup r> swap >r swap r> r> -rot ;
-
-: 2swap ( n1 n2 n3 n4 – n3 n4 n1 n2 )
-	>r -rot r> -rot ;
-
-: 2tuck (  n1 n2 n3 n4 – n3 n4 n1 n2 n3 n4 )
-	2swap 2over ;
-
-\ : 2rot (  n1 n2 n3 n4 n5 n6 – n3 n4 n5 n6 n1 n2 )
-\	2r> 2>r ;
-\ 1 2 3 4 5 6 .s
-\ 2rot .s
-\ 
-\ : 2-rot
-\	2rot 2rot ;
+: 2rot (  n1 n2 n3 n4 n5 n6 – n3 n4 n5 n6 n1 n2 )
+	5 roll 5 roll ;
 
 ( a non portable way of making the terminal input raw )
 : raw c" /bin/stty raw" system ;
 : cooked c" /bin/stty cooked" system ;
 
 : license ( -- : print out license information )
-"
+" 
 The MIT License (MIT)
 
 Copyright (c) 2016 Richard James Howe
@@ -1519,16 +1523,99 @@ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
 THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
 OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-OTHER DEALINGS IN THE SOFTWARE.
+OTHER DEALINGS IN THE SOFTWARE. 
 
-"
+" 
 ;
 
 : welcome ( -- : print out a stupid welcome message which most interpreters seems insistent on)
 	" FORTH: libforth successfully loaded." cr
 	" Type 'help' and press return for a basic introduction." cr
 	" Type 'license' and press return to see the license. (MIT license)." cr
+	" Core: " here . " / " here unused + . cr
 	ok ;
+
+: reader immediate 
+	welcome
+	begin read " ok" cr again ;
+( find reader set-starting-word warm )
+
+( ==================== Matcher ================================ )
+\ Translated from http://c-faq.com/lib/regex.html
+\ int match(char *pat, char *str)
+\ {
+\ 	switch(*pat) {
+\ 	case '\0':  return !*str;
+\ 	case '*':   return match(pat+1, str) || *str && match(pat, str+1);
+\ 	case '?':   return *str && match(pat+1, str+1);
+\ 	default:    return *pat == *str && match(pat+1, str+1);
+\ 	}
+\ }
+
+: fetch ( c-addr -- c-addr u ) 
+	dup c@ ;
+
+: get ( c-addr1 c-addr2 -- c-addr1 c-addr2 char : get the next char ) 
+	over c@ ;
+
+: pass ( c-addr1 c-addr2 -- : bool ) 
+	2drop 1 ;
+: fail ( c-addr1 c-addr2 -- : bool ) 
+	2drop 0 ;
+
+: (pat+1,str+1) ( )
+	1+ swap 1+ swap ;
+
+: (pat,str+1) 
+	swap 1+ swap ;
+
+: (pat+1,str)
+	1+ ;
+
+: *pat==*str ( c-addr1 c-addr2 -- bool )
+	c@ swap c@ = ;
+
+: match ( c-addr1 c-addr2 -- bool : match a ASCIIZ pattern against an ASCIIZ string )
+	( @todo Seems to work - but really needs rewriting! 
+	  @todo Add limits and accept two Forth strings, making sure they are both
+	  ASCIIZ strings as well 
+	  @warning This uses a non-standards compliant version of case! )
+	fetch
+	case
+		0        of 2drop c@ not exit endof
+		[char] * of drop 2dup 
+				(pat+1,str) match 
+				if 
+					pass 
+				else 
+					get if 
+						(pat,str+1) match 
+					else 
+						fail 
+					then 
+				then 
+				exit 
+			endof
+		[char] ? of drop 
+				get if 
+					(pat+1,str+1) match 
+				else
+					fail 
+				then 
+				exit
+			endof
+		drop 
+		2dup *pat==*str
+		if 
+			(pat+1,str+1) match 
+		else
+			fail 
+		then
+		exit
+	endcase ;
+:hide fetch get (pat+1,str+1) (pat,str+1) (pat+1,str) *pat==*str pass fail ;hide
+
+( ==================== Matcher ================================ )
 
 ( clean up the environment )
 :hide
@@ -1539,7 +1626,7 @@ OTHER DEALINGS IN THE SOFTWARE.
  max-core dolist x x! x@ write-exit
  max-string-length xt-token error-no-word
  original-exit
- restart-address pnum
+ pnum
  TrueFalse >instruction print-header
  print-name print-start print-previous print-immediate
  print-instruction xt-instruction defined-word? print-defined
