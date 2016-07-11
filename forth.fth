@@ -93,6 +93,7 @@ Some interesting links:
 : 2, , , ;        ( n n -- : write two values into the dictionary )
 : [literal] dolit 2, ; ( this word probably needs a better name )
 : literal immediate [literal] ;
+: 2literal immediate swap [literal] [literal] ;
 : latest pwd @ ; ( get latest defined word )
 : stdin  ( -- fileid ) `stdin  @ ;
 : stdout ( -- fileid ) `stdout @ ;
@@ -1552,10 +1553,10 @@ OTHER DEALINGS IN THE SOFTWARE.
 \ 	}
 \ }
 
-: fetch ( c-addr -- c-addr u ) 
+: *pat ( regex -- regex char ) 
 	dup c@ ;
 
-: get ( c-addr1 c-addr2 -- c-addr1 c-addr2 char : get the next char ) 
+: *str ( string regex -- string regex char )
 	over c@ ;
 
 : pass ( c-addr1 c-addr2 -- : bool ) 
@@ -1563,57 +1564,37 @@ OTHER DEALINGS IN THE SOFTWARE.
 : fail ( c-addr1 c-addr2 -- : bool ) 
 	2drop 0 ;
 
-: (pat+1,str+1) ( )
-	1+ swap 1+ swap ;
+: *pat==*str ( c-addr1 c-addr2 -- c-addr1 c-addr2 bool )
+	2dup c@ swap c@ = ;
 
-: (pat,str+1) 
-	swap 1+ swap ;
+: ++ ( u1 u2 u3 u4 -- u1+u3 u2+u4 : not quite d+ [does no carry] )
+	swap >r + swap r> + swap ;
 
-: (pat+1,str)
-	1+ ;
+defer matcher
 
-: *pat==*str ( c-addr1 c-addr2 -- bool )
-	c@ swap c@ = ;
+: advance ( string regex char -- bool : advance both regex and string )
+	if 1 1 ++ matcher else fail then ;
+: advance-string ( string regex char -- bool : advance only the string )
+	if 1 0 ++ matcher else fail then ;
+: advance-regex ( string regex -- bool : advance matching )
+	2dup 0 1 ++ matcher if pass else *str advance-string then ;
 
-: match ( c-addr1 c-addr2 -- bool : match a ASCIIZ pattern against an ASCIIZ string )
+: match ( string regex -- bool : match a ASCIIZ pattern against an ASCIIZ string )
 	( @todo Seems to work - but really needs rewriting! 
 	  @todo Add limits and accept two Forth strings, making sure they are both
 	  ASCIIZ strings as well 
 	  @warning This uses a non-standards compliant version of case! )
-	fetch
+	*pat
 	case
-		0        of 2drop c@ not exit endof
-		[char] * of drop 2dup 
-				(pat+1,str) match 
-				if 
-					pass 
-				else 
-					get if 
-						(pat,str+1) match 
-					else 
-						fail 
-					then 
-				then 
-				exit 
-			endof
-		[char] ? of drop 
-				get if 
-					(pat+1,str+1) match 
-				else
-					fail 
-				then 
-				exit
-			endof
-		drop 
-		2dup *pat==*str
-		if 
-			(pat+1,str+1) match 
-		else
-			fail 
-		then
-		exit
+		       0 of drop drop c@ not        exit endof
+		[char] * of drop advance-regex      exit endof
+		[char] ? of drop *str       advance exit endof
+		            drop *pat==*str advance exit
 	endcase ;
-:hide fetch get (pat+1,str+1) (pat,str+1) (pat+1,str) *pat==*str pass fail ;hide
+
+matcher is match
+
+:hide *str *pat *pat==*str pass fail advance advance-string advance-regex matcher ++ ;hide
 
 ( ==================== Matcher ================================ )
 

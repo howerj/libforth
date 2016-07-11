@@ -219,6 +219,28 @@ cleanup
 end-unit
 ( ========================== Match tests ===================================== )
 
+( ========================== Defer tests ===================================== )
+unit( Defer/Is )
+( we cannot make deferred words immediate for now, doing so would require a big
+  change in the interpreter, and fixing immediate so it goes after a words
+  definition... )
+marker cleanup
+defer alpha 
+
+alpha constant alpha-location
+: beta 2 * 3 + ;
+: gamma 5 alpha ;
+: delta 4 * 7 + ;
+s" alpha-location gamma swap drop = " test
+alpha is beta
+s" gamma 13 = " test
+alpha-location is delta
+s" gamma 27 = " test
+
+cleanup
+end-unit
+( ========================== Defer tests ===================================== )
+
 ( ========================== Move Words ====================================== )
 unit( Move words )
 marker cleanup
