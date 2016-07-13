@@ -4,8 +4,7 @@
  *  @copyright  Copyright 2015,2016 Richard James Howe.
  *  @license    LGPL v2.1 or later version
  *  @email      howe.r.j.89@gmail.com 
- *  @todo       deal with endianess correctly
- *  @todo       add options for resizing a core file and making
+ *  @todo       Make an equivalent Forth function to do this
  *  invalid cores valid (force, attempt to fix, etc) */
 #include <assert.h>
 #include <errno.h>

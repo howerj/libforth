@@ -138,7 +138,7 @@ Some interesting links:
 : decimal ( -- : print out decimal )  0 base ! ;
 : negate ( x -- x ) -1 * ;
 : square ( x -- x ) dup * ;
-: drup ( x y -- x x ) drop dup ;
+: drup   ( x y -- x x ) drop dup ;
 : +! ( x addr -- ) ( add x to a value stored at addr ) tuck @ + swap ! ;
 : 1+! ( addr -- : increment a value at an address )  1 swap +! ;
 : 1-! ( addr -- : decrement a value at an address ) -1 swap +! ;
@@ -286,6 +286,25 @@ Some interesting links:
 	> if 2drop -1 exit then
 	< ;
 
+: start-address ( -- c-addr : push the start address  )
+	`start-address @ ;
+: >real-address ( c-addr -- c-addr : convert an interpreter address to a real address )
+	start-address - ;
+: real-address> ( c-addr -- c-addr : convert a real address to an interpreter address )
+	start-address + ;
+: peek ( c-addr -- char : peek at real memory )
+	>real-address c@ ;
+: poke ( char c-addr -- : poke a real memory address  )
+	>real-address c! ;
+: die? ( x -- : controls actions when encountering certain errors )
+	`error-handler ! ;
+: set-starting-word ( cfa -- : set the word to execute at startup )
+	`instruction ! ;	
+: warm ( -- : restart the interpreter, warm restart )
+	1 restart ;
+: trip ( x -- x x x : triplicate a number ) 
+	dup dup ;
+
 ( ========================== Basic Word Set ================================== )
 
 ( ========================== Extended Word Set =============================== )
@@ -309,7 +328,7 @@ Some interesting links:
 	until
 	drop 1- ;
 
-: xt-token ( previous-word-address -- xt-token )
+: cfa ( previous-word-address -- cfa )
 	( Given the address of the PWD field of a word this
 	function will return an execution token for the word )
 	1+    ( MISC field )
@@ -319,16 +338,16 @@ Some interesting links:
 	( If the word is not an immediate word, execution token pointer )
 	compile-instruction = + ;
 
-: ['] immediate find xt-token [literal] ;
+: ['] immediate find cfa [literal] ;
 
-: execute ( xt-token -- )
+: execute ( cfa -- )
 	( given an execution token, execute the word )
 
 	( create a word that pushes the address of a hole to write to
 	a literal takes up two words, '!' takes up one )
 	1- ( execution token expects pointer to PWD field, it does not
 		care about that field however, and increments past it )
-	xt-token
+	cfa
 	[ here 3+ literal ]
 	!                   ( write an execution token to a hole )
 	[ 0 , ]             ( this is the hole we write )
@@ -350,7 +369,7 @@ Some interesting links:
 	creates a word that pushes a location to write an execution token into )
 	:: ' (do-defer) , postpone ; ;
 : is ( location " ccc" -- : make a deferred word execute a word ) 
-	find xt-token swap ! ;
+	find cfa swap ! ;
 hider (do-defer)
 
 ( ========================== Extended Word Set =============================== )
@@ -405,7 +424,7 @@ hider state!
 ;
 
 : >body ( xt -- a-addr : a-addr is data field of a CREATEd word )
-	xt-token 5 + ;
+	cfa 5 + ;
 hider write-quote
 
 ( ========================== CREATE DOES> ==================================== )
@@ -503,7 +522,7 @@ hider tail
 
 	Would overflow the return stack. )
 	immediate
-	latest xt-token
+	latest cfa
 	' branch ,
 	here - 1+ , ;
 
@@ -514,7 +533,7 @@ hider tail
 
 	We can test "recurse" with this factorial function:
 	  : factorial  dup 2 < if drop 1 exit then dup 1- recurse * ;)
-	latest xt-token , ;
+	latest cfa , ;
 : myself immediate postpone recurse ;
 
 0 variable column-counter
@@ -686,6 +705,21 @@ hider sbuf
 hider type,
 
 : ok " ok" cr ;
+
+: empty-stack ( x-n ... x-0 -- : empty the variable stack )
+	begin depth while drop repeat ;
+
+: quit
+	0 `source-id !  ( set source to read from file )
+	`stdin @ `fin ! ( read from stdin )
+	postpone [      ( back into command mode )
+	1 restart       ( restart the interpreter ) ;    
+
+: abort
+	empty-stack quit ;
+
+: abort" immediate postpone "
+	' cr , ' abort , ;
 
 ( ==================== CASE statements ======================== )
 
@@ -1144,10 +1178,10 @@ hider cf
 hider end-print
 
 ( these words push the execution tokens for various special cases for decompilation )
-: get-branch  [ find branch  xt-token ] literal ;
-: get-?branch [ find ?branch xt-token ] literal ;
-: get-original-exit [ original-exit xt-token ] literal ;
-: get-quote   [ find ' xt-token ] literal ;
+: get-branch  [ find branch  cfa ] literal ;
+: get-?branch [ find ?branch cfa ] literal ;
+: get-original-exit [ original-exit cfa ] literal ;
+: get-quote   [ find ' cfa ] literal ;
 
 : branch-increment ( addr branch -- increment : calculate decompile increment for "branch" )
 	1+ dup negative? if drop 2 else 2dup dump then ;
@@ -1212,7 +1246,7 @@ decompilers code stream pointer by )
 ;hide
 
 : xt-instruction ( extract instruction from execution token )
-	xt-token @ >instruction ;
+	cfa @ >instruction ;
 ( these words expect a pointer to the PWD field of a word )
 : defined-word?      xt-instruction dolist = ;
 : print-name         " name:          " name print cr ;
@@ -1238,24 +1272,12 @@ decompilers code stream pointer by )
 	dup print-header
 	dup defined-word?
 	if ( decompile if a compiled word )
-		xt-token 1+ ( move to code field )
+		cfa 1+ ( move to code field )
 		" code field:" cr
 		decompile
 	else ( the instruction describes the word if it is not a compiled word )
 		drop
 	then ;
-
-: empty-stack ( x-n ... x-0 -- : empty the variable stack )
-	begin depth while drop repeat ;
-
-: quit
-	0 `source-id !  ( set source to read from file )
-	`stdin @ `fin ! ( read from stdin )
-	postpone [      ( back into command mode )
-	1 restart       ( restart the interpreter ) ;    
-
-: abort
-	empty-stack quit ;
 
 ( These help messages could be moved to blocks, the blocks could then
   be loaded from disk and printed instead of defining the help here,
@@ -1390,7 +1412,7 @@ For resources on Forth:
 	1 swap read-file swap drop ;
 
 : read-line ( c-addr u1 fileid -- u2 flag ior )
-	-rot over + swap 
+	-rot bounds
 	do 
 		dup i read-char
 		i c@ '\n' = if 
@@ -1422,124 +1444,68 @@ For resources on Forth:
 ( @todo only already created blocks can be loaded, this should be
   corrected so one is created if needed )
 ( @todo better error handling )
+( @todo Use char-table )
+( @todo Fix this! )
 
 -1 variable scr-var
 false variable dirty ( has the buffer been modified? )
 : scr ( -- x : last screen used ) scr-var @ ;
-b/buf chars table block-buffer ( block buffer - enough to store one block )
+b/buf char-table block-buffer ( block buffer - enough to store one block )
 
-: update ( mark block buffer as dirty, so it will be flushed if needed )
+: update ( -- : mark block buffer as dirty, so it will be flushed if needed )
 	true dirty ! ;
-: empty-buffers ( discard any buffers )
-	false dirty ! block-buffer b/buf chars erase ;
-: flush dirty @ if block-buffer chars> scr bsave drop false dirty ! then ;
+: clean  ( -- : mark buffers as clean, even if they are dirty )
+	false dirty ! ;
+
+0 variable make-block-char ( the character buffers are filled with in make-block )
+
+: erase-buffer
+	block-buffer make-block-char @ fill ;
+
+: empty-buffers ( -- : discard any buffers )
+	clean block-buffer erase-buffer ;
+
+: invalid ( block-buffer -- : check if the block buffer is invalid )
+	-1 = if abort" invalid block buffer (-1)" then ;
+
+: flush ( -- : flush dirty block buffers )
+	dirty @ if scr invalid block-buffer drop scr bsave drop clean then ;
 
 : list ( block-number -- : display a block )
-	flush
-	dup dup scr <> if
-		block-buffer chars> swap bload  ( load buffer into block buffer )
+	flush 
+	trip scr <> if
+		block-buffer drop swap bload ( load buffer into block buffer )
 		swap scr-var !
 	else
 		2drop 0
 	then
-	-1 = if exit then                 ( failed to load )
-	block-buffer chars> b/buf type ;  ( print buffer )
+	-1 = if exit then    ( failed to load )
+	block-buffer type ;  ( print buffer )
 
 : block ( u -- addr : load block 'u' and push address to block )
-	dup scr <> if flush block-buffer chars> swap bload then
-	-1 = if -1 else block-buffer then ;
+	dup invalid
+	trip scr <> if flush block-buffer drop swap bload then
+	-1 = if -1 else scr-var ! block-buffer drop chars then ;
 
-: save-buffers flush ;
+: save-buffers ( -- : save all updated buffers )
+	flush ;
 
 : list-thru ( x y -- : list blocks x through to y )
 	1+ swap
 	key drop
-	do " screen no: " i . cr i list cr more loop ;
+	do i invalid " screen no: " i . cr i list cr more loop ;
 
+: make-block ( c-addr u -- : make a block on disk, named after a string )
+	w/o open-file ?dup 0= if abort" file open failed" then
+	flush -1 scr-var !
+	erase-buffer
+	block-buffer rot dup >r write-file r> close-file drop
+	0<> if drop abort" write failed" then
+	b/buf <> if abort" could not write buffer out" then ;
+
+:hide scr-var block-buffer clean invalid erase-buffer make-block-char ;hide
 
 ( ==================== Blocks ================================= )
-
-( ==================== Miscellaneous ========================== )
-
-( @todo use check-within in various primitives like "array" )
-: check-within ( x min max -- : abort if x is not within a range )
-	within not if " limit exceeded" cr abort then ;
-
-: enum ( x " ccc" -- x+1 : define a series of enumerations )
-	dup constant 1+ ; ( better would be a :enum ;enum syntax )
-
-: compare ( c-addr1 u1 c-addr2 u2 -- n : compare two strings, assumes strings are NUL terminated )
-	rot min
-	0 do ( should be ?do )
-		2dup
-		i + c@ swap i + c@
-		<=> dup if leave else drop then
-	loop
-	2drop ;
-
-: start-address ( -- c-addr : push the start address  )
-	`start-address @ ;
-: >real-address ( c-addr -- c-addr : convert an interpreter address to a real address )
-	start-address - ;
-: real-address> ( c-addr -- c-addr : convert a real address to an interpreter address )
-	start-address + ;
-: peek ( c-addr -- char : peek at real memory )
-	>real-address c@ ;
-: poke ( char c-addr -- : poke a real memory address  )
-	>real-address c! ;
-: on-error ( x -- )
-	`error-handler ! ;
-
-: set-starting-word ( xt-token -- : set the word to execute at startup )
-	`instruction ! ;	
-: warm
-	1 restart ;
-
-: 2rot (  n1 n2 n3 n4 n5 n6 – n3 n4 n5 n6 n1 n2 )
-	5 roll 5 roll ;
-
-( a non portable way of making the terminal input raw )
-: raw c" /bin/stty raw" system ;
-: cooked c" /bin/stty cooked" system ;
-
-: license ( -- : print out license information )
-" 
-The MIT License (MIT)
-
-Copyright (c) 2016 Richard James Howe
-
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the 'Software'),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included
-in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
-THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
-OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-OTHER DEALINGS IN THE SOFTWARE. 
-
-" 
-;
-
-: welcome ( -- : print out a stupid welcome message which most interpreters seems insistent on)
-	" FORTH: libforth successfully loaded." cr
-	" Type 'help' and press return for a basic introduction." cr
-	" Type 'license' and press return to see the license. (MIT license)." cr
-	" Core: " here . " / " here unused + . cr
-	ok ;
-
-: reader immediate 
-	welcome
-	begin read " ok" cr again ;
-( find reader set-starting-word warm )
 
 ( ==================== Matcher ================================ )
 \ Translated from http://c-faq.com/lib/regex.html
@@ -1598,14 +1564,108 @@ matcher is match
 
 ( ==================== Matcher ================================ )
 
+( ==================== Miscellaneous ========================== )
+
+( @todo use check-within in various primitives like "array" )
+: check-within ( x min max -- : abort if x is not within a range )
+	within not if abort" limit exceeded" then ;
+
+: enum ( x " ccc" -- x+1 : define a series of enumerations )
+	dup constant 1+ ; ( better would be a :enum ;enum syntax )
+
+: compare ( c-addr1 u1 c-addr2 u2 -- n : compare two strings, assumes strings are NUL terminated )
+	rot min
+	0 do ( should be ?do )
+		2dup
+		i + c@ swap i + c@
+		<=> dup if leave else drop then
+	loop
+	2drop ;
+
+
+: 2rot (  n1 n2 n3 n4 n5 n6 – n3 n4 n5 n6 n1 n2 )
+	5 roll 5 roll ;
+
+( From http://rosettacode.org/wiki/Forth_common_practice )
+: c+! ( n caddr -- ) dup >r c@ + r> c! ;
+: append ( src len dest -- ) 2dup 2>r  count + swap move  2r> c+! ;
+: place ( src len dest -- ) 2dup 2>r  1+ swap move  2r> c! ;
+: scan ( str len char -- str' len' ) >r begin dup while over c@ r@ <> while 1 /string repeat then r> drop ;
+: skip ( str len char -- str' len' ) >r begin dup while over c@ r@ =  while 1 /string repeat then r> drop ;
+: split ( str len char -- str1 len1 str2 len2 ) >r 2dup r> scan 2swap 2 pick - ;
+
+: r13 ( c -- o )
+  >lower trip
+	lowercase?
+	if
+		[char] m > if -13 else 13 then +
+	else 
+		drop 
+	then ;
+
+: r13-type ( c-addr u )
+	bounds do i c@ r13 emit loop ;
+	
+
+( a non portable way of making the terminal input raw )
+: raw c" /bin/stty raw" system ;
+: cooked c" /bin/stty cooked" system ;
+
+: license ( -- : print out license information )
+" 
+The MIT License (MIT)
+
+Copyright (c) 2016 Richard James Howe
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the 'Software'),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE. 
+
+" 
+;
+
+: welcome ( -- : print out a stupid welcome message which most interpreters seems insistent on)
+	" FORTH: libforth successfully loaded." cr
+	" Type 'help' and press return for a basic introduction." cr
+	" Type 'license' and press return to see the license. (MIT license)." cr
+	" Core: " here . " / " here unused + . cr
+	ok ;
+
+: reader immediate 
+	welcome
+	begin read " ok" cr again ;
+( find reader set-starting-word warm )
+
+( ==================== Core utilities ======================== )
+
+( @todo Implement an equivalent to "core.c" here )
+
+
+
+
+( ==================== Core utilities ======================== )
+
 ( clean up the environment )
 :hide
  _emit
- scr-var block-buffer
  write-string do-string ')' alignment-bits print-string
  compile-instruction dictionary-start hidden? hidden-mask instruction-mask
  max-core dolist x x! x@ write-exit
- max-string-length xt-token error-no-word
+ max-string-length error-no-word
  original-exit
  pnum
  TrueFalse >instruction print-header

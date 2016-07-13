@@ -169,6 +169,22 @@ s" 0  negate 0 = " test
 s" 3 2 4 within " test
 s" 2 2 4 within " test
 s" 4 2 4 within not " test
+s" 6 1 5 limit 5 = " test
+s" 0 1 5 limit 1 = " test
+
+s" 1 2 3 3 sum 6 = " test
+
+s" b/buf 1024 = " test ( as per the standard )
+
+s" 1 2 3 4 5 1 pick 4 = " test
+
+s" -1 odd 0<>" test
+s" 0 odd 0=" test
+s" 4 odd 0=" test
+s" 3 odd 0<>" test
+
+s" 4 square 16 = " test
+s" -1 square 1 = " test
 
 end-unit
 ( ========================== Basic Words ===================================== )

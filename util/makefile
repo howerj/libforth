@@ -1,6 +1,6 @@
 RM=rm -f
 CFLAGS=-Wall -Wextra -std=c99 -O2
-TARGETS=hexdump core rle mkblk forth
+TARGETS=hexdump core rle forth
 all: ${TARGETS}
 
 .PHONY: hexdump.dec rle.dec forth.dec

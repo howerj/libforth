@@ -263,8 +263,8 @@
 #define cd(depth) check_depth(o, S, depth, __LINE__)
 /**@brief This performs tracing
  * @param ENV forth environment
- * @param INSTRUCTION instruction to print out
  * @param STK stack pointer
+ * @param EXPECTED expected stack value
  * @param TOP current top of stack to print out*/
 #define TRACE(ENV,INSTRUCTION,STK,TOP) trace(ENV,INSTRUCTION,STK,TOP)
 #else
@@ -276,8 +276,8 @@
 #define cd(depth) ((void)depth)
 /**@brief This removes tracing
  * @param ENV
- * @param INSTRUCTION
  * @param STK
+ * @param EXPECTED 
  * @param TOP */
 #define TRACE(ENV, INSTRUCTION, STK, TOP)
 #endif
@@ -1172,6 +1172,7 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out)
 	assert(in && out);
 	forth_cell_t *m, i, w, t;
 	forth_t *o;
+	assert(sizeof(forth_cell_t) >= sizeof(uintptr_t));
 	/*There is a minimum requirement on the "m" field in the "forth_t"
 	* structure which is not apparent in its definition (and cannot be
 	* made apparent given how flexible array members work). We need enough
@@ -1445,7 +1446,7 @@ int forth_run(forth_t *o)
 				switch(o->m[ERROR_HANDLER]) {
 				case ERROR_INVALIDATE: o->m[INVALID] = 1;
 				case ERROR_HALT:       return -(o->m[INVALID]);
-				case ERROR_RECOVER:
+				case ERROR_RECOVER:    o->m[RSTK] = o->core_size - o->m[STACK_SIZE];
 						       break;
 				}
 			case OK: break;
@@ -1932,7 +1933,7 @@ int forth_run(forth_t *o)
 				FILE *file = (FILE*)f;
 				forth_cell_t count = *S--;
 				forth_cell_t offset = *S--;
-				*S++ = fread(((char*)m)+offset, 1, count, file);
+				*++S = fread(((char*)m)+offset, 1, count, file);
 				f = ferror(file);
 			}
 			break;
@@ -1942,7 +1943,7 @@ int forth_run(forth_t *o)
 				FILE *file = (FILE*)f;
 				forth_cell_t count = *S--;
 				forth_cell_t offset = *S--;
-				*S++ = fwrite(((char*)m)+offset, 1, count, file);
+				*++S = fwrite(((char*)m)+offset, 1, count, file);
 				f = ferror(file);
 			}
 			break;
