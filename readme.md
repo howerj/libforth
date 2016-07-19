@@ -521,13 +521,26 @@ Pop two values, divide 'x' by 'y' and push the result onto the stack. If 'y'
 is zero and error message is printed and 'x' and 'y' will remain on the
 stack, but execution will continue on as normal.
 
-* '\u<'         ( x y -- z )
+* 'u\<'         ( x y -- z )
 
-Pop two unsigned values, compare them (y < x) and push the result onto the stack.
+Pop two unsigned values, compare them (y < x) and push the result onto the
+stack, the comparison will be unsigned.
 
-* '\u>'         ( x y -- z )
+* 'u\>'         ( x y -- z )
 
-Pop two values, compare them (y > x) and push the result onto the stack.
+Pop two values, compare them (y > x) and push the result onto the stack. The
+comparison will be unsigned.
+
+* '\<'          ( x y -- z )
+
+
+Pop two unsigned values, compare them (y < x) and push the result onto the
+stack, the comparison will be signed.
+
+* '\>'          ( x y -- z )
+
+Pop two values, compare them (y > x) and push the result onto the stack. The
+comparison will be signed.
 
 * 'exit'        ( -- )
 

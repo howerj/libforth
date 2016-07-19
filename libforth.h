@@ -20,6 +20,7 @@ extern "C" {
 struct forth; /**< An opaque object that holds a running FORTH environment**/
 typedef struct forth forth_t;
 typedef uintptr_t forth_cell_t; /**< FORTH "machine word", must be able to store a pointer*/
+typedef intptr_t forth_signed_cell_t; /**< signed cell, must be same size as forth_cell_t */
 
 #define PRIdCell PRIdPTR /**< Signed decimal format specifier for a Forth word */
 #define PRIxCell PRIxPTR /**< Hex format specifier for a Forth word */

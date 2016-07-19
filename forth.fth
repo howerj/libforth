@@ -24,7 +24,6 @@ written in 1992 for the International obfuscated C Coding Competition
 See:
 	http://www.ioccc.org/1992/buzzard.2.design
 
-
 TODO
 	* Rewrite starting word using "restart-word!"
 	* This file should be made to be literate
@@ -32,6 +31,7 @@ TODO
 	* add "j" if possible to get outer loop context
 	* FORTH, VOCABULARY
 	* "Value", "To", "Is"
+	* Double cell words and floating point library
 	* The interpreter should use character based addresses, instead of
 	word based, and use values that are actual valid pointers, this
 	will allow easier interaction with the world outside the virtual machine
@@ -77,8 +77,6 @@ Some interesting links:
 : 0= 0 = ;
 : not 0= ;
 : <> = 0= ;
-: < u< ; ( @todo fix this )
-: > u> ; ( @todo fix this )
 : logical ( x -- bool ) not not ;
 : :: [ find : , ] ;
 : '\n' 10 ( -- n : push the newline character ) ;
@@ -98,6 +96,8 @@ Some interesting links:
 : stdin  ( -- fileid ) `stdin  @ ;
 : stdout ( -- fileid ) `stdout @ ;
 : stderr ( -- fileid ) `stderr @ ;
+: stdin? ( -- bool : are we reading from standard input )
+	`fin @ stdin = ;
 : false 0 ( -- n ) ;
 : true 1 ( -- n ) ;
 : *+ * + ( n1 n2 n3 -- n ) ;
@@ -152,13 +152,14 @@ Some interesting links:
 : 2@ dup 1+ @ swap @ ( a-addr -- n1 n2 : load two consecutive memory cells ) ;
 : 2! 2dup ! nip 1+ ! ( n1 n2 a-addr -- : store two values as two consecutive memory cells ) ;
 : r@ r> r @ swap >r ;
-: 0> 0 > ;
+: 0> 0 < ;
+: 0< 0 > ;
 : 0<> 0 <> ;
 : nand ( x x -- x : Logical NAND ) and not ;
 : odd 1 and ;
 : even odd not ;
 : nor  ( x x -- x : Logical NOR  )  or not ;
-: ms ( u -- : wait at least 'u' milliseconds ) clock +  begin dup clock < until drop ;
+: ms ( u -- : wait at least 'u' milliseconds ) clock +  begin dup clock u< until drop ;
 : sleep 1000 * ms ;
 : align immediate ( x -- x ) ; ( nop in this implementation )
 : ) immediate ;
@@ -180,12 +181,18 @@ Some interesting links:
 	base @ >r decimal pnum drop r> base ! ;
 : invalidate-forth
 	1 `invalid ! ;
-: rdrop ( R: x -- )
+: signed ( x -- bool : return true if sign bit set ) 
+	[ 1 size 8 * 1- lshift ] literal and logical ;
+: u>=  ( x y -- bool : unsigned greater than or equal to )
+	2dup u> >r = r> or ;
+: u<=  ( x y -- bool : unsigned less than or equal to )
+	u>= not ;
+
+: rdrop ( R: x -- : drop a value from the return stack )
 	r>           ( get caller's return address )
 	r>           ( get value to drop )
 	drop         ( drop it like it's hot )
-	>r           ( return return address )
-;
+	>r ;         ( return return address )
 
 : again immediate
 	( loop unconditionally in a begin-loop:
@@ -255,7 +262,8 @@ Some interesting links:
 	means in "see" )
 	[ find exit hide ] rdrop exit [ unhide ] ;
 
-: ?exit ( x -- ) ( exit current definition if not zero ) if rdrop exit then ;
+: ?exit ( x -- ) ( exit current definition if not zero ) 
+	if rdrop exit then ;
 
 : number? ( c -- f : is character a number? )
 	[char] 0 [ char 9 1+ ] literal within ;
@@ -298,7 +306,7 @@ Some interesting links:
 	>real-address c! ;
 : die? ( x -- : controls actions when encountering certain errors )
 	`error-handler ! ;
-: set-starting-word ( cfa -- : set the word to execute at startup )
+: start! ( cfa -- : set the word to execute at startup )
 	`instruction ! ;	
 : warm ( -- : restart the interpreter, warm restart )
 	1 restart ;
@@ -456,7 +464,7 @@ hider write-quote
 	+!           ( add value to it )
 	r@ 1- @      ( find the value again )
 	r@ 2- @      ( find the limit value )
-	<
+	u<
 	if
 		r@ @ @ r@ @ + r@ ! exit ( branch )
 	then
@@ -881,7 +889,7 @@ hider endianess
 	space
 	drop ;
 
-: lister 0 counter ! swap do i counted-column i ? i @ as-chars loop ;
+: lister 0 counter ! 1- swap do i counted-column i ? i @ as-chars loop ;
 
 : dump  ( addr u -- : dump out 'u' cells of memory starting from 'addr' )
 	base @ >r hex 1+ over + lister r> base ! cr ;
@@ -1059,7 +1067,7 @@ hider .s
 			drop
 		then
 		@  ( Get pointer to previous word )
-		dup dictionary-start < ( stop if pwd no longer points to a word )
+		dup dictionary-start u< ( stop if pwd no longer points to a word )
 	until
 	drop cr
 ;
@@ -1157,7 +1165,7 @@ hider debug-prompt
 	latest dup @ ( p1 p2 )
 	begin
 		over ( p1 p2 p1 )
-		cf @ <= swap cf @ > and if exit then
+		cf @ u<= swap cf @ > and if exit then
 		dup 0=                  if exit then
 		dup @ swap
 	again
@@ -1495,8 +1503,11 @@ b/buf char-table block-buffer ( block buffer - enough to store one block )
 	key drop
 	do i invalid " screen no: " i . cr i list cr more loop ;
 
+: open-file-or-abort
+	>r 2dup r> open-file ?dup 0= if type " : " abort" file open failed" else >r 2drop r> then ;
+
 : make-block ( c-addr u -- : make a block on disk, named after a string )
-	w/o open-file ?dup 0= if abort" file open failed" then
+	w/o open-file-or-abort
 	flush -1 scr-var !
 	erase-buffer
 	block-buffer rot dup >r write-file r> close-file drop
@@ -1546,9 +1557,9 @@ defer matcher
 	2dup 0 1 ++ matcher if pass else *str advance-string then ;
 
 : match ( string regex -- bool : match a ASCIIZ pattern against an ASCIIZ string )
-	( @todo Seems to work - but really needs rewriting! 
-	  @todo Add limits and accept two Forth strings, making sure they are both
+	( @todo Add limits and accept two Forth strings, making sure they are both
 	  ASCIIZ strings as well 
+	  @todo Case insensitive version
 	  @warning This uses a non-standards compliant version of case! )
 	*pat
 	case
@@ -1582,34 +1593,8 @@ matcher is match
 	loop
 	2drop ;
 
-
 : 2rot (  n1 n2 n3 n4 n5 n6 – n3 n4 n5 n6 n1 n2 )
 	5 roll 5 roll ;
-
-( From http://rosettacode.org/wiki/Forth_common_practice )
-: c+! ( n caddr -- ) dup >r c@ + r> c! ;
-: append ( src len dest -- ) 2dup 2>r  count + swap move  2r> c+! ;
-: place ( src len dest -- ) 2dup 2>r  1+ swap move  2r> c! ;
-: scan ( str len char -- str' len' ) >r begin dup while over c@ r@ <> while 1 /string repeat then r> drop ;
-: skip ( str len char -- str' len' ) >r begin dup while over c@ r@ =  while 1 /string repeat then r> drop ;
-: split ( str len char -- str1 len1 str2 len2 ) >r 2dup r> scan 2swap 2 pick - ;
-
-: r13 ( c -- o )
-  >lower trip
-	lowercase?
-	if
-		[char] m > if -13 else 13 then +
-	else 
-		drop 
-	then ;
-
-: r13-type ( c-addr u )
-	bounds do i c@ r13 emit loop ;
-	
-
-( a non portable way of making the terminal input raw )
-: raw c" /bin/stty raw" system ;
-: cooked c" /bin/stty cooked" system ;
 
 : license ( -- : print out license information )
 " 
@@ -1645,17 +1630,96 @@ OTHER DEALINGS IN THE SOFTWARE.
 	" Core: " here . " / " here unused + . cr
 	ok ;
 
+( @todo Improve this function! )
 : reader immediate 
 	welcome
 	begin read " ok" cr again ;
-( find reader set-starting-word warm )
+( find reader start! warm )
 
 ( ==================== Core utilities ======================== )
 
 ( @todo Implement an equivalent to "core.c" here )
 
+16 constant header-size   ( size of Forth core file header )
+0 variable core-file      ( core fileid we are reading in )
+0 variable core-cell-size ( cell size of Forth core )
+0 variable core-version   ( version of core file )
+0 variable core-endianess ( endianess of core we are reading in )
+
+( save space to read in header )
+create header header-size chars allot
+: cheader ( -- c-addr : header char address )
+	header chars> ;
+
+0
+enum header-magic0
+enum header-magic1
+enum header-magic2
+enum header-magic3
+enum header-cell-size
+enum header-version
+enum header-endianess
+enum header-magic4
+
+: cleanup ( -- : cleanup before abort )
+	core-file @ ?dup 0<> if close-file drop then ;
+
+: invalid-header ( bool -- : abort if header is invalid )
+	<> if cleanup abort" invalid header" then ;
+
+: save-core-cell-size
+	core-cell-size !
+	" cell size:" tab
+	core-cell-size @ 2 = if 2 . cr exit then
+	core-cell-size @ 4 = if 4 . cr exit then
+	core-cell-size @ 8 = if 8 . cr exit then
+	cleanup core-cell-size @ . abort" : invalid cell size"  ;
+
+: check-version-compatibility 
+	core-version !
+	core-version @ 2 = if " core ver:	2" cr exit then
+	cleanup core-version @ . abort" : unknown version number" ;
+
+: save-endianess 
+	core-endianess !
+	" endianess:" tab
+	core-endianess @ 0 = if " big"    cr exit then
+	core-endianess @ 1 = if " little" cr exit then
+	cleanup core-endianess @ . abort" invalid endianess" then ;
+
+: header?
+	cheader header-size core-file @ read-file 
+	           0<> if cleanup abort" file read failed" then
+	header-size <> if cleanup abort" header too small" then
+	( " raw header:" header 2 dump )
+	cheader header-magic0    + c@      255 invalid-header
+	cheader header-magic1    + c@ [char] 4 invalid-header
+	cheader header-magic2    + c@ [char] T invalid-header
+	cheader header-magic3    + c@ [char] H invalid-header
+	cheader header-cell-size + c@ save-core-cell-size
+	cheader header-version   + c@ check-version-compatibility
+	cheader header-endianess + c@ save-endianess
+	cheader header-magic4    + c@      255 invalid-header
+	" valid header" cr ;
+
+: core ( c-addr u -- : )
+	2dup " core file:" tab type cr
+	r/o open-file-or-abort core-file ! 
+	header?
+	core-file @ close-file drop ;
+
+s" forth.core" core
 
 
+:hide header-size header? 
+header-magic0 header-magic1 header-magic2 header-magic3
+header-version header-cell-size header-endianess header-magic4
+header 
+core-file save-core-cell-size check-version-compatibility
+core-cell-size cheader
+core-endianess core-version save-endianess invalid-header
+cleanup
+;hide
 
 ( ==================== Core utilities ======================== )
 
@@ -1675,6 +1739,7 @@ OTHER DEALINGS IN THE SOFTWARE.
  `source-id `sin `sidx `slen `start-address `fin `fout `stdin
  `stdout `stderr `argc `argv `debug `invalid `top `instruction
  `stack-size `start-time `error-handler
+ open-file-or-abort
 ;hide
 
 ( Heres an interesting piece of code from

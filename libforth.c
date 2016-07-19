@@ -693,7 +693,7 @@ static const char *register_names[] = { "h", "r", "`state", "base", "pwd",
  * (such as READ, or how IMMEDIATE interacts with the virtual machines
  * execution). */
 enum instructions { PUSH,COMPILE,RUN,DEFINE,IMMEDIATE,READ,LOAD,STORE,CLOAD,CSTORE,
-SUB,ADD,AND,OR,XOR,INV,SHL,SHR,MUL,DIV,LESS,MORE,EXIT,EMIT,KEY,FROMR,TOR,BRANCH,
+SUB,ADD,AND,OR,XOR,INV,SHL,SHR,MUL,DIV,ULESS,UMORE,SLESS,SMORE,EXIT,EMIT,KEY,FROMR,TOR,BRANCH,
 QBRANCH, PNUM, QUOTE,COMMA,EQUAL,SWAP,DUP,DROP,OVER,TAIL,BSAVE,BLOAD,FIND,PRINT,
 DEPTH,CLOCK,EVALUATE,PSTK,RESTART,SYSTEM,FCLOSE,FOPEN,FDELETE,FREAD,FWRITE,FPOS,
 FSEEK,FFLUSH,FRENAME,LAST_INSTRUCTION };
@@ -708,7 +708,7 @@ FSEEK,FFLUSH,FRENAME,LAST_INSTRUCTION };
  * enumeration used in "enum instructions", so it does not get a name. */
 static const char *instruction_names[] = { "push","compile","run","define", 
 "immediate","read","@","!","c@","c!","-","+","and","or","xor","invert","lshift",
-"rshift","*","/","u<","u>","exit","_emit","key","r>",">r","branch","?branch",
+"rshift","*","/","u<","u>","<",">","exit","_emit","key","r>",">r","branch","?branch",
 "pnum","'", ",","=", "swap","dup","drop", "over", "tail","bsave","bload",
 "find","print","depth","clock","evaluate",".s","restart","system","close-file",
 "open-file","delete-file","read-file","write-file","file-position","reposition-file",
@@ -1173,6 +1173,7 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out)
 	forth_cell_t *m, i, w, t;
 	forth_t *o;
 	assert(sizeof(forth_cell_t) >= sizeof(uintptr_t));
+	assert(sizeof(forth_cell_t) == sizeof(forth_signed_cell_t));
 	/*There is a minimum requirement on the "m" field in the "forth_t"
 	* structure which is not apparent in its definition (and cannot be
 	* made apparent given how flexible array members work). We need enough
@@ -1735,8 +1736,8 @@ int forth_run(forth_t *o)
 		case LOAD:    cd(1); f = m[ck(f)];                   break;
 		case STORE:   cd(2); m[ck(f)] = *S--; f = *S--;      break;
 		/**@warning CLOAD and CSTORE are unsafe - by design! */
-		case CLOAD:   cd(1); f = *(((char*)m) + f);          break;
-		case CSTORE:  cd(2); ((char*)m)[f] = *S--; f = *S--; break;
+		case CLOAD:   cd(1); f = *(((unsigned char*)m) + f); break;
+		case CSTORE:  cd(2); ((unsigned char*)m)[f] = *S--; f = *S--; break;
 		case SUB:     cd(2); f = *S-- - f;                   break;
 		case ADD:     cd(2); f = *S-- + f;                   break;
 		case AND:     cd(2); f = *S-- & f;                   break;
@@ -1755,8 +1756,10 @@ int forth_run(forth_t *o)
 				longjmp(*o->on_error, RECOVERABLE);
 			} 
 			break;
-		case LESS:    cd(2); f = *S-- < f;                       break;
-		case MORE:    cd(2); f = *S-- > f;                       break;
+		case ULESS:   cd(2); f = *S-- < f;                       break;
+		case UMORE:   cd(2); f = *S-- > f;                       break;
+		case SLESS:   cd(2); f = ((forth_signed_cell_t)(*S--)) < (forth_signed_cell_t)f; break;
+		case SMORE:   cd(2); f = ((forth_signed_cell_t)(*S--)) > (forth_signed_cell_t)f; break;
 		case EXIT:    I = m[ck(m[RSTK]--)];                      break;
 		/* @note key and emit could be replaced by the file 
 		 * primitives defined later */
@@ -2080,6 +2083,8 @@ int main_forth(int argc, char **argv)
 	 * option processing stops. It is a simple mechanism for processing
 	 * program arguments and there are better ways of doing it (such as
 	 * "getopt" and "getopts"), but by using them we sacrifice portability. */
+
+	/**@todo Add verbose option */
 	for(i = 1; i < argc && argv[i][0] == '-'; i++)
 		switch(argv[i][1]) {
 		case '\0': goto done; /* stop argument processing */
