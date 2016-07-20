@@ -19,6 +19,8 @@
  * @todo Add a C FFI and methods of adding C functions to the interpreter.
  * @todo Error handling could be improved - the latest word definition should be
  * erased if an error occurs before the terminating ';'.
+ * @todo Make a compiler (a desperate program) that targets the Forth virtual
+ * machine.
  *
  * The MIT License (MIT)
  *
@@ -115,7 +117,6 @@
  *      both interactive execution of commands (making it suitable as a shell
  *      for systems that lack a more formal operating system) and the ability
  *      to compile sequences of commands for later execution."
- *
  *
  *  Forth has a philosophy like most languages, one of simplicity, compactness
  *  and of trying only to solve the problem at hand, even going as far as to try
@@ -1736,8 +1737,8 @@ int forth_run(forth_t *o)
 		case LOAD:    cd(1); f = m[ck(f)];                   break;
 		case STORE:   cd(2); m[ck(f)] = *S--; f = *S--;      break;
 		/**@warning CLOAD and CSTORE are unsafe - by design! */
-		case CLOAD:   cd(1); f = *(((unsigned char*)m) + f); break;
-		case CSTORE:  cd(2); ((unsigned char*)m)[f] = *S--; f = *S--; break;
+		case CLOAD:   cd(1); f = *(((uint8_t*)m) + f);       break;
+		case CSTORE:  cd(2); ((uint8_t*)m)[f] = *S--; f = *S--; break;
 		case SUB:     cd(2); f = *S-- - f;                   break;
 		case ADD:     cd(2); f = *S-- + f;                   break;
 		case AND:     cd(2); f = *S-- & f;                   break;
@@ -1745,7 +1746,7 @@ int forth_run(forth_t *o)
 		case XOR:     cd(2); f = *S-- ^ f;                   break;
 		case INV:     cd(1); f = ~f;                         break;
 		case SHL:     cd(2); f = *S-- << f;                  break;
-		case SHR:     cd(2); f = (forth_cell_t)*S-- >> f;    break;
+		case SHR:     cd(2); f = *S-- >> f;                  break;
 		case MUL:     cd(2); f = *S-- * f;                   break;
 		case DIV:
 			cd(2);

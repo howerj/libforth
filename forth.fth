@@ -110,6 +110,7 @@ Some interesting links:
 : 4/ 2 rshift ( n -- n ) ;
 : 8* 3 lshift ( n -- n ) ;
 : 8/ 3 rshift ( n -- n ) ;
+: 256* 8 lshift ( n -- n ) ;
 : 256/ 8 rshift ( n -- n ) ;
 : 2dup over over ( n1 n2 -- n1 n2 n1 n2 : duplicate two values ) ;
 : mod ( x u -- remainder ) 2dup / * - ;
@@ -216,9 +217,8 @@ Some interesting links:
 
 : source ( -- c-addr u )
 	( TODO: read registers instead )
-	[ 32 chars> ] literal ( size of input buffer, in characters )
-	[ 64 chars> ] literal ( start of input buffer, in characters )
-;
+	[ 32 chars> ] literal   ( size of input buffer, in characters )
+	[ 64 chars> ] literal ; ( start of input buffer, in characters )
 
 : source-id ( -- 0 | 1 | 2 )
 	( The returned values correspond to whether the interpreter is
@@ -817,7 +817,8 @@ single word definition:
 Which will skip a line if a conditional is false, and compile it
 if true )
 
-( These words really, really need refactoring )
+( These words really, really need refactoring, I could use the newly defined 
+  "defer" to help out with this )
 0 variable      nest        ( level of [if] nesting )
 0 variable      [if]-word   ( populated later with "find [if]" )
 0 variable      [else]-word ( populated later with "find [else]")
@@ -853,13 +854,79 @@ find [else] [else]-word !
 
 :hide [if]-word [else]-word nest reset-nest unnest? match-[else]? ;hide
 
+( ==================== Endian Words =========================== )
+
 size 2 = [if] 0x0123           variable endianess [then]
 size 4 = [if] 0x01234567       variable endianess [then]
 size 8 = [if] 0x01234567abcdef variable endianess [then]
 
-: endian ( -- bool : returns the endianess of the processor )
+: endian ( -- bool : returns the endianess of the processor, little = 0, big = 1 )
 	[ endianess chars> c@ 0x01 = ] literal ;
 hider endianess
+
+: swap16 ( x -- x : swap the byte order a 16 bit number )
+	dup 256* 0xff00 and >r 256/ lsb r> or ;
+
+size 4 >= [if] 
+	: swap32 
+		dup       0xffff and swap16 16 lshift swap
+		16 rshift 0xffff and swap16 or ;
+[then]
+
+size 8 >= [if]
+	: swap64 ( x -- x : swap the byte order of a 64 bit number )
+		    dup       0xffffffff and swap32 32 lshift swap
+		    32 rshift 0xffffffff and swap32 or ;
+[then]
+
+size 2 = [if]
+	endian 
+	[if]      ( host is big endian )
+	: >little ( x -- x : host byte order to little endian order ) 
+		swap16 ;
+	: >big    ( x -- x : host byte order to big endian order ) 
+		;
+	[else]    ( host is little endian )
+	: >little ( x -- x : host byte order to little endian order ) 
+		;
+	: >big    ( x -- x : host byte order to big endian order ) 
+		swap16 ;
+	[then]
+[then]
+
+size 4 = [if]
+	endian 
+	[if]      ( host is big endian )
+	: >little ( x -- x : host byte order to little endian order ) 
+		swap32 ;
+	: >big    ( x -- x : host byte order to big endian order ) 
+		;
+	[else]    ( host is little endian )
+	: >little ( x -- x : host byte order to little endian order ) 
+		;
+	: >big    ( x -- x : host byte order to big endian order ) 
+		swap32 ;
+	[then]
+[then]
+
+size 8 = [if]
+	endian 
+	[if]      ( host is big endian )
+	: >little ( x -- x : host byte order to little endian order ) 
+		swap64 ;
+	: >big    ( x -- x : host byte order to big endian order ) 
+		;
+	[else]    ( host is little endian )
+	: >little ( x -- x : host byte order to little endian order ) 
+		;
+	: >big    ( x -- x : host byte order to big endian order ) 
+		swap64 ;
+	[then]
+[then]
+
+( ==================== Endian Words =========================== )
+
+( ==================== Misc words ============================= )
 
 : trace ( flag -- : turn tracing on/off )
 	`debug ! ;
@@ -919,6 +986,8 @@ hider forgetter
 		drop
 		1
 	endif ;
+
+( ==================== Misc words ============================= )
 
 ( ==================== Random Numbers ========================= )
 
@@ -1667,7 +1736,7 @@ enum header-magic4
 : invalid-header ( bool -- : abort if header is invalid )
 	<> if cleanup abort" invalid header" then ;
 
-: save-core-cell-size
+: save-core-cell-size ( char -- : save the core file cell size, checking if it is valid )
 	core-cell-size !
 	" cell size:" tab
 	core-cell-size @ 2 = if 2 . cr exit then
@@ -1675,19 +1744,19 @@ enum header-magic4
 	core-cell-size @ 8 = if 8 . cr exit then
 	cleanup core-cell-size @ . abort" : invalid cell size"  ;
 
-: check-version-compatibility 
+: check-version-compatibility ( char -- : checks the version compatibility of the core file ) 
 	core-version !
 	core-version @ 2 = if " core ver:	2" cr exit then
 	cleanup core-version @ . abort" : unknown version number" ;
 
-: save-endianess 
+: save-endianess ( char -- : save the endianess, checking if it is valid )
 	core-endianess !
 	" endianess:" tab
 	core-endianess @ 0 = if " big"    cr exit then
 	core-endianess @ 1 = if " little" cr exit then
 	cleanup core-endianess @ . abort" invalid endianess" then ;
 
-: header?
+: header? ( -- : )
 	cheader header-size core-file @ read-file 
 	           0<> if cleanup abort" file read failed" then
 	header-size <> if cleanup abort" header too small" then
@@ -1708,7 +1777,7 @@ enum header-magic4
 	header?
 	core-file @ close-file drop ;
 
-s" forth.core" core
+( s" forth.core" core )
 
 
 :hide header-size header? 
