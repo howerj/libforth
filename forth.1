@@ -4,7 +4,7 @@
 .SH NAME
 forth \- A small Forth interpreter.
 .SH SYNOPSIS
-forth [-s file] [-l file] [-t] [-h] [-m size] [-] file..
+forth [-s file] [-l file] [-t] [-h] [-v] [-m size] [-] file..
 .SH DESCRIPTION
 This is a small Forth interpreter, built around the libforth(3) library. It is
 an provides an idiosyncratic version of Forth with minimal effort to abide by
@@ -30,6 +30,12 @@ this will make the Forth interpreter read from stdin(3), but before "-d".
 .TP
 .B -h
 Print out a short help message and exit unsuccessfully.
+
+.TP
+.B -v
+Turn verbose mode on, more information will be printed out, to stderr(3), about
+what is happening in the interpreter. Usually the interpreter is as silent as
+possible.
 
 .TP
 .B -m size

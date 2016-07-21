@@ -19,7 +19,7 @@
  * @todo Add a C FFI and methods of adding C functions to the interpreter.
  * @todo Error handling could be improved - the latest word definition should be
  * erased if an error occurs before the terminating ';'.
- * @todo Make a compiler (a desperate program) that targets the Forth virtual
+ * @todo Make a compiler (a separate program) that targets the Forth virtual
  * machine.
  *
  * The MIT License (MIT)
@@ -256,12 +256,12 @@
  * typing in the line number, as so the name is shorter (and hence the checks
  * are out of the way visually when reading the code).
  * @param c expression to bounds check */
-#define ck(c) check_bounds(o, c, __LINE__)
+#define ck(c) check_bounds(o, &on_error, c, __LINE__)
 
 /**@brief This is a wrapper around check_depth, to make checking the depth
  * short and simple.
  * @param depth */
-#define cd(depth) check_depth(o, S, depth, __LINE__)
+#define cd(depth) check_depth(o, &on_error, S, depth, __LINE__)
 /**@brief This performs tracing
  * @param ENV forth environment
  * @param STK stack pointer
@@ -574,7 +574,6 @@ static const uint8_t header[MAGIC7+1] = {
 struct forth { /**< FORTH environment, values marked '~~' are serialized in order */
 	uint8_t header[sizeof(header)]; /**< ~~ header for reloadable core file */
 	forth_cell_t core_size;  /**< ~~ size of VM (converted to uint64_t for serialization) */
-	jmp_buf *on_error;   /**< place to jump to on error */
 	uint8_t *s;          /**< convenience pointer for string input buffer */
 	char hex_fmt[16];    /**< calculated hex format */
 	char word_fmt[16];   /**< calculated word format */
@@ -990,29 +989,29 @@ static void debug_checks(forth_t *o, forth_cell_t f, unsigned line)
  * interpreter (if it is enabled). The function is not called directly but
  * is instead wrapped in with the "ck" macro, it can be removed completely
  * with compile time defines, removing the check and the debugging code. */
-static forth_cell_t check_bounds(forth_t *o, forth_cell_t f, unsigned line)
+static forth_cell_t check_bounds(forth_t *o, jmp_buf *on_error, forth_cell_t f, unsigned line)
 {
 	if(o->m[DEBUG] >= DEBUG_CHECKS)
 		debug_checks(o, f, line);
 	if(((forth_cell_t)f) >= o->core_size) {
 		fprintf(stderr, "( fatal \" bounds check failed: %" PRIdCell " >= %zu\" )\n", f, (size_t)o->core_size);
-		longjmp(*o->on_error, FATAL);
+		longjmp(*on_error, FATAL);
 	}
 	return f;
 }
 
 /* "check_depth" is used to check that there are enough values on the stack
  * before an operation takes place. It is wrapped up in the "cd" macro. */
-static void check_depth(forth_t *o, forth_cell_t *S, forth_cell_t expected, unsigned line)
+static void check_depth(forth_t *o, jmp_buf *on_error, forth_cell_t *S, forth_cell_t expected, unsigned line)
 {
 	if(o->m[DEBUG] >= DEBUG_CHECKS)
 		debug_checks(o, (forth_cell_t)(S - o->vstart), line);
 	if((uintptr_t)(S - o->vstart) < expected) {
 		fprintf(stderr, "( error \" stack underflow\" )\n");
-		longjmp(*o->on_error, RECOVERABLE);
+		longjmp(*on_error, RECOVERABLE);
 	} else if(S > o->vend) {
 		fprintf(stderr, "( error \" stack overflow\" )\n");
-		longjmp(*o->on_error, RECOVERABLE);
+		longjmp(*on_error, RECOVERABLE);
 	}
 }
 
@@ -1021,31 +1020,31 @@ static void check_depth(forth_t *o, forth_cell_t *S, forth_cell_t expected, unsi
  * There is a bit of a mismatch between Forth strings (which are pointer
  * to the string and a length) and C strings, which a pointer to the string and
  * are NUL terminated. This function helps to correct that. */
-static void check_is_asciiz(forth_t *o, char *s, forth_cell_t end)
+static void check_is_asciiz(jmp_buf *on_error, char *s, forth_cell_t end)
 {
 	if(*(s + end) != '\0') {
 		fprintf(stderr, "( error \" Not an ASCIIZ string\")\n");
-		longjmp(*o->on_error, RECOVERABLE);
+		longjmp(*on_error, RECOVERABLE);
 	}
 }
 
 /* This function gets a string off the Forth stack, checking that the string is
  * NUL terminated. It is a helper function used when a Forth string has to be
  * converted to a C string so it can be passed to a C function. */
-static char *forth_get_string(forth_t *o, forth_cell_t **S, forth_cell_t f)
+static char *forth_get_string(forth_t *o, jmp_buf *on_error, forth_cell_t **S, forth_cell_t f)
 {
 	forth_cell_t length = f;
 	char *string = ((char*)o->m) + **S;
 	(*S)--;
-	check_is_asciiz(o, string, length);
+	check_is_asciiz(on_error, string, length);
 	return string;
 }
 
-static const char* forth_get_fam(forth_t *o, forth_cell_t f)
+static const char* forth_get_fam(jmp_buf *on_error, forth_cell_t f)
 {
 	if(f >= LAST_FAM) {
 		fprintf(stderr, "( error \" Invalid file access method\" %"PRIdCell")\n", f);
-		longjmp(*o->on_error, RECOVERABLE);
+		longjmp(*on_error, RECOVERABLE);
 	}
 	return fams[f];
 }
@@ -1147,7 +1146,6 @@ static void forth_make_default(forth_t *o, size_t size, FILE *in, FILE *out)
 	o->S             = o->m + size - (2 * o->m[STACK_SIZE]); /* set up variable stk pointer */
 	o->vstart        = o->m + size - (2 * o->m[STACK_SIZE]);
 	o->vend          = o->vstart + o->m[STACK_SIZE];
-	o->on_error      = calloc(sizeof(jmp_buf), 1);
 	sprintf(o->hex_fmt, "0x%%0%d"PRIxCell, (int)sizeof(forth_cell_t)*2);
 	sprintf(o->word_fmt, "%%%ds%%n", MAXIMUM_WORD_LENGTH - 1);
 	forth_set_file_input(o, in);  /* set up input after our eval */
@@ -1373,7 +1371,6 @@ void forth_free(forth_t *o)
 {
 	assert(o);
 	o->m[INVALID] = 1; /* a sufficiently "smart" compiler might optimize this out */
-	free(o->on_error);
 	free(o);
 }
 
@@ -1425,6 +1422,7 @@ int forth_run(forth_t *o)
 {
 	int errorval = 0;
 	assert(o);
+	jmp_buf on_error;
 	if(o->m[INVALID]) {
 		fprintf(stderr, "fatal: refusing to run an invalid forth\n");
 		return -1;
@@ -1432,7 +1430,7 @@ int forth_run(forth_t *o)
 
 	/* The following code handles errors, if an error occurs, the
 	 * interpreter will jump back to here. */
-	if ((errorval = setjmp(*o->on_error)) || o->m[INVALID]) {
+	if ((errorval = setjmp(on_error)) || o->m[INVALID]) {
 		/* If the interpreter gets into an invalid state we always
 		 * exit, which */
 		if(o->m[INVALID])
@@ -1714,7 +1712,7 @@ int forth_run(forth_t *o)
 				goto INNER;
 			} else if(!numberify(o->m[BASE], &w, (char*)o->s)) {
 				fprintf(stderr, "( error \" %s is not a word\" )\n", o->s);
-				longjmp(*o->on_error, RECOVERABLE);
+				longjmp(on_error, RECOVERABLE);
 				break;
 			}
 			if (m[STATE]) { /* must be a number then */
@@ -1754,7 +1752,7 @@ int forth_run(forth_t *o)
 				f = *S-- / f;
 			} else {
 				fputs("( error \" divide by zero\" )\n", stderr);
-				longjmp(*o->on_error, RECOVERABLE);
+				longjmp(on_error, RECOVERABLE);
 			} 
 			break;
 		case ULESS:   cd(2); f = *S-- < f;                       break;
@@ -1880,7 +1878,7 @@ int forth_run(forth_t *o)
 				slen   = o->m[SLEN], fin  = o->m[FIN],
 				source = o->m[SOURCE_ID], r = m[RSTK];
 			cd(2);
-			char *s = forth_get_string(o, &S, f);
+			char *s = forth_get_string(o, &on_error, &S, f);
 			f = *S--;
 			/* save the stack variables */
 			o->S = S;
@@ -1906,28 +1904,28 @@ int forth_run(forth_t *o)
 		 * this is the simplest way of adding file access words to our
 		 * Forth interpreter */
 		case PSTK:    print_stack(o, (FILE*)(o->m[STDOUT]), S, f);   break;
-		case RESTART: cd(1); longjmp(*o->on_error, f);               break;
-		case SYSTEM:  cd(2); f = system(forth_get_string(o, &S, f)); break;
+		case RESTART: cd(1); longjmp(on_error, f);                   break;
+		case SYSTEM:  cd(2); f = system(forth_get_string(o, &on_error, &S, f)); break;
 		case FCLOSE:  cd(1); f = fclose((FILE*)f);                   break;
-		case FDELETE: cd(2); f = remove(forth_get_string(o, &S, f)); break;
+		case FDELETE: cd(2); f = remove(forth_get_string(o, &on_error, &S, f)); break;
 		case FPOS:    cd(1); f = ftell((FILE*)f);                    break;
 		case FSEEK:   cd(2); f = fseek((FILE*)f, *S--, SEEK_SET);    break;
 		case FFLUSH:  cd(1); f = fflush((FILE*)f);                   break;
 		case FRENAME:  
 			cd(3); 
 			{
-				const char *f1 = forth_get_fam(o, f);
+				const char *f1 = forth_get_fam(&on_error, f);
 				f = *S--;
-				char *f2 = forth_get_string(o, &S, f);
+				char *f2 = forth_get_string(o, &on_error, &S, f);
 				f = rename(f2, f1);
 			}
 			break;
 		case FOPEN: 
 			cd(3);
 			{
-				const char *fam = forth_get_fam(o, f);
+				const char *fam = forth_get_fam(&on_error, f);
 				f = *S--;
-				char *file = forth_get_string(o, &S, f);
+				char *file = forth_get_string(o, &on_error, &S, f);
 				f = (forth_cell_t)fopen(file, fam);
 			}
 			break;
@@ -1956,7 +1954,7 @@ int forth_run(forth_t *o)
 		 *that virtual machine memory has been corrupted somehow */
 		default:
 			fprintf(stderr, "( fatal 'illegal-op %" PRIdCell " )\n", w);
-			longjmp(*o->on_error, FATAL);
+			longjmp(on_error, FATAL);
 		}
 	}
 	/*We must save the stack pointer and the top of stack when we exit the
@@ -2024,7 +2022,7 @@ static FILE *fopen_or_die(const char *name, char *mode)
 
 static void usage(const char *name)
 {
-	fprintf(stderr, "usage: %s [-s file] [-e string] [-l file] [-t] [-h] [-m size] [-] files\n", name);
+	fprintf(stderr, "usage: %s [-s file] [-e string] [-l file] [-t] [-h] [-v] [-m size] [-] files\n", name);
 }
 
 /* We try to keep the interface to the example program as simple as possible, so
@@ -2044,6 +2042,7 @@ Forth: A small forth interpreter build around libforth\n\n\
 \t-l file   load previously saved state from file\n\
 \t-m size   specify forth memory size in kilobytes (cannot be used with '-l')\n\
 \t-t        process stdin after processing forth files\n\
+\t-v        turn verbose mode on\n\
 \t-         stop processing options\n\n\
 Options must come before files to execute\n\n";
 	fputs(help_text, stderr);
@@ -2073,9 +2072,10 @@ Options must come before files to execute\n\n";
 int main_forth(int argc, char **argv)
 {
 	FILE *in = NULL, *dump = NULL;
-	int save = 0, readterm = 0, mset = 0, eval = 0, rval = 0, i = 1, c = 0;
+	int save = 0, readterm = 0, mset = 0, eval = 0, rval = 0, i = 1, c = 0, verbose = 0;
 	static const size_t kbpc = 1024/sizeof(forth_cell_t); /*kilobytes per cell */
 	static const char *dump_name = "forth.core";
+	char *optarg = NULL;
 	forth_cell_t core_size = DEFAULT_CORE_SIZE;
 	forth_t *o = NULL;
 	/* This loop processes any options that may have been passed to the
@@ -2085,12 +2085,14 @@ int main_forth(int argc, char **argv)
 	 * program arguments and there are better ways of doing it (such as
 	 * "getopt" and "getopts"), but by using them we sacrifice portability. */
 
-	/**@todo Add verbose option */
 	for(i = 1; i < argc && argv[i][0] == '-'; i++)
 		switch(argv[i][1]) {
 		case '\0': goto done; /* stop argument processing */
 		case 'h':  usage(argv[0]); help(); return -1;
-		case 't':  readterm = 1; break;
+		case 't':  readterm = 1; 
+			   if(verbose)
+				   fprintf(stderr, "note: read from stdin after processing arguments\n");
+			   break;
 		case 'e':
 			if(i >= (argc - 1))
 				goto fail;
@@ -2098,7 +2100,10 @@ int main_forth(int argc, char **argv)
 				fprintf(stderr, "fatal: initialization failed\n");
 				return -1;
 			}
-			if(forth_eval(o, argv[++i]) < 0)
+			optarg = argv[++i];
+			if(verbose)
+				fprintf(stderr, "note: evaluating '%s'\n", optarg);
+			if(forth_eval(o, optarg) < 0)
 				goto end;
 			eval = 1;
 			break;
@@ -2107,6 +2112,8 @@ int main_forth(int argc, char **argv)
 				goto fail;
 			dump_name = argv[++i];
 		case 'd':  /*use default name */
+			if(verbose)
+				fprintf(stderr, "note: saving core file to '%s' (on exit)\n", dump_name);
 			save = 1;
 			break;
 		case 'm':
@@ -2116,16 +2123,24 @@ int main_forth(int argc, char **argv)
 				fprintf(stderr, "fatal: -m too small (minimum %zu)\n", MINIMUM_CORE_SIZE / kbpc);
 				return -1;
 			}
+			if(verbose)
+				fprintf(stderr, "note: memory size set to %zu\n", core_size);
 			mset = 1;
 			break;
 		case 'l':
 			if(o || mset || (i >= argc - 1))
 				goto fail;
-			if(!(o = forth_load_core(dump = fopen_or_die(argv[++i], "rb")))) {
-				fprintf(stderr, "fatal: %s: core load failed\n", argv[i]);
+			optarg = argv[++i];
+			if(verbose)
+				fprintf(stderr, "note: loading core file '%s'", optarg);
+			if(!(o = forth_load_core(dump = fopen_or_die(optarg, "rb")))) {
+				fprintf(stderr, "fatal: %s: core load failed\n", optarg);
 				return -1;
 			}
 			fclose(dump);
+			break;
+		case 'v':
+			verbose++;
 			break;
 		default:
 		fail:
@@ -2141,6 +2156,8 @@ done:
 	}
 	forth_set_args(o, argc, argv);
 	for(; i < argc; i++) { /* process all files on command line */
+		if(verbose)
+			fprintf(stderr, "note: reading from file '%s'\n", argv[i]);
 		forth_set_file_input(o, in = fopen_or_die(argv[i], "rb"));
 		if((c = fgetc(in)) == '#') /*shebang line '#!', core files could also be detected */
 			while(((c = forth_get_char(o)) > 0) && (c != '\n'));
@@ -2154,6 +2171,8 @@ close:
 		fclose_input(&in);
 	}
 	if(readterm) { /* if '-t' or no files given, read from stdin */
+		if(verbose)
+			fprintf(stderr, "note: reading from stdin\n");
 		forth_set_file_input(o, stdin);
 		rval = forth_run(o);
 	}
@@ -2168,6 +2187,8 @@ end:
 			fprintf(stderr, "fatal: refusing to save invalid core\n");
 			return -1;
 		}
+		if(verbose)
+			fprintf(stderr, "note: saving for file to '%s'\n", dump_name);
 		if(forth_save_core(o, dump = fopen_or_die(dump_name, "wb"))) {
 			fprintf(stderr, "fatal: core file save to '%s' failed\n", dump_name);
 			rval = -1;

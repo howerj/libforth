@@ -1380,9 +1380,9 @@ more " The built in words that accessible are:
 	@ !               fetch, store
 	c@ c!             character based fetch and store
 	- + * /           standard arithmetic operations,
-	and or xor invert standard bit operations
+	and or xor invert standard bitwise operations
 	lshift rshift     left and right bit shift
-	< > =             comparison predicates
+	u< u> < > =       comparison predicates
 	exit              exit from a word
 	emit              print character from top of stack
 	key               get a character from input
@@ -1644,6 +1644,27 @@ matcher is match
 
 ( ==================== Matcher ================================ )
 
+( ==================== Cons Cells ============================= )
+
+( From http://sametwice.com/cons.fs, this could be improved if the optional
+  memory allocation words were added to the interpreter. This provides
+  a simple "cons cell" data structure. There is currently no way to
+  free allocated cells )
+
+: car! ( cons-addr -- : store a value in the car cell of a cons cell ) 
+	! ;
+: cdr! ( cons-addr -- : store a value in the cdr cell of a cons cell )
+	cell+ ! ;
+: car@ ( cons-addr -- car-val : retrieve car value from cons cell )
+	@ ;
+: cdr@ ( cons-addr -- cdr-val : retrieve cdr value from cons cell )
+	cell+ @ ;
+: cons ( car-val cdr-val -- cons-addr : allocate a new cons cell )
+	swap here >r , , r> ;
+: cons0 0 0 cons ;
+
+( ==================== Cons Cells ============================= )
+
 ( ==================== Miscellaneous ========================== )
 
 ( @todo use check-within in various primitives like "array" )
@@ -1708,6 +1729,8 @@ OTHER DEALINGS IN THE SOFTWARE.
 ( ==================== Core utilities ======================== )
 
 ( @todo Implement an equivalent to "core.c" here )
+( @todo Process a Forth core file and spit out a C structure
+  containing information that describes the core file )
 
 16 constant header-size   ( size of Forth core file header )
 0 variable core-file      ( core fileid we are reading in )
@@ -1779,7 +1802,6 @@ enum header-magic4
 
 ( s" forth.core" core )
 
-
 :hide header-size header? 
 header-magic0 header-magic1 header-magic2 header-magic3
 header-version header-cell-size header-endianess header-magic4
@@ -1811,13 +1833,3 @@ cleanup
  open-file-or-abort
 ;hide
 
-( Heres an interesting piece of code from
-  http://c2.com/cgi/wiki?ForthSimplicity
-
- : IMMEDIATE?	-1 = ;
- : NEXTWORD	BL WORD FIND ;
- : NUMBER,	NUMBER POSTPONE LITERAL ;
- : COMPILEWORD	DUP IF IMMEDIATE? IF EXECUTE ELSE COMPILE, THEN ELSE NUMBER, THEN ;
- : ]	BEGIN NEXTWORD COMPILEWORD AGAIN ;
- : [	R> R> 2DROP ; IMMEDIATE	\ Breaks out of compiler into interpret mode again
-)
