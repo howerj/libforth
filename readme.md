@@ -324,38 +324,38 @@ At the beginning of the Forth virtual machine there is a section used for
 registers, modifying them arbitrary can cause undefined behavior to occur which
 will most likely cause the virtual machine to be terminated.
 
-        NAME          LOCATION     DESCRIPTION
-                    DECIMAL  HEX
-                    0-1      0-1    Unused
-                    2-5      2-5    Push integer word
-        DIC         6        6      Dictionary pointer
-        RSTK        7        7      Return stack pointer
-        STATE       8        8      Interpreter state; compile or command mode
-        BASE        9        9      Base conversion variable
-        PWD         10       A      Pointer to last defined word 
-        SOURCE_ID   11       B      Input source selector (-1 = string input, 
-                                    0 = file input)
-        SIN         12       C      String input pointer
-        SIDX        13       D      String input index  (index into SIN)
-        SLEN        14       E      String input length (length of SIN)
-        START_ADDR  15       F      Pointer to start of VM
-        FIN         16       10     File input pointer
-        FOUT        17       11     File output pointer 
-        STDIN       18       12     File pointer to stdin, if available
-        STDOUT      19       13     File pointer to stdout, if available
-        STDERR      20       14     File pointer to stderr, if available
-        ARGC        21       15     Count of arguments passed to program,
-                                    if available
-        ARGV        22       16     An array of pointers to NUL terminated
-                                    ASCII strings, if available, of ARGC
-                                    length
-	DEBUG       23       17     Turn debugging on/off if enabled
-	INVALID     24       18     If non zero, this interpreter is invalid 
-	TOP         25       19     Stored version of top of stack
-	INSTRUCTION 26       1A     Stored version of instruction pointer
-	STACK_SIZE  27       1B     Size of the variable stack
-	START_TIME  28       1C     Start time in milliseconds 
-                    29-31    1D-3F  Reserved / used for other purposes
+        NAME          LOCATION        DESCRIPTION
+                      DECIMAL  HEX
+                      0-1      0-1    Unused
+                      2-5      2-5    Push integer word
+        DIC           6        6      Dictionary pointer
+        RSTK          7        7      Return stack pointer
+        STATE         8        8      Interpreter state; compile or command mode
+        BASE          9        9      Base conversion variable
+        PWD           10       A      Pointer to last defined word 
+        SOURCE_ID     11       B      Input source selector (-1 = string input, 
+                                      0 = file input)
+        SIN           12       C      String input pointer
+        SIDX          13       D      String input index  (index into SIN)
+        SLEN          14       E      String input length (length of SIN)
+        START_ADDR    15       F      Pointer to start of VM
+        FIN           16       10     File input pointer
+        FOUT          17       11     File output pointer 
+        STDIN         18       12     File pointer to stdin, if available
+        STDOUT        19       13     File pointer to stdout, if available
+        STDERR        20       14     File pointer to stderr, if available
+        ARGC          21       15     Count of arguments passed to program,
+                                      if available
+        ARGV          22       16     An array of pointers to NUL terminated
+                                      ASCII strings, if available, of ARGC
+                                      length
+	DEBUG         23       17     Turn debugging on/off if enabled
+	INVALID       24       18     If non zero, this interpreter is invalid 
+	TOP           25       19     Stored version of top of stack
+	INSTRUCTION   26       1A     Stored version of instruction pointer
+	STACK_SIZE    27       1B     Size of the variable stack
+	ERROR_HANDLER 28     1C     Action to take on error
+                      29-31    1D-3F  Reserved / used for other purposes
 
 ### Dictionary
 

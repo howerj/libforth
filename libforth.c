@@ -636,8 +636,7 @@ enum registers {          /**< virtual machine registers */
 	TOP         = 25, /**< *stored* version of top of stack */
 	INSTRUCTION = 26, /**< start up instruction */
 	STACK_SIZE  = 27, /**< size of the stacks */
-	START_TIME  = 28, /**< start time in milliseconds */
-	ERROR_HANDLER = 29, /**< actions to take on error */
+	ERROR_HANDLER = 28, /**< actions to take on error */
 };
 
 /** @brief enum input_stream contains the possible value of the SOURCE_ID
@@ -676,7 +675,7 @@ enum input_stream {
 static const char *register_names[] = { "h", "r", "`state", "base", "pwd",
 "`source-id", "`sin", "`sidx", "`slen", "`start-address", "`fin", "`fout", "`stdin",
 "`stdout", "`stderr", "`argc", "`argv", "`debug", "`invalid", "`top", "`instruction",
-"`stack-size", "`start-time", "`error-handler", NULL };
+"`stack-size", "`error-handler", NULL };
 
 /** @brief enum for all virtual machine instructions
  *
@@ -1141,7 +1140,6 @@ static void forth_make_default(forth_t *o, size_t size, FILE *in, FILE *out)
 	o->m[STDOUT]     = (forth_cell_t)stdout;
 	o->m[STDERR]     = (forth_cell_t)stderr;
 	o->m[RSTK]       = size - o->m[STACK_SIZE];     /* set up return stk pointer */
-	o->m[START_TIME] = (1000 * clock()) / CLOCKS_PER_SEC;
 	o->m[ARGC] = o->m[ARGV] = 0;
 	o->S             = o->m + size - (2 * o->m[STACK_SIZE]); /* set up variable stk pointer */
 	o->vstart        = o->m + size - (2 * o->m[STACK_SIZE]);
@@ -1453,7 +1451,9 @@ int forth_run(forth_t *o)
 		}
 	}
 	
-	forth_cell_t *m = o->m, pc, *S = o->S, I = o->m[INSTRUCTION], f = o->m[TOP], w;
+	forth_cell_t *m = o->m, pc, *S = o->S, I = o->m[INSTRUCTION], f = o->m[TOP], w, clk;
+
+	clk = (1000 * clock()) / CLOCKS_PER_SEC;
 
 	/*The following section will explain how the threaded virtual machine
 	* interpreter works. Threaded code is quite a simple concept and
@@ -1864,7 +1864,7 @@ int forth_run(forth_t *o)
 		 * has the advantage of being largely portable */
 		case CLOCK:
 			*++S = f;
-			f = ((1000 * clock()) - o->m[START_TIME]) / CLOCKS_PER_SEC;
+			f = ((1000 * clock()) - clk) / CLOCKS_PER_SEC;
 			break;
 		/* EVALUATOR is another complex word needs to be implemented in
 		 * the virtual machine. It mostly just saves and restores state
@@ -1897,6 +1897,8 @@ int forth_run(forth_t *o)
 			o->m[SLEN] = slen;
 			o->m[FIN]  = fin;
 			o->m[SOURCE_ID] = source;
+			if(o->m[INVALID])
+				return -1;
 		}
 		break;
 		/* Whilst loathe to put these in here as virtual machine

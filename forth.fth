@@ -61,6 +61,9 @@ TODO
 	run the core files generated...The virtual machine has higher level
 	functions in it that it probably should not have, like "read" and
 	"system", these belong elsewhere - but where?
+	* It would be interesting to see which Unix utilities could easily
+	be implemented as Forth programs, such as "head", "tail", "cat", "tr",
+	"grep", etcetera.
 
 Some interesting links:
 	* http://www.figuk.plus.com/build/heart.htm
@@ -1167,9 +1170,10 @@ hider hide-words
 	" tracing on:              " `debug   @ TrueFalse cr
 	" starting word:           " `instruction ? cr
 	" real start address:      " `start-address ? cr
+	" error handling:          " `error-handler ? cr
 (
  `sin `sidx `slen `fout
- `stdout `stderr `argc `argv `start-time )
+ `stdout `stderr `argc `argv )
 ;
 
 : y/n? ( -- bool : ask a yes or no question )
@@ -1446,9 +1450,7 @@ more " Some more advanced words:
 	]                 switch to compile mode
 	::                compile ':' into the dictionary
 
-"
-
-more "
+" more "
 For more information either consult the manual pages forth(1) and libforth(1)
 or consult the following sources:
 
@@ -1731,8 +1733,12 @@ OTHER DEALINGS IN THE SOFTWARE.
 ( @todo Implement an equivalent to "core.c" here )
 ( @todo Process a Forth core file and spit out a C structure
   containing information that describes the core file )
+( @todo Implement a series of words for manipulating cell sizes
+  that are larger or smaller, and possibly of a different endianess
+  to the currently running virtual machine )
 
-16 constant header-size   ( size of Forth core file header )
+8 constant header-size   ( size of Forth core file header )
+8 constant size-field-size ( the size in bytes of the size field in the core file )
 0 variable core-file      ( core fileid we are reading in )
 0 variable core-cell-size ( cell size of Forth core )
 0 variable core-version   ( version of core file )
@@ -1742,6 +1748,9 @@ OTHER DEALINGS IN THE SOFTWARE.
 create header header-size chars allot
 : cheader ( -- c-addr : header char address )
 	header chars> ;
+create size-field size-field-size chars allot
+: csize-field ( -- c-addr : address of place size field is stored in )
+	size-field chars> ;
 
 0
 enum header-magic0
@@ -1751,7 +1760,7 @@ enum header-magic3
 enum header-cell-size
 enum header-version
 enum header-endianess
-enum header-magic4
+enum header-magic4 
 
 : cleanup ( -- : cleanup before abort )
 	core-file @ ?dup 0<> if close-file drop then ;
@@ -1779,10 +1788,13 @@ enum header-magic4
 	core-endianess @ 1 = if " little" cr exit then
 	cleanup core-endianess @ . abort" invalid endianess" then ;
 
-: header? ( -- : )
-	cheader header-size core-file @ read-file 
-	           0<> if cleanup abort" file read failed" then
-	header-size <> if cleanup abort" header too small" then
+: read-or-abort ( c-addr size fileid -- : )
+	over >r read-file 
+	  0<> if cleanup abort" file read failed" then
+	r> <> if cleanup abort" header too small" then ;
+
+: header? ( -- : print out header information )
+	cheader header-size core-file @ read-or-abort
 	( " raw header:" header 2 dump )
 	cheader header-magic0    + c@      255 invalid-header
 	cheader header-magic1    + c@ [char] 4 invalid-header
@@ -1794,10 +1806,17 @@ enum header-magic4
 	cheader header-magic4    + c@      255 invalid-header
 	" valid header" cr ;
 
+: size? ( -- : print out core file size )
+	csize-field size-field-size core-file @ read-or-abort
+	( @todo improve method for printing out size )
+	" size: " size-field size-field-size chars dump ;
+
+
 : core ( c-addr u -- : )
 	2dup " core file:" tab type cr
 	r/o open-file-or-abort core-file ! 
 	header?
+	size?
 	core-file @ close-file drop ;
 
 ( s" forth.core" core )
@@ -1809,7 +1828,8 @@ header
 core-file save-core-cell-size check-version-compatibility
 core-cell-size cheader
 core-endianess core-version save-endianess invalid-header
-cleanup
+cleanup size-field csize-field size-field-size
+read-or-abort
 ;hide
 
 ( ==================== Core utilities ======================== )
@@ -1829,7 +1849,7 @@ cleanup
  `state
  `source-id `sin `sidx `slen `start-address `fin `fout `stdin
  `stdout `stderr `argc `argv `debug `invalid `top `instruction
- `stack-size `start-time `error-handler
+ `stack-size `error-handler
  open-file-or-abort
 ;hide
 
