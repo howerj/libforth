@@ -1829,7 +1829,7 @@ core-file save-core-cell-size check-version-compatibility
 core-cell-size cheader
 core-endianess core-version save-endianess invalid-header
 cleanup size-field csize-field size-field-size
-read-or-abort
+read-or-abort size?
 ;hide
 
 ( ==================== Core utilities ======================== )

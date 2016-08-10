@@ -256,8 +256,13 @@
  * typing in the line number, as so the name is shorter (and hence the checks
  * are out of the way visually when reading the code).
  * @param c expression to bounds check */
-#define ck(c) check_bounds(o, &on_error, c, __LINE__)
-
+#define ck(c) check_bounds(o, &on_error, c, __LINE__, o->core_size)
+/**@brief This is a wrapper around check_bounds, so we do not have to keep
+ * typing in the line number, as so the name is shorter (and hence the checks
+ * are out of the way visually when reading the code). This will check
+ * character pointers instead of cell pointers, like "ck" does.
+ * @param c expression to bounds check */
+#define ckchar(c) check_bounds(o, &on_error, c, __LINE__, o->core_size * sizeof(forth_cell_t))
 /**@brief This is a wrapper around check_depth, to make checking the depth
  * short and simple.
  * @param depth */
@@ -272,6 +277,9 @@
 /**@brief This removes the bounds check and debugging code
  * @param c do nothing */
 #define ck(c) (c)
+/**@brief This removes the bounds check and debugging code
+ * @param c do nothing */
+#define ckchar(c) (c)
 /**@brief This is a wrapper around check_depth
  * @param depth do nothing */
 #define cd(depth) ((void)depth)
@@ -663,6 +671,9 @@ enum registers {          /**< virtual machine registers */
  *  possibly another file handle), does not mean that this program is being
  *  run interactively, it could possibly be part of a Unix pipe. As such this
  *  interpreter defaults to being as silent as possible.
+ *
+ *  @todo SOURCE_ID needs extending with the semantics of File Access Words
+ *  optional word set in DPANS94.
  */
 enum input_stream {
 	FILE_IN,       /**< file input; this could be interactive input */
@@ -950,7 +961,7 @@ static int print_unsigned_number(forth_cell_t u, forth_cell_t base, FILE *out)
 {
 	assert(base > 1 && base < 37);
 	int i = 0, r = 0;
-	char s[64 + 1] = "";
+	char s[64 + 1] = ""; 
 	do 
 		s[i++] = conv[u % base];
 	while ((u /= base));
@@ -988,12 +999,12 @@ static void debug_checks(forth_t *o, forth_cell_t f, unsigned line)
  * interpreter (if it is enabled). The function is not called directly but
  * is instead wrapped in with the "ck" macro, it can be removed completely
  * with compile time defines, removing the check and the debugging code. */
-static forth_cell_t check_bounds(forth_t *o, jmp_buf *on_error, forth_cell_t f, unsigned line)
+static forth_cell_t check_bounds(forth_t *o, jmp_buf *on_error, forth_cell_t f, unsigned line, forth_cell_t bound)
 {
 	if(o->m[DEBUG] >= DEBUG_CHECKS)
 		debug_checks(o, f, line);
-	if(((forth_cell_t)f) >= o->core_size) {
-		fprintf(stderr, "( fatal \" bounds check failed: %" PRIdCell " >= %zu\" )\n", f, (size_t)o->core_size);
+	if(f >= bound) {
+		fprintf(stderr, "( fatal \" bounds check failed: %" PRIdCell " >= %zu\" )\n", f, (size_t)bound);
 		longjmp(*on_error, FATAL);
 	}
 	return f;
@@ -1039,6 +1050,9 @@ static char *forth_get_string(forth_t *o, jmp_buf *on_error, forth_cell_t **S, f
 	return string;
 }
 
+/* Forth file access methods ("fam") must be held in a single cell, this
+ * requires a method of translation from this cell into a string that can be
+ * used by the C function "fopen" */
 static const char* forth_get_fam(jmp_buf *on_error, forth_cell_t f)
 {
 	if(f >= LAST_FAM) {
@@ -1050,7 +1064,7 @@ static const char* forth_get_fam(jmp_buf *on_error, forth_cell_t f)
 
 /* This prints out the Forth stack, which is useful for debugging. */
 static void print_stack(forth_t *o, FILE *output, forth_cell_t *S, forth_cell_t f)
-{ /**@todo print out stack the other way around */
+{ 
 	forth_cell_t depth = (forth_cell_t)(S - o->vstart);
 	fprintf(output, "%"PRIdCell": ", depth);
 	if(!depth)
@@ -1061,6 +1075,7 @@ static void print_stack(forth_t *o, FILE *output, forth_cell_t *S, forth_cell_t 
 		print_cell(o, output, *(S--));
 		fputc(' ', output);
 	}
+	fputc('\n', output);
 }
 
 /* This function allows for some more detailed tracing to take place */
@@ -1427,7 +1442,10 @@ int forth_run(forth_t *o)
 	}
 
 	/* The following code handles errors, if an error occurs, the
-	 * interpreter will jump back to here. */
+	 * interpreter will jump back to here.
+	 *
+	 * @todo This code needs to be rethought to be made more compliant with
+	 * how "throw" and "catch" work in Forth. */
 	if ((errorval = setjmp(on_error)) || o->m[INVALID]) {
 		/* If the interpreter gets into an invalid state we always
 		 * exit, which */
@@ -1587,10 +1605,21 @@ int forth_run(forth_t *o)
 	* variable stack. Our "pc" register is now pointing the "RUN" field of
 	* sum of products, the virtual machine will next execute the "RUN"
 	* instruction, saving the instruction pointer to the return stack for
-	* when we finally exit "sum-of-products" back to the interpreter. 
+	* when we finally exit "sum-of-products" back to the interpreter.
+	* "square" will now be called, it's "RUN" field encountered, then "dup".
+	* "dup" does not have a "RUN" field, it is a built in primitive, so the
+	* instruction pointer will not be touched nor the return stack, but the
+	* "DUP" instruction will now be executed. After this has run the
+	* instruction pointer will now be moved to executed "*", another
+	* primitive, then "exit" - which pops a value off the return stack and
+	* sets the instruction pointer to that value. The value points to the
+	* "$swap" field in "sum-of-products", which will in turn be executed
+	* until the final "$exit" field is encountered. This exits back into
+	* our special read-and-loop word defined in the initialization code.
 	*
-	* @todo Continue explanation */
-
+	* The "READ" routine must make sure the correct field is executed when
+	* a word is read in which depends on the state of the interpreter (held
+	* in STATE register). */
 	for(;(pc = m[ck(I++)]);) { 
 	INNER:  
 		w = instruction(m[ck(pc++)]);
@@ -1734,9 +1763,8 @@ int forth_run(forth_t *o)
 		* ADD, SUB and DIV will not. */
 		case LOAD:    cd(1); f = m[ck(f)];                   break;
 		case STORE:   cd(2); m[ck(f)] = *S--; f = *S--;      break;
-		/**@warning CLOAD and CSTORE are unsafe - by design! */
-		case CLOAD:   cd(1); f = *(((uint8_t*)m) + f);       break;
-		case CSTORE:  cd(2); ((uint8_t*)m)[f] = *S--; f = *S--; break;
+		case CLOAD:   cd(1); f = *(((uint8_t*)m) + ckchar(f)); break;
+		case CSTORE:  cd(2); ((uint8_t*)m)[ckchar(f)] = *S--; f = *S--; break;
 		case SUB:     cd(2); f = *S-- - f;                   break;
 		case ADD:     cd(2); f = *S-- + f;                   break;
 		case AND:     cd(2); f = *S-- & f;                   break;
@@ -2146,7 +2174,7 @@ int main_forth(int argc, char **argv)
 			break;
 		default:
 		fail:
-			fprintf(stderr, "fatal: invalid arguments\n");
+			fprintf(stderr, "fatal: invalid argument '%s'\n", argv[i]);
 			usage(argv[0]);
 			return -1;
 		}
