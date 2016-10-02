@@ -1,8 +1,7 @@
 /** @file     unit.c
  *  @brief    unit tests for libforth interpreter public interface
  *  @author   Richard Howe (2015)
- *  @license  LGPL v2.1 or Later 
- *            <https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html> 
+ *  @license  MIT (see https://opensource.org/licenses/MIT)
  *  @email    howe.r.j.89@gmail.com 
  *  @todo     The core unit testing functionality should be made into a
  *            library so it can be used again 

@@ -2,7 +2,7 @@
  *  @brief      a simple run length encoder
  *  @author     Richard James Howe.
  *  @copyright  Copyright 2016 Richard James Howe.
- *  @license    LGPL v2.1 or later version
+ *  @license    MIT (see https://opensource.org/licenses/MIT)
  *  @email      howe.r.j.89@gmail.com 
  *  @todo       add checksum, length and whether encoded succeeded (size decreased) to header
  *  @todo       turn into library (read/write to strings as well as files, man pages)

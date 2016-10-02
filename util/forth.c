@@ -4,7 +4,7 @@
  *              point to porting to more esoteric platforms.
  *  @author     Richard James Howe.
  *  @copyright  Copyright 2016 Richard James Howe.
- *  @license    LGPL v2.1 or later version
+ *  @license    MIT (see https://opensource.org/licenses/MIT)
  *  @email      howe.r.j.89@gmail.com */
 #include <errno.h>
 #include <inttypes.h>
