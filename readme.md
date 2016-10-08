@@ -1074,8 +1074,22 @@ memory addressable by the virtual machine to only within its memory limits
   index into a table of function pointers. The interface would take a
   pointer to the forth object, a pointer to the stack and the stack depth.
 * A few environment variables could be used to specify start up files for the
-interpreter and user specific startup files.
-* For a more complete "To-Do" list see the end of the file [forth.fth][].
+  interpreter and user specific startup files.
+* The file access functions need improving, SOURCE-ID needs extending
+  and some Forth words can be reimplemented in terms of the file access
+  functions. The bsave and bload can be removed.
+* Add save-core, number, word (or parse), load-core, more-core to the
+  virtual machine.
+* Add loading in a Forth image from a memory structure, this will need
+  to be in a portable Format.
+* Add a C FFI and methods of adding C functions to the interpreter.
+* Error handling could be improved - the latest word definition should be
+  erased if an error occurs before the terminating ';'
+* Make a compiler (a separate program) that targets the Forth virtual
+  machine.
+* For a Forth only related "To-Do" list see the end of the file [forth.fth][].
+* SOURCE_ID needs extending with the semantics of File Access Words
+  optional word set in [DPANS94][].
 
 ### Notes
 
@@ -1114,6 +1128,7 @@ you should use a different language, or implementation.
 [liblisp.md]: liblisp.md
 [stdin]: https://en.wikipedia.org/wiki/Standard_streams
 [stderr]: https://en.wikipedia.org/wiki/Standard_streams
+[cxxforth]: https://github.com/kristopherjohnson/cxxforth
+[DPANS94]: http://lars.nocrew.org/dpans/dpans.htm
 
 <style type="text/css">body{margin:40px auto;max-width:850px;line-height:1.6;font-size:16px;color:#444;padding:0 10px}h1,h2,h3{line-height:1.2}</style>
-

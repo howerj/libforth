@@ -40,6 +40,10 @@ help:
 	@echo "cc $< -c -o $@"
 	@${CC} ${CFLAGS} $< -c -o $@
 
+%.md: %.c
+	@${RM} $@
+	./convert $< > $@
+
 lib${TARGET}.a: lib${TARGET}.o
 	${AR} rcs $@ $<
 
@@ -64,21 +68,21 @@ unit.test: unit
 # "forth.core" will fail, making this test fail.
 forth.test: forth unit.test forth.fth unit.fth
 	./$< -s forth_test.core forth.fth unit.fth
-	${RM} forth_test.core
+	@${RM} forth_test.core
 
 test: unit.test forth.test
 
 tags: lib${TARGET}.c lib${TARGET}.h unit.c main.c
 	${CTAGS} $^
 
-dist: ${TARGET} ${TARGET}.1 lib${TARGET}.[a3] ${DOCS} forth.core
+dist: ${TARGET} ${TARGET}.1 lib${TARGET}.[a3] lib${TARGET}.htm ${DOCS} forth.core
 	tar zvcf ${TARGET}.tgz $^
 
 %.htm: %.md
-	${RM} $@
+	@${RM} $@
 	markdown $^ > $@
 
-doc: ${DOCS}
+doc: lib${TARGET}.htm ${DOCS}
 
 doxygen: *.c *.h *.md
 	doxygen -g
@@ -100,4 +104,5 @@ clean:
 	${RM} tags
 	${RM} *.i *.s *.gcov *.gcda *.gcno *.out
 	${RM} html latex Doxyfile *.db *.bak
+	${RM} libforth.md
 

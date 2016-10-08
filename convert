@@ -1,0 +1,57 @@
+#!/usr/bin/awk -f
+
+# This converts a specially formatted C program into markdown, the syntax is
+# simple, any line beginning with "/**" puts the converting into a pass through
+# state, the C comments get put into the output file directly, until "**/" is
+# encountered. Then the converter goes into a "indent everything" state, where
+# the code after the "**/" gets indented before being printed out, this has the
+# effect of making the text quoted.
+#
+# Various Doxygen tags are also processed and removed.
+#
+# Example input:
+#   .---------------------------------.
+#   |/**                              |
+#   |## program that returns true     |
+#   |This program always returns true |
+#   |**/                              |
+#   |int main(void)                   |
+#   |{                                |
+#   |	return -1; /**@todo fix */    |
+#   |}                                |
+#   .---------------------------------.
+# Output:
+#   .---------------------------------.
+#   |## program that returns true     |
+#   |This program always returns true |
+#   |                                 |
+#   |    int main(void)               |
+#   |    {                            |
+#   |	    return -1; /**@todo fix */|
+#   |    }                            |
+#   .---------------------------------.
+
+#
+
+BEGIN {
+	state = 0
+}
+
+/^\/\*\*/ { state = 1; gsub(/^\/\*\*/, "") }
+
+/^\*\*\// { state = 0; gsub(/^\*\*\//, "\n") }
+
+/^@(file|author|copyright|license|email)/ { gsub(/^@[a-z]+ +/, "### ") }
+
+/^@brief/ { gsub(/^@[a-z]+ +/, "") }
+
+/@(param|return)/ { $0 = "" }
+
+{
+	if(state) {
+		print $0
+	} else {
+		print "\t" $0
+	}
+}
+
