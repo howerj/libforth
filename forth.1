@@ -71,30 +71,25 @@ If no files are given to execute stdin(3) will be read from.
 Execute any commands given from stdin(3).
 
 .B
-	./forth -t file1.4th file2.4th
+	./forth -t file1.fth file2.fth
 
-Execute file "file1.4th", then "file2.4th", then read from stdin(3).
-
-.B
-	./forth file1.4th
-
-Execute file "file1.4th".
+Execute file "file1.fth", then "file2.fth", then read from stdin(3).
 
 .B
-	./forth -s file1.4th
+	./forth file1.fth
 
-Execute file "file1.4th", the produce a "forth.core" save file.
+Execute file "file1.fth".
+
+.B
+	./forth -s file1.fth
+
+Execute file "file1.fth", the produce a "forth.core" save file.
 
 .B
 	./forth -s -l forth.core
 
 Load a "forth.core" file, read from stdin(3) and execute any commands given,
 then dump the new core file to "forth.core".
-
-.SH COPYRIGHT
-
-This program is distributed under the LGPL 2.1, or optionally any later
-version.
 
 .SH EXIT STATUS
 
@@ -109,5 +104,11 @@ For more information, including a tutorial, see
 
 .SH BUGS
 Yes, see libforth(3) for a list.
+
+.SH COPYRIGHT
+
+This program is licensed under the MIT license, Copyright (c) 2016, Richard
+James Howe.
+
 .SH AUTHOR
 Richard James Howe (howe.r.j.89@gmail.com)

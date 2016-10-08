@@ -7,6 +7,9 @@ RM      = rm -rf
 CTAGS  ?= ctags
 COLOR   = 
 
+MDS     := ${wildcard *.md}
+DOCS    := ${MDS:%.md=%.htm}
+
 FORTH_FILE = forth.fth
 
 .PHONY: all shorthelp doc clean test profile unit.test forth.test
@@ -68,13 +71,14 @@ test: unit.test forth.test
 tags: lib${TARGET}.c lib${TARGET}.h unit.c main.c
 	${CTAGS} $^
 
-dist: ${TARGET} ${TARGET}.1 lib${TARGET}.[a3] readme.htm forth.core
+dist: ${TARGET} ${TARGET}.1 lib${TARGET}.[a3] ${DOCS} forth.core
 	tar zvcf ${TARGET}.tgz $^
 
 %.htm: %.md
+	${RM} $@
 	markdown $^ > $@
 
-doc: readme.htm
+doc: ${DOCS}
 
 doxygen: *.c *.h *.md
 	doxygen -g

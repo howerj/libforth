@@ -18,7 +18,11 @@ project a [C][] compiler is needed, and a copy of [Make][], type:
 
 	make help
 
-For a list of build options. 
+For a list of build options. But running:
+
+	make run
+
+Will build the interpreter and run it, it will then read from [stdin][].
 
 This implementation is released under the [MIT][] license.
 
@@ -99,6 +103,86 @@ And the forth startup code:
 
 The startup code is well commented and shows how the core interpreter is
 extended to a more function [Forth][] environment.
+
+## Running the interpreter
+
+Running the interpreter is documented in the man page [forth.1][], but it will
+also be described here:
+
+Command line switches must be given before any files, unless that switch takes
+a file as an argument.
+
+* -s file
+
+This saves the working memory of the Forth interpreter to a file,
+which can later be loaded with the "-l" option. If a core file has been
+invalidated this will not be saved, invalidation occurs when an unrecoverable
+error has been detected that would prevent any recovery or meaningful
+execution with the current image.
+
+* -t
+After all the files have been read from and any core files have been loaded
+this will make the Forth interpreter read from [stdin][], the core file will be
+saved after [stdin][] has been read from and there is no more work to do, if
+the "-d" or "-s" flags have been specified.
+
+* -h
+Print out a short help message and exit unsuccessfully.
+
+* -v
+Turn verbose mode on, more information will be printed out, to [stderr][], about
+what is happening in the interpreter. Usually the interpreter is as silent as
+possible.
+
+* -m size
+
+Specify the virtual machines memory size in kilobytes, overriding the default
+memory size. This is mutually exclusive with "-l".
+
+* -l file
+
+This option loads a forth core file generated from the "-d" option of a
+previous run. This core file is not portable and must be generated on the same
+platform as it was generated. It can only be specified once per run of the
+interpreter.
+
+* -
+
+Stop processing any more command line options and treat all arguments after
+this as files to be executed, if there are any.
+
+* file...
+
+If a file, or list of files, is given, read from them one after another
+and execute them. The dictionary and any stored Forth blocks will persist 
+between files but values on the stacks will not.
+
+If no files are given to execute [stdin][] will be read from.
+
+### Examples 
+
+	./forth 
+
+Execute any commands given from [stdin][]
+
+	./forth -t file1.4th file2.4th
+
+Execute file "file1.4th", then "file2.4th", then read from [stdin][]
+
+	./forth file1.4th
+
+Execute file "file1.4th".
+
+	./forth -s file1.4th
+
+Execute file "file1.4th", the produce a "forth.core" save file.
+
+	./forth -s -l forth.core
+
+Load a "forth.core" file, read from [stdin][] and execute any commands given,
+then dump the new core file to "forth.core".
+
+The interpreter returns zero on success and non zero on failure.
 
 ## Using the interpreter
 
@@ -1028,6 +1112,8 @@ you should use a different language, or implementation.
 [Make]: https://en.wikipedia.org/wiki/Make_%28software%29
 [C]: https://en.wikipedia.org/wiki/C_%28programming_language%29
 [liblisp.md]: liblisp.md
+[stdin]: https://en.wikipedia.org/wiki/Standard_streams
+[stderr]: https://en.wikipedia.org/wiki/Standard_streams
 
 <style type="text/css">body{margin:40px auto;max-width:850px;line-height:1.6;font-size:16px;color:#444;padding:0 10px}h1,h2,h3{line-height:1.2}</style>
 

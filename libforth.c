@@ -255,18 +255,25 @@
 /**@brief This is a wrapper around check_bounds, so we do not have to keep
  * typing in the line number, as so the name is shorter (and hence the checks
  * are out of the way visually when reading the code).
- * @param c expression to bounds check */
-#define ck(c) check_bounds(o, &on_error, c, __LINE__, o->core_size)
+ * @param C expression to bounds check
+ * @return check index */
+#define ck(C) check_bounds(o, &on_error, (C), __LINE__, o->core_size)
 /**@brief This is a wrapper around check_bounds, so we do not have to keep
  * typing in the line number, as so the name is shorter (and hence the checks
  * are out of the way visually when reading the code). This will check
  * character pointers instead of cell pointers, like "ck" does.
- * @param c expression to bounds check */
-#define ckchar(c) check_bounds(o, &on_error, c, __LINE__, o->core_size * sizeof(forth_cell_t))
+ * @param C expression to bounds check
+ * @return checked character index */
+#define ckchar(C) check_bounds(o, &on_error, (C), __LINE__, o->core_size * sizeof(forth_cell_t))
 /**@brief This is a wrapper around check_depth, to make checking the depth
  * short and simple.
- * @param depth */
-#define cd(depth) check_depth(o, &on_error, S, depth, __LINE__)
+ * @param DEPTH current depth of the stack*/
+#define cd(DEPTH) check_depth(o, &on_error, S, (DEPTH), __LINE__)
+/**@brief This function makes sure any dictionary pointers never cross into the
+ * stack area.
+ * @param DPTR a index into the dictionary
+ * @return checked index */
+#define dic(DPTR) check_dictionary(o, &on_error, (DPTR))
 /**@brief This performs tracing
  * @param ENV forth environment
  * @param STK stack pointer
@@ -275,14 +282,19 @@
 #define TRACE(ENV,INSTRUCTION,STK,TOP) trace(ENV,INSTRUCTION,STK,TOP)
 #else
 /**@brief This removes the bounds check and debugging code
- * @param c do nothing */
-#define ck(c) (c)
+ * @param C do nothing
+ * @return C is returned */
+#define ck(C) (C)
 /**@brief This removes the bounds check and debugging code
- * @param c do nothing */
-#define ckchar(c) (c)
+ * @param C do nothing
+ * @return C is returned */
+#define ckchar(C) (C)
 /**@brief This is a wrapper around check_depth
  * @param depth do nothing */
-#define cd(depth) ((void)depth)
+#define cd(DEPTH) ((void)DEPTH)
+/**@brief This is a wrapper around check_depth
+ * @param DPTR do nothing */
+#define dic(DPTR) check_dictionary(o, &on_error, (DPTR))
 /**@brief This removes tracing
  * @param ENV
  * @param STK
@@ -328,6 +340,10 @@
  * where it is relative to the PWD field of a word
  * @param MISC This should be the MISC field of a word */
 #define WORD_LENGTH(MISC) (((MISC) >> WORD_LENGTH_OFFSET) & 0xff)
+
+/**@brief Test if a word is a "hidden" word, one that is not in the search
+ * order for the dictionary.
+ * @param PWD field to test*/
 #define WORD_HIDDEN(MISC) ((MISC) & 0x80) /**< is a forth word hidden? */
 
 /**@brief The lower 7 bits of the MISC field are used for the VM instruction,
@@ -432,8 +448,8 @@
  *  (         - begin a Forth comment, terminated by a )
  *  rot       - perform stack manipulation: x y z => y z x
  *  -rot      - perform stack manipulation: x y z => z x y
- *  tuck      - perform stack manipulation: x y => y x y
- *  nip       - perform stack manipulation: x y => y
+ *  tuck      - perform stack manipulation: x y   => y x y
+ *  nip       - perform stack manipulation: x y   => y
  *  allot     - allocate space in the dictionary
  *  bl        - push the space character to the stack
  *  space     - print a space
@@ -1023,6 +1039,17 @@ static void check_depth(forth_t *o, jmp_buf *on_error, forth_cell_t *S, forth_ce
 		fprintf(stderr, "( error \" stack overflow\" )\n");
 		longjmp(*on_error, RECOVERABLE);
 	}
+}
+
+/* check that the dictionary pointer does not go into the stack area */
+static forth_cell_t check_dictionary(forth_t *o, jmp_buf *on_error, forth_cell_t dptr)
+{
+	if((o->m + dptr) >= (o->vstart)) {
+		fprintf(stderr, "( error \" dictionary pointer is in stack area\" %"PRIdCell" )\n", dptr);
+		o->m[INVALID] = 1;
+		longjmp(*on_error, FATAL);
+	}
+	return dptr;
 }
 
 /* This checks that a Forth string is NUL terminated, as required by most C
@@ -1631,7 +1658,7 @@ int forth_run(forth_t *o)
 		* SUB), but its name will be used instead (such as '+' or '-) */
 
 		case PUSH:    *++S = f;     f = m[ck(I++)];          break;
-		case COMPILE: m[ck(m[DIC]++)] = pc;                  break; 
+		case COMPILE: m[dic(m[DIC]++)] = pc;                 break; 
 		case RUN:     m[ck(++m[RSTK])] = I; I = pc;          break;
 		case DEFINE:
 			/*DEFINE backs the Forth word ':', which is an
@@ -1652,7 +1679,7 @@ int forth_run(forth_t *o)
 			if(forth_get_word(o, o->s) < 0)
 				goto end;
 			compile(o, COMPILE, (char*)o->s);
-			m[ck(m[DIC]++)] = RUN;
+			m[dic(m[DIC]++)] = RUN;
 			break;
 		case IMMEDIATE:
 			/*IMMEDIATE makes the current word definition execute
@@ -1697,7 +1724,8 @@ int forth_run(forth_t *o)
 			m[DIC] -= 2; /* move to first code field */
 			m[m[DIC]] &= ~INSTRUCTION_MASK; /* zero instruction */
 			m[m[DIC]] |= RUN; /* set instruction to RUN */
-			m[DIC]++; /* compilation start here */ break;
+			dic(m[DIC]++); /* compilation start here */ 
+			break;
 		case READ:
 			/*The READ instruction, an instruction that
 			* usually does not belong in a virtual machine,
@@ -1745,8 +1773,8 @@ int forth_run(forth_t *o)
 				break;
 			}
 			if (m[STATE]) { /* must be a number then */
-				m[m[DIC]++] = 2; /*fake word push at m[2] */
-				m[ck(m[DIC]++)] = w;
+				m[dic(m[DIC]++)] = 2; /*fake word push at m[2] */
+				m[dic(m[DIC]++)] = w;
 			} else { /* push word */
 				*++S = f;
 				f = w;
@@ -1799,7 +1827,7 @@ int forth_run(forth_t *o)
 		case PNUM:    cd(1); 
 			      f = print_cell(o, (FILE*)(o->m[FOUT]), f); break;
 		case QUOTE:   *++S = f;     f = m[ck(I++)];              break;
-		case COMMA:   cd(1); m[ck(m[DIC]++)] = f; f = *S--;      break;
+		case COMMA:   cd(1); m[dic(m[DIC]++)] = f; f = *S--;     break;
 		case EQUAL:   cd(2); f = *S-- == f;                      break;
 		case SWAP:    cd(2); w = f;  f = *S--;   *++S = w;       break;
 		case DUP:     cd(1); *++S = f;                           break;
