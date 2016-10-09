@@ -269,6 +269,19 @@ marker cleanup
 cleanup
 end-unit
 ( ========================== Move Words ====================================== )
+
+
+( ========================== Misc Words ====================================== )
+unit( Misc words )
+marker cleanup
+
+s" 5 3 repeater 3 sum 15 = " test
+s" 6 1 range mul 120 = " test
+
+cleanup
+end-unit
+( ========================== Misc Words ====================================== )
+
 summary
 
 unit-test-framework

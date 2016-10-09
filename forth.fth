@@ -1,5 +1,6 @@
 #!./forth -t
-( Welcome to libforth, A dialect of Forth. Like all versions of Forth this
+( 
+Welcome to libforth, A dialect of Forth. Like all versions of Forth this
 version is  a little idiosyncratic, but how the interpreter works is
 documented here and in various other files.
 
@@ -24,7 +25,7 @@ written in 1992 for the International obfuscated C Coding Competition
 See:
 	http://www.ioccc.org/1992/buzzard.2.design
 
-TODO
+# TODO
 	* Rewrite starting word using "restart-word!"
 	* This file should be made to be literate
 	* Word, Parse, other forth words

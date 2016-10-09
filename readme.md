@@ -104,6 +104,10 @@ And the forth startup code:
 The startup code is well commented and shows how the core interpreter is
 extended to a more function [Forth][] environment.
 
+The source file [libforth.c][] can be converted to a more readable webpage by
+first converting the source to [markdown][] with [convert][] script, the converting
+that to HTML in the usual fashion
+
 ## Running the interpreter
 
 Running the interpreter is documented in the man page [forth.1][], but it will
@@ -410,38 +414,38 @@ At the beginning of the Forth virtual machine there is a section used for
 registers, modifying them arbitrary can cause undefined behavior to occur which
 will most likely cause the virtual machine to be terminated.
 
-        NAME          LOCATION        DESCRIPTION
-                      DECIMAL  HEX
-                      0-1      0-1    Unused
-                      2-5      2-5    Push integer word
-        DIC           6        6      Dictionary pointer
-        RSTK          7        7      Return stack pointer
-        STATE         8        8      Interpreter state; compile or command mode
-        BASE          9        9      Base conversion variable
-        PWD           10       A      Pointer to last defined word 
-        SOURCE_ID     11       B      Input source selector (-1 = string input, 
-                                      0 = file input)
-        SIN           12       C      String input pointer
-        SIDX          13       D      String input index  (index into SIN)
-        SLEN          14       E      String input length (length of SIN)
-        START_ADDR    15       F      Pointer to start of VM
-        FIN           16       10     File input pointer
-        FOUT          17       11     File output pointer 
-        STDIN         18       12     File pointer to stdin, if available
-        STDOUT        19       13     File pointer to stdout, if available
-        STDERR        20       14     File pointer to stderr, if available
-        ARGC          21       15     Count of arguments passed to program,
-                                      if available
-        ARGV          22       16     An array of pointers to NUL terminated
-                                      ASCII strings, if available, of ARGC
-                                      length
+	NAME          LOCATION        DESCRIPTION
+	              DECIMAL  HEX
+	              0-1      0-1    Unused
+	              2-5      2-5    Push integer word
+	DIC           6        6      Dictionary pointer
+	RSTK          7        7      Return stack pointer
+	STATE         8        8      Interpreter state; compile or command mode
+	BASE          9        9      Base conversion variable
+	PWD           10       A      Pointer to last defined word 
+	SOURCE_ID     11       B      Input source selector (-1 = string input, 
+	                              0 = file input)
+	SIN           12       C      String input pointer
+	SIDX          13       D      String input index  (index into SIN)
+	SLEN          14       E      String input length (length of SIN)
+	START_ADDR    15       F      Pointer to start of VM
+	FIN           16       10     File input pointer
+	FOUT          17       11     File output pointer 
+	STDIN         18       12     File pointer to stdin, if available
+	STDOUT        19       13     File pointer to stdout, if available
+	STDERR        20       14     File pointer to stderr, if available
+	ARGC          21       15     Count of arguments passed to program,
+	                              if available
+	ARGV          22       16     An array of pointers to NUL terminated
+	                              ASCII strings, if available, of ARGC
+	                              length
 	DEBUG         23       17     Turn debugging on/off if enabled
 	INVALID       24       18     If non zero, this interpreter is invalid 
 	TOP           25       19     Stored version of top of stack
 	INSTRUCTION   26       1A     Stored version of instruction pointer
 	STACK_SIZE    27       1B     Size of the variable stack
-	ERROR_HANDLER 28     1C     Action to take on error
-                      29-31    1D-3F  Reserved / used for other purposes
+	ERROR_HANDLER 28       1C     Action to take on error
+	              29-31    1D-3F  Reserved / used for other purposes
 
 ### Dictionary
 
@@ -1130,5 +1134,7 @@ you should use a different language, or implementation.
 [stderr]: https://en.wikipedia.org/wiki/Standard_streams
 [cxxforth]: https://github.com/kristopherjohnson/cxxforth
 [DPANS94]: http://lars.nocrew.org/dpans/dpans.htm
+[markdown]: https://daringfireball.net/projects/markdown/
+[convert]: convert
 
 <style type="text/css">body{margin:40px auto;max-width:850px;line-height:1.6;font-size:16px;color:#444;padding:0 10px}h1,h2,h3{line-height:1.2}</style>

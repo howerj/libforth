@@ -1807,13 +1807,14 @@ when we finally exit **sum-of-products** back to the interpreter.
 **square** will now be called, it's **RUN** field encountered, then **dup**.
 **dup** does not have a **RUN** field, it is a built in primitive, so the
 instruction pointer will not be touched nor the return stack, but the
-**DUP** instruction will now be executed. After this has run the
-instruction pointer will now be moved to executed **\***, another
-primitive, then **exit** - which pops a value off the return stack and
-sets the instruction pointer to that value. The value points to the
-**$swap** field in **sum-of-products**, which will in turn be executed
-until the final **$exit** field is encountered. This exits back into
-our special read-and-loop word defined in the initialization code.
+**DUP** instruction will now be executed. 
+
+After this has run the instruction pointer will now be moved to executed
+**\***, another primitive, then **exit** - which pops a value off the return
+stack and sets the instruction pointer to that value. The value points to
+the **$swap** field in **sum-of-products**, which will in turn be executed
+until the final **$exit** field is encountered. This exits back into our
+special read-and-loop word defined in the initialization code.
 
 The **READ** routine must make sure the correct field is executed when
 a word is read in which depends on the state of the interpreter (held
