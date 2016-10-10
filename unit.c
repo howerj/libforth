@@ -286,6 +286,7 @@ done:
 		must(&tb, f);
 		test(&tb, forth_dump_core(f, core_dump) >= 0);
 		state(&tb, fclose(core_dump));
+		state(&tb, forth_free(f));
 	}
 	{
 		/* Test the persistence of word definitions across core loads*/

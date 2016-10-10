@@ -8,7 +8,7 @@ This file contains most of the start up code, some basic start up code
 is executed in the C file as well which makes programming at least bearable.
 Most of Forth is programmed in itself, which may seem odd if your back
 ground in programming comes from more traditional language [such as C],
-although decidedly less so if you know already know lisp, for example.
+although less so if you know already know lisp.
 
 For more information about this interpreter and Forth see:
 	https://en.wikipedia.org/wiki/Forth_%28programming_language%29
@@ -25,171 +25,363 @@ written in 1992 for the International obfuscated C Coding Competition
 See:
 	http://www.ioccc.org/1992/buzzard.2.design
 
-# TODO
-	* Rewrite starting word using "restart-word!"
-	* This file should be made to be literate
-	* Word, Parse, other forth words
-	* add "j" if possible to get outer loop context
-	* FORTH, VOCABULARY
-	* "Value", "To", "Is"
-	* Double cell words and floating point library
-	* The interpreter should use character based addresses, instead of
-	word based, and use values that are actual valid pointers, this
-	will allow easier interaction with the world outside the virtual machine
-	* A small block editor
-	* more help commands would be good, such as "help-ANSI-escape",
-	"tutorial", etc.
-	* Abort", this could be used to implement words such
-	as "abort if in compile mode", or "abort if in command mode".
-	* common words and actions should be factored out to simplify
-	definitions of other words, their standards compliant version found
-	if any
-	* throw and exception
-	* here documents, string literals
-	* A set of words for navigating around word definitions would be
-	help debugging words, for example:
-		compile-field code-field field-translate
-	would take a pointer to a compile field for a word and translate
-	that into the code field
-	* proper booleans should be used throughout
-	* escaped strings
-	they do not test if the number is negative, however that would
-	unnecessarily limit the range of operation
-	* "print" should be removed from the interpreter
-	* words should be made for debugging the return stack [such as
-	printing it out like .s]
-	* virtual machines could be made in other languages than C that will
-	run the core files generated...The virtual machine has higher level
-	functions in it that it probably should not have, like "read" and
-	"system", these belong elsewhere - but where?
-	* It would be interesting to see which Unix utilities could easily
-	be implemented as Forth programs, such as "head", "tail", "cat", "tr",
-	"grep", etcetera.
+The manual for the interpreter should be read first before looking into this
+code. It is important to understand the execution model of Forth, especially
+the differences between command and compile mode, and how immediate and compiling
+words work.
 
-Some interesting links:
-	* http://www.figuk.plus.com/build/heart.htm
-	* https://groups.google.com/forum/#!msg/comp.lang.forth/NS2icrCj1jQ/1btBCkOWr9wJ
-	* http://newsgroups.derkeiler.com/Archive/Comp/comp.lang.forth/2005-09/msg00337.html
-	* https://stackoverflow.com/questions/407987/what-are-the-primitive-forth-operators
+The structure of this file is as follows:
+
+1. Basic Word Set
+2. Extended Word Set
+3. CREATE DOES>
+4. CASE statements
+5. Conditional Compilation
+6. Endian Words
+7. Misc words
+8. Random Numbers
+9. ANSI Escape Codes
+10. Prime Numbers
+11. Debugging info
+12. Files
+13. Blocks
+14. Matcher
+15. Cons Cells
+16. Miscellaneous
+17. Core utilities
+
+Each of these sections is clearly labeled and they are generally in dependency order.
 )
 
 ( ========================== Basic Word Set ================================== )
-( We'll begin by defining very simple words we can use later )
-: 1+ 1 + ;
-: 1- 1 - ;
-: tab 9 emit ;
-: 0= 0 = ;
-: not 0= ;
-: <> = 0= ;
-: logical ( x -- bool ) not not ;
-: :: [ find : , ] ;
-: '\n' 10 ( -- n : push the newline character ) ;
-: cr '\n' emit ;
-: hidden-mask 0x80 ( Mask for the hide bit in a words MISC field ) ;
-: instruction-mask 0x1f ( Mask for the first code word in a words MISC field ) ;
+
+( 
+We'll begin by defining very simple words we can use later, these a very
+basic words, that perform simple tasks, they will not require much explanation.
+
+Even though the words are simple, their stack comment and a description for
+them will still be included so external tools can process and automatically
+extract the document string for a given work.
+)
+
+: 1+ ( x -- x : increment a number )
+	1 + ;
+
+: 1- ( x -- x : decrement a number )
+	1 - ;
+
+: tab ( -- : print a tab character to current output device )
+	9 emit ;
+
+: 0=  ( x -- bool : is 'x' equal to zero? )
+	0 = ;
+
+: not ( x -- bool : is 'x' true? )
+	0= ;
+
+: <> ( x x -- bool : not equal )
+	= 0= ;
+
+: logical ( x -- bool : turn a value into a boolean ) 
+	not not ;
+
+: :: ( -- : compiling version of ':' )
+	[ find : , ] ;
+
+: '\n' ( -- n : push the newline character )
+	10  ;
+
+: cr  ( -- : emit a newline character )
+	'\n' emit ;
+
+: hidden-mask ( -- x : pushes mask for the hide bit in a words MISC field )
+	0x80  ;
+
+: instruction-mask ( -- x : pushes mask for the first code word in a words MISC field )
+	0x1f  ;
+
 : hidden? ( PWD -- PWD bool : is a word hidden, given the words PWD field ) 
 	dup 1+ @ hidden-mask and logical ;
-: compile-instruction 1 ; ( compile code word, threaded code interpreter instruction )
-: dolist 2 ;      ( -- n : run code word, threaded code interpreter instruction )
-: dolit 2 ;       ( -- n : location of special "push" word )
-: 2, , , ;        ( n n -- : write two values into the dictionary )
-: [literal] dolit 2, ; ( this word probably needs a better name )
-: literal immediate [literal] ;
-: 2literal immediate swap [literal] [literal] ;
-: latest pwd @ ; ( get latest defined word )
-: stdin  ( -- fileid ) `stdin  @ ;
-: stdout ( -- fileid ) `stdout @ ;
-: stderr ( -- fileid ) `stderr @ ;
+
+: compile-instruction ( -- instruction : compile code word, threaded code interpreter instruction )
+	1 ; 
+
+: dolist ( -- x : run code word, threaded code interpreter instruction )
+	2 ;      
+
+: dolit ( -- x : location of special "push" word )
+	2 ;
+
+: 2, ( x x -- : write two values into the dictionary )
+	, , ;
+
+: [literal] ( x -- : write a literal into the dictionary )
+	dolit 2, ; 
+
+: literal ( x -- : immediately write a literal into the dictionary )
+	immediate [literal] ;
+
+: 2literal immediate ( x x -- : immediate write two literals into the dictionary )
+	swap [literal] [literal] ;
+
+: latest ( get latest defined word )
+	pwd @ ; 
+
+: stdin  ( -- fileid : push the fileid for the standard input channel ) 
+	`stdin  @ ;
+
+: stdout ( -- fileid : push the fileid for the standard output channel ) 
+	`stdout @ ;
+
+: stderr ( -- fileid : push the fileid for the standard error channel ) 
+	`stderr @ ;
+
 : stdin? ( -- bool : are we reading from standard input )
 	`fin @ stdin = ;
-: false 0 ( -- n ) ;
-: true 1 ( -- n ) ;
-: *+ * + ( n1 n2 n3 -- n ) ;
-: 2- 2 - ( n -- n ) ;
-: 2+ 2 + ( n -- n ) ;
-: 3+ 3 + ( n -- n ) ;
-: 2* 1 lshift ( n -- n ) ;
-: 2/ 1 rshift ( n -- n ) ;
-: 4* 2 lshift ( n -- n ) ;
-: 4/ 2 rshift ( n -- n ) ;
-: 8* 3 lshift ( n -- n ) ;
-: 8/ 3 rshift ( n -- n ) ;
-: 256* 8 lshift ( n -- n ) ;
-: 256/ 8 rshift ( n -- n ) ;
-: 2dup over over ( n1 n2 -- n1 n2 n1 n2 : duplicate two values ) ;
-: mod ( x u -- remainder ) 2dup / * - ;
-: */ ( n1 n2 n3 -- n4 ) * / ; ( warning: this does not use a double cell for the multiply )
-: char key drop key ;
-: [char] immediate char [literal] ;
-: postpone immediate find , ;
-: unless immediate ( bool -- : like 'if' but execute clause if false ) ' 0= , postpone if ;
-: endif immediate ( synonym for 'then' ) postpone then ;
-: address-unit-bits size 8* ;
+
+: false ( -- x : push the value representing false )
+	0 ;
+
+: true  ( -- x : push the value representing true )
+	1 ;
+
+: *+ ( x1 x2 x3 -- x ) 
+	* + ;
+	
+: 2- ( x -- x : decrement by two )
+	2 - ( x -- x ) ;
+
+: 2+ ( x -- x : increment by two )
+	2 + ( x -- x ) ;
+
+: 3+ ( x -- x : increment by three )
+	3 + ( x -- x ) ;
+
+: 2* ( x -- x : multiply by two )
+	1 lshift ( x -- x ) ;
+
+: 2/ ( x -- x : divide by two )
+	1 rshift ( x -- x ) ;
+
+: 4* ( x -- x : multiply by four )
+	2 lshift ( x -- x ) ;
+
+: 4/ ( x -- x : divide by four )
+	2 rshift ( x -- x ) ;
+
+: 8* ( x -- x : multiply by eight )
+	3 lshift ( x -- x ) ;
+
+: 8/ ( x -- x : divide by eight )
+	3 rshift ( x -- x ) ;
+
+: 256* ( x -- x : multiply by 256 )
+	8 lshift ( x -- x ) ;
+
+: 256/ ( x -- x : divide by 256 )
+	8 rshift ( x -- x ) ;
+
+: 2dup ( x1 x2 -- x1 x2 x1 x2 : duplicate two values )
+	over over ;
+
+: mod ( x u -- x : calculate the remainder of x divided by u ) 
+	2dup / * - ;
+
+: */ ( x1 x2 x3 -- x4 : multiply then divide, @warning this does not use a double cell for the multiply )
+	 * / ; 
+
+: char ( -- x : read in a character from the input steam )
+	key drop key ;
+
+: [char] ( -- x : immediately read in a character from the input stream )
+	immediate char [literal] ;
+
+: postpone ( -- : postpone execution of the following immediate word )
+	immediate find , ;
+
+: unless ( bool -- : like 'if' but execute clause if false )
+	immediate ' 0= , postpone if ;
+
+: endif ( synonym for 'then' ) 
+	immediate  postpone then ;
+
+: cell+ ( a-addr1 -- a-addr2 ) 
+	1+ ;
+
+: cells ( n1 -- n2 ) 
+	immediate  ;
+
+: cell ( -- u : defined as 1 cells )
+	1 cells ;
+
+: address-unit-bits ( -- x : push the number of bits in an address )
+	[ cell size 8* * ] literal ;
+
 : negative? ( x -- bool : is a number negative? )
 	[ 1 address-unit-bits 1- lshift ] literal and logical ;
-: mask-byte ( x -- x ) 8* 0xff swap lshift ;
-: select-byte ( u i -- c ) 8* rshift 0xFF and ;
-: cell+ 1+ ( a-addr1 -- a-addr2 ) ;
-: cells immediate ( n1 -- n2 ) ;
-: cell 1 ( -- u : 1 cells ) ;
-: char+ ( c-addr1 -- c-addr2 ) 1+ ;
-: chars  ( n1 -- n2: convert character address to cell address ) size / ;
-: 2chars ( x y -- x y: ) chars swap chars swap ;
-: chars> ( n1 -- n2: convert cell address to character address ) size * ;
-: 2chars> chars> swap chars> swap ;
-: hex     ( -- : print out hex )     16 base ! ;
-: octal   ( -- : print out octal )    8 base ! ;
-: binary  ( -- : print out binary )   2 base ! ;
-: decimal ( -- : print out decimal )  0 base ! ;
-: negate ( x -- x ) -1 * ;
-: square ( x -- x ) dup * ;
-: drup   ( x y -- x x ) drop dup ;
-: +! ( x addr -- ) ( add x to a value stored at addr ) tuck @ + swap ! ;
-: 1+! ( addr -- : increment a value at an address )  1 swap +! ;
-: 1-! ( addr -- : decrement a value at an address ) -1 swap +! ;
-: lsb ( x -- x : mask off the least significant byte of a cell ) 255 and ;
-: \ immediate begin key '\n' = until ;
-: ?dup ( x -- ? ) dup if dup then ;
-: min ( x y -- min ) 2dup < if drop else swap drop then  ;
-: max ( x y -- max ) 2dup > if drop else swap drop then  ;
-: >= ( x y -- bool ) < not ;
-: <= ( x y -- bool ) > not ;
-: 2@ dup 1+ @ swap @ ( a-addr -- n1 n2 : load two consecutive memory cells ) ;
-: 2! 2dup ! nip 1+ ! ( n1 n2 a-addr -- : store two values as two consecutive memory cells ) ;
-: r@ r> r @ swap >r ;
-: 0> 0 < ;
-: 0< 0 > ;
-: 0<> 0 <> ;
-: nand ( x x -- x : Logical NAND ) and not ;
-: odd 1 and ;
-: even odd not ;
-: nor  ( x x -- x : Logical NOR  )  or not ;
-: ms ( u -- : wait at least 'u' milliseconds ) clock +  begin dup clock u< until drop ;
-: sleep 1000 * ms ;
-: align immediate ( x -- x ) ; ( nop in this implementation )
-: ) immediate ;
-: ? ( a-addr -- : view value at address ) @ . ;
-: bell 7 ( ASCII BEL ) emit ;
-: b/buf  ( bytes per buffer ) 1024 ;
-: # ( x -- x : debug print ) dup . ;
-: compile, ' , , ;   ( A word that writes , into the dictionary )
-: >mark ( -- ) here 0 , ;
-: <resolve here - , ;
-: end immediate (  A synonym for until ) postpone until ;
-: bye ( -- : quit the interpreter ) 0 r ! ;
-: stack-start [ max-core `stack-size @ 2 * -  ] literal ;
+
+: mask-byte ( x -- x : mask off a ) 
+	8* 0xff swap lshift ;
+
+: select-byte ( u i -- c ) 
+	8* rshift 0xff and ;
+
+: char+ ( c-addr -- c-addr : increment a character address by the size of one character ) 
+	1+ ;
+
+: chars  ( c-addr -- addr : convert character address to cell address ) 
+	size / ;
+
+: 2chars ( c-addr1 c-addr2 -- addr addr : convert two character addresses to two cell addresses ) 
+	chars swap chars swap ;
+
+: chars> ( addr -- c-addr : convert cell address to character address ) 
+	size * ;
+
+: 2chars>  ( addr addr -- c-addr c-addr: convert two cell addresses to two character addresses )
+	chars> swap chars> swap ;
+
+: hex     ( -- : print out hex )     
+	16 base ! ;
+
+: octal   ( -- : print out octal )    
+	8 base ! ;
+
+: binary  ( -- : print out binary )   
+	2 base ! ;
+
+: decimal ( -- : print out decimal )  
+	0 base ! ;
+
+: negate ( x -- x ) 
+	-1 * ;
+
+: square ( x -- x ) 
+	dup * ;
+
+: drup   ( x y -- x x ) 
+	drop dup ;
+
+: +! ( x addr -- : add x to a value stored at addr ) 
+	tuck @ + swap ! ;
+
+: 1+! ( addr -- : increment a value at an address )  
+	1 swap +! ;
+
+: 1-! ( addr -- : decrement a value at an address ) 
+	-1 swap +! ;
+
+: lsb ( x -- x : mask off the least significant byte of a cell ) 
+	255 and ;
+
+: \ ( -- : immediate word, used for single line comments )
+	immediate begin key '\n' = until ;
+
+: ?dup ( x -- ? ) 
+	dup if dup then ;
+
+: min ( x y -- min ) 
+	2dup < if drop else swap drop then  ;
+
+: max ( x y -- max ) 
+	2dup > if drop else swap drop then  ;
+
+: >= ( x y -- bool ) 
+	< not ;
+
+: <= ( x y -- bool ) 
+	> not ;
+
+: 2@ ( a-addr -- x1 x2 : load two consecutive memory cells )
+	dup 1+ @ swap @ ;
+
+: 2! ( x1 x2 a-addr -- : store two values as two consecutive memory cells )
+	2dup ! nip 1+ ! ;
+
+: r@ 
+	r> r @ swap >r ;
+
+: 0> ( x -- bool )
+	0 < ;
+
+: 0< ( x -- bool )
+	0 > ;
+
+: 0<> ( x -- bool )
+	0 <> ;
+
+: nand ( x x -- x : Logical NAND ) 
+	and not ;
+
+: odd ( x -- bool : is 'x' odd? )
+	1 and ;
+
+: even ( x -- bool : is 'x' even? )
+	odd not ;
+
+: nor  ( x x -- x : Logical NOR  )  
+	or not ;
+
+: ms ( u -- : wait at least 'u' milliseconds ) 
+	clock +  begin dup clock u< until drop ;
+
+: sleep ( u -- : sleep for 'u' seconds )
+	1000 * ms ;
+
+: align ( addr -- addr : align and address, nop in this implemented )
+	immediate  ; 
+
+: ) ( -- : do nothing, this allows easy commenting out of code )
+	immediate ;
+
+: ? ( a-addr -- : view value at address ) 
+	@ . ;
+
+: bell ( -- : emit an ASCII BEL character ) 
+	7  emit ;
+
+: b/buf  ( -- u : bytes per buffer ) 
+	1024 ;
+
+: # ( x -- x : debug print ) 
+	dup . ;
+
+: compile, ( -- : A word that writes , into the dictionary ) 
+	' , , ;   
+
+: >mark ( -- : write a hole into the dictionary and push a pointer to it ) 
+	here 0 , ;
+
+: <resolve ( addr -- : )
+	here - , ;
+
+: end immediate ( a synonym for until ) 
+	postpone until ;
+
+: bye ( -- : quit the interpreter ) 
+	0 r ! ;
+
+: stack-start ( -- addr : push the address of the start of the stack )
+	max-core `stack-size @ 2 * -  ;
+
 : pick ( xu ... x1 x0 u -- xu ... x1 x0 xu )
 	stack-start depth + swap - 1- @ ;
-: within ( test low high -- flag : is test between low and high )
+
+: within ( test low high -- bool : is test between low and high )
 	over - >r - r> u< ;
+
 : u. ( u -- : display number in base 10, although signed for now )
 	base @ >r decimal pnum drop r> base ! ;
-: invalidate-forth
+
+: invalidate-forth ( -- : invalidate this Forth core )
 	1 `invalid ! ;
+
 : signed ( x -- bool : return true if sign bit set ) 
 	[ 1 size 8 * 1- lshift ] literal and logical ;
+
 : u>=  ( x y -- bool : unsigned greater than or equal to )
 	2dup u> >r = r> or ;
+
 : u<=  ( x y -- bool : unsigned less than or equal to )
 	u>= not ;
 
@@ -235,13 +427,18 @@ Some interesting links:
 	0        File Input [this may be stdin] )
 	`source-id @ ;
 
-: 2drop ( x y -- ) drop drop ;
+: 2drop ( x y -- )
+	 drop drop ;
+
 : 2nip   ( n1 n2 n3 n4 -- n3 n4) 
 	>r >r 2drop r> r> ;
+
 : 2over ( n1 n2 n3 n4 – n1 n2 n3 n4 n1 n2 )
 	>r >r 2dup r> swap >r swap r> r> -rot ;
+
 : 2swap ( n1 n2 n3 n4 – n3 n4 n1 n2 )
 	>r -rot r> -rot ;
+
 : 2tuck (  n1 n2 n3 n4 – n3 n4 n1 n2 n3 n4 )
 	2swap 2over ;
 
@@ -254,10 +451,16 @@ Some interesting links:
 		drop 0
 	then ;
 
-: hider ( WORD -- ) ( hide with drop ) find dup if hide then drop ;
-: unhide ( hide-token -- ) dup @ hidden-mask invert and swap ! ;
+: hider ( WORD -- ) 
+	( hide with drop ) 
+	find dup if hide then drop ;
 
-: original-exit [ find exit ] literal ;
+: unhide ( hide-token -- ) 
+	dup @ hidden-mask invert and swap ! ;
+
+: original-exit 
+	[ find exit ] literal ;
+
 : exit
 	( this will define a second version of exit, ';' will
 	use the original version, whilst everything else will
@@ -300,26 +503,35 @@ Some interesting links:
 
 : start-address ( -- c-addr : push the start address  )
 	`start-address @ ;
+
 : >real-address ( c-addr -- c-addr : convert an interpreter address to a real address )
 	start-address - ;
+
 : real-address> ( c-addr -- c-addr : convert a real address to an interpreter address )
 	start-address + ;
+
 : peek ( c-addr -- char : peek at real memory )
 	>real-address c@ ;
+
 : poke ( char c-addr -- : poke a real memory address  )
 	>real-address c! ;
+
 : die? ( x -- : controls actions when encountering certain errors )
 	`error-handler ! ;
+
 : start! ( cfa -- : set the word to execute at startup )
 	`instruction ! ;	
+
 : warm ( -- : restart the interpreter, warm restart )
 	1 restart ;
+
 : trip ( x -- x x x : triplicate a number ) 
 	dup dup ;
 
 ( ========================== Basic Word Set ================================== )
 
 ( ========================== Extended Word Set =============================== )
+
 : gcd ( a b -- n ) ( greatest common divisor )
 	begin
 		dup
@@ -377,14 +589,23 @@ Some interesting links:
   is no error handling if "find" fails... )
 : (do-defer) ( -- self : pushes the location into which it is compiled )
 	r> dup >r 1- ;
+
 : defer  ( " ccc" -- , Run Time -- location : 
 	creates a word that pushes a location to write an execution token into )
 	:: ' (do-defer) , postpone ; ;
+
 : is ( location " ccc" -- : make a deferred word execute a word ) 
 	find cfa swap ! ;
 hider (do-defer)
 
 ( ========================== Extended Word Set =============================== )
+
+( 
+The words described here on out get more complex and will require more
+of an explanation as to how they work.
+)
+
+
 
 ( ========================== CREATE DOES> ==================================== )
 
@@ -444,15 +665,30 @@ hider write-quote
 : limit ( x min max -- x : limit x with a minimum and maximum )
 	rot min max ;
 
-: array     create allot does> + ;
-: table     create allot does>   ;
-: variable  create ,     does>   ;
-: constant  create ,     does> @ ;
+: array     
+	create allot does> + ;
+
+: table     
+	create allot does>   ;
+
+: variable  
+	create ,     does>   ;
+
+: constant  
+	create ,     does> @ ;
+
 ( @todo replace all instances of table with itable )
-: itable     create dup , allot does> dup @ ;
-: char-table create dup , chars allot does> dup @ swap 1+ chars> swap ;
-: 2constant create , ,   does> dup 1+ @ swap @ ;
-: 2variable create , ,   does> ;
+: itable     
+	create dup , allot does> dup @ ;
+
+: char-table 
+	create dup , chars allot does> dup @ swap 1+ chars> swap ;
+
+: 2constant 
+	create , ,   does> dup 1+ @ swap @ ;
+
+: 2variable 
+	create , ,   does> ;
 
 ( do...loop could be improved by not using the return stack so much )
 
@@ -477,8 +713,12 @@ hider write-quote
 	rdrop
 	>r ;
 
-: loop immediate 1 [literal] ' addi , <resolve ;
-: +loop immediate ' addi , <resolve ;
+: loop immediate 
+	1 [literal] ' addi , <resolve ;
+
+: +loop 
+	immediate ' addi , <resolve ;
+
 hider inci
 hider addi
 
@@ -500,10 +740,17 @@ hider addi
 	>r >r ( restore return stack )
 ;
 
-: range    ( nX nY -- nX nX+1 ... nY )  swap 1+ swap do i loop ;
-: repeater ( n0 X -- n0 ... nX )        1 do dup loop ;
-: sum      ( n0 ... nX X -- sum<0..X> ) 1 do + loop ;
-: mul      ( n0 ... nX X -- mul<0..X> ) 1 do * loop ;
+: range    ( nX nY -- nX nX+1 ... nY )  
+	swap 1+ swap do i loop ;
+
+: repeater ( n0 X -- n0 ... nX )        
+	1 do dup loop ;
+
+: sum      ( n0 ... nX X -- sum<0..X> ) 
+	1 do + loop ;
+
+: mul      ( n0 ... nX X -- mul<0..X> ) 
+	1 do * loop ;
 
 : factorial ( n -- n! )
 	( This factorial is only here to test range, mul, do and loop )
@@ -546,23 +793,35 @@ hider tail
 	We can test "recurse" with this factorial function:
 	  : factorial  dup 2 < if drop 1 exit then dup 1- recurse * ;)
 	latest cfa , ;
-: myself immediate postpone recurse ;
+
+: myself ( -- : myself is a synonym for recurse ) 
+	immediate postpone recurse ;
 
 0 variable column-counter
 4 variable column-width
-: column ( i -- )	column-width @ mod not if cr then ;
-: reset-column		0 column-counter ! ;
+
+: column ( i -- )	
+	column-width @ mod not if cr then ;
+
+: reset-column		
+	0 column-counter ! ;
+
 : auto-column		column-counter dup @ column 1+! ;
 
-: alignment-bits [ 1 size log2 lshift 1- literal ] and ;
+: alignment-bits 
+	[ 1 size log2 lshift 1- literal ] and ;
+
 : name ( PWD -- c-addr )
 	( given a pointer to the PWD field of a word get a pointer to the name
 	of the word )
 	dup 1+ @ 256/ lsb - chars> ;
 
 0 variable x
-: x! ( x -- ) x ! ;
-: x@ ( -- x ) x @ ;
+: x! ( x -- ) 
+	x ! ;
+
+: x@ ( -- x ) 
+	x @ ;
 
 : 2>r ( x1 x2 -- R: x1 x2 )
 	r> x! ( pop off this words return address )
@@ -636,8 +895,7 @@ hider delim
 
 0 variable delim
 : print-string
-	( delimiter -- )
-	( print out the next characters in the input stream until a
+	( delimiter -- : print out the next characters in the input stream until a
 	"delimiter" character is reached )
 	key drop
 	delim !
@@ -709,14 +967,25 @@ hider delim
 hider sbuf
 
 ( @todo these strings really need rethinking, state awareness needs to be removed... )
-: type, state @ if ' type , else type then ;
-: c" immediate [char] " do-string ;
-: "  immediate [char] " do-string type, ;
-: .( immediate [char] ) print-string ;
-: ." immediate [char] " do-string type, ;
+: type, 
+	state @ if ' type , else type then ;
+
+: c" 
+	immediate [char] " do-string ;
+
+: "  
+	immediate [char] " do-string type, ;
+
+: .( 
+	immediate [char] ) print-string ;
+
+: ." 
+	immediate [char] " do-string type, ;
+
 hider type,
 
-: ok " ok" cr ;
+: ok 
+	" ok" cr ;
 
 : empty-stack ( x-n ... x-0 -- : empty the variable stack )
 	begin depth while drop repeat ;
@@ -808,6 +1077,8 @@ hider type,
 	loop
 	2drop ;
 
+( ==================== Conditional Compilation ================ )
+
 ( The words "[if]", "[else]" and "[then]" implement conditional compilation,
 they can be nested as well
 
@@ -857,6 +1128,8 @@ find [if] [if]-word !
 find [else] [else]-word !
 
 :hide [if]-word [else]-word nest reset-nest unnest? match-[else]? ;hide
+
+( ==================== Conditional Compilation ================ )
 
 ( ==================== Endian Words =========================== )
 
@@ -1022,12 +1295,13 @@ size 8 = [if] 12 constant a 25 constant b 27 constant c [then]
 ( ==================== Random Numbers ========================= )
 
 ( ==================== ANSI Escape Codes ====================== )
-(
-	see: https://en.wikipedia.org/wiki/ANSI_escape_code
-	These codes will provide a relatively portable means of
-	manipulating a terminal
+( 
+Terminal colorization module, via ANSI Escape Codes
+ 
+see: https://en.wikipedia.org/wiki/ANSI_escape_code
+These codes will provide a relatively portable means of
+manipulating a terminal
 
-	@bug won't work if hex is set
 )
 
 27 constant 'escape'
@@ -1046,7 +1320,7 @@ char ; constant ';'
 0 constant dark
 1 constant bright
 
-: color ( brightness color-code -- )
+: color ( brightness color-code -- : set the terminal color )
 	( set color on an ANSI compliant terminal,
 	for example:
 		bright red foreground color
@@ -1055,18 +1329,35 @@ char ; constant ';'
 
 : at-xy ( x y -- : set ANSI terminal cursor position to x y )
 	CSI u. ';' emit u. ." H" ;
-: page  ( clear ANSI terminal screen and move cursor to beginning ) CSI ." 2J" 1 1 at-xy ;
-: hide-cursor ( hide the cursor from view ) CSI ." ?25l" ;
-: show-cursor ( show the cursor )           CSI ." ?25h" ;
-: save-cursor ( save cursor position ) CSI ." s" ;
-: restore-cursor ( restore saved cursor position ) CSI ." u" ;
-: reset-color CSI ." 0m" ;
+
+: page  ( -- : clear ANSI terminal screen and move cursor to beginning ) 
+	CSI ." 2J" 1 1 at-xy ;
+
+: hide-cursor ( -- : hide the cursor from view ) 
+	CSI ." ?25l" ;
+
+: show-cursor ( -- : show the cursor )           
+	CSI ." ?25h" ;
+
+: save-cursor ( -- : save cursor position ) 
+	CSI ." s" ;
+
+: restore-cursor ( -- : restore saved cursor position ) 
+	CSI ." u" ;
+
+: reset-color ( -- : reset terminal color to its default value)
+	CSI ." 0m" ;
+
 hider CSI
 ( ==================== ANSI Escape Codes ====================== )
 
 
 ( ==================== Prime Numbers ========================== )
-( from original "third" code from the ioccc http://www.ioccc.org/1992/buzzard.2.design )
+( 
+From original "third" code from the IOCCC at 
+http://www.ioccc.org/1992/buzzard.2.design, the module works out
+and prints prime numbers.
+)
 : prime? ( x -- x/0 : return number if it is prime, zero otherwise )
 	dup 1 = if 1- exit then
 	dup 2 = if    exit then
@@ -1081,7 +1372,7 @@ hider CSI
 ;
 
 0 variable counter
-: primes
+: primes ( x1 x2 -- : print the primes from x2 to x1 )
 	0 counter !
 	"  The primes from " dup . " to " over . " are: "
 	cr
@@ -1111,24 +1402,28 @@ hider .s
 	cr ;
 
 1 variable hide-words ( do we want to hide hidden words or not )
-: words ( -- )
-	( This function prints out all of the defined words, excluding hidden words.
-	An understanding of the layout of a Forth word helps here. The dictionary
-	contains a linked list of words, each forth word has a pointer to the previous
-	word until the first word. The layout of a Forth word looks like this:
 
-	NAME:  Forth Word - A variable length ASCII NUL terminated string
-	PWD:   Previous Word Pointer, points to the previous word
-	MISC:  Flags, code word and offset from previous word pointer to start of Forth word string
-	CODE/DATA: The body of the forth word definition, not interested in this.
-	
-	There is a register which stores the latest defined word which can be
-	accessed with the code "pwd @". In order to print out a word we need to
-	access a words MISC field, the offset to the NAME is stored here in bits
-	8 to 15 and the offset is calculated from the PWD field.
+( 
+This function prints out all of the defined words, excluding hidden words.
+An understanding of the layout of a Forth word helps here. The dictionary
+contains a linked list of words, each forth word has a pointer to the previous
+word until the first word. The layout of a Forth word looks like this:
 
-	"print" expects a character address, so we need to multiply any calculated
-	address by the word size in bytes. )
+NAME:  Forth Word - A variable length ASCII NUL terminated string
+PWD:   Previous Word Pointer, points to the previous word
+MISC:  Flags, code word and offset from previous word pointer to start of Forth word string
+CODE/DATA: The body of the forth word definition, not interested in this.
+
+There is a register which stores the latest defined word which can be
+accessed with the code "pwd @". In order to print out a word we need to
+access a words MISC field, the offset to the NAME is stored here in bits
+8 to 15 and the offset is calculated from the PWD field.
+
+"print" expects a character address, so we need to multiply any calculated
+address by the word size in bytes. 
+)
+
+: words ( -- : print out all defined an visible words )
 	latest
 	begin
 		dup
@@ -1280,34 +1575,34 @@ decompilers code stream pointer by )
 : decompile-?branch ( code -- increment )
 	" [ ?branch	=> " 1+ ? " ]" 2 ;
 
-: decompile ( code-field-ptr -- )
-	( @todo decompile :noname, make the output look better
+( @todo decompile :noname, make the output look better
 
-	This word expects a pointer to the code field of a word, it
-	decompiles a words code field, it needs a lot of work however.
-	There are several complications to implementing this decompile
-	function.
+The decompile word expects a pointer to the code field of a word, it
+decompiles a words code field, it needs a lot of work however.
+There are several complications to implementing this decompile
+function.
 
 	'        The next cell should be pushed
 	:noname  This has a marker before its code field of -1 which
-	         cannot occur normally, this is handles in word-printer
+		 cannot occur normally, this is handles in word-printer
 	branch   branches are used to skip over data, but also for
-	         some branch constructs, any data in between can only
-	         be printed out generally speaking
+		 some branch constructs, any data in between can only
+		 be printed out generally speaking
 	exit     There are two definitions of exit, the one used in
 		 ';' and the one everything else uses, this is used
 		 to determine the actual end of the word
 	literals Literals can be distinguished by their low value,
-	         which cannot possibly be a word with a name, the
-	         next field is the actual literal
+		 which cannot possibly be a word with a name, the
+		 next field is the actual literal
 
-	@todo addi also needs handling, it is another special case used by
-	"do...loop" [which should be replaced].
+@todo addi also needs handling, it is another special case used by
+"do...loop" [which should be replaced].
 
-	Of special difficult is processing 'if' 'else' 'then' statements,
-	this will require keeping track of '?branch'.
+Of special difficult is processing 'if' 'else' 'then' statements,
+this will require keeping track of '?branch'.
 
-	Also of note, a number greater than "here" must be data )
+Also of note, a number greater than "here" must be data )
+: decompile ( code-field-ptr -- : decompile a word )
 	begin
 		tab
 		dup @
@@ -1322,9 +1617,11 @@ decompilers code stream pointer by )
 		+
 		cr
 	again ;
+
 :hide
-	word-printer get-branch get-?branch get-original-exit get-quote branch-increment
-	decompile-literal decompile-branch decompile-?branch decompile-quote
+	word-printer get-branch get-?branch get-original-exit 
+	get-quote branch-increment decompile-literal 
+	decompile-branch decompile-?branch decompile-quote
 ;hide
 
 : xt-instruction ( extract instruction from execution token )
@@ -1343,10 +1640,10 @@ decompilers code stream pointer by )
 	dup print-start
 	dup print-previous
 	dup print-immediate
-	dup print-instruction ( TODO look up instruction name )
+	dup print-instruction ( @todo look up instruction name )
 	print-defined ;
 
-: see
+: see ( -- : decompile the next word in the input stream )
 	( decompile a word )
 	find
 	dup 0= if drop error-no-word exit then
@@ -1361,10 +1658,13 @@ decompilers code stream pointer by )
 		drop
 	then ;
 
-( These help messages could be moved to blocks, the blocks could then
-  be loaded from disk and printed instead of defining the help here,
-  this would allow much larger help )
-: help ( print out a short help message )
+( 
+These help messages could be moved to blocks, the blocks could then
+be loaded from disk and printed instead of defining the help here,
+this would allow much larger help 
+)
+
+: help ( -- : print out a short help message )
 	page
 	key drop
 " Welcome to Forth, an imperative stack based language. It is both a low
@@ -1643,16 +1943,21 @@ defer matcher
 
 matcher is match
 
-:hide *str *pat *pat==*str pass fail advance advance-string advance-regex matcher ++ ;hide
+:hide 
+	*str *pat *pat==*str pass fail advance 
+	advance-string advance-regex matcher ++ 
+;hide
 
 ( ==================== Matcher ================================ )
 
 ( ==================== Cons Cells ============================= )
 
-( From http://sametwice.com/cons.fs, this could be improved if the optional
-  memory allocation words were added to the interpreter. This provides
-  a simple "cons cell" data structure. There is currently no way to
-  free allocated cells )
+( 
+From http://sametwice.com/cons.fs, this could be improved if the optional
+memory allocation words were added to the interpreter. This provides
+a simple "cons cell" data structure. There is currently no way to
+free allocated cells 
+)
 
 : car! ( cons-addr -- : store a value in the car cell of a cons cell ) 
 	! ;
@@ -1822,7 +2127,8 @@ enum header-magic4
 
 ( s" forth.core" core )
 
-:hide header-size header? 
+:hide 
+header-size header? 
 header-magic0 header-magic1 header-magic2 header-magic3
 header-version header-cell-size header-endianess header-magic4
 header 
@@ -1835,7 +2141,12 @@ read-or-abort size?
 
 ( ==================== Core utilities ======================== )
 
-( clean up the environment )
+( 
+Looking at most Forths dictionary with "words" command they tend
+to have a lot of words that do not mean anything but to the implementers
+of that specific Forth, here we clean up as many non standard words as
+possible.
+)
 :hide
  _emit
  write-string do-string ')' alignment-bits print-string
@@ -1853,4 +2164,58 @@ read-or-abort size?
  `stack-size `error-handler
  open-file-or-abort
 ;hide
+
+
+( 
+# Forth To List
+
+The following is a To-Do list for the Forth code itself, along with any
+ideas.
+
+* Rewrite starting word using "restart-word!"
+* Word, Parse, other forth words
+* add "j" if possible to get outer loop context
+* FORTH, VOCABULARY
+* "Value", "To", "Is"
+* Double cell words and floating point library
+* The interpreter should use character based addresses, instead of
+word based, and use values that are actual valid pointers, this
+will allow easier interaction with the world outside the virtual machine
+* A small block editor
+* more help commands would be good, such as "help-ANSI-escape",
+"tutorial", etc.
+* Abort", this could be used to implement words such
+as "abort if in compile mode", or "abort if in command mode".
+* common words and actions should be factored out to simplify
+definitions of other words, their standards compliant version found
+if any
+* throw and exception
+* here documents, string literals
+* A set of words for navigating around word definitions would be
+help debugging words, for example:
+	compile-field code-field field-translate
+would take a pointer to a compile field for a word and translate
+that into the code field
+* proper booleans should be used throughout
+* escaped strings they do not test if the number is negative, however that would
+unnecessarily limit the range of operation
+* "print" should be removed from the interpreter
+* words should be made for debugging the return stack [such as
+printing it out like .s]
+* virtual machines could be made in other languages than C that will
+run the core files generated...The virtual machine has higher level
+functions in it that it probably should not have, like "read" and
+"system", these belong elsewhere - but where?
+* It would be interesting to see which Unix utilities could easily
+be implemented as Forth programs, such as "head", "tail", "cat", "tr",
+"grep", etcetera.
+
+Some interesting links:
+	* http://www.figuk.plus.com/build/heart.htm
+	* https://groups.google.com/forum/#!msg/comp.lang.forth/NS2icrCj1jQ/1btBCkOWr9wJ
+	* http://newsgroups.derkeiler.com/Archive/Comp/comp.lang.forth/2005-09/msg00337.html
+	* https://stackoverflow.com/questions/407987/what-are-the-primitive-forth-operators
+)
+
+
 

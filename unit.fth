@@ -276,11 +276,26 @@ unit( Misc words )
 marker cleanup
 
 s" 5 3 repeater 3 sum 15 = " test
-s" 6 1 range mul 120 = " test
-
+s" 6 1 range dup mul 720 = " test
 cleanup
 end-unit
 ( ========================== Misc Words ====================================== )
+
+
+( ========================== Prime Numbers =================================== )
+unit( Prime numbers )
+marker cleanup
+
+s" 13 prime? " test
+s" 2  prime? " test
+s" 4  prime? not " test
+s" 25 prime? not " test
+
+cleanup
+end-unit
+( ========================== Prime Numbers =================================== )
+
+
 
 summary
 
