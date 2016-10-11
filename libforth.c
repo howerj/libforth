@@ -420,8 +420,9 @@ See:
 * <https://stackoverflow.com/questions/2100331/c-macro-definition-to-determine-big-endian-or-little-endian-machine>
 * <https://en.wikipedia.org/wiki/Endianness>
 
-**/
+For more information and alternatives.
 
+**/
 #define IS_BIG_ENDIAN       (!(union { uint16_t u16; unsigned char c; }){ .u16 = 1 }.c)
 
 /**
@@ -1474,12 +1475,13 @@ conditional constructs
 /**
 A few more constants are now defined, nothing special here 
 **/
-	VERIFY(forth_define_constant(o, "size",        sizeof(forth_cell_t)) >= 0);
-	VERIFY(forth_define_constant(o, "stack-start", size - (2 * o->m[STACK_SIZE])) >= 0);
-	VERIFY(forth_define_constant(o, "max-core",    size) >= 0);
-	VERIFY(forth_define_constant(o, "r/o",         FAM_RO) >= 0);
-	VERIFY(forth_define_constant(o, "w/o",         FAM_WO) >= 0);
-	VERIFY(forth_define_constant(o, "r/w",         FAM_RW) >= 0);
+	VERIFY(forth_define_constant(o, "size",              sizeof(forth_cell_t)) >= 0);
+	VERIFY(forth_define_constant(o, "stack-start",       size - (2 * o->m[STACK_SIZE])) >= 0);
+	VERIFY(forth_define_constant(o, "max-core",          size) >= 0);
+	VERIFY(forth_define_constant(o, "r/o",               FAM_RO) >= 0);
+	VERIFY(forth_define_constant(o, "w/o",               FAM_WO) >= 0);
+	VERIFY(forth_define_constant(o, "r/w",               FAM_RW) >= 0);
+	VERIFY(forth_define_constant(o, "dictionary-start",  DICTIONARY_START) >= 0);
 
 /**All of the calls to **forth\_eval** and **forth_define_constant** have
 set the input streams to point to a string, we need to reset them
@@ -2258,7 +2260,7 @@ static FILE *fopen_or_die(const char *name, char *mode)
 
 static void usage(const char *name)
 {
-	fprintf(stderr, "usage: %s [-s file] [-e string] [-l file] [-t] [-h] [-v] [-m size] [-] files\n", name);
+	fprintf(stderr, "usage: %s [-s file] [-e string] [-V] [-l file] [-t] [-h] [-v] [-m size] [-] files\n", name);
 }
 
 /** 
@@ -2280,6 +2282,7 @@ Forth: A small forth interpreter build around libforth\n\n\
 \t-m size   specify forth memory size in kilobytes (cannot be used with '-l')\n\
 \t-t        process stdin after processing forth files\n\
 \t-v        turn verbose mode on\n\
+\t-V        print out version information and exit\n\
 \t-         stop processing options\n\n\
 Options must come before files to execute\n\n";
 	fputs(help_text, stderr);
@@ -2382,6 +2385,14 @@ sacrifice portability.
 			break;
 		case 'v':
 			verbose++;
+			break;
+		case 'V':
+			fprintf(stdout, 
+					"libforth: version %d, size %u, endianess %u\n"
+					"initial forth program:\n%s\n",
+					CORE_VERSION, (unsigned)sizeof(forth_cell_t), (unsigned)IS_BIG_ENDIAN,
+					initial_forth_program);
+			return EXIT_SUCCESS;
 			break;
 		default:
 		fail:

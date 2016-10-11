@@ -1,8 +1,0 @@
-*.o
-*.log
-*.bin
-*.enc
-*.dec
-hexdump
-rle
-forth

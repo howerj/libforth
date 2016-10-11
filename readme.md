@@ -124,6 +124,9 @@ invalidated this will not be saved, invalidation occurs when an unrecoverable
 error has been detected that would prevent any recovery or meaningful
 execution with the current image.
 
+* -e string
+Evaluate a Forth string passed in as an argument.
+
 * -t
 After all the files have been read from and any core files have been loaded
 this will make the Forth interpreter read from [stdin][], the core file will be
@@ -154,6 +157,10 @@ interpreter.
 
 Stop processing any more command line options and treat all arguments after
 this as files to be executed, if there are any.
+
+* -V 
+
+Print version and interpreter information and exit successfully.
 
 * file...
 

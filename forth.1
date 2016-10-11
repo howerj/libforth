@@ -4,7 +4,7 @@
 .SH NAME
 forth \- A small Forth interpreter.
 .SH SYNOPSIS
-forth [-s file] [-l file] [-t] [-h] [-v] [-m size] [-] file..
+forth [-s file] [-e string] [-l file] [-V] [-t] [-h] [-v] [-m size] [-] file...
 .SH DESCRIPTION
 This is a small Forth interpreter, built around the libforth(3) library. It is
 an provides an idiosyncratic version of Forth with minimal effort to abide by
@@ -21,6 +21,10 @@ which can later be loaded with the "-l" option. If a core file has been
 invalidated this will not be saved, invalidation occurs when an unrecoverable
 error has been detected that would prevent any recovery or meaningful
 execution.
+
+.TP
+.B -e string
+Evaluate a Forth string passed in as an argument.
 
 .TP
 .B -t
@@ -48,6 +52,10 @@ This option loads a forth core file generated from the "-d" option of a
 previous run. This core file is not portable and must be generated on the same
 platform as it was generated. It can only be specified once per run of the
 interpreter.
+
+.TP
+.B -V 
+Print version and interpreter information and exit successfully.
 
 .TP
 .B -

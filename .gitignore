@@ -42,3 +42,4 @@ tags
 Doxyfile
 *.bak
 libforth.md
+*.dump

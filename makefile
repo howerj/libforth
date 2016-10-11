@@ -55,6 +55,9 @@ ${TARGET}: main.o lib${TARGET}.a
 forth.core: ${TARGET} ${FORTH_FILE} test
 	./${TARGET} -s $@ ${FORTH_FILE}
 
+forth.dump: forth.core ${TARGET}
+	./${TARGET} -l $< -e "0 here dump" > $@
+
 run: ${TARGET} ${FORTH_FILE}
 	./$< -t ${FORTH_FILE}
 
@@ -100,7 +103,7 @@ profile: clean ${TARGET}
 clean:
 	${RM} ${TARGET} unit *.a *.so *.o
 	${RM} *.log *.htm *.tgz 
-	${RM} *.blk *.core
+	${RM} *.blk *.core *.dump
 	${RM} tags
 	${RM} *.i *.s *.gcov *.gcda *.gcno *.out
 	${RM} html latex Doxyfile *.db *.bak

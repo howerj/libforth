@@ -298,7 +298,7 @@ extract the document string for a given work.
 : 2! ( x1 x2 a-addr -- : store two values as two consecutive memory cells )
 	2dup ! nip 1+ ! ;
 
-: r@ 
+: r@  (  -- x, R: x -- )
 	r> r @ swap >r ;
 
 : 0> ( x -- bool )
@@ -406,13 +406,8 @@ extract the document string for a given work.
 : never ( never...then : reserve space in word )
 	immediate 0 [literal] postpone if ;
 
-: dictionary-start
-	( The dictionary start at this location, anything before this value
-	is not a defined word )
-	64 ;
-
 : source ( -- c-addr u )
-	( TODO: read registers instead )
+	( @todo read registers instead )
 	[ 32 chars> ] literal   ( size of input buffer, in characters )
 	[ 64 chars> ] literal ; ( start of input buffer, in characters )
 
@@ -439,11 +434,10 @@ extract the document string for a given work.
 : 2swap ( n1 n2 n3 n4 – n3 n4 n1 n2 )
 	>r -rot r> -rot ;
 
-: 2tuck (  n1 n2 n3 n4 – n3 n4 n1 n2 n3 n4 )
+: 2tuck ( n1 n2 n3 n4 – n3 n4 n1 n2 n3 n4 )
 	2swap 2over ;
 
-: hide  ( token -- hide-token )
-	( This hides a word from being found by the interpreter )
+: hide  ( token -- hide-token : this hides a word from being found by the interpreter )
 	dup
 	if
 		dup @ hidden-mask or swap tuck !
@@ -469,7 +463,7 @@ extract the document string for a given work.
 	means in "see" )
 	[ find exit hide ] rdrop exit [ unhide ] ;
 
-: ?exit ( x -- ) ( exit current definition if not zero ) 
+: ?exit ( x -- : exit current definition if not zero ) 
 	if rdrop exit then ;
 
 : number? ( c -- f : is character a number? )
@@ -532,7 +526,7 @@ extract the document string for a given work.
 
 ( ========================== Extended Word Set =============================== )
 
-: gcd ( a b -- n ) ( greatest common divisor )
+: gcd ( x1 x2 -- x : greatest common divisor )
 	begin
 		dup
 		if
@@ -596,6 +590,7 @@ extract the document string for a given work.
 
 : is ( location " ccc" -- : make a deferred word execute a word ) 
 	find cfa swap ! ;
+
 hider (do-defer)
 
 ( ========================== Extended Word Set =============================== )
@@ -604,8 +599,6 @@ hider (do-defer)
 The words described here on out get more complex and will require more
 of an explanation as to how they work.
 )
-
-
 
 ( ========================== CREATE DOES> ==================================== )
 
@@ -620,8 +613,11 @@ A simple version of create is as follows
 	: create :: 2 , here 2 + , ' exit , 0 state ! ;
 But this version is much more limited )
 
-: write-quote ['] ' , ;   ( A word that writes ' into the dictionary )
-: write-exit ['] exit , ; ( A word that write exit into the dictionary )
+: write-quote ( A word that writes ' into the dictionary )
+	['] ' , ;   
+
+: write-exit ( A word that write exit into the dictionary )
+	['] exit , ; 
 
 : state! ( bool -- ) ( set the compilation state variable ) state ! ;
 
@@ -644,15 +640,20 @@ But this version is much more limited )
 ;
 
 : create immediate  ( create word is quite a complex forth word )
-  state @ if postpone <build else command-mode-create then ;
+	state @ 
+	if 
+		postpone <build 
+	else 
+		command-mode-create 
+	then ;
 
 hider command-mode-create
 hider state!
 
-: does> ( whole-to-patch -- )
+: does> ( hole-to-patch -- )
 	immediate
-	write-exit  ( we don't want the defining to exit, but the *defined* word to )
-	here swap !           ( patch in the code fields to point to )
+	write-exit   ( we don't want the defining to exit, but the *defined* word to )
+	here swap !  ( patch in the code fields to point to )
 	dolist ,     ( write a run in )
 ;
 
@@ -713,8 +714,8 @@ hider write-quote
 	rdrop
 	>r ;
 
-: loop immediate 
-	1 [literal] ' addi , <resolve ;
+: loop 
+	immediate 1 [literal] ' addi , <resolve ;
 
 : +loop 
 	immediate ' addi , <resolve ;
@@ -740,16 +741,16 @@ hider addi
 	>r >r ( restore return stack )
 ;
 
-: range    ( nX nY -- nX nX+1 ... nY )  
+: range ( nX nY -- nX nX+1 ... nY )  
 	swap 1+ swap do i loop ;
 
 : repeater ( n0 X -- n0 ... nX )        
 	1 do dup loop ;
 
-: sum      ( n0 ... nX X -- sum<0..X> ) 
+: sum ( n0 ... nX X -- sum<0..X> ) 
 	1 do + loop ;
 
-: mul      ( n0 ... nX X -- mul<0..X> ) 
+: mul ( n0 ... nX X -- mul<0..X> ) 
 	1 do * loop ;
 
 : factorial ( n -- n! )
@@ -763,23 +764,26 @@ hider addi
 	then ;
 
 hider tail
-: tail
-	( This function implements tail calls, which is just a jump
-	to the beginning of the words definition, for example this
-	word will never overflow the stack and will print "1" followed
-	by a new line forever,
 
-		: forever 1 . cr tail ;
+( 
+The "tail" function implements tail calls, which is just a jump
+to the beginning of the words definition, for example this
+word will never overflow the stack and will print "1" followed
+by a new line forever,
 
-	Whereas
+	: forever 1 . cr tail ;
 
-		: forever 1 . cr recurse ;
+Whereas
 
-	or
+	: forever 1 . cr recurse ;
 
-		: forever 1 . cr forever ;
+or
 
-	Would overflow the return stack. )
+	: forever 1 . cr forever ;
+
+Would overflow the return stack. 
+)
+: tail ( -- )
 	immediate
 	latest cfa
 	' branch ,
@@ -806,14 +810,13 @@ hider tail
 : reset-column		
 	0 column-counter ! ;
 
-: auto-column		column-counter dup @ column 1+! ;
+: auto-column		
+	column-counter dup @ column 1+! ;
 
 : alignment-bits 
 	[ 1 size log2 lshift 1- literal ] and ;
 
-: name ( PWD -- c-addr )
-	( given a pointer to the PWD field of a word get a pointer to the name
-	of the word )
+: name ( PWD -- c-addr : given a pointer to the PWD field of a word get a pointer to the name of the word )
 	dup 1+ @ 256/ lsb - chars> ;
 
 0 variable x
@@ -828,27 +831,25 @@ hider tail
 		swap
 		>r
 		>r
-	x@ >r ( restore return address )
-;
+	x@ >r ; ( restore return address )
 
 : 2r> ( R: x1 x2 -- x1 x2 )
 	r> x! ( pop off this words return address )
 		r>
 		r>
 		swap
-	x@ >r ( restore return address )
-;
+	x@ >r ; ( restore return address )
 
-: 2r@ ( -- x1 x2 ) ( R:  x1 x2 -- x1 x2 )
+: 2r@ ( -- x1 x2 , R:  x1 x2 -- x1 x2 )
 	r> x! ( pop off this words return address )
 	r> r>
 	2dup
 	>r >r
 	swap
-	x@ >r ( restore return address )
-;
+	x@ >r ; ( restore return address )
 
-: unused ( -- u ) ( push the amount of core left ) max-core here - ;
+: unused ( -- u : push the amount of core left ) 
+	max-core here - ;
 
 : roll
 	( xu xu-1 ... x0 u -- xu-1 ... x0 xu )
@@ -889,7 +890,8 @@ hider tail
 ;
 hider delim
 
-: accept ( c-addr +n1 -- +n2 : see accepter definition ) '\n' accepter ;
+: accept ( c-addr +n1 -- +n2 : see accepter definition ) 
+	'\n' accepter ;
 
 0xFFFF constant max-string-length
 
@@ -1016,6 +1018,7 @@ hider type,
 
 : over= ( x y -- x bool : over ... then = )
 	over = ;
+
 : of
 	immediate ' over= , postpone if ;
 
@@ -1208,12 +1211,16 @@ size 8 = [if]
 : trace ( flag -- : turn tracing on/off )
 	`debug ! ;
 
+: #pad ( -- u : offset into pad area )
+	64 ;
+
 : pad
 	( the pad is used for temporary storage, and moves
 	along with dictionary pointer, always in front of it )
-	here 64 + ;
+	here #pad + ;
 
 0 variable counter
+
 : counted-column ( index -- : special column printing for dump )
 	counter @ column-width @ mod
 	not if cr . " :" space else drop then
@@ -1233,10 +1240,15 @@ size 8 = [if]
 	space
 	drop ;
 
-: lister 0 counter ! 1- swap do i counted-column i ? i @ as-chars loop ;
+: lister 
+	0 counter ! 1- swap 
+	do 
+		i counted-column i ? i @ as-chars 
+	loop ;
 
 : dump  ( addr u -- : dump out 'u' cells of memory starting from 'addr' )
 	base @ >r hex 1+ over + lister r> base ! cr ;
+
 :hide counted-column counter lister as-chars ;hide
 
 : forgetter ( pwd-token -- : forget a found word and everything after it )
@@ -1250,7 +1262,7 @@ size 8 = [if]
 	:: latest [literal] ' forgetter , postpone ; ;
 hider forgetter
 
-: ?dup-if immediate ( x -- x | - )
+: ?dup-if immediate ( x -- x | - : ?dup and if rolled into one! )
 	' ?dup , postpone if ;
 
 : ** ( b e -- x : exponent, raise 'b' to the power of 'e')
@@ -1268,28 +1280,31 @@ hider forgetter
 
 ( ==================== Random Numbers ========================= )
 
-( See:
-	uses xorshift
-	https://en.wikipedia.org/wiki/Xorshift
-	http://excamera.com/sphinx/article-xorshift.html
-	http://www.arklyffe.com/main/2010/08/29/xorshift-pseudorandom-number-generator/
-	these constants have be collected from the web )
+( 
+See:
+uses xorshift
+https://en.wikipedia.org/wiki/Xorshift
+http://excamera.com/sphinx/article-xorshift.html
+http://www.arklyffe.com/main/2010/08/29/xorshift-pseudorandom-number-generator/
+these constants have be collected from the web 
+)
+
 size 2 = [if] 13 constant a 9  constant b 7  constant c [then]
 size 4 = [if] 13 constant a 17 constant b 5  constant c [then]
 size 8 = [if] 12 constant a 25 constant b 27 constant c [then]
 
 7 variable seed ( must not be zero )
 
-: seed! ( u -- : set the value of the PRNG seed )
+: seed! ( x -- : set the value of the PRNG seed )
 	dup 0= if drop 7 ( zero not allowed ) then seed ! ;
 
-: random
-	( assumes word size is 32 bit )
+: random ( -- x : assumes word size is 32 bit )
 	seed @
 	dup a lshift xor
 	dup b rshift xor
 	dup c lshift xor
 	dup seed! ;
+
 :hide a b c seed ;hide
 
 ( ==================== Random Numbers ========================= )
@@ -1301,7 +1316,6 @@ Terminal colorization module, via ANSI Escape Codes
 see: https://en.wikipedia.org/wiki/ANSI_escape_code
 These codes will provide a relatively portable means of
 manipulating a terminal
-
 )
 
 27 constant 'escape'
@@ -1444,9 +1458,7 @@ hider hide-words
 : TrueFalse ( -- : print true or false )
 	if " true" else " false" then ;
 
-: registers ( -- )
-	( print out important registers and information about the
-	virtual machine )
+: registers ( -- : print out important registers and information about the virtual machine )
 	" return stack pointer:    " r@       . cr
 	" dictionary pointer       " here     . cr
 	" previous word:           " pwd      ? cr
@@ -1494,18 +1506,20 @@ hider hide-words
 	" -- press any key to continue -- "
 	key drop ;
 
-: more ( wait for more input )
+: more ( -- : wait for more input )
 	"  -- press any key to continue -- " key drop cr page ;
 
-( this is not quite ready for prime time )
-: debug-help " debug mode commands
+: debug-help ( -- : this is not quite ready for prime time )
+ " debug mode commands
 	h - print help
 	q - exit containing word
 	r - print registers
 	s - print stack
 	c - continue on with execution
 " ;
-: debug-prompt ." debug> " ;
+: debug-prompt 
+	." debug> " ;
+
 : debug ( a work in progress, debugging support, needs parse-word )
 	key drop
 	cr
@@ -1516,7 +1530,6 @@ hider hide-words
 			[char] h of debug-help endof
 			[char] q of bye        endof
 			[char] r of registers  endof
-			\ [char] d of dump endof \ implement read in number
 			[char] s of >r .s r>   endof
 			[char] c of drop exit  endof
 		endcase drop
@@ -1535,7 +1548,7 @@ hider debug-prompt
 	begin
 		over ( p1 p2 p1 )
 		cf @ u<= swap cf @ > and if exit then
-		dup 0=                  if exit then
+		dup 0=                   if exit then
 		dup @ swap
 	again
 ;
@@ -1543,6 +1556,7 @@ hider cf
 
 : end-print ( x -- )
 	"		=> " . " ]" ;
+
 : word-printer
 	( attempt to print out a word given a words code field
 	WARNING: This is a dirty hack at the moment
@@ -1602,6 +1616,7 @@ Of special difficult is processing 'if' 'else' 'then' statements,
 this will require keeping track of '?branch'.
 
 Also of note, a number greater than "here" must be data )
+
 : decompile ( code-field-ptr -- : decompile a word )
 	begin
 		tab
@@ -1626,6 +1641,7 @@ Also of note, a number greater than "here" must be data )
 
 : xt-instruction ( extract instruction from execution token )
 	cfa @ >instruction ;
+
 ( these words expect a pointer to the PWD field of a word )
 : defined-word?      xt-instruction dolist = ;
 : print-name         " name:          " name print cr ;
@@ -1772,7 +1788,6 @@ For resources on Forth:
 " cr
 ;
 
-
 ( ==================== Files ================================== )
 
 ( @todo implement the other file access methods in terms of the
@@ -1800,6 +1815,7 @@ For resources on Forth:
 	loop ;
 
 : write-line  ( c-addr u fileid -- ior )
+	( @todo implement this )
 ;
 
 : resize-file  ( ud fileid -- ior : attempt to resize a file )
