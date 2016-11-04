@@ -2,9 +2,12 @@ ECHO	= echo
 AR	= ar
 CC	= gcc
 CFLAGS	= -Wall -Wextra -g -pedantic -std=c99 -O2 
+LDFLAGS = 
+INCLUDE = libline
 TARGET	= forth
 RM      = rm -rf
 CTAGS  ?= ctags
+CP      = cp
 COLOR   = 
 
 MDS     := ${wildcard *.md}
@@ -12,7 +15,7 @@ DOCS    := ${MDS:%.md=%.htm}
 
 FORTH_FILE = forth.fth
 
-.PHONY: all shorthelp doc clean test profile unit.test forth.test
+.PHONY: all shorthelp doc clean test profile unit.test forth.test line 
 
 all: shorthelp ${TARGET}
 
@@ -31,6 +34,7 @@ help:
 	@${ECHO} "      test            execute the unit tests"
 	@${ECHO} "      doc             make the project documentation"
 	@${ECHO} "      lib${TARGET}.a      make a static ${TARGET} library"
+	@${ECHO} "      line            make ${TARGET} with line editor"
 	@${ECHO} "      clean           remove generated files"
 	@${ECHO} "      dist            create a distribution archive"
 	@${ECHO} "      profile         generate lots of profiling information"
@@ -41,16 +45,14 @@ help:
 	@${CC} ${CFLAGS} $< -c -o $@
 
 %.md: %.c
-	@${RM} $@
 	./convert $< > $@
 
 lib${TARGET}.a: lib${TARGET}.o
 	${AR} rcs $@ $<
 
-
 ${TARGET}: main.o lib${TARGET}.a
 	@echo "cc $^ -o $@"
-	@${CC} ${CFLAGS} $^ -o $@
+	@${CC} ${CFLAGS} $^ ${LDFLAGS} -o $@
 
 forth.core: ${TARGET} ${FORTH_FILE} test
 	./${TARGET} -s $@ ${FORTH_FILE}
@@ -82,14 +84,30 @@ dist: ${TARGET} ${TARGET}.1 lib${TARGET}.[a3] lib${TARGET}.htm ${DOCS} forth.cor
 	tar zvcf ${TARGET}.tgz $^
 
 %.htm: %.md
-	@${RM} $@
 	markdown $^ > $@
+
+%.pdf: %.md
+	pandoc --toc $^ -o $@
+
+%.1: %.md
+	pandoc -s -t man $^ -o $@
+
+${TARGET}.1: readme.1
+	${CP} $^ $@
 
 doc: lib${TARGET}.htm ${DOCS}
 
 doxygen: *.c *.h *.md
 	doxygen -g
 	doxygen 2> doxygen_warnings.log
+
+libline/libline.a:
+	make -C libline libline.a
+
+# This option requires a clean build
+line: LDFLAGS += -lline
+line: CFLAGS += -L${INCLUDE} -I${INCLUDE} -DUSE_LINE_EDITOR
+line: libline/libline.a ${TARGET}
 
 # CFLAGS: Add "-save-temps" to keep temporary files around
 # objdump: Add "-M intel" for a more sensible assembly output
@@ -102,7 +120,7 @@ profile: clean ${TARGET}
 
 clean:
 	${RM} ${TARGET} unit *.a *.so *.o
-	${RM} *.log *.htm *.tgz 
+	${RM} *.log *.htm *.tgz *.pdf
 	${RM} *.blk *.core *.dump
 	${RM} tags
 	${RM} *.i *.s *.gcov *.gcda *.gcno *.out

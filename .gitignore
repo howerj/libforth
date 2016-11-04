@@ -43,3 +43,7 @@ Doxyfile
 *.bak
 libforth.md
 *.dump
+*.pdf
+*.1
+*.3
+.forth

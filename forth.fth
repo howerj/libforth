@@ -619,9 +619,11 @@ But this version is much more limited )
 : write-exit ( A word that write exit into the dictionary )
 	['] exit , ; 
 
-: state! ( bool -- ) ( set the compilation state variable ) state ! ;
+: state! ( bool -- : set the compilation state variable ) 
+	state ! ;
 
-: command-mode false state! ;
+: command-mode ( -- : put the interpreter into command mode )
+	false state! ;
 
 : command-mode-create   ( create a new work that pushes its data field )
 	::              ( compile a word )
@@ -1811,12 +1813,17 @@ For resources on Forth:
 	do 
 		dup i read-char
 		i c@ '\n' = if 
+			leave
 		then
 	loop ;
 
 : write-line  ( c-addr u fileid -- ior )
 	( @todo implement this )
-;
+	-rot bounds
+	do
+		i c@ dup '\n' = if drop leave then
+		
+	loop ;
 
 : resize-file  ( ud fileid -- ior : attempt to resize a file )
 	( There is no portable way to truncate a file :C )
@@ -2181,12 +2188,11 @@ possible.
  open-file-or-abort
 ;hide
 
-
 ( 
-# Forth To List
+## Forth To List
 
 The following is a To-Do list for the Forth code itself, along with any
-ideas.
+other ideas.
 
 * Rewrite starting word using "restart-word!"
 * Word, Parse, other forth words
@@ -2225,6 +2231,13 @@ functions in it that it probably should not have, like "read" and
 * It would be interesting to see which Unix utilities could easily
 be implemented as Forth programs, such as "head", "tail", "cat", "tr",
 "grep", etcetera.
+* A utility for compressing core files could be made in Forth, it would mimick
+the "rle.c" program previously present in the repository - that is it would
+use run length encoding.
+* The manual pages, and various PDF files, should be generated using pandoc.
+The manual page for the forth library can be generated from the header file, which
+will need special preparation [a markdown file will have to be generated from the
+header file, that file can the be used for the manual page].
 
 Some interesting links:
 	* http://www.figuk.plus.com/build/heart.htm

@@ -1,6 +1,139 @@
-# readme.md {#mainpage}
+% FORTH(1)
+% Richard Howe
+% November 2016
+
+# NAME 
+
+forth - a forth interpreter
+
+# SYNOPSIS
+
+**forth** **-s file** **-e string** **-l file** **-m size** **-VthvL** **-** files
+
+# DESCRIPTION
+
+A Forth interpreter built around a library, libforth, that implements a
+complete Forth interpreter.
 
 This interpreter is available at [here](https://github.com/howerj/libforth).
+
+# OPTIONS
+
+Command line switches must be given before any files, unless that switch takes
+a file as an argument.
+
+* -s file
+
+This saves the working memory of the Forth interpreter to a file,
+which can later be loaded with the "-l" option. If a core file has been
+invalidated this will not be saved, invalidation occurs when an unrecoverable
+error has been detected that would prevent any recovery or meaningful
+execution with the current image.
+
+* -e string
+
+Evaluate a Forth string passed in as an argument.
+
+* -t
+
+After all the files have been read from and any core files have been loaded
+this will make the Forth interpreter read from [stdin][], the core file will be
+saved after [stdin][] has been read from and there is no more work to do, if
+the "-d" or "-s" flags have been specified.
+
+* -h
+
+Print out a short help message and exit unsuccessfully.
+
+* -v
+
+Turn verbose mode on, more information will be printed out, to [stderr][], about
+what is happening in the interpreter. Usually the interpreter is as silent as
+possible.
+
+* -m size
+
+Specify the virtual machines memory size in kilobytes, overriding the default
+memory size. This is mutually exclusive with "-l".
+
+* -l file
+
+This option loads a forth core file generated from the "-d" option of a
+previous run. This core file is not portable and must be generated on the same
+platform as it was generated. It can only be specified once per run of the
+interpreter.
+
+* '-'
+
+Stop processing any more command line options and treat all arguments after
+this as files to be executed, if there are any.
+
+* -V 
+
+Print version and interpreter information and exit successfully.
+
+* -L
+
+If the line editing library is compiled into the executable, which is a compile
+time option, then when reading from [stdin][] this will use a [line editor][]
+to read in a line at a time. This option implies *-t*.
+
+* file...
+
+If a file, or list of files, is given, read from them one after another
+and execute them. The dictionary and any stored Forth blocks will persist 
+between files but values on the stacks will not.
+
+If no files are given to execute [stdin][] will be read from.
+
+## EXAMPLES 
+
+	./forth 
+
+Execute any commands given from [stdin][]
+
+	./forth -t file1.4th file2.4th
+
+Execute file "file1.4th", then "file2.4th", then read from [stdin][]
+
+	./forth file1.4th
+
+Execute file "file1.4th".
+
+	./forth -s file1.4th
+
+Execute file "file1.4th", the produce a "forth.core" save file.
+
+	./forth -s -l forth.core
+
+Load a "forth.core" file, read from [stdin][] and execute any commands given,
+then dump the new core file to "forth.core".
+
+The interpreter returns zero on success and non zero on failure.
+
+# LICENSE
+
+The Forth interpreter and the library that implements it are released under the
+[MIT][] license. Copyright (c) Richard Howe, 2016.
+
+# EXIT STATUS
+
+This program will return a non-zero value on failure, and zero on success.
+
+# SEE ALSO
+
+libforth(3)
+
+# BUGS
+
+If you find a bug, or would like to request a new feature, please Email me at:
+
+        howe.r.j.89 [ at ] gmail . com
+
+The interpreter has not been battle hardened yet so there is likely behavior
+that is non-standard (for no reason) or just outright incorrect.
+
+# MANUAL
 
 This small [Forth][] interpreter is based on a de-obfuscated entrant
 into the [IOCCC][] by *buzzard*. The entry described a [Forth][]
@@ -24,9 +157,8 @@ For a list of build options. But running:
 
 Will build the interpreter and run it, it will then read from [stdin][].
 
-This implementation is released under the [MIT][] license.
-
-# Manual
+To build the documentation other programs may be needed, such as [pandoc][] and
+the [markdown script][], but these steps are optional.
 
 [Forth][] is an odd language that has a loyal following groups, but it
 is admittedly not the most practical of language as it lacks nearly everything
@@ -87,11 +219,6 @@ words that build upon those provided by the base system.
 Apart from this file there are other sources of information about the
 project:
 
-The manual pages can be consulted:
-
-* [forth.1][]
-* [libforth.3][] 
-
 As can the code, which is small enough to be comprehensible:
 
 * [libforth.c][] (contains the core interpreter)
@@ -107,93 +234,6 @@ extended to a more function [Forth][] environment.
 The source file [libforth.c][] can be converted to a more readable webpage by
 first converting the source to [markdown][] with [convert][] script, the converting
 that to HTML in the usual fashion
-
-## Running the interpreter
-
-Running the interpreter is documented in the man page [forth.1][], but it will
-also be described here:
-
-Command line switches must be given before any files, unless that switch takes
-a file as an argument.
-
-* -s file
-
-This saves the working memory of the Forth interpreter to a file,
-which can later be loaded with the "-l" option. If a core file has been
-invalidated this will not be saved, invalidation occurs when an unrecoverable
-error has been detected that would prevent any recovery or meaningful
-execution with the current image.
-
-* -e string
-Evaluate a Forth string passed in as an argument.
-
-* -t
-After all the files have been read from and any core files have been loaded
-this will make the Forth interpreter read from [stdin][], the core file will be
-saved after [stdin][] has been read from and there is no more work to do, if
-the "-d" or "-s" flags have been specified.
-
-* -h
-Print out a short help message and exit unsuccessfully.
-
-* -v
-Turn verbose mode on, more information will be printed out, to [stderr][], about
-what is happening in the interpreter. Usually the interpreter is as silent as
-possible.
-
-* -m size
-
-Specify the virtual machines memory size in kilobytes, overriding the default
-memory size. This is mutually exclusive with "-l".
-
-* -l file
-
-This option loads a forth core file generated from the "-d" option of a
-previous run. This core file is not portable and must be generated on the same
-platform as it was generated. It can only be specified once per run of the
-interpreter.
-
-* -
-
-Stop processing any more command line options and treat all arguments after
-this as files to be executed, if there are any.
-
-* -V 
-
-Print version and interpreter information and exit successfully.
-
-* file...
-
-If a file, or list of files, is given, read from them one after another
-and execute them. The dictionary and any stored Forth blocks will persist 
-between files but values on the stacks will not.
-
-If no files are given to execute [stdin][] will be read from.
-
-### Examples 
-
-	./forth 
-
-Execute any commands given from [stdin][]
-
-	./forth -t file1.4th file2.4th
-
-Execute file "file1.4th", then "file2.4th", then read from [stdin][]
-
-	./forth file1.4th
-
-Execute file "file1.4th".
-
-	./forth -s file1.4th
-
-Execute file "file1.4th", the produce a "forth.core" save file.
-
-	./forth -s -l forth.core
-
-Load a "forth.core" file, read from [stdin][] and execute any commands given,
-then dump the new core file to "forth.core".
-
-The interpreter returns zero on success and non zero on failure.
 
 ## Using the interpreter
 
@@ -539,7 +579,7 @@ A comment, ignore everything until the end of the line.
 
 * 'read'        ( -- )
 
-*read* is a complex word that implements most of the user facing interpreter,
+*read* is a complex word that implements most of the input interpreter,
 it reads in a [Forth][] *word* (up to 31 characters), if this *word* is in
 the *dictionary* it will either execute the word if we are in *command mode*
 or compile a pointer to the executable section of the word if in *compile
@@ -939,7 +979,7 @@ on the variable stack, in the opposite direction of "rot".
 The is like "\_emit", it writes a single character out to the output stream,
 however it drops the resulting status.
 
-## [forth.fth][]
+## Library of Forth words
 
 The file [forth.fth][] contains many defined words, however those words are
 documented within that file and so as to avoid duplication will not be
@@ -1064,21 +1104,9 @@ reasons, firstly because of limitations in the implementation, and secondly
 there is no reason for cluttering up the output window with this. The
 implementation should be silent by default.
 
-## Miscellaneous 
+## To-Do
 
-### Bugs and features
-
-If you find a bug, or would like to request a new feature, please Email me at:
-
-        howe.r.j.89 [ at ] gmail . com
-
-The interpreter has not been battle hardened yet so there is likely behavior
-that is non-standard (for no reason) or just outright incorrect.
-
-### To-Do
 * Port this to a micro controller, and a Linux kernel module device
-* The "check\_bounds" function, whilst useful for debugging, limits the
-memory addressable by the virtual machine to only within its memory limits
 * A way to integrate calls to arbitrary functions that can be loaded at run time
   could be added, this would be technically non portable as uintptr\_t is
   not guaranteed to be able to hold a function pointer (although it could
@@ -1086,23 +1114,21 @@ memory addressable by the virtual machine to only within its memory limits
   pointer to the forth object, a pointer to the stack and the stack depth.
 * A few environment variables could be used to specify start up files for the
   interpreter and user specific startup files.
-* The file access functions need improving, SOURCE-ID needs extending
-  and some Forth words can be reimplemented in terms of the file access
-  functions. The bsave and bload can be removed.
+*  The bsave and bload can be removed.
 * Add save-core, number, word (or parse), load-core, more-core to the
   virtual machine.
 * Add loading in a Forth image from a memory structure, this will need
   to be in a portable Format.
-* Add a C FFI and methods of adding C functions to the interpreter.
 * Error handling could be improved - the latest word definition should be
   erased if an error occurs before the terminating ';'
 * Make a compiler (a separate program) that targets the Forth virtual
   machine.
 * For a Forth only related "To-Do" list see the end of the file [forth.fth][].
-* SOURCE_ID needs extending with the semantics of File Access Words
+* This manual needs updating
+* SOURCE\_ID needs extending with the semantics of File Access Words
   optional word set in [DPANS94][].
 
-### Notes
+## Notes
 
 * The compilation should result in a small executable, and when statically
 linked against [musl][] under Linux (x86-84), the stripped executable is around
@@ -1125,15 +1151,11 @@ you should use a different language, or implementation.
 [Threaded Code]: https://en.wikipedia.org/wiki/Threaded_code
 [forth.fth]: forth.fth
 [tail calls]: https://en.wikipedia.org/wiki/Tail_call
-[forth.1]: forth.1
-[libforth.3]: libforth.3
 [libforth.c]: libforth.c
 [libforth.h]: libforth.h
 [ANS Forth]: http://lars.nocrew.org/dpans/dpans.htm
 [musl]: https://www.musl-libc.org/
 [MIT]: https://opensource.org/licenses/MIT
-[Forth]: https://en.wikipedia.org/wiki/Forth_%28programming_language%29
-[IOCCC]: http://ioccc.org/winners.html
 [Make]: https://en.wikipedia.org/wiki/Make_%28software%29
 [C]: https://en.wikipedia.org/wiki/C_%28programming_language%29
 [liblisp.md]: liblisp.md
@@ -1143,5 +1165,8 @@ you should use a different language, or implementation.
 [DPANS94]: http://lars.nocrew.org/dpans/dpans.htm
 [markdown]: https://daringfireball.net/projects/markdown/
 [convert]: convert
+[line editor]: https://github.com/howerj/libline
+[pandoc]: http://pandoc.org/
+[markdown script]: https://daringfireball.net/projects/markdown/
 
 <style type="text/css">body{margin:40px auto;max-width:850px;line-height:1.6;font-size:16px;color:#444;padding:0 10px}h1,h2,h3{line-height:1.2}</style>

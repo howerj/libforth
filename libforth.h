@@ -3,7 +3,8 @@
  *  @author     Richard James Howe.
  *  @copyright  Copyright 2015,2016 Richard James Howe.
  *  @license    MIT (see https://opensource.org/licenses/MIT)
- *  @email      howe.r.j.89@gmail.com **/
+ *  @email      howe.r.j.89@gmail.com 
+ *  @todo       Generate the manual page for the library from this header **/
 #ifndef FORTH_H
 #define FORTH_H
 #ifdef __cplusplus
