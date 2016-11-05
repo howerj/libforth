@@ -15,7 +15,7 @@ DOCS    := ${MDS:%.md=%.htm}
 
 FORTH_FILE = forth.fth
 
-.PHONY: all shorthelp doc clean test profile unit.test forth.test line 
+.PHONY: all shorthelp doc clean test profile unit.test forth.test line small fast static
 
 all: shorthelp ${TARGET}
 
@@ -114,6 +114,16 @@ libline/libline.a:
 line: LDFLAGS += -lline
 line: CFLAGS += -L${INCLUDE} -I${INCLUDE} -DUSE_LINE_EDITOR
 line: libline/libline.a ${TARGET}
+
+small: CFLAGS = -m32 -DNDEBUG -std=c99 -Os 
+small: ${TARGET}
+	strip ${TARGET}
+
+fast: CFLAGS = -DNDEBUG -O3 -std=c99
+fast: ${TARGET}
+
+static: CC=musl-gcc
+static: ${TARGET}
 
 # CFLAGS: Add "-save-temps" to keep temporary files around
 # objdump: Add "-M intel" for a more sensible assembly output

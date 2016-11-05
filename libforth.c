@@ -899,6 +899,16 @@ great deal more complex and will require paragraphs to explain fully
 (such as **READ**, or how **IMMEDIATE** interacts with the virtual machines
 execution). 
 
+The instruction name, enumeration and a help string, are all stored with
+an X-Macro. X-Macros are an unusual but useful method of making tables
+of data. 
+
+More information about X-Macros can be found here:
+
+* <https://en.wikipedia.org/wiki/X_Macro>
+* <http://www.drdobbs.com/cpp/the-x-macro/228700289>
+* <https://stackoverflow.com/questions/6635851>
+
 **/
 
 #define XMACRO_INSTRUCTIONS\
@@ -939,9 +949,9 @@ execution).
  X(DROP,      "drop",       "x -- : drop a value")\
  X(OVER,      "over",       "x1 x2 -- x1 x2 x1 : copy over a value")\
  X(TAIL,      "tail",       " -- : tail recursion")\
- X(BSAVE,     "bsave",      " c-addr x -- : save a block")\
- X(BLOAD,     "bload",      " c-addr x -- : load a block")\
- X(FIND,      "find",       " c\" xxx\" -- addr | 0 : find a Forth word")\
+ X(BSAVE,     "bsave",      "c-addr x -- : save a block")\
+ X(BLOAD,     "bload",      "c-addr x -- : load a block")\
+ X(FIND,      "find",       "c\" xxx\" -- addr | 0 : find a Forth word")\
  X(DEPTH,     "depth",      " -- x : get current stack depth")\
  X(CLOCK,     "clock",      " -- x : push a time value")\
  X(EVALUATE,  "evaluate",   "c-addr u -- x : evaluate a string")\
@@ -975,6 +985,15 @@ enumeration used in **enum instructions**, so it does not get a name.
 **/
 static const char *instruction_names[] = { /**< instructions with names */
 #define X(ENUM, STRING, HELP) STRING,
+	XMACRO_INSTRUCTIONS
+#undef X
+};
+
+/**
+The help strings are made available in the following array:
+**/
+static const char *instruction_help_strings[] = {
+#define X(ENUM, STRING, HELP) HELP,
 	XMACRO_INSTRUCTIONS
 #undef X
 };
@@ -2479,20 +2498,27 @@ to pick option names that they would expect (for example *-l* for loading,
 **/
 static void help(void)
 {
-	static const char help_text[] = "\
-Forth: A small forth interpreter build around libforth\n\n\
-\t-h        print out this help and exit unsuccessfully\n\
-\t-e string evaluate a string\n\
-\t-s file   save state of forth interpreter to file\n\
-\t-d        save state to 'forth.core'\n\
-\t-l file   load previously saved state from file\n\
-\t-m size   specify forth memory size in kilobytes (cannot be used with '-l')\n\
-\t-t        process stdin after processing forth files\n\
-\t-v        turn verbose mode on\n\
-\t-V        print out version information and exit\n\
-\t-         stop processing options\n\n\
-Options must come before files to execute\n\n";
+	static const char help_text[] =
+"Forth: A small forth interpreter build around libforth\n\n"
+"\t-h        print out this help and exit unsuccessfully\n"
+"\t-e string evaluate a string\n"
+"\t-s file   save state of forth interpreter to file\n"
+"\t-d        save state to 'forth.core'\n"
+"\t-l file   load previously saved state from file\n"
+"\t-m size   specify forth memory size in kilobytes (cannot be used with '-l')\n"
+"\t-t        process stdin after processing forth files\n"
+"\t-v        turn verbose mode on\n"
+"\t-V        print out version information and exit\n"
+"\t-         stop processing options\n\n"
+"Options must come before files to execute.\n\n"
+"The following words are built into the interpreter:\n\n";
+;
 	fputs(help_text, stderr);
+
+	for(unsigned i = 0; i < LAST_INSTRUCTION; i++)
+		fprintf(stderr, "%s\t\t%s\n", 
+				instruction_names[i],
+				instruction_help_strings[i]);
 }
 
 /**
