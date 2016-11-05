@@ -47,6 +47,7 @@ Options:\n\
 ";
 
 	state = 0
+	lines = 1
 
 	for (i = 1; i < ARGC; i++) {
 		if (ARGV[i] == "-H")
@@ -85,8 +86,11 @@ Options:\n\
 {
 	if(state) {
 		print $0
+	} else if($0 ~ /^[ \t\n\r]*$/) {
+		printf "\n"
 	} else {
-		print "\t" $0
+		printf "\t%04u %s\n", lines, $0
+		lines++
 	}
 }
 

@@ -1,0 +1,4 @@
+#!/usr/bin/awk -f
+{line++}
+length > 80 {printf "%04u: %s\n", line, $0}
+

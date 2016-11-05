@@ -8,7 +8,7 @@ forth - a forth interpreter
 
 # SYNOPSIS
 
-**forth** **-s file** **-e string** **-l file** **-m size** **-VthvL** **-** files
+**forth** \[**-s** file\] \[**-e** string\] \[**-l** file\] \[**-m** size\] \[**-VthvL**\] \[**-**\] \[**files**\]
 
 # DESCRIPTION
 
@@ -666,26 +666,10 @@ stack, the comparison will be unsigned.
 Pop two values, compare them (y > x) and push the result onto the stack. The
 comparison will be unsigned.
 
-* '\<'          ( x y -- z )
-
-
-Pop two unsigned values, compare them (y < x) and push the result onto the
-stack, the comparison will be signed.
-
-* '\>'          ( x y -- z )
-
-Pop two values, compare them (y > x) and push the result onto the stack. The
-comparison will be signed.
-
 * 'exit'        ( -- )
 
 Pop the return stack and set the instruction stream pointer to that
 value.
-
-* '\_emit'        ( char -- status )
-
-Pop a value and emit the character to the output. This pushes return status,
-negative means failure of some sort.
 
 * 'key'         ( -- char )
 
@@ -760,11 +744,6 @@ memory of a likewise *blocknum* derived name as in *bsave*.
 
 Find a word in the dictionary pushing a pointer to that word onto the
 variable stack.
-
-* 'print'       ( char-address -- )
-
-This prints a NUL terminate string at *charptr*. *charptr* is a character
-aligned pointer not a machine-word aligned pointer.
 
 * 'depth'       ( -- depth )
 
@@ -976,8 +955,7 @@ on the variable stack, in the opposite direction of "rot".
 
 * 'emit'        ( x -- )
 
-The is like "\_emit", it writes a single character out to the output stream,
-however it drops the resulting status.
+Write a single character out to the output stream.
 
 ## Library of Forth words
 
@@ -1125,8 +1103,6 @@ implementation should be silent by default.
   machine.
 * For a Forth only related "To-Do" list see the end of the file [forth.fth][].
 * This manual needs updating
-* SOURCE\_ID needs extending with the semantics of File Access Words
-  optional word set in [DPANS94][].
 
 ## Notes
 

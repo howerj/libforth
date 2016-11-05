@@ -29,6 +29,7 @@ assumed to work )
 
 ( @todo Test as many words as possible )
 
+
 ( ========================== Hiding Words ==================================== )
 
 : test01 2 2 + ; test01 4 = test
@@ -188,6 +189,22 @@ s" -1 square 1 = " test
 
 end-unit
 ( ========================== Basic Words ===================================== )
+
+( ========================== Signed comparison =============================== )
+( Signed comparison is not built in, so should be tested )
+unit( Signed Comparision ) 
+
+s" -2 3  < 1 = " test
+s"  2 -3 < 0 = " test
+s"  2  3 < 1 = " test
+s" -2 -1 < 1 = " test
+s" -2 -2 < 0 = " test
+s"  5 5  < 0 = " test
+
+end-unit
+( ========================== Signed comparison =============================== )
+
+
 
 ( ========================== Jump Tables ===================================== )
 

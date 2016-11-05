@@ -44,7 +44,7 @@ help:
 	@echo "cc $< -c -o $@"
 	@${CC} ${CFLAGS} $< -c -o $@
 
-%.md: %.c
+%.md: %.c convert
 	./convert $< > $@
 
 lib${TARGET}.a: lib${TARGET}.o
@@ -84,13 +84,19 @@ dist: ${TARGET} ${TARGET}.1 lib${TARGET}.[a3] lib${TARGET}.htm ${DOCS} forth.cor
 	tar zvcf ${TARGET}.tgz $^
 
 %.htm: %.md
-	markdown $^ > $@
+	markdown $< > $@
 
 %.pdf: %.md
-	pandoc --toc $^ -o $@
+	pandoc --toc $< -o $@
 
 %.1: %.md
-	pandoc -s -t man $^ -o $@
+	pandoc -s -t man $< -o $@
+
+%.md: %.h convert
+	./convert -H $< -o $@
+
+%.3: %.h
+	./convert -H $< | pandoc -f markdown -s -t man -o $@
 
 ${TARGET}.1: readme.1
 	${CP} $^ $@

@@ -1,4 +1,3 @@
-#!./forth -t
 ( 
 Welcome to libforth, A dialect of Forth. Like all versions of Forth this
 version is  a little idiosyncratic, but how the interpreter works is
@@ -70,6 +69,12 @@ extract the document string for a given work.
 : 1- ( x -- x : decrement a number )
 	1 - ;
 
+: chars ( c-addr -- addr : convert a character address to an address )
+	size / ; 
+
+: chars> ( addr -- c-addr: convert an address to a character address )
+	size * ; 
+
 : tab ( -- : print a tab character to current output device )
 	9 emit ;
 
@@ -120,6 +125,18 @@ extract the document string for a given work.
 
 : literal ( x -- : immediately write a literal into the dictionary )
 	immediate [literal] ;
+
+: min-signed-integer ( -- x : push the minimum signed integer value )
+	[ -1 -1 1 rshift invert and ] literal ;
+
+: max-signed-integer ( -- x : push the maximum signed integer value )
+	[ min-signed-integer invert ] literal ;
+
+: < ( x1 x2 -- bool : signed less than comparison )
+	- dup if max-signed-integer u> else logical then ;
+
+: > ( x1 x2 -- bool : signed greater than comparison )
+	< not ;
 
 : 2literal immediate ( x x -- : immediate write two literals into the dictionary )
 	swap [literal] [literal] ;
@@ -229,14 +246,8 @@ extract the document string for a given work.
 : char+ ( c-addr -- c-addr : increment a character address by the size of one character ) 
 	1+ ;
 
-: chars  ( c-addr -- addr : convert character address to cell address ) 
-	size / ;
-
 : 2chars ( c-addr1 c-addr2 -- addr addr : convert two character addresses to two cell addresses ) 
 	chars swap chars swap ;
-
-: chars> ( addr -- c-addr : convert cell address to character address ) 
-	size * ;
 
 : 2chars>  ( addr addr -- c-addr c-addr: convert two cell addresses to two character addresses )
 	chars> swap chars> swap ;
@@ -409,21 +420,24 @@ extract the document string for a given work.
 : source ( -- c-addr u )
 	( @todo read registers instead )
 	[ 32 chars> ] literal   ( size of input buffer, in characters )
-	[ 64 chars> ] literal ; ( start of input buffer, in characters )
+	>in ;                   ( start of input buffer, in characters )
 
-: source-id ( -- 0 | 1 | 2 )
-	( The returned values correspond to whether the interpreter is
-	reading from the user input device or is evaluating a string,
-	currently the "evaluate" word is not accessible from within
-	the Forth environment and only via the C-API, however the
-	value can still change, the values correspond to:
+: stdin?
+	`fin @ `stdin @ = ;
+
+: source-id ( -- 0 | -1 | file-id )
+	( 	
 	Value    Input Source
 	-1       String
-	0        File Input [this may be stdin] )
-	`source-id @ ;
-
-: 2drop ( x y -- )
-	 drop drop ;
+	0        Reading from user input / standard in
+	file-id   )
+	`source-id @ 
+	0= if
+		stdin? if 0 else `fin @ then
+	else
+		-1
+	then
+	;
 
 : 2nip   ( n1 n2 n3 n4 -- n3 n4) 
 	>r >r 2drop r> r> ;
@@ -668,7 +682,7 @@ hider write-quote
 : limit ( x min max -- x : limit x with a minimum and maximum )
 	rot min max ;
 
-: array     
+: array ( x c" xxx" -- : create a named array )   
 	create allot does> + ;
 
 : table     
@@ -987,6 +1001,12 @@ hider sbuf
 	immediate [char] " do-string type, ;
 
 hider type,
+
+(  This word really should be removed along with any usages of this word, it
+is not a very "Forth" like word, it accepts a pointer to an ASCIIZ string and
+prints it out, it also does not checking of the returned values from write-file )
+: print ( c-addr -- : print out a string to the standard output )
+	-1 over >r length r> swap stdout write-file 2drop ;
 
 : ok 
 	" ok" cr ;
@@ -1476,7 +1496,7 @@ hider hide-words
 	" start of variable stack: " max-core `stack-size @ 2* - . cr
 	" start of return stack:   " max-core `stack-size @ - . cr
 	" current input source:    " source-id -1 = if " string" else " file" then cr
-	" reading from stdin:      " source-id 0 = `stdin @ `fin @ = and TrueFalse cr
+	" reading from stdin:      " source-id 0 = stdin? and TrueFalse cr
 	" tracing on:              " `debug   @ TrueFalse cr
 	" starting word:           " `instruction ? cr
 	" real start address:      " `start-address ? cr
@@ -1794,35 +1814,34 @@ For resources on Forth:
 
 ( @todo implement the other file access methods in terms of the
   built in ones [see http://forth.sourceforge.net/std/dpans/dpans11.htm]
+  @todo read-line and write-line need their flag and ior setting correctly
 
 	FILE-SIZE    [ use file-positions ]
 	INCLUDE-FILE 
 	INCLUDED
-	READ-LINE
-	WRITE-LINE
 	FILE-STATUS
 
   Also of note:	
   * Source ID needs extending. )
 
-: read-char ( c-addr fileid -- u2 ior )
-	1 swap read-file swap drop ;
+: read-char ( c-addr fileid -- ior : read a char )
+	1 swap read-file swap 1 = if drop -1 then ;
 
-: read-line ( c-addr u1 fileid -- u2 flag ior )
-	-rot bounds
-	do 
-		dup i read-char
-		i c@ '\n' = if 
-			leave
-		then
-	loop ;
+: write-char ( c-addr fileid -- ior : write a char )
+	1 swap write-file swap 1 = if drop -1 then ;
 
-: write-line  ( c-addr u fileid -- ior )
-	( @todo implement this )
+: read-line ( c-addr u1 fileid -- u2 flag ior : read in a line of text )
 	-rot bounds
 	do
-		i c@ dup '\n' = if drop leave then
-		
+		dup i swap read-char drop
+		i c@ '\n' = if drop i 0 0 leave then
+	loop drop ;
+
+: write-line  ( c-addr u fileid -- u2 flag ior : write a line of text )
+	-rot bounds
+	do
+		dup i swap write-char drop
+		i c@ '\n' = if drop i 0 0 leave then
 	loop ;
 
 : resize-file  ( ud fileid -- ior : attempt to resize a file )
@@ -2171,7 +2190,6 @@ of that specific Forth, here we clean up as many non standard words as
 possible.
 )
 :hide
- _emit
  write-string do-string ')' alignment-bits print-string
  compile-instruction dictionary-start hidden? hidden-mask instruction-mask
  max-core dolist x x! x@ write-exit
@@ -2203,9 +2221,6 @@ other ideas.
 * The interpreter should use character based addresses, instead of
 word based, and use values that are actual valid pointers, this
 will allow easier interaction with the world outside the virtual machine
-* A small block editor
-* more help commands would be good, such as "help-ANSI-escape",
-"tutorial", etc.
 * Abort", this could be used to implement words such
 as "abort if in compile mode", or "abort if in command mode".
 * common words and actions should be factored out to simplify
@@ -2219,11 +2234,6 @@ help debugging words, for example:
 would take a pointer to a compile field for a word and translate
 that into the code field
 * proper booleans should be used throughout
-* escaped strings they do not test if the number is negative, however that would
-unnecessarily limit the range of operation
-* "print" should be removed from the interpreter
-* words should be made for debugging the return stack [such as
-printing it out like .s]
 * virtual machines could be made in other languages than C that will
 run the core files generated...The virtual machine has higher level
 functions in it that it probably should not have, like "read" and
@@ -2231,7 +2241,7 @@ functions in it that it probably should not have, like "read" and
 * It would be interesting to see which Unix utilities could easily
 be implemented as Forth programs, such as "head", "tail", "cat", "tr",
 "grep", etcetera.
-* A utility for compressing core files could be made in Forth, it would mimick
+* A utility for compressing core files could be made in Forth, it would mimic
 the "rle.c" program previously present in the repository - that is it would
 use run length encoding.
 * The manual pages, and various PDF files, should be generated using pandoc.
@@ -2247,4 +2257,9 @@ Some interesting links:
 )
 
 
+(
+The following will not work as we might actually be reading from a string [`sin]
+not `fin. 
+: key 32 chars> 1 `fin @ read-file drop 0 = if 0 else 32 chars> c@ then ;
+)
 

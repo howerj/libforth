@@ -3,7 +3,7 @@
 @file       libforth.c
 @author     Richard James Howe.
 @copyright  Copyright 2015,2016 Richard James Howe.
-@license    MIT (see <https://opensource.org/licenses/MIT>)
+@license    MIT
 @email      howe.r.j.89@gmail.com
 
 @brief      A FORTH library, written in a literate style.
@@ -47,6 +47,14 @@ For more information about Forth see:
 * Thinking Forth by Leo Brodie
 * Starting Forth by Leo Brodie
 
+A glossary of words for FIG FORTH 79:
+
+* <http://www.dwheeler.com/6502/fig-forth-glossary.txt>
+
+And the more recent and widespread standard for ANS Forth:
+
+* <http://lars.nocrew.org/dpans/dpans.htm>
+
 The antecedent of this interpreter:
 
 * <http://www.ioccc.org/1992/buzzard.2.c>
@@ -87,11 +95,10 @@ Each section will be explained in detail as it is encountered.
 
 An attempt has been made to make this document flow, as both a source
 code document and as a description of how the Forth kernel works.
-This is helped by the fact that the program is quite small and compact
+This is helped by the fact that the program is small and compact
 without being written in obfuscated C. It is, as mentioned, compact,
-and can be quite difficult to understand regardless of code quality. There
-are a number of behaviors programmers from a C background will not be familiar
-with.
+and can be difficult to understand regardless of code quality. Some
+of the semantics of Forth will not be familiar to C programmers.
 
 A basic understanding of how to use Forth would help as this document is
 meant to describe how a Forth implementation works and not as an
@@ -116,9 +123,9 @@ best sums the language up:
 Forth has a philosophy like most languages, one of simplicity, compactness
 and of trying only to solve the problem at hand, even going as far as to try
 to simplify the problem or replace the problem (which may span multiple
-domains, not just software) completely with a simpler one. This is often not
-a realistic way of tackling things and Forth has largely fallen out of
-favor, it is nonetheless a very interesting language which can be
+domains, not just software) with a simpler one. This is often not
+a realistic way of tackling things and Forth has fallen out of
+favor, it is nonetheless an interesting language which can be
 implemented and understood by a single programmer (another integral part
 of the Forth philosophy).
 
@@ -131,7 +138,7 @@ the most complex terms. This means a abstract syntax tree does not need to
 be constructed and terms can be executed as soon as they are parsed. The
 *parser* can described in only a handful of lines of C.
 2) The language uses concatenation of Forth words (called functions in
-other language) to create new words, this allows for very small programs to
+other language) to create new words, this allows for small programs to
 be created and encourages *factoring* definitions into smaller words.
 3) The language is untyped.
 4) Forth functions, or words, take their arguments implicitly and return
@@ -154,9 +161,9 @@ stated, unlike in C. Although this has the advantage of brevity, it is now
 up to the programmer to manages those variables.
 
 5) The input and output facilities are set up and used implicitly as well.
-Input is taken from **stdin** and output goes to **stdout**, by default. Words that
-deal with I/O uses these file steams internally.
-6) Error handling is traditionally non existent or only very limited.
+Input is taken from **stdin** and output goes to **stdout**, by default. 
+Words that deal with I/O uses these file steams internally.
+6) Error handling is traditionally non existent or limited.
 7) This point is not a property of the language, but part of the way the
 Forth programmer must program. The programmer must make their factored word
 definitions *flow*. Instead of reordering the contents of the stack for
@@ -171,6 +178,22 @@ good for processing text, thanks in large part to sensible defaults for how
 text is split up into lines and records, and how input and output is
 already set up for the programmer.
 
+An example of this succinctness in AWK is the following program, which
+can be typed in at the command line. It will read from the standard
+input if no files are given, and print any lines longer than eighty characters
+along with the line number of that line:
+
+	awk '{line++}length > 80 {printf "%04u: %s\n", line, $0}' file.txt ...
+
+For more information about AWK see:
+
+* <http://www.grymoire.com/Unix/Awk.html>
+* <https://en.wikipedia.org/wiki/AWK>
+* <http://www.pement.org/awk/awk1line.txt>
+
+Forth likewise can achieve succinctness and brevity because of its implicit
+behavior.
+
 Naturally we try to adhere to Forth philosophy, but also to Unix philosophy
 (which most Forths do not do), this is described later on.
 
@@ -183,8 +206,8 @@ Glossary of Terms:
 		       usual meaning of an integer that is the same size as
 		       the machines underlying word size, this can cause confusion
 	API            - Application Program Interface
-	interpreter    - as in byte code interpreter, largely synonymous with virtual
-		       machine as is used here
+	interpreter    - as in byte code interpreter, synonymous with virtual
+		       machine.
 	REPL           - Read-Evaluate-Print-Loop, this Forth actually provides
 		       something more like a "REL", or Read-Evaluate-Loop (as printing
 		       has to be done explicitly), but the interpreter is interactive
@@ -221,7 +244,7 @@ Glossary of Terms:
 
 /** 
 This file implements a Forth library, so a Forth interpreter can be embedded
-in another application, as such many of the functions in this file are
+in another application, as such a subset of the functions in this file are
 exported, and are documented in the *libforth.h* header 
 **/
 #include "libforth.h"
@@ -247,16 +270,17 @@ more memory.
 Some forward declarations are needed for functions relating to logging
 **/
 static const char *emsg(void);
-static int logger(const char *prefix, const char *file, const char *func, unsigned line, const char *fmt, ...);
+static int logger(const char *prefix, const char *func, 
+		unsigned line, const char *fmt, ...);
 
 /**
 As are some macros
 **/
-#define fatal(FMT, ...)    logger("fatal",   __FILE__, __func__, __LINE__, (FMT), __VA_ARGS__)
-#define error(FMT, ...)    logger("error",   __FILE__, __func__, __LINE__, (FMT), __VA_ARGS__)
-#define warning(FMT, ...)  logger("warning", __FILE__, __func__, __LINE__, (FMT), __VA_ARGS__)
-#define note(FMT, ...)     logger("note",    __FILE__, __func__, __LINE__, (FMT), __VA_ARGS__)
-#define debug(FMT, ...)    logger("debug",   __FILE__, __func__, __LINE__, (FMT), __VA_ARGS__)
+#define fatal(FMT,...)   logger("fatal",  __func__, __LINE__, FMT, __VA_ARGS__)
+#define error(FMT,...)   logger("error",  __func__, __LINE__, FMT, __VA_ARGS__)
+#define warning(FMT,...) logger("warning",__func__, __LINE__, FMT, __VA_ARGS__)
+#define note(FMT,...)    logger("note",   __func__, __LINE__, FMT, __VA_ARGS__)
+#define debug(FMT,...)   logger("debug",  __func__, __LINE__, FMT, __VA_ARGS__)
 
 /**
 A purely optional feature, a line editing library can be used for user input.
@@ -264,15 +288,16 @@ The line editor is not portable to all platforms, and is by default disabled.
 **/
 #ifdef USE_LINE_EDITOR
 #include "libline.h"
+#define LINE_EDITOR_AVAILABLE (1)
 
 /**
-The Forth history file will be stored in this file, if the USE_LINE_EDITOR
-option is set.
+The Forth history file will be stored in this file, if the 
+**USE\_LINE\_EDITOR** option is set.
 **/
 static const char *history_file = ".forth";
 
 /**
-The line editor, if used, will print a prompt for each line
+The line editor, if used, will print a prompt for each line:
 **/
 static const char *prompt = "> ";
 
@@ -280,12 +305,14 @@ static const char *prompt = "> ";
 @brief The following function implements a line-editor loop, quiting
 when there is no more input to be read.
 @param  o   a fully initialized for environment
-@return int <0 on failure of the Forth execution, or something going wrong with the line editor
+@return int <0 on failure of the Forth execution or the line editor
 **/
 static int forth_line_editor(forth_t *o)
 {
 	int rval = 0;
 	char *line = NULL;
+	assert(o);
+	errno = 0;
 	if(line_history_load(history_file) < 0) /* loading can fail, which is fine */
 		warning("failed to load history file %s, %s", history_file, emsg());
 	while((line = line_editor(prompt))) {
@@ -307,7 +334,8 @@ end:
 	free(line);
 	return rval;
 }
-
+#else
+#define LINE_EDITOR_AVAILABLE (0)
 #endif /* USE_LINE_EDITOR */
 
 /**
@@ -334,27 +362,30 @@ are out of the way visually when reading the code).
 **/
 #define ck(C) check_bounds(o, &on_error, (C), __LINE__, o->core_size)
 /**
-@brief This is a wrapper around check_bounds, so we do not have to keep
+@brief This is a wrapper around **check\_bounds**, so we do not have to keep
 typing in the line number, as so the name is shorter (and hence the checks
 are out of the way visually when reading the code). This will check
 character pointers instead of cell pointers, like **ck** does.
 @param C expression to bounds check
 @return checked character index 
 **/
-#define ckchar(C) check_bounds(o, &on_error, (C), __LINE__, o->core_size * sizeof(forth_cell_t))
+#define ckchar(C) check_bounds(o, &on_error, (C), __LINE__, \
+			o->core_size * sizeof(forth_cell_t))
 /**
-@brief This is a wrapper around **check\_depth**, to make checking the depth short and simple.
+@brief This is a wrapper around **check\_depth**, to make checking the depth 
+short and simple.
 @param DEPTH current depth of the stack
 **/
 #define cd(DEPTH) check_depth(o, &on_error, S, (DEPTH), __LINE__)
 /**
-@brief This function makes sure any dictionary pointers never cross into the stack area.
+@brief This function makes sure any dictionary pointers never cross into 
+the stack area.
 @param DPTR a index into the dictionary
 @return checked index 
 **/
 #define dic(DPTR) check_dictionary(o, &on_error, (DPTR))
 /**
-@brief This performs tracing
+@brief This macro wraps up the tracing function, which we may want to remove.
 @param ENV forth environment
 @param STK stack pointer
 @param EXPECTED expected stack value
@@ -362,35 +393,16 @@ character pointers instead of cell pointers, like **ck** does.
 **/
 #define TRACE(ENV,INSTRUCTION,STK,TOP) trace(ENV,INSTRUCTION,STK,TOP)
 #else
+
 /**
-@brief This removes the bounds check and debugging code
-@param C do nothing
-@return C is returned 
+The following are defined only if we remove the checking and
+the debug code.
 **/
+
 #define ck(C) (C)
-/**
-@brief This removes the bounds check and debugging code
-@param C do nothing
-@return C is returned 
-**/
 #define ckchar(C) (C)
-/**
-@brief This is a wrapper around **check\_depth**
-@param depth do nothing 
-**/
 #define cd(DEPTH) ((void)DEPTH)
-/**
-@brief This is a wrapper around **check\_depth**
-@param DPTR do nothing 
-**/
 #define dic(DPTR) check_dictionary(o, &on_error, (DPTR))
-/**
-@brief This removes tracing
-@param ENV
-@param STK
-@param EXPECTED 
-@param TOP 
-**/
 #define TRACE(ENV, INSTRUCTION, STK, TOP)
 #endif
 
@@ -401,7 +413,7 @@ character pointers instead of cell pointers, like **ck** does.
 
 /**
 @brief Blocks will be encountered and explained later, they have a fixed
-size which has been standardized to 1024 
+size which has been standardized to 1024.
 **/
 #define BLOCK_SIZE          (1024u)
 
@@ -422,7 +434,7 @@ words).
 /**
 @brief minimum stack size of both the variable and return stack, the stack
 size should not be made smaller than this otherwise the built in code and
-code in *forth.fth* will not work 
+code in *forth.fth* will not work.
 **/
 #define MINIMUM_STACK_SIZE  (64u)
 
@@ -430,7 +442,7 @@ code in *forth.fth* will not work
 The start of the dictionary is after the registers and the **STRING\_OFFSET**,
 this is the area where Forth definitions are placed. 
 **/
-#define DICTIONARY_START    (STRING_OFFSET + MAXIMUM_WORD_LENGTH) /**< start of dic */
+#define DICTIONARY_START (STRING_OFFSET+MAXIMUM_WORD_LENGTH) /**< start of dic*/
 
 /**
 Later we will encounter a field called **MISC**, a field in every Word
@@ -441,13 +453,13 @@ the **MISC** field.
 **/
 
 /**
-@brief Bit offset for word length start 
+@brief The bit offset for word length start.
 **/
 #define WORD_LENGTH_OFFSET  (8)  
 
 /**
 @brief **WORD\_LENGTH** extracts the length of a Forth words name so we know
-where it is relative to the **PWD** field of a word
+where it is relative to the **PWD** field of a word.
 @param MISC This should be the **MISC** field of a word 
 **/
 #define WORD_LENGTH(MISC) (((MISC) >> WORD_LENGTH_OFFSET) & 0xff)
@@ -462,19 +474,19 @@ order for the dictionary.
 /**
 @brief The lower 7 bits of the MISC field are used for the VM instruction,
 limiting the number of instructions the virtual machine can have in it, the
-higher bits are used for other purposes 
+higher bits are used for other purposes.
 **/
 #define INSTRUCTION_MASK    (0x7f)
 
 /**
-@brief A mask that the VM uses to extract the instruction
+@brief A mask that the VM uses to extract the instruction.
 @param k This **MISC**, or a **CODE** Field of a Forth word 
 **/
 #define instruction(k)      ((k) & INSTRUCTION_MASK)
 
 /**
-@brief **VERIFY** is our assert macro that will always been defined regardless of
-whether **NDEBUG** is defined
+@brief **VERIFY** is our assert macro that will always been defined 
+regardless of whether **NDEBUG** is defined.
 @param X expression to verify
 **/
 #define VERIFY(X)           do { if(!(X)) { abort(); } } while(0)
@@ -485,21 +497,21 @@ determine the endianess of the machine using trickery.
 
 See:
 
-* <https://stackoverflow.com/questions/2100331/c-macro-definition-to-determine-big-endian-or-little-endian-machine>
+* <https://stackoverflow.com/questions/2100331>
 * <https://en.wikipedia.org/wiki/Endianness>
 
 For more information and alternatives.
 
 **/
-#define IS_BIG_ENDIAN       (!(union { uint16_t u16; unsigned char c; }){ .u16 = 1 }.c)
+#define IS_BIG_ENDIAN (!(union { uint16_t u16; uint8_t c; }){ .u16 = 1 }.c)
 
 /**
 @brief When designing a binary format, which this interpreter uses and
- saves to disk, it is imperative that certain information is saved to
- disk - one of those pieces of information is the version of the
- interpreter. Something such as this may seem trivial, but only once you
- start to deploy applications to different machines and to different users
- does it become apparent how important this is. 
+saves to disk, it is imperative that certain information is saved to
+disk - one of those pieces of information is the version of the
+interpreter. Something such as this may seem trivial, but only once you
+start to deploy applications to different machines and to different users
+does it become apparent how important this is. 
 **/
 #define CORE_VERSION        (0x02u)
 
@@ -509,11 +521,11 @@ For more information and alternatives.
 
 /**
 This following string is a forth program that gets called when creating a
-new Forth environment, it is not actually the very first program that gets
+new Forth environment, it is not actually the first program that gets
 run, but it is run before the user gets a chance to do anything.
 
 The program is kept as small as possible, but is dependent on the virtual
-machine image being set up correctly with a few other words being defined
+machine image being set up correctly with other, basic, words being defined
 first, they will be described as they are encountered. Suffice to say,
 before this program is executed the following happens:
 
@@ -522,11 +534,11 @@ before this program is executed the following happens:
   3) All registers are named and some constants defined
   4) **;** is defined
 
-Of note, words such as **if**, **else**, **then**, and even comments - **(** -, are
-not actually Forth primitives, there are defined in terms of other Forth
-words.
+Of note, words such as **if**, **else**, **then**, and even comments 
+- **(** -, are not actually Forth primitives, there are defined in terms 
+of other Forth words.
 
-The Forth interpreter is a very simple loop that does the following:
+The Forth interpreter is a simple loop that does the following:
 
 	Start the interpreter loop <-----------<-----------------<---.
 	Get a space delimited word                                    \
@@ -584,44 +596,45 @@ named registers being defined, as well as **state** and **;**.
 	space     - print a space
 	.         - print out current top of stack, followed by a space 
 **/
-static const char *initial_forth_program = "                       \n\
-: here h @ ;                                                       \n\
-: [ immediate 0 state ! ;                                          \n\
-: ] 1 state ! ;                                                    \n\
-: >mark here 0 , ;                                                 \n\
-: :noname immediate -1 , here 2 , ] ;                              \n\
-: if immediate ' ?branch , >mark ;                                 \n\
-: else immediate ' branch , >mark swap dup here swap - swap ! ;    \n\
-: then immediate dup here swap - swap ! ;                          \n\
-: begin immediate here ;                                           \n\
-: until immediate ' ?branch , here - , ;                           \n\
-: ')' 41 ;                                                         \n\
-: ( immediate begin key ')' = until ; ( We can now use comments! ) \n\
-: rot >r swap r> swap ;                                            \n\
-: -rot rot rot ;                                                   \n\
-: tuck swap over ;                                                 \n\
-: nip swap drop ;                                                  \n\
-: allot here + h ! ;                                               \n\
-: bl 32 ;                                                          \n\
-: emit _emit drop ;                                                \n\
-: space bl emit ;                                                  \n\
-: . pnum drop space ; ";
+static const char *initial_forth_program = 
+": here h @ ; \n"
+": [ immediate 0 state ! ; \n"
+": ] 1 state ! ; \n"
+": >mark here 0 , ; \n"
+": :noname immediate -1 , here 2 , ] ; \n"
+": if immediate ' ?branch , >mark ; \n"
+": else immediate ' branch , >mark swap dup here swap - swap ! ; \n"
+": then immediate dup here swap - swap ! ; \n"
+": begin immediate here ; \n"
+": until immediate ' ?branch , here - , ; \n"
+": ')' 41 ; \n"
+": ( immediate begin key ')' = until ; \n"
+": rot >r swap r> swap ; \n"
+": -rot rot rot ; \n"
+": tuck swap over ; \n"
+": nip swap drop ; \n"
+": allot here + h ! ; \n"
+": 2drop drop drop ; \n"
+": bl 32 ; \n"
+": emit >in c! >in 1 `fout @ write-file 2drop ; \n" /* @todo throw exception instead of drop */
+": space bl emit ; \n"
+": . pnum drop space ; \n";
 
 /**
 @brief This is a string used in number to string conversion in
-**number\_printer**, which is dependent on the current base
+**number\_printer**, which is dependent on the current base.
 **/
 static const char conv[] = "0123456789abcdefghijklmnopqrstuvwxzy";
 
 /**
 @brief These are the file access methods available for use when the virtual
 machine is up and running, they are passed to the built in primitives that
-deal with file input and output (such as open-file) 
+deal with file input and output (such as open-file).
 **/
 static const char *fams[] = { "wb", "rb", "r+b", NULL };
 
 /**
-@brief int to **char\*** map for file access methods 
+@brief int to **char\*** map for file access methods.
 **/
 enum fams { 
 	FAM_WO,   /**< write only */
@@ -632,7 +645,7 @@ enum fams {
 
 /**
 @brief The following are different reactions errors can take when
-using **longjmp** to a previous **setjump**
+using **longjmp** to a previous **setjump**.
 **/
 enum errors
 {
@@ -643,12 +656,10 @@ enum errors
 };
 
 /**
-@brief An enumeration describing a save Forth images header
-
 We can serialize the Forth virtual machine image, saving it to disk so we
 can load it again later. When saving the image to disk it is important
-to be able to identify the file somehow, and to identify various
-properties of the image.
+to be able to identify the file somehow, and to identify properties of 
+the image.
 
 Unfortunately each image is not portable to machines with different
 cell sizes (determined by "sizeof(forth\_cell\_t)") and different endianess,
@@ -672,7 +683,7 @@ the version of the file format.
 When loading the image the magic numbers are checked as well as
 compatibility between the saved image and the compiled Forth interpreter. 
 **/
-enum header {
+enum header { /**< Forth header description enum */
 	MAGIC0,     /**< Magic number used to identify file type */
 	MAGIC1,     /**< Magic number ... */
 	MAGIC2,     /**< Magic number ... */
@@ -700,7 +711,7 @@ static const uint8_t header[MAGIC7+1] = {
 };
 
 /**
-@brief Main structure used by the virtual machine
+@brief Main structure used by the virtual machine.
 
 The structure is defined here and not in the header to hide the implementation
 details it, all API functions are passed an opaque pointer to the structure
@@ -714,10 +725,11 @@ Only three fields are serialized to the file saved to disk:
 
 3) **m**
 
-And they are done so in that order, **core\_size** and **m** are save in whatever
-endianess the machine doing the saving is done in, however **core\_size**
-is converted to a **uint64\_t** before being save to disk so it is not of a
-variable size. **m** is a flexible array member **core\_size** number of members.
+And they are done so in that order, **core\_size** and **m** are save in 
+whatever endianess the machine doing the saving is done in, however 
+**core\_size** is converted to a **uint64\_t** before being save to disk 
+so it is not of a variable size. **m** is a flexible array member 
+**core\_size** number of members.
 
 The **m** field is the virtual machines working memory, it has its own internal
 structure which includes registers, stacks and a dictionary of defined words.
@@ -739,10 +751,17 @@ after the registers. It includes scratch areas for parsing words, start up
 code and empty space yet to be consumed before the variable stack. The sizes
 of the variable and returns stack change depending on the virtual machine
 size. The structures within the dictionary will be described later on.
+
+In the following structure, **struct forth**, values marked with a '~~'
+are serialized, the serialization takes place in order. Values are written
+out as they are with the exception of **core\_size** which is converted
+to a **uint64\_t** before serialization (it being a fixed width makes reading
+it back in from a file easier).
+
 **/
-struct forth { /**< FORTH environment, values marked '~~' are serialized in order */
-	uint8_t header[sizeof(header)]; /**< ~~ header for reloadable core file */
-	forth_cell_t core_size;  /**< ~~ size of VM (converted to uint64\_t for serialization) */
+struct forth { /**< FORTH environment */
+	uint8_t header[sizeof(header)]; /**< ~~ header for core file */
+	forth_cell_t core_size;  /**< ~~ size of VM */
 	uint8_t *s;          /**< convenience pointer for string input buffer */
 	char hex_fmt[16];    /**< calculated hex format */
 	char word_fmt[16];   /**< calculated word format */
@@ -753,7 +772,7 @@ struct forth { /**< FORTH environment, values marked '~~' are serialized in orde
 };
 
 /**
-@brief Actions to take on error
+@brief Actions to take on error.
 
 This enumeration describes the possible actions that can be taken when an
 error occurs, by setting the right register value it is possible to make errors
@@ -785,7 +804,7 @@ enum trace_level
 /**
 @brief A list of all the registers placed in the **m** field of **struct forth**
 
-There are a number of registers available to the virtual machine, they are
+There a small number of registers available to the virtual machine, they are
 actually indexes into the virtual machines main memory, this is so that the
 programs running on the virtual machine can access them. There are other
 registers that are in use that the virtual machine cannot access directly
@@ -821,29 +840,31 @@ enum registers {          /**< virtual machine registers */
 };
 
 /** 
-@brief **enum input\_stream** contains the possible value of the **SOURCE\_ID** register
+@brief The enum **input\_stream** lists values of the **SOURCE\_ID** register
 
 Input in Forth systems traditionally (tradition is a word we will keep using
 here, generally in the context of programming it means justification for
 cruft) came from either one of two places, the keyboard that the programmer
 was typing at, interactively, or from some kind of non volatile store, such
-as a floppy disk. Our C program has no (easy and portable) way of interacting
+as a floppy disk. Our C program has no portable way of interacting
 directly with the keyboard, instead it could interact with a file handle
-such as **stdin**, or read from a string. This is what we do in this interpreter.
+such as **stdin**, or read from a string. This is what we do in this 
+interpreter.
 
 A word in Forth called **SOURCE-ID** can be used to query what the input device
 currently is, the values expected are zero for interactive interpretation, or
 minus one (minus one, or all bits set, is used to represent truth conditions
 in most Forths, we are a bit more liberal in our definition of true) for string
 input. These are the possible values that the **SOURCE_ID** register can take.
+The **SOURCE-ID** word, defined in *forth.fth*, then does more processing
+of this word.
 
 Note that the meaning is slightly different in our Forth to what is meant
 traditionally, just because this program is taking input from **stdin** (or
 possibly another file handle), does not mean that this program is being
-run interactively, it could possibly be part of a Unix pipe. As such this
-interpreter defaults to being as silent as possible.
+run interactively, it could possibly be part of a Unix pipe, which is
+the reason the interpreter defaults to being as silent as possible.
 
-@todo extend the semantics of input_stream to be compliant with various Forth extensions
 **/
 enum input_stream {
 	FILE_IN,       /**< file input; this could be interactive input */
@@ -858,9 +879,9 @@ them by name instead, these strings each correspond in turn to enumeration
 called **registers** 
 **/
 static const char *register_names[] = { "h", "r", "`state", "base", "pwd",
-"`source-id", "`sin", "`sidx", "`slen", "`start-address", "`fin", "`fout", "`stdin",
-"`stdout", "`stderr", "`argc", "`argv", "`debug", "`invalid", "`top", "`instruction",
-"`stack-size", "`error-handler", NULL };
+"`source-id", "`sin", "`sidx", "`slen", "`start-address", "`fin", "`fout", 
+"`stdin", "`stdout", "`stderr", "`argc", "`argv", "`debug", "`invalid", 
+"`top", "`instruction", "`stack-size", "`error-handler", NULL };
 
 /** 
 @brief enum for all virtual machine instructions
@@ -872,23 +893,79 @@ language, given only these primitives it is possible to add conditional
 statements, case statements, arrays and strings, even though they do not
 exist as instructions here.
 
-Most of these instructions are quite simple (such as; pop two items off the
+Most of these instructions are simple (such as; pop two items off the
 variable stack, add them and push the result for **ADD**) however others are a
-great deal more complex and will take a few paragraphs to explain fully
+great deal more complex and will require paragraphs to explain fully
 (such as **READ**, or how **IMMEDIATE** interacts with the virtual machines
 execution). 
 
-@todo merge enum instructions and instruction_names with an X-Macro
 **/
-enum instructions { PUSH,COMPILE,RUN,DEFINE,IMMEDIATE,READ,LOAD,STORE,CLOAD,CSTORE,
-SUB,ADD,AND,OR,XOR,INV,SHL,SHR,MUL,DIV,ULESS,UMORE,SLESS,SMORE,EXIT,EMIT,KEY,FROMR,TOR,BRANCH,
-QBRANCH, PNUM, QUOTE,COMMA,EQUAL,SWAP,DUP,DROP,OVER,TAIL,BSAVE,BLOAD,FIND,PRINT,
-DEPTH,CLOCK,EVALUATE,PSTK,RESTART,SYSTEM,FCLOSE,FOPEN,FDELETE,FREAD,FWRITE,FPOS,
-FSEEK,FFLUSH,FRENAME,LAST_INSTRUCTION };
+
+#define XMACRO_INSTRUCTIONS\
+ X(PUSH,      "push",       " -- x : push a literal")\
+ X(COMPILE,   "compile",    " -- : compile a pointer to a Forth word")\
+ X(RUN,       "run",        " -- : run a Forth word")\
+ X(DEFINE,    "define",     " -- : make new Forth word, set compile mode")\
+ X(IMMEDIATE, "immediate",  " -- : make a Forth word immediate")\
+ X(READ,      "read",       " -- : read in a Forth word and execute it")\
+ X(LOAD,      "@",          "addr -- x : load a value")\
+ X(STORE,     "!",          "x addr -- : store a value")\
+ X(CLOAD,     "c@",         "c-addr -- x : load character value")\
+ X(CSTORE,    "c!",         "x c-addr -- : store character value")\
+ X(SUB,       "-",          "x1 x2 -- x3 : subtract x2 from x1 yielding x3")\
+ X(ADD,       "+",          "x x -- x : add two values")\
+ X(AND,       "and",        "x x -- x : bitwise and of two values")\
+ X(OR,        "or",         "x x -- x : bitwise or of two values")\
+ X(XOR,       "xor",        "x x -- x : bitwise exclusive or of two values")\
+ X(INV,       "invert",     "x -- x : invert bits of value")\
+ X(SHL,       "lshift",     "x1 x2 -- x3 : left shift x1 by x2")\
+ X(SHR,       "rshift",     "x1 x2 -- x3 : right shift x1 by x2")\
+ X(MUL,       "*",          "x x -- x : multiply to values")\
+ X(DIV,       "/",          "x1 x2 -- x3 : divide x1 by x2 yielding x3")\
+ X(ULESS,     "u<",         "x x -- bool : unsigned less than")\
+ X(UMORE,     "u>",         "x x -- bool : unsigned greater than")\
+ X(EXIT,      "exit",       " -- : return from a word defition")\
+ X(KEY,       "key",        " -- char : get one character of input")\
+ X(FROMR,     "r>",         " -- x, R: x -- : move from return stack")\
+ X(TOR,       ">r",         "x --, R: -- x : move to return stack")\
+ X(BRANCH,    "branch",     " -- : unconditional branch")\
+ X(QBRANCH,   "?branch",    "x -- : branch if x is zero")\
+ X(PNUM,      "pnum",       "x -- : print a number")\
+ X(QUOTE,     "'",          " -- addr : push address of word")\
+ X(COMMA,     ",",          "x -- : write a value into the dictionary")\
+ X(EQUAL,     "=",          "x x -- bool : compare two values for equality")\
+ X(SWAP,      "swap",       "x1 x2 -- x2 x1 : swap two values")\
+ X(DUP,       "dup",        "x -- x x : duplicate a value")\
+ X(DROP,      "drop",       "x -- : drop a value")\
+ X(OVER,      "over",       "x1 x2 -- x1 x2 x1 : copy over a value")\
+ X(TAIL,      "tail",       " -- : tail recursion")\
+ X(BSAVE,     "bsave",      " c-addr x -- : save a block")\
+ X(BLOAD,     "bload",      " c-addr x -- : load a block")\
+ X(FIND,      "find",       " c\" xxx\" -- addr | 0 : find a Forth word")\
+ X(DEPTH,     "depth",      " -- x : get current stack depth")\
+ X(CLOCK,     "clock",      " -- x : push a time value")\
+ X(EVALUATE,  "evaluate",   "c-addr u -- x : evaluate a string")\
+ X(PSTK,      ".s",         " -- : print out values on the stack")\
+ X(RESTART,   "restart",         " error -- : restart system, cause error")\
+ X(SYSTEM,    "system",          "c-addr u -- bool : execute system command")\
+ X(FCLOSE,    "close-file",      "file-id -- ior : close a file")\
+ X(FOPEN,     "open-file",       "c-addr u fam -- open a file")\
+ X(FDELETE,   "delete-file",     "c-addr u -- : delete a file")\
+ X(FREAD,     "read-file",       "c-addr u file-id -- u ior : write block")\
+ X(FWRITE,    "write-file",      "c-addr u file-id -- u ior : read block")\
+ X(FPOS,      "file-position",   "file-id -- u : get the file position")\
+ X(FSEEK,     "reposition-file", "file-id u -- ior : reposition file")\
+ X(FFLUSH,    "flush-file",      "file-id -- ior : flush a file")\
+ X(FRENAME,   "rename-file",     "c-addr1 u1 c-addr2 u2 -- ior : rename file")\
+ X(LAST_INSTRUCTION, NULL, "")\
+
+enum instructions { /**< instruction enumerations */
+#define X(ENUM, STRING, HELP) ENUM,
+	XMACRO_INSTRUCTIONS
+#undef X
+};
 
 /**
-@brief names of all named instructions, with a few exceptions
-
 So that we can compile programs we need ways of referring to the basic
 programming constructs provided by the virtual machine, theses words are
 fed into the C function **compile** in a process described later.
@@ -896,20 +973,18 @@ fed into the C function **compile** in a process described later.
 **LAST\_INSTRUCTION** is not an instruction, but only a marker of the last
 enumeration used in **enum instructions**, so it does not get a name.
 **/
-static const char *instruction_names[] = { "push","compile","run","define", 
-"immediate","read","@","!","c@","c!","-","+","and","or","xor","invert","lshift",
-"rshift","*","/","u<","u>","<",">","exit","_emit","key","r>",">r","branch","?branch",
-"pnum","'", ",","=", "swap","dup","drop", "over", "tail","bsave","bload",
-"find","print","depth","clock","evaluate",".s","restart","system","close-file",
-"open-file","delete-file","read-file","write-file","file-position","reposition-file",
-"flush-file","rename-file", NULL };
+static const char *instruction_names[] = { /**< instructions with names */
+#define X(ENUM, STRING, HELP) STRING,
+	XMACRO_INSTRUCTIONS
+#undef X
+};
 
 /**
 ## Helping Functions For The Compiler
 **/
 
 /**
-@brief  "emsg" returns a possible reason for a failure in a library function,
+@brief  **emsg** returns a possible reason for a failure in a library function,
 in the form of a string
 @return an error message string
 **/
@@ -932,11 +1007,13 @@ static const char *emsg(void)
 @param ...    arguments for format string
 @return int < 0 is failure
 **/
-static int logger(const char *prefix, const char *file, const char *func, unsigned line, const char *fmt, ...)
+static int logger(const char *prefix, const char *func, 
+		unsigned line, const char *fmt, ...)
 {
 	int r;
 	va_list ap;
-	fprintf(stderr, "[%s %s %u] %s: ", file, func, line, prefix);
+	assert(prefix && func && fmt);
+	fprintf(stderr, "[%s %u] %s: ", func, line, prefix);
 	va_start(ap, fmt);
 	r = vfprintf(stderr, fmt, ap);
 	va_end(ap);
@@ -949,11 +1026,12 @@ static int logger(const char *prefix, const char *file, const char *func, unsign
 @param  o   forth image containing information about current input stream
 @return int same value as fgetc or getchar
 
-This Forth interpreter only has a few mechanisms for I/O, one of these is
-to fetch an individual character of input from either a string or a file
-which can be set either with knowledge of the implementation from within
-the virtual machine, or via the API presented to the programmer. The C
-functions **forth\_init**, **forth\_set\_file\_input** and
+This Forth interpreter only has a limited number of mechanisms for I/O, one 
+of these is to fetch an individual character of input from either a string 
+or a file which can be set either with knowledge of the implementation 
+from within the virtual machine, or via the API presented to the programmer. 
+
+The C functions **forth\_init**, **forth\_set\_file\_input** and
 **forth\_set\_string_input** set up and manipulate the input of the
 interpreter. These functions act on the following registers:
 
@@ -973,7 +1051,9 @@ static int forth_get_char(forth_t *o)
 {
 	switch(o->m[SOURCE_ID]) {
 	case FILE_IN:   return fgetc((FILE*)(o->m[FIN]));
-	case STRING_IN: return o->m[SIDX] >= o->m[SLEN] ? EOF : ((char*)(o->m[SIN]))[o->m[SIDX]++];
+	case STRING_IN: return o->m[SIDX] >= o->m[SLEN] ? 
+				EOF : 
+				((char*)(o->m[SIN]))[o->m[SIDX]++];
 	default:        return EOF;
 	}
 }
@@ -984,10 +1064,11 @@ static int forth_get_char(forth_t *o)
 @param p    pointer to string to write into
 @return int return status of [fs]scanf
 
-This function reads in a space delimited word, limited to **MAXIMUM\_WORD\_LENGTH**,
-the word is put into the pointer **\*p**, due to the simple nature of Forth
-this is as complex as parsing and lexing gets. It can either read from
-a file handle or a string, like forth_get_char() 
+This function reads in a space delimited word, limited to 
+**MAXIMUM\_WORD\_LENGTH**, the word is put into the pointer **\*p**, 
+due to the simple nature of Forth this is as complex as parsing and 
+lexing gets. It can either read from a file handle or a string, 
+like forth_get_char() 
 **/
 static int forth_get_word(forth_t *o, uint8_t *p)
 {
@@ -997,7 +1078,8 @@ static int forth_get_word(forth_t *o, uint8_t *p)
 	case STRING_IN:
 		if(sscanf((char *)&(((char*)(o->m[SIN]))[o->m[SIDX]]), o->word_fmt, p, &n) < 0)
 			return EOF;
-		return o->m[SIDX] += n, n;
+		o->m[SIDX] += n;
+		return n;
 	default:       return EOF;
 	}
 }
@@ -1015,12 +1097,13 @@ the behavior of the Forth run time.
 In all Forth implementations there exists a concept of *the dictionary*,
 although they may be implemented in different ways the usual way is as a
 linked list of words, starting with the latest defined word and ending with
-a special terminating value. Words cannot be arbitrarily deleted, and
-operation is largely append only. Each word or Forth function that has been
-defined can be looked up in this dictionary, and dependent on whether it is
-an immediate word or a compiling word, and whether we are in command or
-compile mode different actions are taken when we have found the word we are
-looking for in our Read-Evaluate-Loop.
+a special terminating value. Words cannot be arbitrarily deleted, deletions
+have to occur in the reverse order that they are defined.
+
+Each word or Forth function that has been defined can be looked up in this 
+dictionary, and dependent on whether it is an immediate word or a compiling 
+word, and whether we are in command or compile mode different actions are 
+taken when we have found the word we are looking for in our Read-Evaluate-Loop.
 
 	    | <-- Start of VM memory
 	    |             | <-- Start of dictionary
@@ -1056,8 +1139,8 @@ as an offset in cells from **PWD** field. The field looks like this:
 	... |  Word Name Size   | Hidden Bit | Instruction |
 	-----.-------------------.------------.-------------.
 
-The maximum value for the Word Name field is determined by the Word Name
-Size field and a few other constants in the interpreter.
+The maximum value for the Word Name field is determined by the width of
+the Word Name Size field.
 
 The hidden bit is not used in the **compile** function, but is used
 elsewhere (in **forth\_find**) to hide a word definition from the word
@@ -1069,19 +1152,22 @@ definition when it is found and how to interpret **CODE-2** and the
 **Data Field** if they exist. 
 **/
 static void compile(forth_t *o, forth_cell_t code, const char *str)
-{ /* create a new forth word header */
+{ 
 	assert(o && code < LAST_INSTRUCTION);
 	forth_cell_t *m = o->m, header = m[DIC], l = 0;
 	/*FORTH header structure */
-	strcpy((char *)(o->m + header), str); /* 0: Copy the new FORTH word into the new header */
+	/*Copy the new FORTH word into the new header */
+	strcpy((char *)(o->m + header), str); 
+	/* align up to size of cell */
 	l = strlen(str) + 1;
-	l = (l + (sizeof(forth_cell_t) - 1)) & ~(sizeof(forth_cell_t) - 1); /* align up to sizeof word */
+	l = (l + (sizeof(forth_cell_t) - 1)) & ~(sizeof(forth_cell_t) - 1); 
 	l = l/sizeof(forth_cell_t);
 	m[DIC] += l; /* Add string length in words to header (STRLEN) */
 
-	m[m[DIC]++] = m[PWD];     /*0 + STRLEN: Pointer to previous words header */
-	m[PWD] = m[DIC] - 1;      /*   Update the PWD register to new word */
-	m[m[DIC]++] = (l << WORD_LENGTH_OFFSET) | code; /*1: size of words name and code field */
+	m[m[DIC]++] = m[PWD]; /*0 + STRLEN: Pointer to previous words header */
+	m[PWD] = m[DIC] - 1;  /*Update the PWD register to new word */
+	/*size of words name and code field*/
+	m[m[DIC]++] = (l << WORD_LENGTH_OFFSET) | code; 
 }
 
 /** 
@@ -1094,7 +1180,7 @@ static void compile(forth_t *o, forth_cell_t code, const char *str)
 
 Forth traditionally uses blocks as its method of storing data and code to
 disk, each block is **BLOCK_SIZE** characters long (which should be 1024
-characters). The reason for such a simple method is that many early Forth
+characters). The reason for such a simple method is that early Forth
 systems ran on microcomputers which did not have an operating system as
 they are now known, but only a simple monitor program and a programming
 language, as such there was no file system either. Each block was loaded
@@ -1102,16 +1188,19 @@ from disk and then evaluated.
 
 The **blockio** function implements this simple type of interface, and can
 load and save blocks to disk. 
+
+This will be replaced with the file utilities at a later date.
 **/
 static int blockio(forth_t *o, forth_cell_t poffset, forth_cell_t id, char rw)
-{ /* simple block I/O, could be replaced with making fopen/fclose available to interpreter */
+{ 
 	char name[16] = {0}; /* XXXX + ".blk" + '\0' + a little spare change */
 	FILE *file = NULL;
 	size_t n;
 	if(((forth_cell_t)poffset) > ((o->core_size * sizeof(forth_cell_t)) - BLOCK_SIZE))
 		return -1;
 	sprintf(name, "%04x.blk", (int)id);
-	if(!(file = fopen(name, rw == 'r' ? "rb" : "wb"))) { /**@todo loading should always succeed */
+	errno = 0;
+	if(!(file = fopen(name, rw == 'r' ? "rb" : "wb"))) { 
 		error("file open %s, %s", name, emsg());
 		return -1;
 	}
@@ -1143,13 +1232,13 @@ static int numberify(int base, forth_cell_t *n, const char *s)
 @brief case insensitive string comparison
 @param  a   first string to compare
 @param  b   second string
-@return int zero if both strings are the same, non zero otherwise (same as **strcmp**, only insensitive to case)
+@return int same as **strcmp**, only case insensitive
 
 Forths are usually case insensitive and are required to be (or at least accept
-only uppercase characters only) by many of the standards for Forth.  As an
-aside I do not believe case insensitivity is a good idea as it complicates
-interfaces and creates as much confusion as it tries to solve (not only that
-different case letters do convey information). However, in keeping with
+only uppercase characters only) by the majority of the standards for Forth.  
+As an aside I do not believe case insensitivity is a good idea as it complicates
+interfaces and creates as much confusion as it tries to solve (not only that,
+but different case letters do convey information). However, in keeping with
 other implementations, this Forth is also made insensitive to case **DUP**
 is treated the same as **dup** and **Dup**.
 
@@ -1157,7 +1246,7 @@ This comparison function, **istrcmp**, is only used in one place however, in
 the C function **forth\_find**, replacing it with **strcmp** will bring back the
 more logical, case sensitive, behavior. 
 **/
-static int istrcmp(const uint8_t *a, const uint8_t *b)
+static int istrcmp(const char *a, const char *b)
 {
 	for(; ((*a == *b) || (tolower(*a) == tolower(*b))) && *a && *b; a++, b++)
 		;
@@ -1176,7 +1265,7 @@ interpreter a lot.
 forth_cell_t forth_find(forth_t *o, const char *s)
 {
 	forth_cell_t *m = o->m, w = m[PWD], len = WORD_LENGTH(m[w+1]);
-	for (;w > DICTIONARY_START && (WORD_HIDDEN(m[w+1]) || istrcmp((uint8_t*)s,(uint8_t*)(&o->m[w - len])));) {
+	for (;w > DICTIONARY_START && (WORD_HIDDEN(m[w+1]) || istrcmp(s,(char*)(&o->m[w-len])));) {
 		w = m[w];
 		len = WORD_LENGTH(m[w+1]);
 	}
@@ -1219,23 +1308,17 @@ static int print_cell(forth_t *o, FILE *output, forth_cell_t f)
 	return print_unsigned_number(f, base, output);
 }
 
-static void debug_checks(forth_t *o, forth_cell_t f, unsigned line)
-{
-	(void)o;
-	debug("0x%"PRIxCell " %u", f, line);
-}
-
 /**
 **check\_bounds** is used to both check that a memory access performed by
 the virtual machine is within range and as a crude method of debugging the
 interpreter (if it is enabled). The function is not called directly but is
-instead wrapped in with the **ck** macro, it can be removed completely with
+instead wrapped in with the **ck** macro, it can be removed with
 compile time defines, removing the check and the debugging code.
 **/
 static forth_cell_t check_bounds(forth_t *o, jmp_buf *on_error, forth_cell_t f, unsigned line, forth_cell_t bound)
 {
 	if(o->m[DEBUG] >= DEBUG_CHECKS)
-		debug_checks(o, f, line);
+		debug("0x%"PRIxCell " %u", f, line);
 	if(f >= bound) {
 		fatal("bounds check failed (%" PRIdCell " >= %zu)", f, (size_t)bound);
 		longjmp(*on_error, FATAL);
@@ -1250,7 +1333,7 @@ before an operation takes place. It is wrapped up in the **cd** macro.
 static void check_depth(forth_t *o, jmp_buf *on_error, forth_cell_t *S, forth_cell_t expected, unsigned line)
 {
 	if(o->m[DEBUG] >= DEBUG_CHECKS)
-		debug_checks(o, (forth_cell_t)(S - o->vstart), line);
+		debug("0x%"PRIxCell " %u", (forth_cell_t)(S - o->vstart), line);
 	if((uintptr_t)(S - o->vstart) < expected) {
 		error("stack underflow %p", S);
 		longjmp(*on_error, RECOVERABLE);
@@ -1319,19 +1402,19 @@ static const char* forth_get_fam(jmp_buf *on_error, forth_cell_t f)
 /**
 This prints out the Forth stack, which is useful for debugging. 
 **/
-static void print_stack(forth_t *o, FILE *output, forth_cell_t *S, forth_cell_t f)
+static void print_stack(forth_t *o, FILE *out, forth_cell_t *S, forth_cell_t f)
 { 
 	forth_cell_t depth = (forth_cell_t)(S - o->vstart);
-	fprintf(output, "%"PRIdCell": ", depth);
+	fprintf(out, "%"PRIdCell": ", depth);
 	if(!depth)
 		return;
-	print_cell(o, output, f);
-	fputc(' ', output);
+	print_cell(o, out, f);
+	fputc(' ', out);
 	while(o->vstart + 1 < S) {
-		print_cell(o, output, *(S--));
-		fputc(' ', output);
+		print_cell(o, out, *(S--));
+		fputc(' ', out);
 	}
-	fputc('\n', output);
+	fputc('\n', out);
 }
 
 /**
@@ -1409,21 +1492,23 @@ valid for a limited period (such as pointers to **stdin**).
 **/
 static void forth_make_default(forth_t *o, size_t size, FILE *in, FILE *out)
 {
+	assert(o && size >= MINIMUM_CORE_SIZE && in && out);
 	o->core_size     = size;
 	o->m[STACK_SIZE] = size / MINIMUM_STACK_SIZE > MINIMUM_STACK_SIZE ?
 				size / MINIMUM_STACK_SIZE :
 				MINIMUM_STACK_SIZE;
-	o->s             = (uint8_t*)(o->m + STRING_OFFSET); /* string store offset into CORE, skip registers */
+
+	o->s             = (uint8_t*)(o->m + STRING_OFFSET); /*skip registers*/
 	o->m[FOUT]       = (forth_cell_t)out;
 	o->m[START_ADDR] = (forth_cell_t)&(o->m);
 	o->m[STDIN]      = (forth_cell_t)stdin;
 	o->m[STDOUT]     = (forth_cell_t)stdout;
 	o->m[STDERR]     = (forth_cell_t)stderr;
-	o->m[RSTK]       = size - o->m[STACK_SIZE];     /* set up return stk pointer */
+	o->m[RSTK] = size - o->m[STACK_SIZE]; /* set up return stk ptr */
 	o->m[ARGC] = o->m[ARGV] = 0;
-	o->S             = o->m + size - (2 * o->m[STACK_SIZE]); /* set up variable stk pointer */
-	o->vstart        = o->m + size - (2 * o->m[STACK_SIZE]);
-	o->vend          = o->vstart + o->m[STACK_SIZE];
+	o->S       = o->m + size - (2 * o->m[STACK_SIZE]); /* v. stk pointer */
+	o->vstart  = o->m + size - (2 * o->m[STACK_SIZE]);
+	o->vend    = o->vstart + o->m[STACK_SIZE];
 	sprintf(o->hex_fmt, "0x%%0%d"PRIxCell, (int)sizeof(forth_cell_t)*2);
 	sprintf(o->word_fmt, "%%%ds%%n", MAXIMUM_WORD_LENGTH - 1);
 	forth_set_file_input(o, in);  /* set up input after our eval */
@@ -1454,15 +1539,14 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out)
 	forth_cell_t *m, i, w, t;
 	forth_t *o;
 	assert(sizeof(forth_cell_t) >= sizeof(uintptr_t));
-	assert(sizeof(forth_cell_t) == sizeof(forth_signed_cell_t));
 /**
 There is a minimum requirement on the **m** field in the **forth\_t** structure
 which is not apparent in its definition (and cannot be made apparent given
 how flexible array members work). We need enough memory to store the registers
-(32 cells), the parse area for a word (**MAXIMUM_WORD\_LENGTH** cells), the initial
-start up program (about 6 cells), the initial built in and defined word set
-(about 600-700 cells) and the variable and return stacks (**MINIMUM\_STACK\_SIZE**
-cells each, as minimum).
+(32 cells), the parse area for a word (**MAXIMUM_WORD\_LENGTH** cells), the 
+initial start up program (about 6 cells), the initial built in and defined 
+word set (about 600-700 cells) and the variable and return stacks 
+(**MINIMUM\_STACK\_SIZE** cells each, as minimum).
 
 If we add these together we come up with an absolute minimum, although
 that would not allow us define new words or do anything useful. We use
@@ -1515,16 +1599,16 @@ performs a **READ** then calls itself tail recursively". The first
 instruction run is **RUN** which we save in **o->m[INSTRUCTION]** and
 restore when we enter **forth\_run**.
 **/
-	o->m[PWD]   = 0;  /*special terminating pwd value */
-	t = m[DIC] = DICTIONARY_START; /*initial dictionary offset, skip registers and string offset */
-	m[m[DIC]++] = TAIL; /*Add a TAIL instruction that can be called */
-	w = m[DIC];         /*Save current offset, it will contain the READ instruction */
-	m[m[DIC]++] = READ; /*create a special word that reads in FORTH */
-	m[m[DIC]++] = RUN;  /*call the special word recursively */
-	o->m[INSTRUCTION] = m[DIC]; /*instruction stream points to our special word */
-	m[m[DIC]++] = w;    /*call to READ word */
-	m[m[DIC]++] = t;    /*call to TAIL */
-	m[m[DIC]++] = o->m[INSTRUCTION] - 1; /* recurse */
+	o->m[PWD]   = 0;  /* special terminating pwd value */
+	t = m[DIC] = DICTIONARY_START; /* initial dictionary offset */
+	m[m[DIC]++] = TAIL; /* add a TAIL instruction that can be called */
+	w = m[DIC];         /* save current offset, which will contain READ */
+	m[m[DIC]++] = READ; /* populate the cell with READ */
+	m[m[DIC]++] = RUN;  /* call the special word recursively */
+	o->m[INSTRUCTION] = m[DIC]; /* stream points to the special word */
+	m[m[DIC]++] = w;    /* call to READ word */
+	m[m[DIC]++] = t;    /* call to TAIL */
+	m[m[DIC]++] = o->m[INSTRUCTION] - 1; /* recurse*/
 
 /**
 **DEFINE** and **IMMEDIATE** are two immediate words, the only two immediate
@@ -1554,7 +1638,8 @@ The created word looks like this:
 	.------.-----.------.----------------.
 
 The MISC field here contains the **COMPILE** instructions, which will compile a
-pointer to the **VM-INSTRUCTION**, as well as the other fields it usually contains.
+pointer to the **VM-INSTRUCTION**, as well as the other fields it usually 
+contains.
 **/
 	for(i = READ, w = READ; instruction_names[i]; i++) {
 		compile(o, COMPILE, instruction_names[i]);
@@ -1574,22 +1659,24 @@ number, this is not strictly necessary but is good practice.
 		VERIFY(forth_define_constant(o, register_names[i], i+DIC) >= 0);
 
 /**
+More constants are now defined:
+**/
+	VERIFY(forth_define_constant(o, "size", sizeof(forth_cell_t)) >= 0);
+	VERIFY(forth_define_constant(o, "stack-start", size - (2 * o->m[STACK_SIZE])) >= 0);
+	VERIFY(forth_define_constant(o, "max-core", size) >= 0);
+	VERIFY(forth_define_constant(o, "r/o",      FAM_RO) >= 0);
+	VERIFY(forth_define_constant(o, "w/o",      FAM_WO) >= 0);
+	VERIFY(forth_define_constant(o, "r/w",      FAM_RW) >= 0);
+	VERIFY(forth_define_constant(o, "dictionary-start",  DICTIONARY_START) >= 0);
+	VERIFY(forth_define_constant(o, ">in",  STRING_OFFSET * sizeof(forth_cell_t)) >= 0);
+
+/**
 Now we finally are in a state to load the slightly inaccurately
 named **initial\_forth\_program**, which will give us basic looping and
 conditional constructs 
 **/
 	VERIFY(forth_eval(o, initial_forth_program) >= 0);
 
-/**
-A few more constants are now defined, nothing special here 
-**/
-	VERIFY(forth_define_constant(o, "size",              sizeof(forth_cell_t)) >= 0);
-	VERIFY(forth_define_constant(o, "stack-start",       size - (2 * o->m[STACK_SIZE])) >= 0);
-	VERIFY(forth_define_constant(o, "max-core",          size) >= 0);
-	VERIFY(forth_define_constant(o, "r/o",               FAM_RO) >= 0);
-	VERIFY(forth_define_constant(o, "w/o",               FAM_WO) >= 0);
-	VERIFY(forth_define_constant(o, "r/w",               FAM_RW) >= 0);
-	VERIFY(forth_define_constant(o, "dictionary-start",  DICTIONARY_START) >= 0);
 
 /**All of the calls to **forth\_eval** and **forth_define_constant** have
 set the input streams to point to a string, we need to reset them
@@ -1641,24 +1728,38 @@ are correct and compatible with this interpreter.
 in registers which are now invalid after we have loaded the file from disk.
 **/
 forth_t *forth_load_core(FILE *dump)
-{ /* load a forth core dump for execution */
-	uint8_t actual[sizeof(header)] = {0}, expected[sizeof(header)] = {0};
+{ 
+	uint8_t actual[sizeof(header)] = {0},   /* read in header */
+		expected[sizeof(header)] = {0}; /* what we expected */
 	forth_t *o = NULL;
 	uint64_t w = 0, core_size = 0;
+	assert(dump);
 	make_header(expected);
-	if(sizeof(actual) != fread(actual, 1, sizeof(actual), dump))
+	if(sizeof(actual) != fread(actual, 1, sizeof(actual), dump)) {
 		goto fail; /* no header */
-	if(memcmp(expected, actual, sizeof(header)))
+	}
+	if(memcmp(expected, actual, sizeof(header))) {
 		goto fail; /* invalid or incompatible header */
-	if(1 != fread(&core_size, sizeof(core_size), 1, dump) || core_size < MINIMUM_CORE_SIZE)
-		goto fail; /* no header, or size too small */
+	}
+	if(1 != fread(&core_size, sizeof(core_size), 1, dump)) {
+		goto fail; /* no header */
+	}
+	if(core_size < MINIMUM_CORE_SIZE) {
+		error("core size of %"PRIdCell" is too small", core_size);
+		goto fail; 
+	}
 	w = sizeof(*o) + (sizeof(forth_cell_t) * core_size);
-	if(!(o = calloc(w, 1)))
-		goto fail; /* object too big */
+	errno = 0;
+	if(!(o = calloc(w, 1))) {
+		error("allocation of size %"PRId64" failed, %s", w, emsg());
+		goto fail; 
+	}
 	w = sizeof(forth_cell_t) * core_size;
 	/**@todo succeed if o->m[DIC] bytes read in?*/
-	if(w != fread(o->m, 1, w, dump))
-		goto fail; /* not enough bytes in file */
+	if(w != fread(o->m, 1, w, dump)) {
+		error("file too small (expected %"PRId64")", w);
+		goto fail;
+	}
 	o->core_size = core_size;
 	memcpy(o->header, actual, sizeof(o->header));
 	forth_make_default(o, core_size, stdin, stdout);
@@ -1675,13 +1776,15 @@ in case there is a use after free
 void forth_free(forth_t *o)
 {
 	assert(o);
-	o->m[INVALID] = 1; /* a sufficiently "smart" compiler might optimize this out */
+	/* invalidate the forth core, a sufficiently "smart" compiler 
+	 * might optimize this out */
+	o->m[INVALID] = 1; 
 	free(o);
 }
 
 /**
-**forth\_push**, **forth\_pop** and **forth\_stack\_position** are the main ways an
-application programmer can interact with the Forth interpreter. Usually
+**forth\_push**, **forth\_pop** and **forth\_stack\_position** are the main 
+ways an application programmer can interact with the Forth interpreter. Usually
 this tutorial talks about how the interpreter and virtual machine work,
 about how compilation and command modes work, and the internals of a Forth
 implementation. However this project does not just present an ordinary Forth
@@ -1771,7 +1874,7 @@ int forth_run(forth_t *o)
 
 /**
 The following section will explain how the threaded virtual machine interpreter
-works. Threaded code is quite a simple concept and Forths typically compile
+works. Threaded code is a simple concept and Forths typically compile
 their code to threaded code, it suites Forth implementations as word
 definitions consist of juxtaposition of previously defined words until they
 reach a set of primitives.
@@ -1792,8 +1895,8 @@ of code address to jump to, which will become:
 
 We now have the problem that we cannot just jump to the beginning of the
 definition of **square** in our virtual machine, we instead use an instruction
-(**RUN** in our interpreter, or **DOLIST** as it is sometimes known in most other
-implementations) to determine what to do with the following data, if there
+(**RUN** in our interpreter, or **DOLIST** as it is sometimes known in most 
+other implementations) to determine what to do with the following data, if there
 is any. This system also allows us to encode primitives, or virtual machine
 instructions, in the same way as we encode words. If our word does not have
 the **RUN** instruction as its first instruction then the list of addresses will
@@ -1828,9 +1931,10 @@ And compiling words look like this:
 	| COMPILE | Instruction | Optional Data Field |
 	.---------.-------------.---------------------.
 
-If the data field exists, the **Instruction** field will contain **RUN**. For words
-that only implement a single virtual machine instruction the **Instruction**
-field will contain only that single instruction (such as ADD, or SUB).
+If the data field exists, the **Instruction** field will contain **RUN**. 
+For words that only implement a single virtual machine instruction the 
+**Instruction** field will contain only that single instruction 
+(such as ADD, or SUB).
 
 Let us define a series of words and see how the resulting word definitions
 are laid out, discounting the **Word Name**, **PWD** and the top bits of the
@@ -1983,8 +2087,8 @@ versus, as is expected:
 
 	: name ... ; immediate
 
-The way this word works is when **DEFINE** (or **:**) runs it creates a word header
-that looks like this:
+The way this word works is when **DEFINE** (or **:**) runs it creates a word 
+header that looks like this:
 
 	.------.-----.------.-----.----
 	| NAME | PWD | MISC | RUN |    ...
@@ -2013,7 +2117,11 @@ With the **MISC** field containing **RUN**.
 		case READ:
 /**
 The **READ** instruction, an instruction that usually does not belong in a
-virtual machine, forms the basis of Forths interactive nature.
+virtual machine, forms the basis of Forths interactive nature. In order to 
+move this word outside of the virtual machine a compiler for the virtual
+machine would have to be made, which would complicate the implementation,
+but simplify the virtual machine and make it more like a 'normal' virtual
+machine.
 
 It attempts to do the follow:
 
@@ -2022,7 +2130,7 @@ and we are in command mode we execute it, if we are in compile mode and
 the word is a compiling word we compile a pointer to it in the dictionary,
 if not we execute it.
 b) If it is not a word in the dictionary we attempt to treat it as a number,
-if it is a number (using the **BASE** register to determine the base of it)
+if it is numeric (using the **BASE** register to determine the base)
 then if we are in command mode we push the number to the variable stack,
 else if we are in compile mode we compile the literal into the dictionary.
 c) If it is neither a word nor a number, regardless of mode, we emit a
@@ -2034,6 +2142,7 @@ will notice that the above description did not include any looping, as such
 there is a driver for the interpreter which must be made and initialized
 in **forth\_init**, a simple word that calls **READ** in a loop (actually tail
 recursively).
+
 **/
 			if(forth_get_word(o, o->s) < 0)
 				goto end;
@@ -2089,12 +2198,7 @@ require some explaining, but ADD, SUB and DIV will not.
 			break;
 		case ULESS:   cd(2); f = *S-- < f;                       break;
 		case UMORE:   cd(2); f = *S-- > f;                       break;
-		case SLESS:   cd(2); f = ((forth_signed_cell_t)(*S--)) < (forth_signed_cell_t)f; break;
-		case SMORE:   cd(2); f = ((forth_signed_cell_t)(*S--)) > (forth_signed_cell_t)f; break;
 		case EXIT:    I = m[ck(m[RSTK]--)];                      break;
-		/* @note key and emit could be replaced by the file 
-		 * primitives defined later */
-		case EMIT:    cd(1); f = fputc(f, (FILE*)(o->m[FOUT]));  break;
 		case KEY:     *++S = f; f = forth_get_char(o);           break;
 		case FROMR:   *++S = f; f = m[ck(m[RSTK]--)];            break;
 		case TOR:     cd(1); m[ck(++m[RSTK])] = f; f = *S--;     break;
@@ -2110,9 +2214,9 @@ require some explaining, but ADD, SUB and DIV will not.
 		case DROP:    cd(1); f = *S--;                           break;
 		case OVER:    cd(2); w = *S; *++S = f; f = w;            break;
 /**
-**TAIL** is a crude method of doing tail recursion, it should not be used generally
-but is quite useful at startup, there are a number of limitations when using
-it in word definitions.
+**TAIL** is a crude method of doing tail recursion, it should not be used 
+generally but is useful at startup, there are limitations when using it 
+in word definitions.
 
 The following tail recursive definition of the greatest common divisor,
 called **(gcd)** will not work correctly when interacting with other words:
@@ -2162,28 +2266,10 @@ pointer to that word if it found.
 			f = forth_find(o, (char*)o->s);
 			f = f < DICTIONARY_START ? 0 : f;
 			break;
-/**
-PRINT is a word that could be removed from the interpreter, as it could be
-implemented in terms of looping and emit, it prints out an ASCII delimited
-string to the output stream.
 
-There is a bit of an impedance mismatch between how Forth treats strings and
-how most programming languages treat them. Most higher level languages are
-built upon the C runtime, so at some level support *NUL* terminated strings,
-however Forth uses strings that include a pointer to the string and the
-strings length instead. As more C functions are added the difference in
-string treatment will become more apparent. Due to this difference it is
-always best to *NUL* terminate strings in Forth code even if they are stored
-with their length.
-**/
-		case PRINT:
-			cd(1);
-			fputs(((char*)m)+f, (FILE*)(o->m[FOUT]));
-			f = *S--;
-			break;
 /**
 DEPTH is added because the stack is not directly accessible
-by the virtual machine (mostly for code readability reasons), normally it
+by the virtual machine (for code readability reasons), normally it
 would have no way of knowing where the variable stack pointer is, which
 is needed to implement Forth words such as **.s** - which prints out all the
 items on the stack.
@@ -2194,17 +2280,17 @@ items on the stack.
 			f = w;
 			break;
 /**
-CLOCK allows for a very primitive and wasteful (depending on how the C
+CLOCK allows for a primitive and wasteful (depending on how the C
 library implements "clock") timing mechanism, it has the advantage of being
-largely portable
+portable:
 **/
 		case CLOCK:
 			*++S = f;
 			f = ((1000 * clock()) - clk) / CLOCKS_PER_SEC;
 			break;
 /**
-EVALUATOR is another complex word needs to be implemented in
-the virtual machine. It mostly just saves and restores state which we do
+EVALUATOR is another complex word which needs to be implemented in
+the virtual machine. It saves and restores state which we do
 not usually need to do when the interpreter is not running (the usual case
 for **forth\_eval** when called from C)
 **/
@@ -2241,7 +2327,12 @@ for **forth\_eval** when called from C)
 /**
 Whilst loathe to put these in here as virtual machine instructions (instead
 a better mechanism should be found), this is the simplest way of adding file
-access words to our Forth interpreter
+access words to our Forth interpreter.
+
+The file access methods *should* all be wrapped up so it does not matter
+if a file or a piece of memory (a string for example) is being read or
+written to. This would allow the KEY to be removed as a virtual machine
+instruction, and would be a useful abstraction. 
 **/
 		case PSTK:    print_stack(o, (FILE*)(o->m[STDOUT]), S, f);   break;
 		case RESTART: cd(1); longjmp(on_error, f);                   break;
@@ -2302,7 +2393,7 @@ machine memory has been corrupted somehow.
 /**
 We must save the stack pointer and the top of stack when we exit the
 interpreter so the C functions like "forth_pop" work correctly. If the
-**forth\_t** object has been invalidated (because something when very wrong),
+**forth\_t** object has been invalidated (because something went wrong),
 we do not have to jump to *end* as functions like **forth\_pop** should not
 be called on the invalidated object any longer.
 **/
@@ -2325,7 +2416,7 @@ This program can be used as a filter in a Unix pipe chain, or as a standalone
 interpreter for Forth. It tries to follow the Unix philosophy and way of
 doing things (see <http://www.catb.org/esr/writings/taoup/html/ch01s06.html>
 and <https://en.wikipedia.org/wiki/Unix_philosophy>). Whether this is
-achieved is a matter of opinion. There are a few things this interpreter does
+achieved is a matter of opinion. There are a things this interpreter does
 differently to most Forth interpreters that support this philosophy however,
 it is silent by default and does not clutter up the output window with "ok",
 or by printing a banner at start up (which would contain no useful information
@@ -2345,7 +2436,7 @@ void forth_set_args(forth_t *o, int argc, char **argv)
 	o->m[ARGV] = (forth_cell_t)argv;
 }
 
-/* 
+/**
 **main\_forth** implements a Forth interpreter which is a wrapper around the
 C API, there is an assumption that main_forth will be the only thing running
 in a process (it does not seem sensible to run multiple instances of it at
@@ -2366,14 +2457,22 @@ static FILE *fopen_or_die(const char *name, char *mode)
 	return file;
 }
 
+/**
+It is customary for Unix programs to have a usage string, which we
+can print out as a quick reminder to the user as to what the command
+line options are.
+**/
 static void usage(const char *name)
 {
-	fprintf(stderr, "usage: %s [-s file] [-e string] [-l file] [-m size] [-VthvL] [-] files\n", name);
+	fprintf(stderr, 
+		"usage: %s "
+		"[-(s|l) file] [-e expr] [-m size] [-VthvL] [-] files\n", 
+		name);
 }
 
 /** 
 We try to keep the interface to the example program as simple as possible,
-so there are few options and they are largely uncomplicated. What they do
+so there are limited, uncomplicated options. What they do
 should come as no surprise to an experienced Unix programmer, it is important
 to pick option names that they would expect (for example *-l* for loading,
 *-e* for evaluation, and not using *-h* for help would be a hanging offense).
@@ -2422,7 +2521,13 @@ although some options take arguments immediately after them.
 int main_forth(int argc, char **argv)
 {
 	FILE *in = NULL, *dump = NULL;
-	int save = 0, readterm = 0, mset = 0, eval = 0, rval = 0, i = 1, c = 0, verbose = 0, use_line_editor = 0;
+	int rval = 0, c = 0, i = 1;
+       	int save = 0,            /* attempt to save core if true */
+	    eval = 0,            /* have we evaluated anything? */
+	    verbose = 0,         /* verbosity level */
+	    use_line_editor = 0, /* use a line editor, *if* one exists */
+	    readterm = 0,        /* read from standard in */
+	    mset = 0;            /* memory size specified */
 	static const size_t kbpc = 1024 / sizeof(forth_cell_t); /*kilobytes per cell*/
 	static const char *dump_name = "forth.core";
 	char *optarg = NULL;
@@ -2439,7 +2544,7 @@ sacrifice portability.
 
 	for(i = 1; i < argc && argv[i][0] == '-'; i++)
 		switch(argv[i][1]) {
-		case '\0': goto done; /* stop argument processing */
+		case '\0': goto done; /* stop processing options */
 		case 'h':  usage(argv[0]); 
 			   help(); 
 			   return -1;
@@ -2452,6 +2557,7 @@ sacrifice portability.
 		case 'e':
 			if(i >= (argc - 1))
 				goto fail;
+			errno = 0;
 			if(!(o = o ? o : forth_init(core_size, stdin, stdout))) {
 				fatal("initialization failed, %s", emsg());
 				return -1;
@@ -2502,9 +2608,17 @@ sacrifice portability.
 			/**@todo display whether compile time options have been
 			 * included, such as USE_LINE_EDITOR */
 			fprintf(stdout, 
-					"libforth: version %d, size %u, endianess %u\n"
+					"libforth:\n" 
+					"\tversion:     %d\n"
+					"\tsize:        %u\n"
+					"\tendianess:   %u\n"
+					"\tline-editor: %s\n\n"
 					"initial forth program:\n%s\n",
-					CORE_VERSION, (unsigned)sizeof(forth_cell_t), (unsigned)IS_BIG_ENDIAN,
+					CORE_VERSION, 
+					(unsigned)sizeof(forth_cell_t) * CHAR_BIT, 
+					(unsigned)IS_BIG_ENDIAN,
+					LINE_EDITOR_AVAILABLE ? 
+						"available" : "unavailable",
 					initial_forth_program);
 			return EXIT_SUCCESS;
 			break;
@@ -2515,7 +2629,9 @@ sacrifice portability.
 			return -1;
 		}
 done:
-	readterm = (!eval && i == argc) || readterm; /* if no files are given, read stdin */
+	/* if no files are given, read stdin */
+	readterm = (!eval && i == argc) || readterm;
+	errno = 0;
 	if(!o && !(o = forth_init(core_size, stdin, stdout))) {
 		fatal("forth initialization failed, %s", emsg());
 		return -1;
@@ -2525,7 +2641,8 @@ done:
 		if(verbose)
 			note("reading from file '%s'", argv[i]);
 		forth_set_file_input(o, in = fopen_or_die(argv[i], "rb"));
-		if((c = fgetc(in)) == '#') /*shebang line '#!', core files could also be detected */
+		/* shebang line '#!', core files could also be detected */
+		if((c = fgetc(in)) == '#') 
 			while(((c = forth_get_char(o)) > 0) && (c != '\n'));
 		else if(c == EOF)
 			goto close;
@@ -2576,7 +2693,7 @@ Whilst the following **forth\_free** is not strictly necessary, there
 is often a debate that comes up making short lived programs or programs whose
 memory use stays either constant or only goes up, when these programs exit
 it is not necessary to clean up the environment and in some case (although
-not this one) it can significantly slow down the exit of the program for
+not this one) it can slow down the exit of the program for
 no reason.  However not freeing the memory after use does not play nice with
 programs that detect memory leaks, like Valgrind. Either way, we free the
 memory used here, but only if no other errors have occurred before hand. 
