@@ -125,6 +125,7 @@ no harm in adding tests here, they can always be moved around if there any probl
 in terms of dependencies )
 
 unit( Basic Words ) 
+marker cleanup
 
 s" 1 " test 
 s" 0 not " test
@@ -177,16 +178,34 @@ s" 1 2 3 3 sum 6 = " test
 
 s" b/buf 1024 = " test ( as per the standard )
 
-s" 1 2 3 4 5 1 pick 4 = " test
+1 2 3 4 5 1 pick constant pick-result
+s" pick-result 4 =  " test
+empty-stack
 
-s" -1 odd 0<>" test
-s" 0 odd 0=" test
-s" 4 odd 0=" test
-s" 3 odd 0<>" test
+s" -1 odd 0<> " test
+s" 0 odd 0= " test
+s" 4 odd 0= " test
+s" 3 odd 0<> " test
 
 s" 4 square 16 = " test
 s" -1 square 1 = " test
 
+s" 55 signum 1 = " test
+s" -4 signum -1 = " test
+s" 0 signum 0 = " test
+
+
+s" 5 5 <=> 0 = "  test
+s" 4 5 <=> 1 = "  test
+s" 5 3 <=> -1 = " test
+s" -5 3 <=> 1 = " test
+
+9 variable x
+s" x -1 toggle x @ -10 = " test
+s" x -1 toggle x @   9 = " test
+forget x
+
+cleanup
 end-unit
 ( ========================== Basic Words ===================================== )
 
@@ -203,8 +222,6 @@ s"  5 5  < 0 = " test
 
 end-unit
 ( ========================== Signed comparison =============================== )
-
-
 
 ( ========================== Jump Tables ===================================== )
 
@@ -292,8 +309,24 @@ end-unit
 unit( Misc words )
 marker cleanup
 
+( test the built in version of factorial )
+s" 6 factorial 720 = " test
+s" 0 factorial   1 = " test
+s" 1 factorial   1 = " test
+
+: factorial ( n -- n! )
+	( This factorial is only here to test range, mul, do and loop )
+	dup 1 <=
+	if
+		drop
+		1
+	else ( This is obviously super space inefficient )
+ 		dup >r 1 range r> mul
+	then ;
+
 s" 5 3 repeater 3 sum 15 = " test
 s" 6 1 range dup mul 720 = " test
+s" 5 factorial 120 = " test
 cleanup
 end-unit
 ( ========================== Misc Words ====================================== )
@@ -307,12 +340,37 @@ s" 13 prime? " test
 s" 2  prime? " test
 s" 4  prime? not " test
 s" 25 prime? not " test
-
 cleanup
 end-unit
 ( ========================== Prime Numbers =================================== )
 
+( ========================== Cons Cells    =================================== )
 
+unit( Cons cells )
+marker cleanup
+
+77 987 cons constant x
+s" x car@ 77  = " test
+s" x cdr@ 987 = " test
+s" 55 x cdr! x cdr@ 55 = x car@ 77 = and " test
+s" 44 x car! x cdr@ 55 = x car@ 44 = and " test
+cleanup
+end-unit
+
+( ========================== Cons Cells    =================================== )
+
+
+( ========================== Sanity Checks =================================== )
+unit( Sanity Checks )
+marker cleanup
+
+.( Test depth is zero: ) cr
+depth constant depth-result
+s" depth-result 0= " test
+
+cleanup
+end-unit
+( ========================== Sanity Checks =================================== )
 
 summary
 

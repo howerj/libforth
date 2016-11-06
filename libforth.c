@@ -441,6 +441,10 @@ code in *forth.fth* will not work.
 /** 
 The start of the dictionary is after the registers and the **STRING\_OFFSET**,
 this is the area where Forth definitions are placed. 
+
+@note The string offset could be placed after the end of the dictionary
+to save space, in the area between the end of the dictionary and the
+beginning of the pad area.
 **/
 #define DICTIONARY_START (STRING_OFFSET+MAXIMUM_WORD_LENGTH) /**< start of dic*/
 

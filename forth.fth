@@ -126,6 +126,13 @@ extract the document string for a given work.
 : literal ( x -- : immediately write a literal into the dictionary )
 	immediate [literal] ;
 
+( space saving measure )
+-1 : -1 literal ;
+ 0 : 0 literal ;
+ 1 : 1 literal ;
+ 2 : 2 literal ;
+ 3 : 3 literal ;
+
 : min-signed-integer ( -- x : push the minimum signed integer value )
 	[ -1 -1 1 rshift invert and ] literal ;
 
@@ -136,7 +143,7 @@ extract the document string for a given work.
 	- dup if max-signed-integer u> else logical then ;
 
 : > ( x1 x2 -- bool : signed greater than comparison )
-	< not ;
+	- dup if max-signed-integer u< else logical then ;
 
 : 2literal immediate ( x x -- : immediate write two literals into the dictionary )
 	swap [literal] [literal] ;
@@ -270,6 +277,9 @@ extract the document string for a given work.
 : negate ( x -- x ) 
 	-1 * ;
 
+: abs ( x -- u : return the absolute value of a number )
+	dup negative? if negate then ;
+
 : square ( x -- x ) 
 	dup * ;
 
@@ -284,6 +294,9 @@ extract the document string for a given work.
 
 : 1-! ( addr -- : decrement a value at an address ) 
 	-1 swap +! ;
+
+: toggle ( addr u -- : complement the value at address with the bit pattern u ) 
+	over @ xor swap ! ;
 
 : lsb ( x -- x : mask off the least significant byte of a cell ) 
 	255 and ;
@@ -316,13 +329,18 @@ extract the document string for a given work.
 	r> r @ swap >r ;
 
 : 0> ( x -- bool )
-	0 < ;
+	0 > ;
 
 : 0< ( x -- bool )
-	0 > ;
+	0 < ;
 
 : 0<> ( x -- bool )
 	0 <> ;
+
+: signum ( x -- -1 | 0 | 1 : )
+	dup 0< if drop -1 exit then
+	    0> if       1 exit then
+	0 ;
 
 : nand ( x x -- x : Logical NAND ) 
 	and not ;
@@ -769,16 +787,6 @@ hider addi
 : mul ( n0 ... nX X -- mul<0..X> ) 
 	1 do * loop ;
 
-: factorial ( n -- n! )
-	( This factorial is only here to test range, mul, do and loop )
-	dup 1 <=
-	if
-		drop
-		1
-	else ( This is obviously super space inefficient )
- 		dup >r 1 range r> mul
-	then ;
-
 hider tail
 
 ( 
@@ -811,8 +819,11 @@ Would overflow the return stack.
 	blow up the return stack.
 
 	We can test "recurse" with this factorial function:
-	  : factorial  dup 2 < if drop 1 exit then dup 1- recurse * ;)
+	  : factorial  dup 2 < if drop 1 exit then dup 1- recurse * ; )
 	latest cfa , ;
+
+: factorial ( x -- x : compute the factorial of a number )
+	dup 2 < if drop 1 exit then dup 1- recurse * ;
 
 : myself ( -- : myself is a synonym for recurse ) 
 	immediate postpone recurse ;
@@ -1072,7 +1083,7 @@ prints it out, it also does not checking of the returned values from write-file 
 		hide drop
 	again ;
 
-: count ( c-addr1 -- c-addr2 u : advance string pointer ) 
+: count ( c-addr1 -- c-addr2 u : get a string whose first char is its length )
 	dup c@ swap 1+ swap ;
 
 : bounds ( x y -- y+x x : make an upper and lower bound )
@@ -1276,7 +1287,10 @@ size 8 = [if]
 : forgetter ( pwd-token -- : forget a found word and everything after it )
 	dup @ pwd ! h ! ;
 
-( @bug will not work for immediate defined words )
+( @bug will not work for immediate defined words 
+@note Fig Forth had a word FENCE, if anything before this word was
+attempted to be forgotten then 
+)
 : forget ( WORD -- : forget word and every word defined after it )
 	find 1- forgetter ;
 
@@ -1436,10 +1450,10 @@ and prints prime numbers. )
 		not if
 			drop 0 leave
 		then
-	loop
-;
+	loop ;
 
 0 variable counter
+
 : primes ( x1 x2 -- : print the primes from x2 to x1 )
 	0 counter !
 	"  The primes from " dup . " to " over . " are: "
@@ -1454,6 +1468,7 @@ and prints prime numbers. )
 	cr
 	"  There are " counter @ . " primes."
 	cr ;
+
 hider counter
 ( ==================== Prime Numbers ========================== )
 
@@ -2030,16 +2045,21 @@ a simple "cons cell" data structure. There is currently no way to
 free allocated cells 
 )
 
-: car! ( cons-addr -- : store a value in the car cell of a cons cell ) 
+: car! ( value cons-addr -- : store a value in the car cell of a cons cell ) 
 	! ;
-: cdr! ( cons-addr -- : store a value in the cdr cell of a cons cell )
+
+: cdr! ( value cons-addr -- : store a value in the cdr cell of a cons cell )
 	cell+ ! ;
+
 : car@ ( cons-addr -- car-val : retrieve car value from cons cell )
 	@ ;
+
 : cdr@ ( cons-addr -- cdr-val : retrieve cdr value from cons cell )
 	cell+ @ ;
+
 : cons ( car-val cdr-val -- cons-addr : allocate a new cons cell )
 	swap here >r , , r> ;
+
 : cons0 0 0 cons ;
 
 ( ==================== Cons Cells ============================= )
