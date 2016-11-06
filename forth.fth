@@ -160,7 +160,7 @@ extract the document string for a given work.
 	0 ;
 
 : true  ( -- x : push the value representing true )
-	1 ;
+	-1 ;
 
 : *+ ( x1 x2 x3 -- x ) 
 	* + ;
@@ -203,6 +203,9 @@ extract the document string for a given work.
 
 : mod ( x u -- x : calculate the remainder of x divided by u ) 
 	2dup / * - ;
+
+: um/mod ( x1 x2 -- rem quot : calculate the remainder and quotient of x1 divided by x2 ) 
+	2dup / >r mod r> ;
 
 : */ ( x1 x2 x3 -- x4 : multiply then divide, @warning this does not use a double cell for the multiply )
 	 * / ; 
@@ -354,7 +357,7 @@ extract the document string for a given work.
 : b/buf  ( -- u : bytes per buffer ) 
 	1024 ;
 
-: # ( x -- x : debug print ) 
+: .d ( x -- x : debug print ) 
 	dup . ;
 
 : compile, ( -- : A word that writes , into the dictionary ) 
@@ -380,9 +383,6 @@ extract the document string for a given work.
 
 : within ( test low high -- bool : is test between low and high )
 	over - >r - r> u< ;
-
-: u. ( u -- : display number in base 10, although signed for now )
-	base @ >r decimal pnum drop r> base ! ;
 
 : invalidate-forth ( -- : invalidate this Forth core )
 	1 `invalid ! ;
@@ -1331,6 +1331,41 @@ size 8 = [if] 12 constant a 25 constant b 27 constant c [then]
 
 ( ==================== Random Numbers ========================= )
 
+( ==================== Pictured Numeric Output ================ )
+
+0 variable hld
+
+: hold ( char -- : add a character to the numeric output string )
+	pad chars> hld @ - c! hld 1+! ;
+
+: nbase ( -- base : in this forth 0 is a special base, push 10 is base is zero )
+	base @ dup 0= if drop 10 then ;
+
+: <# ( -- : setup pictured numeric output )
+	1 hld ! ;
+
+: sign ( -- : add a sign to the pictured numeric output string )
+	[char] - hold ;
+
+: # ( x -- x : divide x by base, turn into a character, put in pictured output string )
+	nbase um/mod swap
+  	nbase 10 u>
+  	if 7 + then
+  	48 + hold ;
+
+: #s ( x -- 0 : repeatedly call # on x until x is zero )
+	begin # dup 0= until ; 
+
+: #> ( -- c-addr u : end pictured output conversion, push output string to stack )
+	0 hold pad chars> hld @ tuck - swap ;
+
+: u. ( u -- : display number in base 10 )
+	base @ >r decimal <# #s #> type drop r> base ! ;
+
+:hide nbase ;hide
+
+( ==================== Pictured Numeric Output ================ )
+
 ( ==================== ANSI Escape Codes ====================== )
 ( 
 Terminal colorization module, via ANSI Escape Codes
@@ -1341,16 +1376,15 @@ manipulating a terminal
 )
 
 27 constant 'escape'
-char ; constant ';'
 : CSI 'escape' emit ." [" ;
-0  constant black
-1  constant red
-2  constant green
-3  constant yellow
-4  constant blue
-5  constant magenta
-6  constant cyan
-7  constant white
+0 constant black
+1 constant red
+2 constant green
+3 constant yellow
+4 constant blue
+5 constant magenta
+6 constant cyan
+7 constant white
 : foreground 30 + ;
 : background 40 + ;
 0 constant dark
@@ -1364,7 +1398,7 @@ char ; constant ';'
 	CSI u. if ." ;1" then ." m" ;
 
 : at-xy ( x y -- : set ANSI terminal cursor position to x y )
-	CSI u. ';' emit u. ." H" ;
+	CSI u. [char] ; emit u. ." H" ;
 
 : page  ( -- : clear ANSI terminal screen and move cursor to beginning ) 
 	CSI ." 2J" 1 1 at-xy ;
@@ -1384,16 +1418,14 @@ char ; constant ';'
 : reset-color ( -- : reset terminal color to its default value)
 	CSI ." 0m" ;
 
-hider CSI
+:hide CSI ;hide
 ( ==================== ANSI Escape Codes ====================== )
 
-
 ( ==================== Prime Numbers ========================== )
-( 
-From original "third" code from the IOCCC at 
+( From original "third" code from the IOCCC at 
 http://www.ioccc.org/1992/buzzard.2.design, the module works out
-and prints prime numbers.
-)
+and prints prime numbers. )
+
 : prime? ( x -- x/0 : return number if it is prime, zero otherwise )
 	dup 1 = if 1- exit then
 	dup 2 = if    exit then
@@ -1439,8 +1471,7 @@ hider .s
 
 1 variable hide-words ( do we want to hide hidden words or not )
 
-( 
-This function prints out all of the defined words, excluding hidden words.
+( This function prints out all of the defined words, excluding hidden words.
 An understanding of the layout of a Forth word helps here. The dictionary
 contains a linked list of words, each forth word has a pointer to the previous
 word until the first word. The layout of a Forth word looks like this:
@@ -1456,8 +1487,7 @@ access a words MISC field, the offset to the NAME is stored here in bits
 8 to 15 and the offset is calculated from the PWD field.
 
 "print" expects a character address, so we need to multiply any calculated
-address by the word size in bytes. 
-)
+address by the word size in bytes. )
 
 : words ( -- : print out all defined an visible words )
 	latest
@@ -1696,11 +1726,9 @@ Also of note, a number greater than "here" must be data )
 		drop
 	then ;
 
-( 
-These help messages could be moved to blocks, the blocks could then
+( These help messages could be moved to blocks, the blocks could then
 be loaded from disk and printed instead of defining the help here,
-this would allow much larger help 
-)
+this would allow much larger help )
 
 : help ( -- : print out a short help message )
 	page
@@ -1992,6 +2020,7 @@ matcher is match
 
 ( ==================== Matcher ================================ )
 
+
 ( ==================== Cons Cells ============================= )
 
 ( 
@@ -2257,9 +2286,12 @@ Some interesting links:
 )
 
 
-(
+( 
 The following will not work as we might actually be reading from a string [`sin]
 not `fin. 
 : key 32 chars> 1 `fin @ read-file drop 0 = if 0 else 32 chars> c@ then ;
+
+: s>d \ x -- d : convert a signed value to a double width cell 
+	dup 0< if true else false then ;
 )
 
