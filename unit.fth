@@ -21,14 +21,13 @@ arithmetic, and control flow, are already done in other tests or are
 assumed to work )
 
 ( first simple test bench, this will be redefined later )
-: test 0= if invalidate-forth bye then ;
+: test 0= if invalidate bye then ;
 
 ( example usage of the test bench, this will exit and invalidate
  the core if it tests )
 2 2 + 4 = test
 
 ( @todo Test as many words as possible )
-
 
 ( ========================== Hiding Words ==================================== )
 
@@ -95,12 +94,13 @@ true variable unit-color-on
 
 : summary ( -- : print summary of unit tests and exit if there are problems )
 	" passed: " unit-pass @ unit-fail @ print-ratio cr
-	unit-fail @ if " test suite failed" cr invalidate-forth bye then ;
+	unit-fail @ if " test suite failed" cr invalidate bye then ;
 
 0 variable #current-test
-256 char-table current-test
+256 string current-test
 : fill-current-test 
 	current-test 0 fill current-test [char] ) accepter #current-test ! ;
+
 
 ( @todo forget everything declared after this test )
 : unit(    ( -- : Mark the beginning of a unit test )   
@@ -253,11 +253,11 @@ marker cleanup
 	2dup type cr ;
 
 .(  Match str:	) c" hello" typist drop constant matchme
-.(  Pattern 1:	) c" h?ll?" typist drop constant pat1
+.(  Pattern 1:	) c" h.ll." typist drop constant pat1
 .(  Pattern 2:	) c" h*lo"  typist drop constant pat2
 .(  Pattern 3:	) c" hxllo" typist drop constant pat3
 .(  Pattern 4:	) c" *"     typist drop constant pat4
-.(  Pattern 5:	) c" h*llx" typist drop constant pat5
+.(  Pattern 5:	) c" h.llx" typist drop constant pat5
 
 s" matchme pat1 match 1 = " test
 s" matchme pat2 match 1 = " test
@@ -295,8 +295,8 @@ end-unit
 unit( Move words )
 marker cleanup
 \ 128 constant len
-\ len char-table t1
-\ len char-table t2
+\ len string t1
+\ len string t2
 \ t1 2chars erase
 \ t1 type cr
 ( @todo implement these tests )

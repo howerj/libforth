@@ -13,7 +13,6 @@ For more information about this interpreter and Forth see:
 	https://en.wikipedia.org/wiki/Forth_%28programming_language%29
 	readme.md   : for a manual for this interpreter
 	libforth.h  : for information about the C API
-	libforth.3  : for limited information about the C API
 	libforth.c  : for the interpreter itself
 	unit.c      : a series of unit tests against libforth.c
 	unit.fth    : a series of unit tests against this file
@@ -31,26 +30,32 @@ words work.
 
 The structure of this file is as follows:
 
-1. Basic Word Set
-2. Extended Word Set
-3. CREATE DOES>
-4. CASE statements
-5. Conditional Compilation
-6. Endian Words
-7. Misc words
-8. Random Numbers
-9. ANSI Escape Codes
-10. Prime Numbers
-11. Debugging info
-12. Files
-13. Blocks
-14. Matcher
-15. Cons Cells
-16. Miscellaneous
-17. Core utilities
+ * Basic Word Set
+ * Extended Word Set
+ * CREATE DOES>
+ * DO...LOOP
+ * CASE statements
+ * Conditional Compilation
+ * Endian Words
+ * Misc words
+ * Random Numbers
+ * ANSI Escape Codes
+ * Prime Numbers
+ * Debugging info
+ * Files
+ * Blocks
+ * Matcher
+ * Cons Cells
+ * Miscellaneous
+ * Core utilities
 
 Each of these sections is clearly labeled and they are generally in dependency order.
-)
+
+Unfortunately the code in this file is not as portable as it could be, it makes
+assumptions about the size of cells provided by the virtual machine, which will
+take time to rectify. Some of the constructs are subtly different from the
+DPANs Forth specification, which is usually noted. Eventually this should
+also be fixed.)
 
 ( ========================== Basic Word Set ================================== )
 
@@ -283,6 +288,9 @@ extract the document string for a given work.
 : square ( x -- x ) 
 	dup * ;
 
+: sum-of-squares ( a b -- c : compute a^2 + b^2 to get c )
+	square swap square + ;
+
 : drup   ( x y -- x x ) 
 	drop dup ;
 
@@ -307,11 +315,14 @@ extract the document string for a given work.
 : ?dup ( x -- ? ) 
 	dup if dup then ;
 
-: min ( x y -- min ) 
+: min ( x y -- min : return the minimum of two integers ) 
 	2dup < if drop else swap drop then  ;
 
-: max ( x y -- max ) 
+: max ( x y -- max : return the maximum of two integers ) 
 	2dup > if drop else swap drop then  ;
+
+: limit ( x min max -- x : limit x with a minimum and maximum )
+	rot min max ;
 
 : >= ( x y -- bool ) 
 	< not ;
@@ -394,15 +405,21 @@ extract the document string for a given work.
 	0 r ! ;
 
 : stack-start ( -- addr : push the address of the start of the stack )
-	max-core `stack-size @ 2 * -  ;
+	max-core `stack-size @ 2* -  ;
+
+: rstack-start ( -- addr : push the address of the start of the return stack )
+	max-core `stack-size @ - ;
 
 : pick ( xu ... x1 x0 u -- xu ... x1 x0 xu )
 	stack-start depth + swap - 1- @ ;
 
+: rpick ( R: xu ... x1 x0 u -- xu ... x1 x0 xu )
+	r@ swap - @ ;
+
 : within ( test low high -- bool : is test between low and high )
 	over - >r - r> u< ;
 
-: invalidate-forth ( -- : invalidate this Forth core )
+: invalidate ( -- : invalidate this Forth core )
 	1 `invalid ! ;
 
 : signed ( x -- bool : return true if sign bit set ) 
@@ -554,6 +571,19 @@ extract the document string for a given work.
 : trip ( x -- x x x : triplicate a number ) 
 	dup dup ;
 
+: roll  ( xu xu-1 ... x0 u -- xu-1 ... x0 xu : u+1 items on the top of the stack by u )
+	dup 0 >
+	if
+		swap >r 1- roll r> swap
+	else
+		drop
+	then ;
+
+: s>d ( x -- d : convert a signed value to a double width cell )
+	( @note the if...else...then is only necessary as this Forths
+	booleans are 0 and 1, not 0 and -1 as it usually is )
+	dup 0< if true else false then ;
+
 ( ========================== Basic Word Set ================================== )
 
 ( ========================== Extended Word Set =============================== )
@@ -587,6 +617,9 @@ extract the document string for a given work.
 	instruction-mask and  ( Mask off the instruction )
 	( If the word is not an immediate word, execution token pointer )
 	compile-instruction = + ;
+
+: >body ( xt -- a-addr : a-addr is data field of a CREATEd word )
+	cfa 5 + ;
 
 : ['] immediate find cfa [literal] ;
 
@@ -642,8 +675,15 @@ words can be used to add constants, variables and arrays to the language,
 amongst other things.
 
 A simple version of create is as follows
+
 	: create :: 2 , here 2 + , ' exit , 0 state ! ;
-But this version is much more limited )
+
+But this version is much more limited.
+
+"create"..."does>" is one of the constructs that makes Forth Forth, it
+allows the creation of words which can define new words in themselves,
+and thus allows us to extend the language easily.
+)
 
 : write-quote ( A word that writes ' into the dictionary )
 	['] ' , ;   
@@ -665,12 +705,12 @@ But this version is much more limited )
 
 : <build immediate
 	( @note ' command-mode-create , *nearly* works )
-	' :: ,                               ( Make the defining word compile a header )
-	write-quote dolit , compile,         ( Write in push to the creating word )
-	' here , ' 3+ , compile,             ( Write in the number we want the created word to push )
-	write-quote >mark compile,           ( Write in a place holder 0 and push a pointer to to be used by does> )
-	write-quote write-exit compile,      ( Write in an exit in the word we're compiling. )
-	['] command-mode ,                   ( Make sure to change the state back to command mode )
+	' :: ,                          ( Make the defining word compile a header )
+	write-quote dolit , compile,    ( Write in push to the creating word )
+	' here , ' 3+ , compile,        ( Write in the number we want the created word to push )
+	write-quote >mark compile,      ( Write in a place holder 0 and push a pointer to to be used by does> )
+	write-quote write-exit compile, ( Write in an exit in the word we're compiling. )
+	['] command-mode ,              ( Make sure to change the state back to command mode )
 ;
 
 : create immediate  ( create word is quite a complex forth word )
@@ -688,92 +728,131 @@ hider state!
 	immediate
 	write-exit   ( we don't want the defining to exit, but the *defined* word to )
 	here swap !  ( patch in the code fields to point to )
-	dolist ,     ( write a run in )
-;
+	dolist , ;   ( write a run in )
 
-: >body ( xt -- a-addr : a-addr is data field of a CREATEd word )
-	cfa 5 + ;
 hider write-quote
 
-( ========================== CREATE DOES> ==================================== )
+( Now that we have create...does> we can use it to create arrays, variables
+and constants, as we mentioned before.
+)
 
-: limit ( x min max -- x : limit x with a minimum and maximum )
-	rot min max ;
-
-: array ( x c" xxx" -- : create a named array )   
+: array ( u c" xxx" -- : create a named array of length u )   
 	create allot does> + ;
 
-: table     
-	create allot does>   ;
-
-: variable  
+: variable ( x c" xxx" -- : create a variable will initial value of x )
 	create ,     does>   ;
 
-: constant  
+: constant ( x c" xxx" -- : create a constant with value of x ) 
 	create ,     does> @ ;
 
-( @todo replace all instances of table with itable )
-: itable     
+: table  ( u c" xxx" --, Run Time: -- addr u : create a named table )
 	create dup , allot does> dup @ ;
 
-: char-table 
+: string ( u c" xxx" --, Run Time: -- addr u : create a named table )
 	create dup , chars allot does> dup @ swap 1+ chars> swap ;
 
 : 2constant 
-	create , ,   does> dup 1+ @ swap @ ;
+	create , , does> dup 1+ @ swap @ ;
 
 : 2variable 
-	create , ,   does> ;
+	create , , does> ;
 
-( do...loop could be improved by not using the return stack so much )
+( ========================== CREATE DOES> ==================================== )
 
-: do immediate
-	' swap ,         ( compile 'swap' to swap the limit and start )
-	' >r ,           ( compile to push the limit onto the return stack )
-	' >r ,           ( compile to push the start on the return stack )
-	postpone begin ; ( save this address so we can branch back to it )
+( ========================== DO...LOOP ======================================= )
 
-: addi
-	( @todo simplify )
+( The following section implements Forth's do...loop constructs, the
+word definitions are quite complex as it involves a lot of juggling of
+the return stack. Along with begin...until do loops are one of the
+main looping constructs. 
+
+Unlike begin...until do accepts two values a limit and a starting value,
+they are also words only to be used within a word definition, some Forths
+extend the semantics so looping constructs operate in command mode, this
+Forth does not do that as it complicates things unnecessarily.
+
+Example:
+	
+	: example-1 10 1 do i . i 5 > if cr leave then loop 100 . cr ; 
+	example-1
+
+Prints:
+	1 2 3 4 5 6
+
+In "example-1" we can see the following:
+
+1. A limit, 10, and a start value, 1, passed to "do".
+2. A word called 'i', which is the current count of the loop
+3. If the count is greater than 5, we call a word call 'leave', this
+word exits the current loop context as well as the current calling
+word.
+4. "100 . cr" is never called. This should be changed in future
+revision, but this version of leave exits the calling word as well.
+
+'i', 'j', and 'leave' *must* be used within a do...loop construct. )
+
+
+: (do)
+	swap    ( swap the limit and start )
+	r>      ( save our return stack to temporary variable )
+	-rot    ( limit start return -- return start limit )
+	>r      ( push limit onto return stack )
+	>r      ( push start onto return stack )
+	>r ;    ( restore our return address )
+
+: do immediate  ( Run time: high low -- : begin do...loop construct )
+	' (do) ,
+	postpone begin ; 
+
+: (unloop)    ( -- , R: i limit -- : remove limit and i from  )
+	r>           ( save our return address )
+	rdrop        ( pop off i )
+	rdrop        ( pop off limit )
+	>r ;         ( restore our return stack )
+
+: (+loop) ( x -- bool : increment loop variable by x and test it )
 	r@ 1-        ( get the pointer to i )
 	+!           ( add value to it )
+	r@ 1- @      ( find i again )
+	r@ 2- @      ( find the limit value )
+	u>= ;
+
+: (loop) ( -- bool : increment loop variable by 1 and test it )
+	r@ 1-        ( get the pointer to i )
+	1+!          ( add one to it )
 	r@ 1- @      ( find the value again )
 	r@ 2- @      ( find the limit value )
-	u<
+	u>= ;
+
+: loop  ( -- : end do...loop construct )
+	immediate ' (loop) , postpone until ' (unloop) , ;
+
+: +loop ( x -- : end do...+loop loop construct )
+	immediate ' (+loop) , postpone until ' (unloop) , ;
+
+: leave ( -- , R: i limit return -- : break out of a do-loop construct )
+	(unloop)
+	rdrop ; ( return to the caller's caller routine )
+
+: ?leave ( x -- , R: i limit return -- | i limit return : conditional leave )
 	if
-		r@ @ @ r@ @ + r@ ! exit ( branch )
-	then
-	r> 1+
-	rdrop
-	rdrop
-	>r ;
-
-: loop 
-	immediate 1 [literal] ' addi , <resolve ;
-
-: +loop 
-	immediate ' addi , <resolve ;
-
-hider inci
-hider addi
-
-: leave ( break out of a do-loop construct )
-	rdrop   ( pop off our return address )
-	rdrop   ( pop off i )
-	rdrop ; ( pop off the limit of i and return to the caller's caller routine )
-
-: ?leave ( x -- : conditional leave )
-	if
-		rdrop ( pop off our return address )
-		rdrop ( pop off i )
-		rdrop ( pop off the limit of i and return to the caller's caller routine )
+		(unloop)
+		rdrop ( return to the caller's caller routine )
 	then ;
 
-: i ( -- i : Get current, or innermost, loop index in do-loop construct )
-	r> r> ( pop off return address and i )
-	tuck  ( tuck i away )
-	>r >r ( restore return stack )
-;
+: i ( -- i : Get current, or innermost, loop index in do...loop construct )
+	r> r>   ( pop off return address and i )
+	tuck    ( tuck i away )
+	>r >r ; ( restore return stack )
+
+: j ( -- j : Get outermost loop index in do...loop construct )
+	4 rpick ;
+
+( This is a simple test function for the looping, for interactive
+testing and debugging:
+ : mm 5 1 do i . cr 4 1 do j . tab i . cr loop loop ; )
+
+( ========================== DO...LOOP ======================================= )
 
 : range ( nX nY -- nX nX+1 ... nY )  
 	swap 1+ swap do i loop ;
@@ -807,7 +886,7 @@ or
 
 Would overflow the return stack. 
 )
-: tail ( -- )
+: tail ( -- : perform tail recursion in current word definition )
 	immediate
 	latest cfa
 	' branch ,
@@ -878,24 +957,14 @@ Would overflow the return stack.
 : unused ( -- u : push the amount of core left ) 
 	max-core here - ;
 
-: roll
-	( xu xu-1 ... x0 u -- xu-1 ... x0 xu )
-	( remove u and rotate u+1 items on the top of the stack,
-	this could be replaced with a move on the stack and
-	some magic so the return stack is used less )
-	dup 0 >
-	if
-		swap >r 1- roll r> swap
-	else
-		drop
-	then ;
-
-: accumulator  ( " ccc" -- : make a word that increments by a value and pushes the result )
+: accumulator  ( initial " ccc" -- : make a word that increments by a value and pushes the result )
 	create , does> tuck +! @ ;
 
+: counter ( " ccc" --, Run Time: -- x : make a word that increments itself by one, starting from zero )
+	create -1 , does> dup 1+! @ ;
+
 0 variable delim
-: accepter
-	( c-addr max delimiter -- i )
+: accepter ( c-addr max delimiter -- i )
 	( store a "max" number of chars at c-addr until "delimiter" encountered,
 	the number of characters stored is returned )
 	key drop ( drop first key after word )
@@ -913,8 +982,7 @@ Would overflow the return stack.
 	loop
 	begin ( read until delimiter )
 		key delim @ =
-	until 
-;
+	until  ;
 hider delim
 
 : accept ( c-addr +n1 -- +n2 : see accepter definition ) 
@@ -990,7 +1058,7 @@ hider delim
 : /string ( c-addr1 u1 n -- c-addr2 u2 : advance a string by n characters )
 	over min rot over + -rot - ;
 
-128 char-table sbuf
+128 string sbuf
 : s" ( "ccc<quote>" --, Run Time -- c-addr u )
 	sbuf 0 fill sbuf [char] " accepter sbuf drop swap ;
 hider sbuf
@@ -1260,18 +1328,16 @@ size 8 = [if]
 	counter 1+! ;
 
 : as-chars ( x -- : print a cell out as characters )
-	size 0
+	size 0 ( from zero to the size of a cell )
 	do
-		dup
-		size i 1+ - select-byte ( @todo adjust for endianess )
-		dup printable? not
-		if
-			drop [char] .
-		then
-		emit
+		dup                     ( copy variable to print out )
+		size i 1+ - select-byte ( select correct bye )
+		dup printable? not      ( is it not printable )
+		if drop [char] . then   ( print a '.' if it is not )
+		emit                    ( otherwise print it out )
 	loop
-	space
-	drop ;
+	space  ( print out space after )
+	drop ; ( drop cell we have printed out )
 
 : lister 
 	0 counter ! 1- swap 
@@ -1347,6 +1413,7 @@ size 8 = [if] 12 constant a 25 constant b 27 constant c [then]
 
 ( ==================== Pictured Numeric Output ================ )
 
+( @todo this needs debugging )
 0 variable hld
 
 : hold ( char -- : add a character to the numeric output string )
@@ -1374,7 +1441,8 @@ size 8 = [if] 12 constant a 25 constant b 27 constant c [then]
 	0 hold pad chars> hld @ tuck - swap ;
 
 : u. ( u -- : display number in base 10 )
-	base @ >r decimal <# #s #> type drop r> base ! ;
+	base @ >r decimal pnum drop r> base ! ;
+	\ base @ >r decimal <# #s #> type drop r> base ! ;
 
 :hide nbase ;hide
 
@@ -1676,9 +1744,6 @@ function.
 		 which cannot possibly be a word with a name, the
 		 next field is the actual literal
 
-@todo addi also needs handling, it is another special case used by
-"do...loop" [which should be replaced].
-
 Of special difficult is processing 'if' 'else' 'then' statements,
 this will require keeping track of '?branch'.
 
@@ -1909,13 +1974,12 @@ For resources on Forth:
 ( @todo only already created blocks can be loaded, this should be
   corrected so one is created if needed )
 ( @todo better error handling )
-( @todo Use char-table )
 ( @todo Fix this! )
 
 -1 variable scr-var
 false variable dirty ( has the buffer been modified? )
 : scr ( -- x : last screen used ) scr-var @ ;
-b/buf char-table block-buffer ( block buffer - enough to store one block )
+b/buf string block-buffer ( block buffer - enough to store one block )
 
 : update ( -- : mark block buffer as dirty, so it will be flushed if needed )
 	true dirty ! ;
@@ -1976,13 +2040,39 @@ b/buf char-table block-buffer ( block buffer - enough to store one block )
 ( ==================== Blocks ================================= )
 
 ( ==================== Matcher ================================ )
+( The following section implements a very simple regular expression
+engine, which expects an ASCIIZ Forth string. It is translated from C
+code and performs an identical function.
+
+The regular expression language is as follows:
+
+	c	match a literal character
+	.	match any character
+	*	match any characters
+
+The "*" operator performs the same function as ".*" does in most
+other regular expression engines. Most other regular expression engines
+also do not anchor their selections to the beginning and the end of
+the string to match, instead using the operators '^' and '$' to do
+so, to emulate this behavior '*' can be added as either a suffix,
+or a prefix, or both, to the matching expression.
+
+As an example "*, World!" matches both "Hello, World!" and
+"Good bye, cruel World!". "Hello, ...." matches "Hello, Bill"
+and "Hello, Fred" but not "Hello, Tim" as there are two few
+characters in the last string.
+
+@todo make a matcher that expects a Forth string, which do not
+have to be NUL terminated
+)
+
 \ Translated from http://c-faq.com/lib/regex.html
 \ int match(char *pat, char *str)
 \ {
 \ 	switch(*pat) {
 \ 	case '\0':  return !*str;
 \ 	case '*':   return match(pat+1, str) || *str && match(pat, str+1);
-\ 	case '?':   return *str && match(pat+1, str+1);
+\ 	case '.':   return *str && match(pat+1, str+1);
 \ 	default:    return *pat == *str && match(pat+1, str+1);
 \ 	}
 \ }
@@ -2008,8 +2098,10 @@ defer matcher
 
 : advance ( string regex char -- bool : advance both regex and string )
 	if 1 1 ++ matcher else fail then ;
+
 : advance-string ( string regex char -- bool : advance only the string )
 	if 1 0 ++ matcher else fail then ;
+
 : advance-regex ( string regex -- bool : advance matching )
 	2dup 0 1 ++ matcher if pass else *str advance-string then ;
 
@@ -2022,7 +2114,7 @@ defer matcher
 	case
 		       0 of drop drop c@ not        exit endof
 		[char] * of drop advance-regex      exit endof
-		[char] ? of drop *str       advance exit endof
+		[char] . of drop *str       advance exit endof
 		            drop *pat==*str advance exit
 	endcase ;
 
@@ -2175,7 +2267,7 @@ enum header-magic4
 
 : check-version-compatibility ( char -- : checks the version compatibility of the core file ) 
 	core-version !
-	core-version @ 2 = if " core ver:	2" cr exit then
+	core-version @ 2 = if " version: 2" cr exit then
 	cleanup core-version @ . abort" : unknown version number" ;
 
 : save-endianess ( char -- : save the endianess, checking if it is valid )
@@ -2208,8 +2300,7 @@ enum header-magic4
 	( @todo improve method for printing out size )
 	" size: " size-field size-field-size chars dump ;
 
-
-: core ( c-addr u -- : )
+: core ( c-addr u -- : analyze a Forth core file from disk given its file name )
 	2dup " core file:" tab type cr
 	r/o open-file-or-abort core-file ! 
 	header?
@@ -2263,7 +2354,6 @@ other ideas.
 
 * Rewrite starting word using "restart-word!"
 * Word, Parse, other forth words
-* add "j" if possible to get outer loop context
 * FORTH, VOCABULARY
 * "Value", "To", "Is"
 * Double cell words and floating point library
@@ -2311,7 +2401,107 @@ The following will not work as we might actually be reading from a string [`sin]
 not `fin. 
 : key 32 chars> 1 `fin @ read-file drop 0 = if 0 else 32 chars> c@ then ;
 
-: s>d \ x -- d : convert a signed value to a double width cell 
-	dup 0< if true else false then ;
 )
+
+0 variable a
+0 variable b
+0 variable m
+: equal ( a1 ... an b1 ... bn n -- bool : determine if two lists on the stack are equal )
+	( example: 
+		1 2 3 
+		1 2 3 
+		3 equal 
+	returns: 1 )
+	dup m ! 1+ 1 do 
+		i 1-       pick b !
+		i m @ + 1- pick a !
+		a @ b @ <>
+		if 0 leave then
+	loop 1 ;
+
+:hide a b m ;hide
+
+: ndrop ( drop n items )
+	dup if 0 do drop loop else drop then ;
+
+( ==================== Unit test framework =================== )
+
+256 string estring  ( string to test )
+0 variable #estring ( actual string length )
+0 variable start    ( starting depth )
+0 variable result   ( result depth )
+true variable verbose  ( print out what test is occurring if true )
+0 variable dictionary ( dictionary pointer on entering { )
+0 variable previous  ( PWD register on entering { )
+
+: -> ( -- : save depth in variable ) 
+	depth result ! ; 
+
+: (fail) ( -- : invalidate the forth interpreter and exit )
+	invalidate bye ;
+
+: fail" ( -- : invalidate the forth interpreter after printing a string )
+	immediate postpone ."
+	' cr , ' (fail) , ;
+
+: evaluate? ( bool -- : test if evaluation has failed )
+	if fail" evaluation failed" then ;
+
+: adjust ( x -- x : adjust a depth to take into account starting depth ) 
+	start @ - ;
+
+: depth? ( -- : check if depth is correct )
+	depth adjust          ( get depth and adjust for starting depth )
+	result @ adjust 2* =  ( get results depth, same adjustment, should be
+	                        half size of the depth ) 
+	0= if 
+		." depth:  " depth . cr
+		." result: " result @ . cr
+		fail" Unequal depths" 
+	then ;
+
+: equal? ( -- : determine if results equals expected )
+	result @ adjust equal
+	0= if 
+		." Got: "
+		.s 
+		fail" Result is not equal to expected values" 
+	then ;
+
+: testing ( -- : print out testing message in estring )
+	verbose @ if ." Testing: " estring type cr then ;
+
+: pass ( -- : print out passing message )
+	verbose @ if ." Passed. " cr then ;
+
+: save 
+	pwd @ previous !
+	here dictionary ! ;
+
+: restore
+	previous @ pwd ! 
+	dictionary @ h ! ;
+
+: {  ( -- : perform a unit test )
+	depth start ! ( save start of stack depth )
+	0 result !    ( reset result variable )
+	save          ( save dictionary state )
+	estring [char] } accepter #estring ! ( read in string to test )
+	testing   ( print which string we are testing )
+	estring drop #estring @ evaluate ( perform test )
+	evaluate? ( evaluate successfully? )
+	depth?    ( correct depth )
+	equal?    ( results equal to expected values? )
+	pass      ( print pass message )
+	result @ adjust 2* ndrop ( remove items on stack generated by test )
+	restore ; ( restore dictionary to previous state )
+( 
+{ 1 2 -> 1 2 }
+{ 1 2 -> 1 2 }
+{ : c 1 2 ; c -> 1 2 } )
+:hide 
+	pass testing verbose 
+	adjust start save restore dictionary previous 
+	evaluate? equal? depth? estring #estring result fail" 
+;hide
 
