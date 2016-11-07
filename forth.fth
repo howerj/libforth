@@ -1926,7 +1926,6 @@ For resources on Forth:
 
 	FILE-SIZE    [ use file-positions ]
 	INCLUDE-FILE 
-	INCLUDED
 	FILE-STATUS
 
   Also of note:	
@@ -1958,6 +1957,12 @@ For resources on Forth:
 
 : create-file ( c-addr u fam -- fileid ior )
 	open-file ;
+
+: include ( c" ccc" -- : attempt to evaluate a file )
+	( @bug does not remove leading spaces from name, should use parse, or something )
+	source accept 1+ >in swap r/o open-file 
+	dup 0= if abort" : could not open file for reading" cr then
+	0 1 evaluator drop ;
 
 : bin ( fam1 -- fam2 : modify a file access method to be binary not line oriented ) 
 	( Do nothing, all file access methods are binary, although of note

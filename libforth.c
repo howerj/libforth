@@ -622,6 +622,7 @@ static const char *initial_forth_program =
 ": bl 32 ; \n"
 ": emit >in c! >in 1 `fout @ write-file 2drop ; \n" /* @todo throw exception instead of drop */
 ": space bl emit ; \n"
+": evaluate 0 evaluator ; \n"
 ": . pnum drop space ; \n";
 
 /**
@@ -958,12 +959,12 @@ More information about X-Macros can be found here:
  X(FIND,      "find",       "c\" xxx\" -- addr | 0 : find a Forth word")\
  X(DEPTH,     "depth",      " -- x : get current stack depth")\
  X(CLOCK,     "clock",      " -- x : push a time value")\
- X(EVALUATE,  "evaluate",   "c-addr u -- x : evaluate a string")\
+ X(EVALUATOR, "evaluator", "c-addr u 0 | file-id 0 1 -- x : evaluate file/str")\
  X(PSTK,      ".s",         " -- : print out values on the stack")\
- X(RESTART,   "restart",         " error -- : restart system, cause error")\
- X(SYSTEM,    "system",          "c-addr u -- bool : execute system command")\
- X(FCLOSE,    "close-file",      "file-id -- ior : close a file")\
- X(FOPEN,     "open-file",       "c-addr u fam -- open a file")\
+ X(RESTART,   "restart",    " error -- : restart system, cause error")\
+ X(SYSTEM,    "system",     "c-addr u -- bool : execute system command")\
+ X(FCLOSE,    "close-file", "file-id -- ior : close a file")\
+ X(FOPEN,     "open-file",  "c-addr u fam -- open a file")\
  X(FDELETE,   "delete-file",     "c-addr u -- : delete a file")\
  X(FREAD,     "read-file",       "c-addr u file-id -- u ior : write block")\
  X(FWRITE,    "write-file",      "c-addr u file-id -- u ior : read block")\
@@ -1358,10 +1359,10 @@ static void check_depth(forth_t *o, jmp_buf *on_error, forth_cell_t *S, forth_ce
 	if(o->m[DEBUG] >= DEBUG_CHECKS)
 		debug("0x%"PRIxCell " %u", (forth_cell_t)(S - o->vstart), line);
 	if((uintptr_t)(S - o->vstart) < expected) {
-		error("stack underflow %p", S);
+		error("stack underflow %p -> %u", S, line);
 		longjmp(*on_error, RECOVERABLE);
 	} else if(S > o->vend) {
-		error("stack overflow %p", S - o->vend);
+		error("stack overflow %p -> %u", S - o->vend, line);
 		longjmp(*on_error, RECOVERABLE);
 	}
 }
@@ -2315,23 +2316,39 @@ portable:
 EVALUATOR is another complex word which needs to be implemented in
 the virtual machine. It saves and restores state which we do
 not usually need to do when the interpreter is not running (the usual case
-for **forth\_eval** when called from C)
+for **forth\_eval** when called from C). It can read either from a string
+or from a file.
 **/
-		case EVALUATE:
+		case EVALUATOR:
 		{ 
 			/* save current input */
 			forth_cell_t sin    = o->m[SIN],  sidx = o->m[SIDX],
 				slen   = o->m[SLEN], fin  = o->m[FIN],
 				source = o->m[SOURCE_ID], r = m[RSTK];
-			cd(2);
-			char *s = forth_get_string(o, &on_error, &S, f);
+			char *s = NULL;
+			FILE *file = NULL;
+			int file_in = 0;
+			cd(3);
+			file_in = f; /*get file/string in bool*/
 			f = *S--;
+			if(file_in) {
+				file = (FILE*)(*S--);
+				f = *S--;
+			} else {
+				s = forth_get_string(o, &on_error, &S, f);
+				f = *S--;
+			}
 			/* save the stack variables */
 			o->S = S;
 			o->m[TOP] = f;
 			/* push a fake call to forth_eval */
 			m[RSTK]++;
-			w = forth_eval(o, s);
+			if(file_in) {
+				forth_set_file_input(o, file);
+				w = forth_run(o);
+			} else {
+				w = forth_eval(o, s);
+			}
 			/* restore stack variables */
 			m[RSTK] = r;
 			S = o->S;
