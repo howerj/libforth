@@ -42,6 +42,11 @@ to the forth interpreter which can be used from within the Forth interpreter.
 This structure can be used to extend the forth interpreter with functions
 defined elsewhere, which is particularly useful for allowing the interpreter
 to use non-portable functions.
+
+@todo rewrite structure so static allocation of functions can be done,
+thus removing the need for **forth\_new\_function\_list** and 
+**forth\_delete\_function\_list**.
+
 **/
 struct forth_functions
 {

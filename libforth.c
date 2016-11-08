@@ -2658,6 +2658,8 @@ This make implementing a Forth interpreter as simple as:
 
 To keep things simple options are parsed first then arguments like files,
 although some options take arguments immediately after them. 
+
+@todo make an incredibly simplified version of **main\_forth**
 **/
 int main_forth(int argc, char **argv)
 {

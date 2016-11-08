@@ -675,6 +675,10 @@ value.
 
 Get a value from the input and put it onto the stack.
 
+* '\_emit'      ( char -- status )
+
+Put a character to the output stream returning a success value.
+
 * 'r\>'          ( -- x )
         
 Pop a value from the return stack and push it to the variable stack.
@@ -766,6 +770,8 @@ zero on success, anything else on failure of some sort.
 * 'system'      ( c-addr u -- status )
 
 Execute a command with the systems command interpreter.
+
+@todo Document file related words and 'call' function.
 
 ##### File Access Words
 

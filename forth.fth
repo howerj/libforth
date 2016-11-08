@@ -1017,7 +1017,7 @@ Would overflow the return stack.
 	until  ;
 hider delim
 
-: word ( c -- c-addr )
+: word ( c -- c-addr : parse until 'c' is encountered, push transient counted string  )
 	>r
 	chere 1+
 	pad here - chars>
