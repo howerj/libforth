@@ -181,6 +181,20 @@ static unsigned unit_test_end(test_t *t, const char *unit_name)
 
 /*** end minimal test framework ***/
 
+/* forth_function_1 and forth_function_2 are 
+test functions that can be called from within the interpreter */
+static int forth_function_1(forth_t *f)
+{
+	forth_push(f, 123);
+	return 0;
+}
+
+static int forth_function_2(forth_t *f)
+{
+	forth_push(f, 789);
+	return 0;
+}
+
 static char usage[] = "\
 libforth unit test framework\n\
 \n\
@@ -232,7 +246,7 @@ done:
 		forth_cell_t here;
 		forth_t *f;
 		print_note(&tb, "libforth.c");
-		state(&tb, f = forth_init(MINIMUM_CORE_SIZE, stdin, stdout));
+		state(&tb, f = forth_init(MINIMUM_CORE_SIZE, stdin, stdout, NULL));
 		must(&tb, f);
 		state(&tb, core = fopen("unit.core", "wb"));
 		must(&tb, core);
@@ -282,7 +296,7 @@ done:
 		forth_t *f = NULL;
 		state(&tb, core_dump = tmpfile());
 		must(&tb, core_dump);
-		state(&tb, f = forth_init(MINIMUM_CORE_SIZE, stdin, stdout));
+		state(&tb, f = forth_init(MINIMUM_CORE_SIZE, stdin, stdout, NULL));
 		must(&tb, f);
 		test(&tb, forth_dump_core(f, core_dump) >= 0);
 		state(&tb, fclose(core_dump));
@@ -321,7 +335,7 @@ done:
 		 * 	'\n' ')' cr :: 
 		 */
 		forth_t *f;
-		state(&tb, f = forth_init(MINIMUM_CORE_SIZE, stdin, stdout));
+		state(&tb, f = forth_init(MINIMUM_CORE_SIZE, stdin, stdout, NULL));
 		must(&tb, f);
 
 		/* here we test if...else...then statements and hex conversion,
@@ -371,8 +385,8 @@ done:
 	}
 	{
 		/* test the forth interpreter internals */
-		forth_t *f;
-		state(&tb, f = forth_init(MINIMUM_CORE_SIZE, stdin, stdout));
+		forth_t *f = NULL;
+		state(&tb, f = forth_init(MINIMUM_CORE_SIZE, stdin, stdout, NULL));
 		must(&tb, f);
 
 		/* base should be set to zero, this is a special value
@@ -393,7 +407,41 @@ done:
 		test(&tb, forth_eval(f, " `source-id @ -1 = ") >= 0);
 		test(&tb, forth_pop(f));
 
+		/* 0 call should fail, returning non zero */
+		test(&tb, forth_eval(f, "0 call") >= 0);
+		test(&tb, forth_pop(f)); 
+
 		state(&tb, forth_free(f));
+	}
+	{
+		forth_t *f = NULL;
+		struct forth_functions *ff;
+		state(&tb, ff = forth_new_function_list(2));
+		must(&tb, ff);
+
+		state(&tb, ff->functions[0].function = forth_function_1);
+		state(&tb, ff->functions[1].function = forth_function_2);
+
+		state(&tb, f = forth_init(MINIMUM_CORE_SIZE, stdin, stdout, ff));
+		must(&tb, f);
+
+		/* 0 call should correspond to the first function, which just
+		 * pushes 123 */
+		test(&tb, forth_eval(f, "0 call") >= 0);
+		test(&tb, !forth_pop(f));
+		test(&tb, 123 == forth_pop(f));
+
+		/* 1 call corresponds to the second function... */
+		test(&tb, forth_eval(f, "1 call") >= 0);
+		test(&tb, !forth_pop(f));
+		test(&tb, 789 == forth_pop(f));
+
+		test(&tb, forth_eval(f, "2 call") >= 0);
+		/* call signals failure by returning non zero */
+		test(&tb, forth_pop(f)); 
+
+		state(&tb, forth_free(f));
+		state(&tb, forth_delete_function_list(ff));
 	}
 	return !!unit_test_end(&tb, "libforth");
 }

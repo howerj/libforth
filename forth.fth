@@ -231,6 +231,13 @@ extract the document string for a given work.
 : postpone ( -- : postpone execution of the following immediate word )
 	immediate find , ;
 
+: compose ( xt1 xt2 -- xt3 : create a new function from two xt-tokens )
+	>r >r            ( save execution tokens )
+	postpone :noname ( )
+	r> ,             ( write first token )
+	r> ,             ( write second token )
+	postpone ; ;     ( terminate new :noname )
+
 : unless ( bool -- : like 'if' but execute clause if false )
 	immediate ' 0= , postpone if ;
 
@@ -437,13 +444,21 @@ extract the document string for a given work.
 	drop         ( drop it like it's hot )
 	>r ;         ( return return address )
 
+: rdup
+	r>           ( get caller's return address )
+	r>           ( get value to duplicate )
+	dup          ( ... )
+	>r >r >r ;   ( make it all work )
+
 : again immediate
 	( loop unconditionally in a begin-loop:
 		begin ... again )
 	' branch , <resolve ;
 
 ( begin...while...repeat These are defined in a very "Forth" way )
-: while immediate postpone if ( branch to repeats 'then') ;
+: while 
+	immediate postpone if ( branch to repeats 'then') ;
+
 : repeat immediate
 	swap            ( swap 'begin' here and 'while' here )
 	postpone again  ( again jumps to begin )
@@ -451,6 +466,9 @@ extract the document string for a given work.
 
 : never ( never...then : reserve space in word )
 	immediate 0 [literal] postpone if ;
+
+: chere ( -- c-addr : here as in character address units )
+	here chars> ;
 
 : source ( -- c-addr u )
 	( @todo read registers instead )
@@ -583,6 +601,20 @@ extract the document string for a given work.
 	( @note the if...else...then is only necessary as this Forths
 	booleans are 0 and 1, not 0 and -1 as it usually is )
 	dup 0< if true else false then ;
+
+: trace ( level -- : set tracing level )
+	`debug ! ;
+
+: verbose ( -- : get the log level )
+	`debug @ ;
+
+: #pad ( -- u : offset into pad area )
+	64 ;
+
+: pad
+	( the pad is used for temporary storage, and moves
+	along with dictionary pointer, always in front of it )
+	here #pad + ;
 
 ( ========================== Basic Word Set ================================== )
 
@@ -985,6 +1017,14 @@ Would overflow the return stack.
 	until  ;
 hider delim
 
+: word ( c -- c-addr )
+	>r
+	chere 1+
+	pad here - chars>
+	r> accepter 1-
+	chere c!
+	chere ;
+
 : accept ( c-addr +n1 -- +n2 : see accepter definition ) 
 	'\n' accepter ;
 
@@ -994,23 +1034,20 @@ hider delim
 : print-string
 	( delimiter -- : print out the next characters in the input stream until a
 	"delimiter" character is reached )
-	key drop
-	delim !
+	key drop ( drop next space )
+	>r       ( save delimiter )
 	begin
-		key dup delim @ =
-		if
-			drop exit
-		then
-		emit 0
-	until ;
+		key dup 
+		rdup r> ( get delimiter )
+		= if drop rdrop exit then
+		emit
+	again ;
 hider delim
 
-size 1- constant aligner
 : aligned ( unaligned -- aligned : align a pointer )
-	aligner + aligner invert and ;
-hider aligner
+	[ size 1- ] literal + 
+	[ size 1- ] literal invert and ;
 
-0 variable delim
 : write-string ( char -- c-addr u )
 	( @todo This really needs simplifying, to do this
 	a set of words that operate on a temporary buffer can
@@ -1020,20 +1057,20 @@ hider aligner
 	dictionary so normal execution of a word can continue. The
 	length and character address of the string are left on the
 	stack )
-	delim !         ( save delimiter )
+	>r         ( save delimiter )
 	' branch ,      ( write in jump, this will jump past the string )
 	>mark           ( make hole )
 	dup 1+ chars>   ( calculate address to write to )
-	max-string-length delim @ accepter dup >r ( write string into dictionary, save index )
+	max-string-length 
+	r>              ( restore delimiter )
+	accepter dup >r ( write string into dictionary, save index )
 	aligned 2dup size / ( stack: length hole char-len hole )
-	1+ dup allot   ( update dictionary pointer with string length )
-	1+ swap !      ( write place to jump to )
-	drop           ( do not need string length anymore )
-	1+ chars>      ( calculate place to print )
-	r>             ( restore index and address of string )
-	1-
-;
-hider delim
+	1+ dup allot    ( update dictionary pointer with string length )
+	1+ swap !       ( write place to jump to )
+	drop            ( do not need string length anymore )
+	1+ chars>       ( calculate place to print )
+	r>              ( restore index and address of string )
+	1- ;
 
 : length ( c-addr u -- u : push the length of an ASCIIZ string )
   tuck 0 do dup c@ 0= if 2drop i leave then 1+ loop ;
@@ -1104,6 +1141,7 @@ prints it out, it also does not checking of the returned values from write-file 
 
 : abort" immediate postpone "
 	' cr , ' abort , ;
+
 
 ( ==================== CASE statements ======================== )
 
@@ -1309,16 +1347,6 @@ size 8 = [if]
 
 ( ==================== Misc words ============================= )
 
-: trace ( flag -- : turn tracing on/off )
-	`debug ! ;
-
-: #pad ( -- u : offset into pad area )
-	64 ;
-
-: pad
-	( the pad is used for temporary storage, and moves
-	along with dictionary pointer, always in front of it )
-	here #pad + ;
 
 0 variable counter
 
@@ -1368,17 +1396,164 @@ hider forgetter
 	' ?dup , postpone if ;
 
 : ** ( b e -- x : exponent, raise 'b' to the power of 'e')
-	dup
-	if
-		dup
-		1
-		do over * loop
+	?dup-if
+		over swap
+		1 do over * loop 
+		nip
 	else
-		drop
-		1
+		drop 1
 	endif ;
 
+0 variable a
+0 variable b
+0 variable m
+: equal ( a1...an b1...bn n -- a1...an b1...bn bool : determine if two lists are equal )
+	( example: 
+		1 2 3 
+		1 2 3 
+		3 equal 
+	returns: 1 )
+	dup m ! 1+ 1  ( store copy of length and use as loop index )
+	do 
+		i 1-       pick b ! ( store ith element of list in b1...bn )
+		i m @ + 1- pick a ! ( store ith element of list in a1...an )
+		a @ b @ <>          ( compare a and b for equality )
+		if 0 leave then     ( unequal, finish early )
+	loop 1 ; ( lists must be equal )
+
+:hide a b m ;hide
+
+: ndrop ( drop n items )
+	?dup-if 0 do drop loop then ;
+
 ( ==================== Misc words ============================= )
+
+( ==================== Unit test framework =================== )
+
+256 string estring    ( string to test )
+0 variable #estring   ( actual string length )
+0 variable start      ( starting depth )
+0 variable result     ( result depth )
+0 variable dictionary ( dictionary pointer on entering { )
+0 variable previous   ( PWD register on entering { )
+
+: -> ( -- : save depth in variable ) 
+	depth result ! ; 
+
+: fail ( -- : invalidate the forth interpreter and exit )
+	invalidate bye ;
+
+: evaluate? ( bool -- : test if evaluation has failed )
+	if ." evaluation failed" cr fail then ;
+
+: adjust ( x -- x : adjust a depth to take into account starting depth ) 
+	start @ - ;
+
+: depth? ( -- : check if depth is correct )
+	depth adjust          ( get depth and adjust for starting depth )
+	result @ adjust 2* =  ( get results depth, same adjustment, should be
+	                        half size of the depth ) 
+	0= if 
+		." Unequal depths" cr
+		." depth:  " depth . cr
+		." result: " result @ . cr
+		fail
+	then ;
+
+: equal? ( -- : determine if results equals expected )
+	result @ adjust equal
+	0= if 
+		." Result is not equal to expected values. " cr  
+		." Got: " cr .s 
+		fail
+	then ;
+
+: testing ( -- : print out testing message in estring )
+	verbose if ." Testing: " cr estring type cr then ;
+
+: pass ( -- : print out passing message )
+	verbose if ." Passed. " cr then ;
+
+: save  ( -- : save current dictionary )
+	pwd @ previous !
+	here dictionary ! ;
+
+: restore ( -- : restore dictionary )
+	previous @ pwd ! 
+	dictionary @ h ! ;
+
+: {  ( -- : perform a unit test )
+	depth start ! ( save start of stack depth )
+	0 result !    ( reset result variable )
+	save          ( save dictionary state )
+	estring [char] } accepter #estring ! ( read in string to test )
+	testing   ( print which string we are testing )
+	estring drop #estring @ evaluate ( perform test )
+	evaluate? ( evaluate successfully? )
+	depth?    ( correct depth )
+	equal?    ( results equal to expected values? )
+	pass      ( print pass message )
+	result @ adjust 2* ndrop ( remove items on stack generated by test )
+	restore ; ( restore dictionary to previous state )
+( 
+{ 1 2 -> 1 2 }
+{ 1 2 -> 1 2 }
+{ : c 1 2 ; c -> 1 2 } )
+
+{
+	:noname 2 ;
+	:noname 3 + ;
+	compose execute -> 5
+}
+
+:hide 
+	pass testing
+	adjust start save restore dictionary previous 
+	evaluate? equal? depth? estring #estring result
+;hide
+
+( ==================== Unit test framework =================== )
+
+
+( ==================== Pictured Numeric Output ================ )
+
+0 variable hld
+
+: hold ( char -- : add a character to the numeric output string )
+	pad chars> hld @ - c! hld 1+! ;
+
+: nbase ( -- base : in this forth 0 is a special base, push 10 is base is zero )
+	base @ dup 0= if drop 10 then ;
+
+: <# ( -- : setup pictured numeric output )
+	0 hld ! ;
+
+: sign ( -- : add a sign to the pictured numeric output string )
+	[char] - hold ;
+
+: # ( x -- x : divide x by base, turn into a character, put in pictured output string )
+	nbase um/mod swap
+  	nbase 10 u>
+  	if 7 + then
+  	48 + hold ;
+
+: #s ( x -- 0 : repeatedly call # on x until x is zero )
+	begin # dup 0= until ; 
+
+: #> ( -- c-addr u : end pictured output conversion, push output string to stack )
+	0 hold   ( NUL terminate string, just in case )
+	hld 1-!  ( but do not include that in the count )
+	pad chars> hld @ 
+	tuck - 1+ swap ;
+
+: u. ( u -- : display number in base 10 )
+	base @ >r decimal <# #s #> type drop r> base ! ;
+
+:hide nbase ;hide
+
+( ==================== Pictured Numeric Output ================ )
+
+
 
 ( ==================== Random Numbers ========================= )
 
@@ -1410,43 +1585,6 @@ size 8 = [if] 12 constant a 25 constant b 27 constant c [then]
 :hide a b c seed ;hide
 
 ( ==================== Random Numbers ========================= )
-
-( ==================== Pictured Numeric Output ================ )
-
-( @todo this needs debugging )
-0 variable hld
-
-: hold ( char -- : add a character to the numeric output string )
-	pad chars> hld @ - c! hld 1+! ;
-
-: nbase ( -- base : in this forth 0 is a special base, push 10 is base is zero )
-	base @ dup 0= if drop 10 then ;
-
-: <# ( -- : setup pictured numeric output )
-	1 hld ! ;
-
-: sign ( -- : add a sign to the pictured numeric output string )
-	[char] - hold ;
-
-: # ( x -- x : divide x by base, turn into a character, put in pictured output string )
-	nbase um/mod swap
-  	nbase 10 u>
-  	if 7 + then
-  	48 + hold ;
-
-: #s ( x -- 0 : repeatedly call # on x until x is zero )
-	begin # dup 0= until ; 
-
-: #> ( -- c-addr u : end pictured output conversion, push output string to stack )
-	0 hold pad chars> hld @ tuck - swap ;
-
-: u. ( u -- : display number in base 10 )
-	base @ >r decimal pnum drop r> base ! ;
-	\ base @ >r decimal <# #s #> type drop r> base ! ;
-
-:hide nbase ;hide
-
-( ==================== Pictured Numeric Output ================ )
 
 ( ==================== ANSI Escape Codes ====================== )
 ( 
@@ -1698,8 +1836,8 @@ hider cf
 	NOTE: given a pointer to somewhere in a word it is possible
 	to work out the PWD by looping through the dictionary to
 	find the PWD below it )
-	1- dup @ -1 =              if " [ noname" end-print exit then
-	   dup  " [ " code>pwd dup if name print else drop " data" then
+	1- dup @ -1 =               if " [ noname" end-print exit then
+	   dup  " [ " code>pwd ?dup-if name print else drop " data" then
 	        end-print ;
 hider end-print
 
@@ -2170,14 +2308,6 @@ free allocated cells
 : enum ( x " ccc" -- x+1 : define a series of enumerations )
 	dup constant 1+ ; ( better would be a :enum ;enum syntax )
 
-: compare ( c-addr1 u1 c-addr2 u2 -- n : compare two strings, assumes strings are NUL terminated )
-	rot min
-	0 do ( should be ?do )
-		2dup
-		i + c@ swap i + c@
-		<=> dup if leave else drop then
-	loop
-	2drop ;
 
 : 2rot (  n1 n2 n3 n4 n5 n6 – n3 n4 n5 n6 n1 n2 )
 	5 roll 5 roll ;
@@ -2220,6 +2350,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 : reader immediate 
 	welcome
 	begin read " ok" cr again ;
+
 ( find reader start! warm )
 
 ( ==================== Core utilities ======================== )
@@ -2392,6 +2523,11 @@ use run length encoding.
 The manual page for the forth library can be generated from the header file, which
 will need special preparation [a markdown file will have to be generated from the
 header file, that file can the be used for the manual page].
+* Change the debug register so there are multiple levels of debug, not
+everything is active at non-zero levels, this will allow for a more verbose
+libforth interpter. The verbose option passed in by the command line can be
+used to populate the libforth debug register. Unit tests could then be
+optionally made to be noisy.
 
 Some interesting links:
 	* http://www.figuk.plus.com/build/heart.htm
@@ -2400,113 +2536,20 @@ Some interesting links:
 	* https://stackoverflow.com/questions/407987/what-are-the-primitive-forth-operators
 )
 
-
 ( 
 The following will not work as we might actually be reading from a string [`sin]
 not `fin. 
 : key 32 chars> 1 `fin @ read-file drop 0 = if 0 else 32 chars> c@ then ;
 
-)
+\ needs fixing
+: compare \ c-addr1 u1 c-addr2 u2 -- n : compare two strings, assumes strings are NUL terminated
+	rot min
+	0 do 
+		2dup
+		i + c@ swap i + c@
+		<=> ?dup-if leave then
+	loop
+	2drop 0 ; )
 
-0 variable a
-0 variable b
-0 variable m
-: equal ( a1 ... an b1 ... bn n -- bool : determine if two lists on the stack are equal )
-	( example: 
-		1 2 3 
-		1 2 3 
-		3 equal 
-	returns: 1 )
-	dup m ! 1+ 1 do 
-		i 1-       pick b !
-		i m @ + 1- pick a !
-		a @ b @ <>
-		if 0 leave then
-	loop 1 ;
-
-:hide a b m ;hide
-
-: ndrop ( drop n items )
-	dup if 0 do drop loop else drop then ;
-
-( ==================== Unit test framework =================== )
-
-256 string estring  ( string to test )
-0 variable #estring ( actual string length )
-0 variable start    ( starting depth )
-0 variable result   ( result depth )
-true variable verbose  ( print out what test is occurring if true )
-0 variable dictionary ( dictionary pointer on entering { )
-0 variable previous  ( PWD register on entering { )
-
-: -> ( -- : save depth in variable ) 
-	depth result ! ; 
-
-: (fail) ( -- : invalidate the forth interpreter and exit )
-	invalidate bye ;
-
-: fail" ( -- : invalidate the forth interpreter after printing a string )
-	immediate postpone ."
-	' cr , ' (fail) , ;
-
-: evaluate? ( bool -- : test if evaluation has failed )
-	if fail" evaluation failed" then ;
-
-: adjust ( x -- x : adjust a depth to take into account starting depth ) 
-	start @ - ;
-
-: depth? ( -- : check if depth is correct )
-	depth adjust          ( get depth and adjust for starting depth )
-	result @ adjust 2* =  ( get results depth, same adjustment, should be
-	                        half size of the depth ) 
-	0= if 
-		." depth:  " depth . cr
-		." result: " result @ . cr
-		fail" Unequal depths" 
-	then ;
-
-: equal? ( -- : determine if results equals expected )
-	result @ adjust equal
-	0= if 
-		." Got: "
-		.s 
-		fail" Result is not equal to expected values" 
-	then ;
-
-: testing ( -- : print out testing message in estring )
-	verbose @ if ." Testing: " estring type cr then ;
-
-: pass ( -- : print out passing message )
-	verbose @ if ." Passed. " cr then ;
-
-: save 
-	pwd @ previous !
-	here dictionary ! ;
-
-: restore
-	previous @ pwd ! 
-	dictionary @ h ! ;
-
-: {  ( -- : perform a unit test )
-	depth start ! ( save start of stack depth )
-	0 result !    ( reset result variable )
-	save          ( save dictionary state )
-	estring [char] } accepter #estring ! ( read in string to test )
-	testing   ( print which string we are testing )
-	estring drop #estring @ evaluate ( perform test )
-	evaluate? ( evaluate successfully? )
-	depth?    ( correct depth )
-	equal?    ( results equal to expected values? )
-	pass      ( print pass message )
-	result @ adjust 2* ndrop ( remove items on stack generated by test )
-	restore ; ( restore dictionary to previous state )
-( 
-{ 1 2 -> 1 2 }
-{ 1 2 -> 1 2 }
-{ : c 1 2 ; c -> 1 2 } )
-:hide 
-	pass testing verbose 
-	adjust start save restore dictionary previous 
-	evaluate? equal? depth? estring #estring result fail" 
-;hide
+verbose [if] welcome [then]
 

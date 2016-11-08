@@ -620,7 +620,7 @@ static const char *initial_forth_program =
 ": allot here + h ! ; \n"
 ": 2drop drop drop ; \n"
 ": bl 32 ; \n"
-": emit >in c! >in 1 `fout @ write-file 2drop ; \n" /* @todo throw exception instead of drop */
+": emit _emit drop ; \n" 
 ": space bl emit ; \n"
 ": evaluate 0 evaluator ; \n"
 ": . pnum drop space ; \n";
@@ -771,8 +771,9 @@ struct forth { /**< FORTH environment */
 	char hex_fmt[16];    /**< calculated hex format */
 	char word_fmt[16];   /**< calculated word format */
 	forth_cell_t *S;     /**< stack pointer */
-	forth_cell_t *vstart;/**< index into m[] where the variable stack starts*/
-	forth_cell_t *vend;  /**< index into m[] where the variable stack ends*/
+	forth_cell_t *vstart;/**< index into m[] where variable stack starts*/
+	forth_cell_t *vend;  /**< index into m[] where variable stack ends*/
+	const struct forth_functions *calls; /**< functions for CALL instruction */
 	forth_cell_t m[];    /**< ~~ Forth Virtual Machine memory */
 };
 
@@ -798,12 +799,16 @@ enum actions_on_error
 
 /**
 @brief These are the possible options for the debug registers.
+@todo  Add more debug levels, pass in level from command line
 **/
 enum trace_level
 {
 	DEBUG_OFF,         /**< tracing is off */
+	DEBUG_FORTH_CODE,  /**< used within the forth interpreter */
+	DEBUG_NOTE,        /**< print notes */
 	DEBUG_INSTRUCTION, /**< instructions and stack are traced */
-	DEBUG_CHECKS       /**< bounds checks are printed out */
+	DEBUG_CHECKS,      /**< bounds checks are printed out */
+	DEBUG_ALL,         /**< trace everything that can be traced */
 };
 
 /**
@@ -941,6 +946,7 @@ More information about X-Macros can be found here:
  X(UMORE,     "u>",         "x x -- bool : unsigned greater than")\
  X(EXIT,      "exit",       " -- : return from a word defition")\
  X(KEY,       "key",        " -- char : get one character of input")\
+ X(EMIT,      "_emit",      " char -- status : get one character of input")\
  X(FROMR,     "r>",         " -- x, R: x -- : move from return stack")\
  X(TOR,       ">r",         "x --, R: -- x : move to return stack")\
  X(BRANCH,    "branch",     " -- : unconditional branch")\
@@ -962,6 +968,7 @@ More information about X-Macros can be found here:
  X(EVALUATOR, "evaluator", "c-addr u 0 | file-id 0 1 -- x : evaluate file/str")\
  X(PSTK,      ".s",         " -- : print out values on the stack")\
  X(RESTART,   "restart",    " error -- : restart system, cause error")\
+ X(CALL,      "call",       "x1...xn c -- x1...xn c : call a function")\
  X(SYSTEM,    "system",     "c-addr u -- bool : execute system command")\
  X(FCLOSE,    "close-file", "file-id -- ior : close a file")\
  X(FOPEN,     "open-file",  "c-addr u fam -- open a file")\
@@ -1438,7 +1445,6 @@ static void print_stack(forth_t *o, FILE *out, forth_cell_t *S, forth_cell_t f)
 		print_cell(o, out, *(S--));
 		fputc(' ', out);
 	}
-	fputc('\n', out);
 }
 
 /**
@@ -1557,7 +1563,8 @@ allocating memory for the object to be returned, but it also does has the
 task of getting the object into a runnable state so we can pass it to
 **forth\_run** and do useful work. 
 **/
-forth_t *forth_init(size_t size, FILE *in, FILE *out)
+forth_t *forth_init(size_t size, FILE *in, FILE *out, 
+		const struct forth_functions *calls)
 {
 	assert(in && out);
 	forth_cell_t *m, i, w, t;
@@ -1600,7 +1607,9 @@ the interpreter:
 **/
 	make_header(o->header);
 
-	m = o->m;       /*a local variable only for convenience */
+	o->calls = calls; /* pass over functions for CALL */
+
+	m = o->m;         /*a local variable only for convenience */
 
 /**
 The next section creates a word that calls **READ**, then **TAIL**,
@@ -1807,6 +1816,27 @@ void forth_free(forth_t *o)
 }
 
 /**
+Unfortunately C disallows the static initialization of structures with 
+flexible array member, GCC allows this as an extension.
+**/
+struct forth_functions *forth_new_function_list(forth_cell_t count)
+{
+	struct forth_functions *ff = NULL;
+	errno = 0;
+	ff = calloc(sizeof(*ff) + sizeof(ff->functions[0]) * count + 1, 1);
+	if(!ff) 
+		warning("calloc failed: %s", emsg());
+	else
+		ff->count = count;
+	return ff;
+}
+
+void forth_delete_function_list(struct forth_functions *calls)
+{
+	free(calls);
+}
+
+/**
 **forth\_push**, **forth\_pop** and **forth\_stack\_position** are the main 
 ways an application programmer can interact with the Forth interpreter. Usually
 this tutorial talks about how the interpreter and virtual machine work,
@@ -1870,8 +1900,7 @@ int forth_run(forth_t *o)
 	 * @todo This code needs to be rethought to be made more compliant with
 	 * how "throw" and "catch" work in Forth. */
 	if ((errorval = setjmp(on_error)) || o->m[INVALID]) {
-		/* If the interpreter gets into an invalid state we always
-		 * exit, which */
+		/* if the interpreter is invalid we always exit*/
 		if(o->m[INVALID])
 			return -1;
 		switch(errorval) {
@@ -2224,6 +2253,7 @@ require some explaining, but ADD, SUB and DIV will not.
 		case UMORE:   cd(2); f = *S-- > f;                       break;
 		case EXIT:    I = m[ck(m[RSTK]--)];                      break;
 		case KEY:     *++S = f; f = forth_get_char(o);           break;
+		case EMIT:    f = fputc(f, (FILE*)o->m[FOUT]);           break;
 		case FROMR:   *++S = f; f = m[ck(m[RSTK]--)];            break;
 		case TOR:     cd(1); m[ck(++m[RSTK])] = f; f = *S--;     break;
 		case BRANCH:  I += m[ck(I)];                             break;
@@ -2364,6 +2394,52 @@ or from a file.
 				return -1;
 		}
 		break;
+		case PSTK:    print_stack(o, (FILE*)(o->m[STDOUT]), S, f);   break;
+		case RESTART: cd(1); longjmp(on_error, f);                   break;
+
+/**
+CALL allows arbitrary C functions to be passed in and used within
+the interpreter, allowing it to be extended. The functions have to be
+passed in during initialization and then they become available to be
+used by CALL.
+
+The structure **forth\_functions** is a list of function
+pointers that can be populated by the user of the libforth library,
+CALL indexes into that structure (after performing bounds checking)
+and executes the function.
+**/
+		case CALL:
+		{
+			cd(1);
+			if(!(o->calls) || !(o->calls->count)) {
+				/* no call structure, or count is zero */
+				f = -1;
+				break;
+			}
+			forth_cell_t i = f;
+			if(i >= (o->calls->count)) {
+				f = -1;
+				break;
+			}
+
+			assert(o->calls->functions[i].function);
+			/* check depth of function */
+			cd(o->calls->functions[i].depth);
+			/* pop call number */
+			f = *S--; 
+			/* save stack state */
+			o->S = S;
+			o->m[TOP] = f;
+			/* call arbitrary C function */
+			w = o->calls->functions[i].function(o);
+			/* restore stack state */
+			S = o->S;
+			f = o->m[TOP];
+			/* push call success value */
+			*++S = f;
+			f = w;
+			break;
+		}
 /**
 Whilst loathe to put these in here as virtual machine instructions (instead
 a better mechanism should be found), this is the simplest way of adding file
@@ -2374,8 +2450,7 @@ if a file or a piece of memory (a string for example) is being read or
 written to. This would allow the KEY to be removed as a virtual machine
 instruction, and would be a useful abstraction. 
 **/
-		case PSTK:    print_stack(o, (FILE*)(o->m[STDOUT]), S, f);   break;
-		case RESTART: cd(1); longjmp(on_error, f);                   break;
+
 		case SYSTEM:  cd(2); f = system(forth_get_string(o, &on_error, &S, f)); break;
 		case FCLOSE:  cd(1); f = fclose((FILE*)f);                   break;
 		case FDELETE: cd(2); f = remove(forth_get_string(o, &on_error, &S, f)); break;
@@ -2517,6 +2592,7 @@ should come as no surprise to an experienced Unix programmer, it is important
 to pick option names that they would expect (for example *-l* for loading,
 *-e* for evaluation, and not using *-h* for help would be a hanging offense).
 **/
+
 static void help(void)
 {
 	static const char help_text[] =
@@ -2527,6 +2603,7 @@ static void help(void)
 "\t-d        save state to 'forth.core'\n"
 "\t-l file   load previously saved state from file\n"
 "\t-m size   specify forth memory size in kilobytes (cannot be used with '-l')\n"
+"\t-L        use a line editor when reading from stdin if one is available\n"
 "\t-t        process stdin after processing forth files\n"
 "\t-v        turn verbose mode on\n"
 "\t-V        print out version information and exit\n"
@@ -2540,6 +2617,23 @@ static void help(void)
 		fprintf(stderr, "%s\t\t%s\n", 
 				instruction_names[i],
 				instruction_help_strings[i]);
+}
+
+static void version(void)
+{
+	fprintf(stdout, 
+		"libforth:\n" 
+		"\tversion:     %d\n"
+		"\tsize:        %u\n"
+		"\tendianess:   %u\n"
+		"\tline-editor: %s\n\n"
+		"initial forth program:\n%s\n",
+		CORE_VERSION, 
+		(unsigned)sizeof(forth_cell_t) * CHAR_BIT, 
+		(unsigned)IS_BIG_ENDIAN,
+		LINE_EDITOR_AVAILABLE ? 
+			"available" : "unavailable",
+		initial_forth_program);
 }
 
 /**
@@ -2598,19 +2692,20 @@ sacrifice portability.
 		case 'L':  use_line_editor = 1;
 			   /*fall through*/
 		case 't':  readterm = 1; 
-			   if(verbose)
+			   if(verbose >= DEBUG_NOTE)
 				   note("stdin on, line editor %s", use_line_editor ? "on" : "off");
 			   break;
 		case 'e':
 			if(i >= (argc - 1))
 				goto fail;
 			errno = 0;
-			if(!(o = o ? o : forth_init(core_size, stdin, stdout))) {
+			if(!(o = o ? o : forth_init(core_size, stdin, stdout, NULL))) {
 				fatal("initialization failed, %s", emsg());
 				return -1;
 			}
+			o->m[DEBUG] = verbose;
 			optarg = argv[++i];
-			if(verbose)
+			if(verbose >= DEBUG_NOTE)
 				note("evaluating '%s'", optarg);
 			if(forth_eval(o, optarg) < 0)
 				goto end;
@@ -2621,7 +2716,7 @@ sacrifice portability.
 				goto fail;
 			dump_name = argv[++i];
 		case 'd':  /*use default name */
-			if(verbose)
+			if(verbose >= DEBUG_NOTE)
 				note("saving core file to '%s' (on exit)", dump_name);
 			save = 1;
 			break;
@@ -2632,7 +2727,7 @@ sacrifice portability.
 				fatal("-m too small (minimum %zu)", MINIMUM_CORE_SIZE / kbpc);
 				return -1;
 			}
-			if(verbose)
+			if(verbose >= DEBUG_NOTE)
 				note("memory size set to %zu", core_size);
 			mset = 1;
 			break;
@@ -2640,33 +2735,20 @@ sacrifice portability.
 			if(o || mset || (i >= argc - 1))
 				goto fail;
 			optarg = argv[++i];
-			if(verbose)
+			if(verbose >= DEBUG_NOTE)
 				note("loading core file '%s'", optarg);
 			if(!(o = forth_load_core(dump = fopen_or_die(optarg, "rb")))) {
 				fatal("%s, core load failed", optarg);
 				return -1;
 			}
+			o->m[DEBUG] = verbose;
 			fclose(dump);
 			break;
 		case 'v':
 			verbose++;
 			break;
 		case 'V':
-			/**@todo display whether compile time options have been
-			 * included, such as USE_LINE_EDITOR */
-			fprintf(stdout, 
-					"libforth:\n" 
-					"\tversion:     %d\n"
-					"\tsize:        %u\n"
-					"\tendianess:   %u\n"
-					"\tline-editor: %s\n\n"
-					"initial forth program:\n%s\n",
-					CORE_VERSION, 
-					(unsigned)sizeof(forth_cell_t) * CHAR_BIT, 
-					(unsigned)IS_BIG_ENDIAN,
-					LINE_EDITOR_AVAILABLE ? 
-						"available" : "unavailable",
-					initial_forth_program);
+			version();
 			return EXIT_SUCCESS;
 			break;
 		default:
@@ -2678,14 +2760,17 @@ sacrifice portability.
 done:
 	/* if no files are given, read stdin */
 	readterm = (!eval && i == argc) || readterm;
-	errno = 0;
-	if(!o && !(o = forth_init(core_size, stdin, stdout))) {
-		fatal("forth initialization failed, %s", emsg());
-		return -1;
+	if(!o) {
+		errno = 0;
+		if(!(o = forth_init(core_size, stdin, stdout, NULL))) {
+			fatal("forth initialization failed, %s", emsg());
+			return -1;
+		}
+		o->m[DEBUG] = verbose;
 	}
 	forth_set_args(o, argc, argv);
 	for(; i < argc; i++) { /* process all files on command line */
-		if(verbose)
+		if(verbose >= DEBUG_NOTE)
 			note("reading from file '%s'", argv[i]);
 		forth_set_file_input(o, in = fopen_or_die(argv[i], "rb"));
 		/* shebang line '#!', core files could also be detected */
@@ -2701,7 +2786,7 @@ close:
 		fclose_input(&in);
 	}
 	if(readterm) { /* if '-t' or no files given, read from stdin */
-		if(verbose)
+		if(verbose >= DEBUG_NOTE)
 			note("reading from stdin (%p)", stdin);
 #ifdef USE_LINE_EDITOR
 		if(use_line_editor) {
@@ -2727,7 +2812,7 @@ state with invalid data.
 			fatal("refusing to save invalid core, %u/%"PRIdCell, rval, o->m[INVALID]);
 			return -1;
 		}
-		if(verbose)
+		if(verbose >= DEBUG_NOTE)
 			note("saving for file to '%s'", dump_name);
 		if(forth_save_core(o, dump = fopen_or_die(dump_name, "wb"))) {
 			fatal("core file save to '%s' failed", dump_name);
