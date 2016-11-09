@@ -492,7 +492,9 @@ will most likely cause the virtual machine to be terminated.
 	INSTRUCTION   26       1A     Stored version of instruction pointer
 	STACK_SIZE    27       1B     Size of the variable stack
 	ERROR_HANDLER 28       1C     Action to take on error
-	              29-31    1D-3F  Reserved / used for other purposes
+	THROW         29       1D     Used for throw/catch
+	SCRATCH_X     30       1E     Fixed scratch variable for the user
+	SCRATCH_Y     31       1F     Fixed scratch variable for the user
 
 ### Dictionary
 

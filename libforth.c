@@ -821,6 +821,8 @@ registers that are in use that the virtual machine cannot access directly
 registers correspond directly to well known Forth concepts, such as the
 dictionary and return stack pointers, others are just implementation
 details. 
+
+@todo Combine the enumeration registers and register names in an X-Macro
 **/
 enum registers {          /**< virtual machine registers */
 	DIC         =  6, /**< dictionary pointer */
