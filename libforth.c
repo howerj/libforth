@@ -799,7 +799,6 @@ enum actions_on_error
 
 /**
 @brief These are the possible options for the debug registers.
-@todo  Add more debug levels, pass in level from command line
 **/
 enum trace_level
 {
@@ -847,7 +846,23 @@ enum registers {          /**< virtual machine registers */
 	INSTRUCTION = 26, /**< start up instruction */
 	STACK_SIZE  = 27, /**< size of the stacks */
 	ERROR_HANDLER = 28, /**< actions to take on error */
+	THROW       = 29, /**< place where exception handler is stored */
+	SCRATCH_X   = 30, /**< scratch variable x */
+	SCRATCH_Y   = 31, /**< scratch variable y */
 };
+
+/**
+@brief Name of registers
+
+Instead of using numbers to refer to registers, it is better to refer to
+them by name instead, these strings each correspond in turn to enumeration
+called **registers** 
+**/
+static const char *register_names[] = { "h", "r", "`state", "base", "pwd",
+"`source-id", "`sin", "`sidx", "`slen", "`start-address", "`fin", "`fout", 
+"`stdin", "`stdout", "`stderr", "`argc", "`argv", "`debug", "`invalid", 
+"`top", "`instruction", "`stack-size", "`error-handler", "`handler", "`x",
+"`y", NULL };
 
 /** 
 @brief The enum **input\_stream** lists values of the **SOURCE\_ID** register
@@ -880,18 +895,6 @@ enum input_stream {
 	FILE_IN,       /**< file input; this could be interactive input */
 	STRING_IN = -1 /**< string input */
 };
-
-/**
-@brief Name of registers
-
-Instead of using numbers to refer to registers, it is better to refer to
-them by name instead, these strings each correspond in turn to enumeration
-called **registers** 
-**/
-static const char *register_names[] = { "h", "r", "`state", "base", "pwd",
-"`source-id", "`sin", "`sidx", "`slen", "`start-address", "`fin", "`fout", 
-"`stdin", "`stdout", "`stderr", "`argc", "`argv", "`debug", "`invalid", 
-"`top", "`instruction", "`stack-size", "`error-handler", NULL };
 
 /** 
 @brief enum for all virtual machine instructions
@@ -964,6 +967,8 @@ More information about X-Macros can be found here:
  X(BLOAD,     "bload",      "c-addr x -- : load a block")\
  X(FIND,      "find",       "c\" xxx\" -- addr | 0 : find a Forth word")\
  X(DEPTH,     "depth",      " -- x : get current stack depth")\
+ X(SPLOAD,    "sp@",        " -- addr : load current stack pointer ")\
+ X(SPSTORE,   "sp!",        " addr -- : modify the stack pointer")\
  X(CLOCK,     "clock",      " -- x : push a time value")\
  X(EVALUATOR, "evaluator", "c-addr u 0 | file-id 0 1 -- x : evaluate file/str")\
  X(PSTK,      ".s",         " -- : print out values on the stack")\
@@ -1701,7 +1706,8 @@ More constants are now defined:
 	VERIFY(forth_define_constant(o, "w/o",      FAM_WO) >= 0);
 	VERIFY(forth_define_constant(o, "r/w",      FAM_RW) >= 0);
 	VERIFY(forth_define_constant(o, "dictionary-start",  DICTIONARY_START) >= 0);
-	VERIFY(forth_define_constant(o, ">in",  STRING_OFFSET * sizeof(forth_cell_t)) >= 0);
+	VERIFY(forth_define_constant(o, "tib",  STRING_OFFSET * sizeof(forth_cell_t)) >= 0);
+	VERIFY(forth_define_constant(o, "#tib",  MAXIMUM_WORD_LENGTH * sizeof(forth_cell_t)) >= 0);
 
 /**
 Now we finally are in a state to load the slightly inaccurately
@@ -1922,7 +1928,6 @@ int forth_run(forth_t *o)
 	}
 	
 	forth_cell_t *m = o->m, pc, *S = o->S, I = o->m[INSTRUCTION], f = o->m[TOP], w, clk;
-
 	clk = (1000 * clock()) / CLOCKS_PER_SEC;
 
 /**
@@ -2323,14 +2328,31 @@ pointer to that word if it found.
 
 /**
 DEPTH is added because the stack is not directly accessible
-by the virtual machine (for code readability reasons), normally it
-would have no way of knowing where the variable stack pointer is, which
-is needed to implement Forth words such as **.s** - which prints out all the
+by the virtual machine, normally it would have no way of knowing 
+where the variable stack pointer is, which is needed to implement 
+Forth words such as **.s** - which prints out all the
 items on the stack.
 **/
 		case DEPTH:
 			w = S - o->vstart;
 			*++S = f;
+			f = w;
+			break;
+/**
+SPLOAD (**sp@**) loads the current stack pointer, which is needed because the
+stack pointer does not live within any of the virtual machines registers.
+**/
+		case SPLOAD:
+			*++S = f;
+			f = (forth_cell_t)(S - o->m);
+			break;
+/**
+SPSTORE (**sp!**) modifies the stack, setting it to the value on the top
+of the stack.
+**/
+		case SPSTORE:
+			w = *S--;
+			S = (forth_cell_t*)(f + o->m - 1);
 			f = w;
 			break;
 /**

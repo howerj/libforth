@@ -213,6 +213,12 @@ extract the document string for a given work.
 : 2dup ( x1 x2 -- x1 x2 x1 x2 : duplicate two values )
 	over over ;
 
+: 3drop ( x x x -- : drop three stack items )
+	2drop drop ;
+
+: 3dup ( x -- x x x : triplicate a stack item )
+	2dup dup ;
+
 : mod ( x u -- x : calculate the remainder of x divided by u ) 
 	2dup / * - ;
 
@@ -346,6 +352,11 @@ extract the document string for a given work.
 : r@  (  -- x, R: x -- )
 	r> r @ swap >r ;
 
+: rp@ (  -- x, R: x -- )
+	r> r @ swap >r ;
+
+( @todo r!, rp! )
+
 : 0> ( x -- bool )
 	0 > ;
 
@@ -471,9 +482,8 @@ extract the document string for a given work.
 	here chars> ;
 
 : source ( -- c-addr u )
-	( @todo read registers instead )
-	[ 32 chars> ] literal   ( size of input buffer, in characters )
-	>in ;                   ( start of input buffer, in characters )
+	#tib   ( size of input buffer, in characters )
+	tib ;  ( start of input buffer, in characters )
 
 : stdin?
 	`fin @ `stdin @ = ;
@@ -597,6 +607,9 @@ extract the document string for a given work.
 		drop
 	then ;
 
+: 2rot (  n1 n2 n3 n4 n5 n6 – n3 n4 n5 n6 n1 n2 )
+	5 roll 5 roll ;
+
 : s>d ( x -- d : convert a signed value to a double width cell )
 	( @note the if...else...then is only necessary as this Forths
 	booleans are 0 and 1, not 0 and -1 as it usually is )
@@ -615,6 +628,75 @@ extract the document string for a given work.
 	( the pad is used for temporary storage, and moves
 	along with dictionary pointer, always in front of it )
 	here #pad + ;
+
+: count ( c-addr1 -- c-addr2 u : get a string whose first char is its length )
+	dup c@ swap 1+ swap ;
+
+: bounds ( x y -- y+x x : make an upper and lower bound )
+	over + swap ;
+
+: ?dup-if immediate ( x -- x | - : ?dup and if rolled into one! )
+	' ?dup , postpone if ;
+
+: aligned ( unaligned -- aligned : align a pointer )
+	[ size 1- ] literal + 
+	[ size 1- ] literal invert and ;
+
+: cfa ( previous-word-address -- cfa )
+	( Given the address of the PWD field of a word this
+	function will return an execution token for the word )
+	1+    ( MISC field )
+	dup
+	@     ( Contents of MISC field )
+	instruction-mask and  ( Mask off the instruction )
+	( If the word is not an immediate word, execution token pointer )
+	compile-instruction = + ;
+
+: >body ( xt -- a-addr : a-addr is data field of a CREATEd word )
+	cfa 5 + ;
+
+: ['] immediate find cfa [literal] ;
+
+: execute ( xt -- : given an execution token, execute the word )
+	( create a word that pushes the address of a hole to write to
+	a literal takes up two words, '!' takes up one, that's right,
+	some self modifying code! )
+	1- ( execution token expects pointer to PWD field, it does not
+		care about that field however, and increments past it )
+	cfa
+	[ here 3+ literal ] ( calculate place to write to )
+	!                   ( write an execution token to a hole )
+	[ 0 , ] ;           ( this is the hole we write )
+
+( From: http://lars.nocrew.org/dpans/dpansa9.htm )
+
+: catch  ( xt -- exception# | 0 : return addr on stack )
+	sp@ >r        ( xt : save data stack pointer )
+	`handler @ >r  ( xt : and previous handler )
+	r@ `handler !  ( xt : set current handler )
+	execute       (      execute returns if no throw )
+	r> `handler !  (      restore previous handler )
+	r> drop       (      discard saved stack ptr )
+	0 ;           ( 0  : normal completion )
+
+( @todo use this everywhere )
+: throw  ( ??? exception# -- ??? exception# )
+	?dup-if ( exc# \ 0 throw is no-op )
+		`handler @ r ! ( exc# \ restore prev return stack )
+		r> `handler !  ( exc# \ restore prev handler )
+		r> swap >r    ( saved-sp \ exc# on return stack )
+		sp! drop r>   ( exc# \ restore stack )
+		(  return to the caller of catch because return )
+		(  stack is restored to the state that existed )
+		(  when catch began execution )
+	then ; 
+
+: interpret begin 
+	' read catch 
+	?dup-if [char] ! emit tab . cr then
+	0 until ;
+
+interpret 
 
 ( ========================== Basic Word Set ================================== )
 
@@ -639,34 +721,6 @@ extract the document string for a given work.
 		swap 1+ swap 2/ dup 0=
 	until
 	drop 1- ;
-
-: cfa ( previous-word-address -- cfa )
-	( Given the address of the PWD field of a word this
-	function will return an execution token for the word )
-	1+    ( MISC field )
-	dup
-	@     ( Contents of MISC field )
-	instruction-mask and  ( Mask off the instruction )
-	( If the word is not an immediate word, execution token pointer )
-	compile-instruction = + ;
-
-: >body ( xt -- a-addr : a-addr is data field of a CREATEd word )
-	cfa 5 + ;
-
-: ['] immediate find cfa [literal] ;
-
-: execute ( cfa -- )
-	( given an execution token, execute the word )
-
-	( create a word that pushes the address of a hole to write to
-	a literal takes up two words, '!' takes up one )
-	1- ( execution token expects pointer to PWD field, it does not
-		care about that field however, and increments past it )
-	cfa
-	[ here 3+ literal ]
-	!                   ( write an execution token to a hole )
-	[ 0 , ]             ( this is the hole we write )
-;
 
 : time ( " ccc" -- n : time the number of milliseconds it takes to execute a word )
 	clock >r
@@ -1030,25 +1084,7 @@ hider delim
 
 0xFFFF constant max-string-length
 
-0 variable delim
-: print-string
-	( delimiter -- : print out the next characters in the input stream until a
-	"delimiter" character is reached )
-	key drop ( drop next space )
-	>r       ( save delimiter )
-	begin
-		key dup 
-		rdup r> ( get delimiter )
-		= if drop rdrop exit then
-		emit
-	again ;
-hider delim
-
-: aligned ( unaligned -- aligned : align a pointer )
-	[ size 1- ] literal + 
-	[ size 1- ] literal invert and ;
-
-: write-string ( char -- c-addr u )
+: (.")  ( char -- c-addr u )
 	( @todo This really needs simplifying, to do this
 	a set of words that operate on a temporary buffer can
 	be used )
@@ -1057,7 +1093,7 @@ hider delim
 	dictionary so normal execution of a word can continue. The
 	length and character address of the string are left on the
 	stack )
-	>r         ( save delimiter )
+	>r              ( save delimiter )
 	' branch ,      ( write in jump, this will jump past the string )
 	>mark           ( make hole )
 	dup 1+ chars>   ( calculate address to write to )
@@ -1085,7 +1121,8 @@ hider delim
 	0 do dup c@ emit 1+ loop drop ;
 
 : do-string ( char -- : write a string into the dictionary reading it until char is encountered )
-	write-string state @ if swap [literal] [literal] then ;
+	(.") 
+	state @ if swap [literal] [literal] then ;
 
 : fill ( c-addr u char -- : fill in an area of memory with a character, only if u is greater than zero )
 	-rot
@@ -1110,8 +1147,18 @@ hider sbuf
 : "  
 	immediate [char] " do-string type, ;
 
+: sprint ( c -- : print out chars until 'c' is encountered )
+	key drop ( drop next space )
+	>r       ( save delimiter )
+	begin
+		key dup ( get next character )
+		rdup r> ( get delimiter )
+		<> if emit 0 then
+	until rdrop ;
+
 : .( 
-	immediate [char] ) print-string ;
+	immediate [char] ) sprint ;
+hider sprint
 
 : ." 
 	immediate [char] " do-string type, ;
@@ -1189,12 +1236,6 @@ prints it out, it also does not checking of the returned values from write-file 
 		hide drop
 	again ;
 
-: count ( c-addr1 -- c-addr2 u : get a string whose first char is its length )
-	dup c@ swap 1+ swap ;
-
-: bounds ( x y -- y+x x : make an upper and lower bound )
-	over + swap ;
-
 : spaces ( n -- : print n spaces ) 
 	0 do space loop ;
 
@@ -1269,7 +1310,8 @@ if true )
 find [if] [if]-word !
 find [else] [else]-word !
 
-:hide [if]-word [else]-word nest reset-nest unnest? match-[else]? ;hide
+:hide 
+[if]-word [else]-word nest reset-nest unnest? match-[else]? end-nest? nest? ;hide
 
 ( ==================== Conditional Compilation ================ )
 
@@ -1392,8 +1434,6 @@ attempted to be forgotten then
 	:: latest [literal] ' forgetter , postpone ; ;
 hider forgetter
 
-: ?dup-if immediate ( x -- x | - : ?dup and if rolled into one! )
-	' ?dup , postpone if ;
 
 : ** ( b e -- x : exponent, raise 'b' to the power of 'e')
 	?dup-if
@@ -1485,6 +1525,7 @@ hider forgetter
 : {  ( -- : perform a unit test )
 	depth start ! ( save start of stack depth )
 	0 result !    ( reset result variable )
+	\ estring 0 fill ( zero input string )
 	save          ( save dictionary state )
 	estring [char] } accepter #estring ! ( read in string to test )
 	testing   ( print which string we are testing )
@@ -1505,6 +1546,7 @@ hider forgetter
 	:noname 3 + ;
 	compose execute -> 5
 }
+
 
 :hide 
 	pass testing
@@ -1790,6 +1832,7 @@ hider hide-words
 	s - print stack
 	c - continue on with execution
 " ;
+
 : debug-prompt 
 	." debug> " ;
 
@@ -1798,7 +1841,7 @@ hider hide-words
 	cr
 	begin
 		debug-prompt
-		key dup '\n' <> if source accept drop then
+		'\n' word count drop c@
 		case
 			[char] h of debug-help endof
 			[char] q of bye        endof
@@ -1809,23 +1852,16 @@ hider hide-words
 	again ;
 hider debug-prompt
 
-0 variable cf
-: code>pwd ( CODE -- PWD/0 )
-	( @todo simplify using "within"
-	 given a pointer to a executable code field
-	this words attempts to find the PWD field for
-	that word, or return zero )
+: code>pwd ( CODE -- PWD/0 : calculate PWD from code address )
 	dup dictionary-start here within not if drop 0 exit then
-	cf !
+	>r
 	latest dup @ ( p1 p2 )
 	begin
 		over ( p1 p2 p1 )
-		cf @ u<= swap cf @ > and if exit then
-		dup 0=                   if exit then
+		rdup r> u<= swap rdup r> > and if rdrop exit then
+		dup 0=                   if rdrop exit then
 		dup @ swap
-	again
-;
-hider cf
+	again ;
 
 : end-print ( x -- )
 	"		=> " . " ]" ;
@@ -1840,6 +1876,7 @@ hider cf
 	   dup  " [ " code>pwd ?dup-if name print else drop " data" then
 	        end-print ;
 hider end-print
+hider code>pwd
 
 ( these words push the execution tokens for various special cases for decompilation )
 : get-branch  [ find branch  cfa ] literal ;
@@ -1853,6 +1890,7 @@ hider end-print
 ( these words take a code field to a primitive they implement, decompile it
 and any data belonging to that operation, and push a number to increment the
 decompilers code stream pointer by )
+
 : decompile-literal ( code -- increment )
 	" [ literal	=> " 1+ ? " ]" 2 ;
 : decompile-branch  ( code -- increment )
@@ -1862,9 +1900,7 @@ decompilers code stream pointer by )
 : decompile-?branch ( code -- increment )
 	" [ ?branch	=> " 1+ ? " ]" 2 ;
 
-( @todo decompile :noname, make the output look better
-
-The decompile word expects a pointer to the code field of a word, it
+( The decompile word expects a pointer to the code field of a word, it
 decompiles a words code field, it needs a lot of work however.
 There are several complications to implementing this decompile
 function.
@@ -2098,7 +2134,7 @@ For resources on Forth:
 
 : include ( c" ccc" -- : attempt to evaluate a file )
 	( @bug does not remove leading spaces from name, should use parse, or something )
-	source accept 1+ >in swap r/o open-file 
+	source accept 1+ tib swap r/o open-file 
 	dup 0= if abort" : could not open file for reading" cr then
 	0 1 evaluator drop ;
 
@@ -2251,7 +2287,6 @@ defer matcher
 : match ( string regex -- bool : match a ASCIIZ pattern against an ASCIIZ string )
 	( @todo Add limits and accept two Forth strings, making sure they are both
 	  ASCIIZ strings as well 
-	  @todo Case insensitive version
 	  @warning This uses a non-standards compliant version of case! )
 	*pat
 	case
@@ -2307,10 +2342,6 @@ free allocated cells
 
 : enum ( x " ccc" -- x+1 : define a series of enumerations )
 	dup constant 1+ ; ( better would be a :enum ;enum syntax )
-
-
-: 2rot (  n1 n2 n3 n4 n5 n6 – n3 n4 n5 n6 n1 n2 )
-	5 roll 5 roll ;
 
 : license ( -- : print out license information )
 " 
@@ -2466,7 +2497,7 @@ of that specific Forth, here we clean up as many non standard words as
 possible.
 )
 :hide
- write-string do-string ')' alignment-bits print-string
+ do-string ')' alignment-bits 
  compile-instruction dictionary-start hidden? hidden-mask instruction-mask
  max-core dolist x x! x@ write-exit
  max-string-length error-no-word
@@ -2478,7 +2509,7 @@ possible.
  `state
  `source-id `sin `sidx `slen `start-address `fin `fout `stdin
  `stdout `stderr `argc `argv `debug `invalid `top `instruction
- `stack-size `error-handler
+ `stack-size `error-handler `x `y `handler
  open-file-or-abort
 ;hide
 
@@ -2489,51 +2520,22 @@ The following is a To-Do list for the Forth code itself, along with any
 other ideas.
 
 * Rewrite starting word using "restart-word!"
-* Word, Parse, other forth words
 * FORTH, VOCABULARY
 * "Value", "To", "Is"
 * Double cell words and floating point library
 * The interpreter should use character based addresses, instead of
 word based, and use values that are actual valid pointers, this
 will allow easier interaction with the world outside the virtual machine
-* Abort", this could be used to implement words such
-as "abort if in compile mode", or "abort if in command mode".
 * common words and actions should be factored out to simplify
 definitions of other words, their standards compliant version found
 if any
-* throw and exception
 * here documents, string literals
-* A set of words for navigating around word definitions would be
-help debugging words, for example:
-	compile-field code-field field-translate
-would take a pointer to a compile field for a word and translate
-that into the code field
 * proper booleans should be used throughout
-* virtual machines could be made in other languages than C that will
-run the core files generated...The virtual machine has higher level
-functions in it that it probably should not have, like "read" and
-"system", these belong elsewhere - but where?
-* It would be interesting to see which Unix utilities could easily
-be implemented as Forth programs, such as "head", "tail", "cat", "tr",
-"grep", etcetera.
 * A utility for compressing core files could be made in Forth, it would mimic
 the "rle.c" program previously present in the repository - that is it would
-use run length encoding.
-* The manual pages, and various PDF files, should be generated using pandoc.
-The manual page for the forth library can be generated from the header file, which
-will need special preparation [a markdown file will have to be generated from the
-header file, that file can the be used for the manual page].
-* Change the debug register so there are multiple levels of debug, not
-everything is active at non-zero levels, this will allow for a more verbose
-libforth interpter. The verbose option passed in by the command line can be
-used to populate the libforth debug register. Unit tests could then be
-optionally made to be noisy.
-
-Some interesting links:
-	* http://www.figuk.plus.com/build/heart.htm
-	* https://groups.google.com/forum/#!msg/comp.lang.forth/NS2icrCj1jQ/1btBCkOWr9wJ
-	* http://newsgroups.derkeiler.com/Archive/Comp/comp.lang.forth/2005-09/msg00337.html
-	* https://stackoverflow.com/questions/407987/what-are-the-primitive-forth-operators
+use run length encoding. 
+* Implement as many things from http://lars.nocrew.org/forth2012/implement.html
+as is sensible.
 )
 
 ( 

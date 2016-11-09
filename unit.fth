@@ -2,8 +2,6 @@
 
 marker unit-test-framework
 
-( @todo These tests fail to run on a 32-bit platform, if "unit(" is used )
-
 ( Forth Unit Tests
 This fill contains the tests for words and functionality defined in
 forth.fth. The mechanism to test whether the tests have tested would
@@ -26,8 +24,6 @@ assumed to work )
 ( example usage of the test bench, this will exit and invalidate
  the core if it tests )
 2 2 + 4 = test
-
-( @todo Test as many words as possible )
 
 ( ========================== Hiding Words ==================================== )
 

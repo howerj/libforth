@@ -754,6 +754,21 @@ variable stack.
 Push the current stack depth onto the stack, the value is the depth of the
 stack before the depth value was pushed onto the variable stack.
 
+* 'sp@'         ( -- addr )
+
+Push the address of the stack pointer onto the stack, before **sp@** was 
+executed:
+
+	1 2 sp@ . . .
+
+Prints
+
+	2 2 1
+
+* 'sp!'         ( addr -- )
+
+Set the address of the stack pointer.
+
 * 'clock'       ( -- x )
 
 Push the difference between the startup time and now, in milliseconds. This
@@ -1091,15 +1106,10 @@ implementation should be silent by default.
 ## To-Do
 
 * Port this to a micro controller, and a Linux kernel module device
-* A way to integrate calls to arbitrary functions that can be loaded at run time
-  could be added, this would be technically non portable as uintptr\_t is
-  not guaranteed to be able to hold a function pointer (although it could
-  index into a table of function pointers. The interface would take a
   pointer to the forth object, a pointer to the stack and the stack depth.
 * A few environment variables could be used to specify start up files for the
   interpreter and user specific startup files.
-*  The bsave and bload can be removed.
-* Add save-core, number, word (or parse), load-core, more-core to the
+* Add save-core, number, parse, load-core, more-core to the
   virtual machine.
 * Add loading in a Forth image from a memory structure, this will need
   to be in a portable Format.
