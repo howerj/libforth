@@ -763,7 +763,7 @@ executed:
 
 	1 2 sp@ . . .
 
-Prints
+Prints:
 
 	2 2 1
 

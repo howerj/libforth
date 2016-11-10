@@ -1358,7 +1358,7 @@ static forth_cell_t check_bounds(forth_t *o, jmp_buf *on_error, forth_cell_t f, 
 	if(o->m[DEBUG] >= DEBUG_CHECKS)
 		debug("0x%"PRIxCell " %u", f, line);
 	if(f >= bound) {
-		fatal("bounds check failed (%" PRIdCell " >= %zu)", f, (size_t)bound);
+		fatal("bounds check failed (%" PRIdCell " >= %zu) line %u", f, (size_t)bound, line);
 		longjmp(*on_error, FATAL);
 	}
 	return f;
@@ -1452,6 +1452,7 @@ static void print_stack(forth_t *o, FILE *out, forth_cell_t *S, forth_cell_t f)
 		print_cell(o, out, *(S--));
 		fputc(' ', out);
 	}
+	fputc('\n', out);
 }
 
 /**
@@ -1796,7 +1797,6 @@ forth_t *forth_load_core(FILE *dump)
 		goto fail; 
 	}
 	w = sizeof(forth_cell_t) * core_size;
-	/**@todo succeed if o->m[DIC] bytes read in?*/
 	if(w != fread(o->m, 1, w, dump)) {
 		error("file too small (expected %"PRId64")", w);
 		goto fail;
@@ -2496,7 +2496,9 @@ instruction, and would be a useful abstraction.
 				const char *fam = forth_get_fam(&on_error, f);
 				f = *S--;
 				char *file = forth_get_string(o, &on_error, &S, f);
-				f = (forth_cell_t)fopen(file, fam);
+				errno = 0;
+				*++S = (forth_cell_t)fopen(file, fam);
+				f = errno;
 			}
 			break;
 		case FREAD:
@@ -2507,6 +2509,7 @@ instruction, and would be a useful abstraction.
 				forth_cell_t offset = *S--;
 				*++S = fread(((char*)m)+offset, 1, count, file);
 				f = ferror(file);
+				clearerr(file);
 			}
 			break;
 		case FWRITE:
@@ -2517,6 +2520,7 @@ instruction, and would be a useful abstraction.
 				forth_cell_t offset = *S--;
 				*++S = fwrite(((char*)m)+offset, 1, count, file);
 				f = ferror(file);
+				clearerr(file);
 			}
 			break;
 		break;

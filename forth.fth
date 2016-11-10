@@ -514,19 +514,21 @@ extract the document string for a given work.
 : 2tuck ( n1 n2 n3 n4 – n3 n4 n1 n2 n3 n4 )
 	2swap 2over ;
 
-: hide  ( token -- hide-token : this hides a word from being found by the interpreter )
-	dup
-	if
-		dup @ hidden-mask or swap tuck !
-	else
-		drop 0
-	then ;
+: ?dup-if immediate ( x -- x | - : ?dup and if rolled into one! )
+	' ?dup , postpone if ;
 
-: hider ( WORD -- ) 
-	( hide with drop ) 
+: ?if ( -- : non destructive if ) 
+	immediate ' dup , postpone if ;
+
+: hide  ( token -- hide-token : this hides a word from being found by the interpreter )
+	?dup-if
+		dup @ hidden-mask or swap tuck ! exit
+	then 0 ;
+
+: hider ( WORD -- : hide with drop ) 
 	find dup if hide then drop ;
 
-: unhide ( hide-token -- ) 
+: reveal ( hide-token -- : reveal a hidden word ) 
 	dup @ hidden-mask invert and swap ! ;
 
 : original-exit 
@@ -538,7 +540,7 @@ extract the document string for a given work.
 	use this version, allowing us to distinguish between
 	the end of a word definition and an early exit by other
 	means in "see" )
-	[ find exit hide ] rdrop exit [ unhide ] ;
+	[ find exit hide ] rdrop exit [ reveal ] ;
 
 : ?exit ( x -- : exit current definition if not zero ) 
 	if rdrop exit then ;
@@ -635,9 +637,6 @@ extract the document string for a given work.
 : bounds ( x y -- y+x x : make an upper and lower bound )
 	over + swap ;
 
-: ?dup-if immediate ( x -- x | - : ?dup and if rolled into one! )
-	' ?dup , postpone if ;
-
 : aligned ( unaligned -- aligned : align a pointer )
 	[ size 1- ] literal + 
 	[ size 1- ] literal invert and ;
@@ -668,7 +667,70 @@ extract the document string for a given work.
 	!                   ( write an execution token to a hole )
 	[ 0 , ] ;           ( this is the hole we write )
 
-( From: http://lars.nocrew.org/dpans/dpansa9.htm )
+( See: http://lars.nocrew.org/dpans/dpans9.htm
+       Code     Reserved for
+       ----     ------------
+        -1      ABORT
+        -2      ABORT"
+        -3      stack overflow
+        -4      stack underflow
+        -5      return stack overflow
+        -6      return stack underflow
+        -7      do-loops nested too deeply during execution
+        -8      dictionary overflow
+        -9      invalid memory address
+        -10     division by zero
+        -11     result out of range
+        -12     argument type mismatch
+        -13     undefined word
+        -14     interpreting a compile-only word
+        -15     invalid FORGET
+        -16     attempt to use zero-length string as a name
+        -17     pictured numeric output string overflow
+        -18     parsed string overflow
+        -19     definition name too long
+        -20     write to a read-only location
+        -21     unsupported operation [e.g., AT-XY on a
+                too-dumb terminal]
+        -22     control structure mismatch
+        -23     address alignment exception
+        -24     invalid numeric argument
+        -25     return stack imbalance
+        -26     loop parameters unavailable
+        -27     invalid recursion
+        -28     user interrupt
+        -29     compiler nesting
+        -30     obsolescent feature
+        -31     >BODY used on non-CREATEd definition
+        -32     invalid name argument [e.g., TO xxx]
+        -33     block read exception
+        -34     block write exception
+        -35     invalid block number
+        -36     invalid file position
+        -37     file I/O exception
+        -38     non-existent file
+        -39     unexpected end of file
+        -40     invalid BASE for floating point conversion
+        -41     loss of precision
+        -42     floating-point divide by zero
+        -43     floating-point result out of range
+        -44     floating-point stack overflow
+        -45     floating-point stack underflow
+        -46     floating-point invalid argument
+        -47     compilation word list deleted
+        -48     invalid POSTPONE
+        -49     search-order overflow
+        -50     search-order underflow
+        -51     compilation word list changed
+        -52     control-flow stack overflow
+        -53     exception stack overflow
+        -54     floating-point underflow
+        -55     floating-point unidentified fault
+        -56     QUIT
+        -57     exception in sending or receiving a character
+        -58     [IF], [ELSE], or [THEN] exception
+)
+
 
 : catch  ( xt -- exception# | 0 : return addr on stack )
 	sp@ >r        ( xt : save data stack pointer )
@@ -746,10 +808,8 @@ hider (do-defer)
 
 ( ========================== Extended Word Set =============================== )
 
-( 
-The words described here on out get more complex and will require more
-of an explanation as to how they work.
-)
+( The words described here on out get more complex and will require more
+of an explanation as to how they work. )
 
 ( ========================== CREATE DOES> ==================================== )
 
@@ -819,8 +879,7 @@ hider state!
 hider write-quote
 
 ( Now that we have create...does> we can use it to create arrays, variables
-and constants, as we mentioned before.
-)
+and constants, as we mentioned before. )
 
 : array ( u c" xxx" -- : create a named array of length u )   
 	create allot does> + ;
@@ -875,8 +934,10 @@ word.
 4. "100 . cr" is never called. This should be changed in future
 revision, but this version of leave exits the calling word as well.
 
-'i', 'j', and 'leave' *must* be used within a do...loop construct. )
+'i', 'j', and 'leave' *must* be used within a do...loop construct. 
 
+In order to remedy point 4. loop should not use branch but instead 
+should use a value to return to which it pushes to the return stack )
 
 : (do)
 	swap    ( swap the limit and start )
@@ -954,8 +1015,7 @@ testing and debugging:
 
 hider tail
 
-( 
-The "tail" function implements tail calls, which is just a jump
+( The "tail" function implements tail calls, which is just a jump
 to the beginning of the words definition, for example this
 word will never overflow the stack and will print "1" followed
 by a new line forever,
@@ -970,8 +1030,8 @@ or
 
 	: forever 1 . cr forever ;
 
-Would overflow the return stack. 
-)
+Would overflow the return stack. )
+
 : tail ( -- : perform tail recursion in current word definition )
 	immediate
 	latest cfa
@@ -1425,10 +1485,9 @@ size 8 = [if]
 
 ( @bug will not work for immediate defined words 
 @note Fig Forth had a word FENCE, if anything before this word was
-attempted to be forgotten then 
-)
+attempted to be forgotten then  )
 : forget ( WORD -- : forget word and every word defined after it )
-	find 1- forgetter ;
+	find dup 0= if -15 throw then 1- forgetter ;
 
 : marker ( WORD -- : make word the forgets itself and words after it)
 	:: latest [literal] ' forgetter , postpone ; ;
@@ -1522,26 +1581,26 @@ hider forgetter
 	previous @ pwd ! 
 	dictionary @ h ! ;
 
-: {  ( -- : perform a unit test )
-	depth start ! ( save start of stack depth )
-	0 result !    ( reset result variable )
-	\ estring 0 fill ( zero input string )
-	save          ( save dictionary state )
+: T{  ( -- : perform a unit test )
+	depth start !  ( save start of stack depth )
+	0 result !     ( reset result variable )
+	estring 0 fill ( zero input string )
+	save           ( save dictionary state )
 	estring [char] } accepter #estring ! ( read in string to test )
-	testing   ( print which string we are testing )
+	testing        ( print which string we are testing )
 	estring drop #estring @ evaluate ( perform test )
-	evaluate? ( evaluate successfully? )
-	depth?    ( correct depth )
-	equal?    ( results equal to expected values? )
-	pass      ( print pass message )
+	evaluate?      ( evaluate successfully? )
+	depth?         ( correct depth )
+	equal?         ( results equal to expected values? )
+	pass           ( print pass message )
 	result @ adjust 2* ndrop ( remove items on stack generated by test )
-	restore ; ( restore dictionary to previous state )
+	restore ;      ( restore dictionary to previous state )
 ( 
 { 1 2 -> 1 2 }
 { 1 2 -> 1 2 }
 { : c 1 2 ; c -> 1 2 } )
 
-{
+T{
 	:noname 2 ;
 	:noname 3 + ;
 	compose execute -> 5
@@ -1651,12 +1710,14 @@ manipulating a terminal
 : background 40 + ;
 0 constant dark
 1 constant bright
+true variable colorize 
 
 : color ( brightness color-code -- : set the terminal color )
 	( set color on an ANSI compliant terminal,
 	for example:
 		bright red foreground color
 	sets the foreground text to bright red )
+	colorize @ 0= if 2drop exit then 
 	CSI u. if ." ;1" then ." m" ;
 
 : at-xy ( x y -- : set ANSI terminal cursor position to x y )
@@ -1678,6 +1739,7 @@ manipulating a terminal
 	CSI ." u" ;
 
 : reset-color ( -- : reset terminal color to its default value)
+	colorize @ 0= if exit then
 	CSI ." 0m" ;
 
 :hide CSI ;hide
@@ -2106,10 +2168,10 @@ For resources on Forth:
   * Source ID needs extending. )
 
 : read-char ( c-addr fileid -- ior : read a char )
-	1 swap read-file swap 1 = if drop -1 then ;
+	1 swap read-file 0<> swap 1 <> or ;
 
 : write-char ( c-addr fileid -- ior : write a char )
-	1 swap write-file swap 1 = if drop -1 then ;
+	1 swap write-file 0<> swap 1 <> or ;
 
 : read-line ( c-addr u1 fileid -- u2 flag ior : read in a line of text )
 	-rot bounds
@@ -2203,11 +2265,8 @@ b/buf string block-buffer ( block buffer - enough to store one block )
 	key drop
 	do i invalid " screen no: " i . cr i list cr more loop ;
 
-: open-file-or-abort
-	>r 2dup r> open-file ?dup 0= if type " : " abort" file open failed" else >r 2drop r> then ;
-
 : make-block ( c-addr u -- : make a block on disk, named after a string )
-	w/o open-file-or-abort
+	w/o open-file throw
 	flush -1 scr-var !
 	erase-buffer
 	block-buffer rot dup >r write-file r> close-file drop
@@ -2469,7 +2528,7 @@ enum header-magic4
 
 : core ( c-addr u -- : analyze a Forth core file from disk given its file name )
 	2dup " core file:" tab type cr
-	r/o open-file-or-abort core-file ! 
+	r/o open-file throw core-file ! 
 	header?
 	size?
 	core-file @ close-file drop ;
@@ -2490,6 +2549,87 @@ read-or-abort size?
 
 ( ==================== Core utilities ======================== )
 
+( ==================== RLE =================================== )
+
+( These set of words implement Run Length Compression, which can be used for
+saving space when compressing the core files generated by Forth programs, which
+contain mostly runs of NUL characters. 
+
+The format of the encoded data is quite simple, there is a command byte
+followed by data. The command byte encodes only two commands; encode a run of
+literal data and repeat the next character. 
+
+If the command byte is greater than X the command is a run of characters, 
+X is then subtracted from the command byte and this is the number of 
+characters that is to be copied verbatim when decompressing.
+
+If the command byte is less than or equal to X then this number, plus one, is 
+used to repeat the next data byte in the input stream.
+
+X is 128 for this application, but could be adjusted for better compression
+depending on what the data looks like. 
+
+Example:
+	
+	2 'a' 130 'b' 'c' 3 'd'
+
+Becomes:
+
+	aabcddd 
+
+Example usage:
+
+	: extract
+		c" forth.core" w/o open-file throw
+		c" forth.core.rle" r/o open-file throw
+		decompress ;
+	extract
+
+@note file redirection could be used for the input as well
+@todo compression, and reading/writing to strings )
+
+: cpad pad chars> ;
+
+0 variable out
+128 constant run-length
+
+: more ( file-id -- char : read in a single character )
+	>r cpad r> read-char throw cpad c@ ;
+
+: repeated ( count file-id -- : repeat a character count times )
+	more swap 0 do dup emit loop drop ;
+
+: literals ( count file-id -- : extract a literal run )
+	>r cpad swap r> read-file throw cpad swap type ;
+
+: command ( file-id -- : process an RLE command )
+	dup 
+	>r more 
+	dup run-length u> 
+	if 
+		run-length - r> literals 
+	else 
+		1+ r> repeated 
+	then ;
+
+: redirect ( file-id-out -- : save current output pointer, redirect to output )
+	`fout @ out ! `fout ! ;
+
+: restore ( -- : restore previous output pointer )
+	out @ `fout ! ;
+
+: decompress ( file-id-out file-id-in -- : decompress an RLE encoded file )
+	swap
+	redirect
+	begin dup ' command catch until ( process commands until input exhausted )
+	2drop ( drop twice because catch will restore stack before 'command' )
+	restore ; ( restore input stream )
+
+:hide literals repeated more redirect restore out cpad run-length ;hide
+
+( ==================== RLE =================================== )
+
+
 ( 
 Looking at most Forths dictionary with "words" command they tend
 to have a lot of words that do not mean anything but to the implementers
@@ -2502,7 +2642,7 @@ possible.
  max-core dolist x x! x@ write-exit
  max-string-length error-no-word
  original-exit
- pnum
+ pnum evaluator 
  TrueFalse >instruction print-header
  print-name print-start print-previous print-immediate
  print-instruction xt-instruction defined-word? print-defined
@@ -2510,7 +2650,6 @@ possible.
  `source-id `sin `sidx `slen `start-address `fin `fout `stdin
  `stdout `stderr `argc `argv `debug `invalid `top `instruction
  `stack-size `error-handler `x `y `handler
- open-file-or-abort
 ;hide
 
 ( 
@@ -2531,9 +2670,6 @@ definitions of other words, their standards compliant version found
 if any
 * here documents, string literals
 * proper booleans should be used throughout
-* A utility for compressing core files could be made in Forth, it would mimic
-the "rle.c" program previously present in the repository - that is it would
-use run length encoding. 
 * Implement as many things from http://lars.nocrew.org/forth2012/implement.html
 as is sensible.
 )
@@ -2554,4 +2690,5 @@ not `fin.
 	2drop 0 ; )
 
 verbose [if] welcome [then]
+
 
