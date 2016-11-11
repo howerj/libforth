@@ -81,8 +81,8 @@ to read in a line at a time. This option implies *-t*.
 * file...
 
 If a file, or list of files, is given, read from them one after another
-and execute them. The dictionary and any stored Forth blocks will persist 
-between files but values on the stacks will not.
+and execute them. The dictionary and any stored Forth blocks will persist, as
+will values on the stack. 
 
 If no files are given to execute [stdin][] will be read from.
 
@@ -734,17 +734,6 @@ Drop a value.
 * 'over'        ( x y -- x y x )
 
 Duplicate the value that is next on the stack.
-
-* 'bsave'       ( char-address block-number -- )
-
-Given an address, attempt to write out the values addr to addr+1023 values
-out to disk, the name of the block will be 'XXXX.blk' where the 'XXXX' is
-replaced by the hexadecimal representation of *blocknum*.
-
-* 'bload'        ( char-address block-number -- )
-
-Like *bsave*, but attempts to load a block of 1024 words into an address in
-memory of a likewise *blocknum* derived name as in *bsave*.
 
 * 'find'        ( -- execution-token )
 

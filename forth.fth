@@ -389,7 +389,7 @@ extract the document string for a given work.
 : sleep ( u -- : sleep for 'u' seconds )
 	1000 * ms ;
 
-: align ( addr -- addr : align and address, nop in this implemented )
+: align ( addr -- addr : align an address, nop in this implemented )
 	immediate  ; 
 
 : ) ( -- : do nothing, this allows easy commenting out of code )
@@ -407,8 +407,8 @@ extract the document string for a given work.
 : .d ( x -- x : debug print ) 
 	dup . ;
 
-: compile, ( -- : A word that writes , into the dictionary ) 
-	' , , ;   
+: compile, ( x -- : )
+	, ;
 
 : >mark ( -- : write a hole into the dictionary and push a pointer to it ) 
 	here 0 , ;
@@ -654,6 +654,7 @@ extract the document string for a given work.
 : >body ( xt -- a-addr : a-addr is data field of a CREATEd word )
 	cfa 5 + ;
 
+( @todo non-compliant, fix )
 : ['] immediate find cfa [literal] ;
 
 : execute ( xt -- : given an execution token, execute the word )
@@ -728,29 +729,27 @@ extract the document string for a given work.
         -55     floating-point unidentified fault
         -56     QUIT
         -57     exception in sending or receiving a character
-        -58     [IF], [ELSE], or [THEN] exception
-)
-
+        -58     [IF], [ELSE], or [THEN] exception )
 
 : catch  ( xt -- exception# | 0 : return addr on stack )
 	sp@ >r        ( xt : save data stack pointer )
-	`handler @ >r  ( xt : and previous handler )
-	r@ `handler !  ( xt : set current handler )
+	`handler @ >r ( xt : and previous handler )
+	r@ `handler ! ( xt : set current handler )
 	execute       (      execute returns if no throw )
-	r> `handler !  (      restore previous handler )
+	r> `handler ! (      restore previous handler )
 	r> drop       (      discard saved stack ptr )
 	0 ;           ( 0  : normal completion )
 
 ( @todo use this everywhere )
 : throw  ( ??? exception# -- ??? exception# )
 	?dup-if ( exc# \ 0 throw is no-op )
-		`handler @ r ! ( exc# \ restore prev return stack )
-		r> `handler !  ( exc# \ restore prev handler )
-		r> swap >r    ( saved-sp \ exc# on return stack )
-		sp! drop r>   ( exc# \ restore stack )
-		(  return to the caller of catch because return )
-		(  stack is restored to the state that existed )
-		(  when catch began execution )
+		`handler @ r ! ( exc# : restore prev return stack )
+		r> `handler !  ( exc# : restore prev handler )
+		r> swap >r     ( saved-sp : exc# on return stack )
+		sp! drop r>    ( exc# : restore stack )
+		( return to the caller of catch because return )
+		( stack is restored to the state that existed )
+		( when catch began execution )
 	then ; 
 
 : interpret begin 
@@ -763,17 +762,6 @@ interpret
 ( ========================== Basic Word Set ================================== )
 
 ( ========================== Extended Word Set =============================== )
-
-: gcd ( x1 x2 -- x : greatest common divisor )
-	begin
-		dup
-		if
-			tuck mod 0
-		else
-			1
-		then
-	until
-	drop ;
 
 : log2 ( x -- log2 )
 	( Computes the binary integer logarithm of a number,
@@ -806,6 +794,48 @@ interpret
 
 hider (do-defer)
 
+hider tail
+
+( The "tail" function implements tail calls, which is just a jump
+to the beginning of the words definition, for example this
+word will never overflow the stack and will print "1" followed
+by a new line forever,
+
+	: forever 1 . cr tail ;
+
+Whereas
+
+	: forever 1 . cr recurse ;
+
+or
+
+	: forever 1 . cr forever ;
+
+Would overflow the return stack. )
+
+: tail ( -- : perform tail recursion in current word definition )
+	immediate
+	latest cfa
+	' branch ,
+	here - 1+ , ;
+
+: recurse immediate
+	( This function implements recursion, although this interpreter
+	allows calling a word directly. If used incorrectly this will
+	blow up the return stack.
+
+	We can test "recurse" with this factorial function:
+	  : factorial  dup 2 < if drop 1 exit then dup 1- recurse * ; )
+	latest cfa , ;
+
+: factorial ( x -- x : compute the factorial of a number )
+	dup 2 < if drop 1 exit then dup 1- recurse * ;
+
+: gcd ( x1 x2 -- x : greatest common divisor )
+	dup if tuck mod tail then drop ;
+
+
+
 ( ========================== Extended Word Set =============================== )
 
 ( The words described here on out get more complex and will require more
@@ -831,11 +861,14 @@ allows the creation of words which can define new words in themselves,
 and thus allows us to extend the language easily.
 )
 
-: write-quote ( A word that writes ' into the dictionary )
+: write-quote ( -- : A word that writes ' into the dictionary )
 	['] ' , ;   
 
-: write-exit ( A word that write exit into the dictionary )
+: write-exit ( -- : A word that write exit into the dictionary )
 	['] exit , ; 
+
+: write-compile, ( -- : A word that writes , into the dictionary ) 
+	' , , ;
 
 : state! ( bool -- : set the compilation state variable ) 
 	state ! ;
@@ -852,10 +885,10 @@ and thus allows us to extend the language easily.
 : <build immediate
 	( @note ' command-mode-create , *nearly* works )
 	' :: ,                          ( Make the defining word compile a header )
-	write-quote dolit , compile,    ( Write in push to the creating word )
-	' here , ' 3+ , compile,        ( Write in the number we want the created word to push )
-	write-quote >mark compile,      ( Write in a place holder 0 and push a pointer to to be used by does> )
-	write-quote write-exit compile, ( Write in an exit in the word we're compiling. )
+	write-quote dolit , write-compile,    ( Write in push to the creating word )
+	' here , ' 3+ , write-compile,        ( Write in the number we want the created word to push )
+	write-quote >mark write-compile,      ( Write in a place holder 0 and push a pointer to to be used by does> )
+	write-quote write-exit write-compile, ( Write in an exit in the word we're compiling. )
 	['] command-mode ,              ( Make sure to change the state back to command mode )
 ;
 
@@ -895,6 +928,27 @@ and constants, as we mentioned before. )
 
 : string ( u c" xxx" --, Run Time: -- addr u : create a named table )
 	create dup , chars allot does> dup @ swap 1+ chars> swap ;
+
+\ : +field  \ n <"name"> -- ; exec: addr -- 'addr
+\    create over , +
+\    does> @ + ;
+\ 
+\ : begin-structure  \ -- addr 0 ; -- size
+\ 	create
+\ 	here 0 0 ,  \ mark stack, lay dummy
+\ 	does> @ ;   \ -- rec-len
+\ 
+\ : end-structure  \ addr n --
+\    swap ! ;      \ set len  
+\ 
+\ begin-structure point
+\ 	point +field p.x
+\ 	point +field p.y
+\ end-structure
+\ 
+\ This should work...
+\ : buffer: ( u c" xxx" --, Run Time: -- addr )
+\	create allot ;
 
 : 2constant 
 	create , , does> dup 1+ @ swap @ ;
@@ -999,7 +1053,6 @@ should use a value to return to which it pushes to the return stack )
 testing and debugging:
  : mm 5 1 do i . cr 4 1 do j . tab i . cr loop loop ; )
 
-( ========================== DO...LOOP ======================================= )
 
 : range ( nX nY -- nX nX+1 ... nY )  
 	swap 1+ swap do i loop ;
@@ -1013,43 +1066,7 @@ testing and debugging:
 : mul ( n0 ... nX X -- mul<0..X> ) 
 	1 do * loop ;
 
-hider tail
-
-( The "tail" function implements tail calls, which is just a jump
-to the beginning of the words definition, for example this
-word will never overflow the stack and will print "1" followed
-by a new line forever,
-
-	: forever 1 . cr tail ;
-
-Whereas
-
-	: forever 1 . cr recurse ;
-
-or
-
-	: forever 1 . cr forever ;
-
-Would overflow the return stack. )
-
-: tail ( -- : perform tail recursion in current word definition )
-	immediate
-	latest cfa
-	' branch ,
-	here - 1+ , ;
-
-: recurse immediate
-	( This function implements recursion, although this interpreter
-	allows calling a word directly. If used incorrectly this will
-	blow up the return stack.
-
-	We can test "recurse" with this factorial function:
-	  : factorial  dup 2 < if drop 1 exit then dup 1- recurse * ; )
-	latest cfa , ;
-
-: factorial ( x -- x : compute the factorial of a number )
-	dup 2 < if drop 1 exit then dup 1- recurse * ;
-
+( ========================== DO...LOOP ======================================= )
 : myself ( -- : myself is a synonym for recurse ) 
 	immediate postpone recurse ;
 
@@ -1241,14 +1258,13 @@ prints it out, it also does not checking of the returned values from write-file 
 	0 `source-id !  ( set source to read from file )
 	`stdin @ `fin ! ( read from stdin )
 	postpone [      ( back into command mode )
-	1 restart       ( restart the interpreter ) ;    
+	-1 restart      ( restart the interpreter ) ;    
 
 : abort
 	empty-stack quit ;
 
 : abort" immediate postpone "
 	' cr , ' abort , ;
-
 
 ( ==================== CASE statements ======================== )
 
@@ -1620,8 +1636,12 @@ T{
 
 0 variable hld
 
+( @todo throw if too many characters held )
 : hold ( char -- : add a character to the numeric output string )
 	pad chars> hld @ - c! hld 1+! ;
+
+: holds ( addr u -- )
+  begin dup while 1- 2dup + c@ hold repeat 2drop ;
 
 : nbase ( -- base : in this forth 0 is a special base, push 10 is base is zero )
 	base @ dup 0= if drop 10 then ;
@@ -1633,8 +1653,8 @@ T{
 	[char] - hold ;
 
 : # ( x -- x : divide x by base, turn into a character, put in pictured output string )
-	nbase um/mod swap
-  	nbase 10 u>
+	nbase um/mod swap 
+  	dup 9 u>
   	if 7 + then
   	48 + hold ;
 
@@ -1872,7 +1892,7 @@ hider hide-words
 		" y/n? "
 	again ;
 
-: >instruction ( extract instruction from instruction field ) 0x1f and ;
+: >instruction ( extract instruction from instruction field ) 0x7f and ;
 
 : step
 	( step through a word: this word could be augmented
@@ -2192,13 +2212,19 @@ For resources on Forth:
 	2drop -1 ( -1 to indicate failure ) ;
 
 : create-file ( c-addr u fam -- fileid ior )
-	open-file ;
+	>r 2dup w/o open-file throw close-file throw
+	r> open-file ;
+
+: include-file
+	0 1 evaluator throw ;
+
+: included ( c-addr u )
+	r/o open-file throw 
+	include-file ;
 
 : include ( c" ccc" -- : attempt to evaluate a file )
-	( @bug does not remove leading spaces from name, should use parse, or something )
-	source accept 1+ tib swap r/o open-file 
-	dup 0= if abort" : could not open file for reading" cr then
-	0 1 evaluator drop ;
+	( @bug does not remove leading spaces from name, should use parse-name )
+	source accept 1+ tib swap included ;
 
 : bin ( fam1 -- fam2 : modify a file access method to be binary not line oriented ) 
 	( Do nothing, all file access methods are binary, although of note
@@ -2210,70 +2236,32 @@ For resources on Forth:
 ( ==================== Files ================================== )
 
 ( ==================== Blocks ================================= )
+( 
+0 variable dirty
+b/buf string buf
+0 variable loaded
+0 variable blk
+0 variable scr
 
-( @todo process invalid blocks [anything greater or equal to 0xFFFF] )
-( @todo only already created blocks can be loaded, this should be
-  corrected so one is created if needed )
-( @todo better error handling )
-( @todo Fix this! )
+: update 1 dirty ! ;
+: empty-buffers 0 loaded ! ;
+: ?update dup loaded @ <> dirty @ or ;
+: ?invalid dup 0= if empty-buffers -35 throw then ;
+: write dup >r write-file r> close-file throw ;
+: read dup >r read-file r> close-file throw ;
+: name >r <# #s #> rot drop r> create-file throw ; \ @todo add .blk with holds, also create file deletes file first...
+: update! >r buf r> w/o name write throw drop empty-buffers ;
+: get >r buf r> r/o name read throw drop ;
+: block ?invalid ?update if dup update! then dup get loaded ! buf drop ;
 
--1 variable scr-var
-false variable dirty ( has the buffer been modified? )
-: scr ( -- x : last screen used ) scr-var @ ;
-b/buf string block-buffer ( block buffer - enough to store one block )
+:hide dirty ?update update! loaded name get ?invalid write read ;hide
 
-: update ( -- : mark block buffer as dirty, so it will be flushed if needed )
-	true dirty ! ;
-: clean  ( -- : mark buffers as clean, even if they are dirty )
-	false dirty ! ;
-
-0 variable make-block-char ( the character buffers are filled with in make-block )
-
-: erase-buffer
-	block-buffer make-block-char @ fill ;
-
-: empty-buffers ( -- : discard any buffers )
-	clean block-buffer erase-buffer ;
-
-: invalid ( block-buffer -- : check if the block buffer is invalid )
-	-1 = if abort" invalid block buffer (-1)" then ;
-
-: flush ( -- : flush dirty block buffers )
-	dirty @ if scr invalid block-buffer drop scr bsave drop clean then ;
-
-: list ( block-number -- : display a block )
-	flush 
-	trip scr <> if
-		block-buffer drop swap bload ( load buffer into block buffer )
-		swap scr-var !
-	else
-		2drop 0
-	then
-	-1 = if exit then    ( failed to load )
-	block-buffer type ;  ( print buffer )
-
-: block ( u -- addr : load block 'u' and push address to block )
-	dup invalid
-	trip scr <> if flush block-buffer drop swap bload then
-	-1 = if -1 else scr-var ! block-buffer drop chars then ;
-
-: save-buffers ( -- : save all updated buffers )
-	flush ;
-
-: list-thru ( x y -- : list blocks x through to y )
-	1+ swap
-	key drop
-	do i invalid " screen no: " i . cr i list cr more loop ;
-
-: make-block ( c-addr u -- : make a block on disk, named after a string )
-	w/o open-file throw
-	flush -1 scr-var !
-	erase-buffer
-	block-buffer rot dup >r write-file r> close-file drop
-	0<> if drop abort" write failed" then
-	b/buf <> if abort" could not write buffer out" then ;
-
-:hide scr-var block-buffer clean invalid erase-buffer make-block-char ;hide
+: c 
+	1 block update drop
+	2 block update drop
+	3 block update drop
+	4 block update drop ;
+c )
 
 ( ==================== Blocks ================================= )
 
@@ -2625,10 +2613,28 @@ Example usage:
 	2drop ( drop twice because catch will restore stack before 'command' )
 	restore ; ( restore input stream )
 
-:hide literals repeated more redirect restore out cpad run-length ;hide
+:hide literals repeated more redirect restore out run-length command ;hide
 
 ( ==================== RLE =================================== )
 
+( ==================== Hex dump ============================== )
+
+( @todo hexdump can read in too many characters and it does not
+print out the correct address )
+: refill >r cpad 128 r> read-file throw ; ( file-id -- u 0 )
+: input  ' refill catch ; ( file-id -- u 0 | error, XXX not needed now! )
+: clean  cpad 128 0 fill ; ( -- )
+: cdump  cpad chars swap aligned chars dump ; ( u -- )
+: hexdump ( file-id -- : [hex]dump a file to the screen )
+	dup 
+	clean
+	input if 2drop exit then
+	?dup-if cdump else drop exit then
+	tail ; 
+
+:hide more cpad clean cdump input refill ;hide
+
+( ==================== Hex dump ============================== )
 
 ( 
 Looking at most Forths dictionary with "words" command they tend
@@ -2690,5 +2696,4 @@ not `fin.
 	2drop 0 ; )
 
 verbose [if] welcome [then]
-
 

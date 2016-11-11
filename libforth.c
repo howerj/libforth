@@ -412,12 +412,6 @@ the debug code.
 #define DEFAULT_CORE_SIZE   (32 * 1024) 
 
 /**
-@brief Blocks will be encountered and explained later, they have a fixed
-size which has been standardized to 1024.
-**/
-#define BLOCK_SIZE          (1024u)
-
-/**
 @brief When we are reading input to be parsed we need a space to hold that
 input, the offset to this area is into a field called **m** in **struct forth**,
 defined later, the offset is a multiple of cells and not chars.  
@@ -632,13 +626,6 @@ static const char *initial_forth_program =
 static const char conv[] = "0123456789abcdefghijklmnopqrstuvwxzy";
 
 /**
-@brief These are the file access methods available for use when the virtual
-machine is up and running, they are passed to the built in primitives that
-deal with file input and output (such as open-file).
-**/
-static const char *fams[] = { "wb", "rb", "r+b", NULL };
-
-/**
 @brief int to **char\*** map for file access methods.
 **/
 enum fams { 
@@ -646,6 +633,18 @@ enum fams {
 	FAM_RO,   /**< read only */
 	FAM_RW,   /**< read write */
 	LAST_FAM  /**< marks last file access method */
+};
+
+/**
+@brief These are the file access methods available for use when the virtual
+machine is up and running, they are passed to the built in primitives that
+deal with file input and output (such as open-file).
+**/
+static const char *fams[] = { 
+	[FAM_WO] = "wb", 
+	[FAM_RO] = "rb", 
+	[FAM_RW] = "r+b", 
+	NULL 
 };
 
 /**
@@ -822,35 +821,49 @@ registers correspond directly to well known Forth concepts, such as the
 dictionary and return stack pointers, others are just implementation
 details. 
 
-@todo Combine the enumeration registers and register names in an X-Macro
+X-Macros are an unusual but useful method of making tables
+of data. We use this to store the registers name, it's address within
+the virtual machine and the enumeration for it.
+
+More information about X-Macros can be found here:
+
+* <https://en.wikipedia.org/wiki/X_Macro>
+* <http://www.drdobbs.com/cpp/the-x-macro/228700289>
+* <https://stackoverflow.com/questions/6635851>
+
 **/
-enum registers {          /**< virtual machine registers */
-	DIC         =  6, /**< dictionary pointer */
-	RSTK        =  7, /**< return stack pointer */
-	STATE       =  8, /**< interpreter state; compile or command mode */
-	BASE        =  9, /**< base conversion variable */
-	PWD         = 10, /**< pointer to previous word */
-	SOURCE_ID   = 11, /**< input source selector */
-	SIN         = 12, /**< string input pointer */
-	SIDX        = 13, /**< string input index */
-	SLEN        = 14, /**< string input length */
-	START_ADDR  = 15, /**< pointer to start of VM */
-	FIN         = 16, /**< file input pointer */
-	FOUT        = 17, /**< file output pointer */
-	STDIN       = 18, /**< file pointer to stdin */
-	STDOUT      = 19, /**< file pointer to stdout */
-	STDERR      = 20, /**< file pointer to stderr */
-	ARGC        = 21, /**< argument count */
-	ARGV        = 22, /**< arguments */
-	DEBUG       = 23, /**< turn debugging on/off if enabled */
-	INVALID     = 24, /**< if non zero, this interpreter is invalid */
-	TOP         = 25, /**< *stored* version of top of stack */
-	INSTRUCTION = 26, /**< start up instruction */
-	STACK_SIZE  = 27, /**< size of the stacks */
-	ERROR_HANDLER = 28, /**< actions to take on error */
-	THROW       = 29, /**< place where exception handler is stored */
-	SCRATCH_X   = 30, /**< scratch variable x */
-	SCRATCH_Y   = 31, /**< scratch variable y */
+#define XMACRO_REGISTERS \
+ X("h",               DIC,            6,   "dictionary pointer")\
+ X("r",               RSTK,           7,   "return stack pointer")\
+ X("`state",          STATE,          8,   "interpreter state; compile or command mode")\
+ X("base",            BASE,           9,   "base conversion variable")\
+ X("pwd",             PWD,            10,  "pointer to previous word")\
+ X("`source-id",      SOURCE_ID,      11,  "input source selector")\
+ X("`sin",            SIN,            12,  "string input pointer")\
+ X("`sidx",           SIDX,           13,  "string input index")\
+ X("`slen",           SLEN,           14,  "string input length")\
+ X("`start-address",  START_ADDR,     15,  "pointer to start of VM")\
+ X("`fin",            FIN,            16,  "file input pointer")\
+ X("`fout",           FOUT,           17,  "file output pointer")\
+ X("`stdin",          STDIN,          18,  "file pointer to stdin")\
+ X("`stdout",         STDOUT,         19,  "file pointer to stdout")\
+ X("`stderr",         STDERR,         20,  "file pointer to stderr")\
+ X("`argc",           ARGC,           21,  "argument count")\
+ X("`argv",           ARGV,           22,  "arguments")\
+ X("`debug",          DEBUG,          23,  "turn debugging on/off if enabled")\
+ X("`invalid",        INVALID,        24,  "if non zero,this interpreter is invalid")\
+ X("`top",            TOP,            25,  "*stored* version of top of stack")\
+ X("`instruction",    INSTRUCTION,    26,  "start up instruction")\
+ X("`stack-size",     STACK_SIZE,     27,  "size of the stacks")\
+ X("`error-handler",  ERROR_HANDLER,  28,  "actions to take on error")\
+ X("`handler",        THROW,          29,  "place where exception handler is stored")\
+ X("`x",              SCRATCH_X,      30,  "scratch variable x")\
+ X("`y",              SCRATCH_Y,      31,  "scratch variable y")
+
+enum registers {  /**< virtual machine registers */
+#define X(NAME, ENUM, VALUE, HELP) ENUM = VALUE,
+	XMACRO_REGISTERS
+#undef X
 };
 
 /**
@@ -860,11 +873,12 @@ Instead of using numbers to refer to registers, it is better to refer to
 them by name instead, these strings each correspond in turn to enumeration
 called **registers** 
 **/
-static const char *register_names[] = { "h", "r", "`state", "base", "pwd",
-"`source-id", "`sin", "`sidx", "`slen", "`start-address", "`fin", "`fout", 
-"`stdin", "`stdout", "`stderr", "`argc", "`argv", "`debug", "`invalid", 
-"`top", "`instruction", "`stack-size", "`error-handler", "`handler", "`x",
-"`y", NULL };
+static const char *register_names[] = { 
+#define X(NAME, ENUM, VALUE, HELP) NAME,
+	XMACRO_REGISTERS
+#undef X
+	NULL
+};
 
 /** 
 @brief The enum **input\_stream** lists values of the **SOURCE\_ID** register
@@ -915,15 +929,8 @@ great deal more complex and will require paragraphs to explain fully
 execution). 
 
 The instruction name, enumeration and a help string, are all stored with
-an X-Macro. X-Macros are an unusual but useful method of making tables
-of data. 
-
-More information about X-Macros can be found here:
-
-* <https://en.wikipedia.org/wiki/X_Macro>
-* <http://www.drdobbs.com/cpp/the-x-macro/228700289>
-* <https://stackoverflow.com/questions/6635851>
-
+an X-Macro. 
+ 
 **/
 
 #define XMACRO_INSTRUCTIONS\
@@ -965,8 +972,6 @@ More information about X-Macros can be found here:
  X(DROP,      "drop",       "x -- : drop a value")\
  X(OVER,      "over",       "x1 x2 -- x1 x2 x1 : copy over a value")\
  X(TAIL,      "tail",       " -- : tail recursion")\
- X(BSAVE,     "bsave",      "c-addr x -- : save a block")\
- X(BLOAD,     "bload",      "c-addr x -- : load a block")\
  X(FIND,      "find",       "c\" xxx\" -- addr | 0 : find a Forth word")\
  X(DEPTH,     "depth",      " -- x : get current stack depth")\
  X(SPLOAD,    "sp@",        " -- addr : load current stack pointer ")\
@@ -1206,46 +1211,6 @@ static void compile(forth_t *o, forth_cell_t code, const char *str)
 	m[PWD] = m[DIC] - 1;  /*Update the PWD register to new word */
 	/*size of words name and code field*/
 	m[m[DIC]++] = (l << WORD_LENGTH_OFFSET) | code; 
-}
-
-/** 
-@brief **blockio** implements the Forth block I/O mechanism
-@param o       virtual machine image to do the block I/O in
-@param poffset offset into **o->m** field to load or save
-@param id      Identification of block to read or write
-@param rw      Mode of operation 'r' == read, 'w' == write
-@return negative number on failure, zero on success
-
-Forth traditionally uses blocks as its method of storing data and code to
-disk, each block is **BLOCK_SIZE** characters long (which should be 1024
-characters). The reason for such a simple method is that early Forth
-systems ran on microcomputers which did not have an operating system as
-they are now known, but only a simple monitor program and a programming
-language, as such there was no file system either. Each block was loaded
-from disk and then evaluated.
-
-The **blockio** function implements this simple type of interface, and can
-load and save blocks to disk. 
-
-This will be replaced with the file utilities at a later date.
-**/
-static int blockio(forth_t *o, forth_cell_t poffset, forth_cell_t id, char rw)
-{ 
-	char name[16] = {0}; /* XXXX + ".blk" + '\0' + a little spare change */
-	FILE *file = NULL;
-	size_t n;
-	if(((forth_cell_t)poffset) > ((o->core_size * sizeof(forth_cell_t)) - BLOCK_SIZE))
-		return -1;
-	sprintf(name, "%04x.blk", (int)id);
-	errno = 0;
-	if(!(file = fopen(name, rw == 'r' ? "rb" : "wb"))) { 
-		error("file open %s, %s", name, emsg());
-		return -1;
-	}
-	n = rw == 'w' ? fwrite(((char*)o->m) + poffset, 1, BLOCK_SIZE, file):
-			fread (((char*)o->m) + poffset, 1, BLOCK_SIZE, file);
-	fclose(file);
-	return n == BLOCK_SIZE ? 0 : -1;
 }
 
 /**
@@ -1616,8 +1581,7 @@ the interpreter:
 	make_header(o->header);
 
 	o->calls = calls; /* pass over functions for CALL */
-
-	m = o->m;         /*a local variable only for convenience */
+	m = o->m;         /* a local variable only for convenience */
 
 /**
 The next section creates a word that calls **READ**, then **TAIL**,
@@ -1750,6 +1714,8 @@ int forth_save_core(forth_t *o, FILE *dump)
 {
 	assert(o && dump);
 	uint64_t r1, r2, r3, core_size = o->core_size;
+	if(o->m[INVALID])
+		return -1;
 	r1 = fwrite(o->header,  1, sizeof(o->header), dump);
 	r2 = fwrite(&core_size, sizeof(core_size), 1, dump);
 	r3 = fwrite(o->m,       1, sizeof(forth_cell_t) * o->core_size, dump);
@@ -2303,18 +2269,6 @@ is hidden in favor of the new one.
 		case TAIL:
 			m[RSTK]--;
 			break;
-/**
-These two primitives implement block IO, they could be implemented in terms
-of the file primitives later, and so they may be removed.
-**/
-		case BSAVE:
-			cd(2);
-			f = blockio(o, *S--, f, 'w');
-			break;
-		case BLOAD:
-			cd(2);
-			f = blockio(o, *S--, f, 'r');
-			break;
 /** 
 FIND is a natural factor of READ, we add it to the Forth interpreter as
 it already exits, it looks up a Forth word in the dictionary and returns a
@@ -2476,7 +2430,7 @@ instruction, and would be a useful abstraction.
 **/
 
 		case SYSTEM:  cd(2); f = system(forth_get_string(o, &on_error, &S, f)); break;
-		case FCLOSE:  cd(1); f = fclose((FILE*)f);                   break;
+		case FCLOSE:  cd(1); f = fclose((FILE*)f) ? errno : 0;       break;
 		case FDELETE: cd(2); f = remove(forth_get_string(o, &on_error, &S, f)); break;
 		case FPOS:    cd(1); f = ftell((FILE*)f);                    break;
 		case FSEEK:   cd(2); f = fseek((FILE*)f, *S--, SEEK_SET);    break;
@@ -2487,7 +2441,7 @@ instruction, and would be a useful abstraction.
 				const char *f1 = forth_get_fam(&on_error, f);
 				f = *S--;
 				char *f2 = forth_get_string(o, &on_error, &S, f);
-				f = rename(f2, f1);
+				f = rename(f2, f1) ? errno : 0;
 			}
 			break;
 		case FOPEN: 
@@ -2686,8 +2640,6 @@ This make implementing a Forth interpreter as simple as:
 
 To keep things simple options are parsed first then arguments like files,
 although some options take arguments immediately after them. 
-
-@todo make an incredibly simplified version of **main\_forth**
 **/
 int main_forth(int argc, char **argv)
 {
