@@ -47,4 +47,9 @@ libforth.md
 *.1
 *.3
 .forth
-
+.tmp_versions/*
+*.mod
+*.cmd
+*.ko
+*.order
+*.symvers

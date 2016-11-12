@@ -1,0 +1,2 @@
+#Rules file for the forth character device driver
+KERNEL=="forthchar", SUBSYSTEM=="forth", MODE="0600"
