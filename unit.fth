@@ -1,7 +1,8 @@
 #!./forth 
 
-( ==================== Unit tests ============================ )
-1 trace !
+.( Unit tests ) cr
+
+1 trace
 
 marker cleanup
 T{ 0 not -> 1 }T
@@ -111,6 +112,20 @@ T{ 1 2 3 4 5 6 2rot -> 3 4 5 6 1 2 }
 T{  4 s>d ->  4  0 }T
 T{ -5 s>d -> -5 -1 }T
 
+T{ 4 5 bounds -> 9 4 }T
+
+T{ 0  aligned -> 0 }T
+T{ 1  aligned -> size }T
+T{ 7  aligned -> size }T
+T{ 8  aligned -> size }T
+T{ 9  aligned -> size 2* }T
+T{ 10 aligned -> size 2* }T
+T{ 16 aligned -> size 2* }T
+T{ 17 aligned -> size 3 * }T
+
+T{ 8 16 4 /string -> 12 12 }T
+T{ 0 17 3 /string -> 3  14 }T
+
 T{ -1 odd -> 1 }T
 T{ 0 odd  -> 0 }T
 T{ 4 odd  -> 0 }T
@@ -161,6 +176,7 @@ T{ 5 3 repeater 3 sum -> 15 }T
 T{ 6 1 range dup mul -> 720 }T
 T{ 5 factorial -> 120 }T
 
+.( jump tables ) cr
 : j1 1 ;
 : j2 2 ;
 : j3 3 ;
@@ -174,6 +190,7 @@ T{ 2 jump -> j3 }T
 T{ 3 jump -> j4 }T
 T{ 4 jump -> j4 }T ( check limit )
 
+.( defer ) cr
 defer alpha 
 alpha constant alpha-location
 : beta 2 * 3 + ;
@@ -194,6 +211,16 @@ T{ 1 2 under -> 1 1 2 }T
 T{ 1 2 3 4 2nip -> 3 4 }
 T{ 1 2 3 4 2over -> 1 2 3 4 1 2 }
 T{ 1 2 3 4 2swap -> 3 4 1 2 }
+
+.( match ) cr
+T{ c" hello" drop c" hello" drop match -> 1 }T
+T{ c" hello" drop c" hellx" drop match -> 0 }T
+T{ c" hellx" drop c" hello" drop match -> 0 }T
+T{ c" hello" drop c" hell"  drop match -> 0 }T
+T{ c" hell"  drop c" hello" drop match -> 0 }T
+T{ c" hello" drop c" he.lo" drop match -> 1 }T
+T{ c" hello" drop c" h*"    drop match -> 1 }T
+T{ c" hello" drop c" h*l."  drop match -> 1 }T
 
 cleanup
 

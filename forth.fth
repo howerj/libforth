@@ -786,7 +786,6 @@ interpret
 
 hider (do-defer)
 
-hider tail
 
 ( The "tail" function implements tail calls, which is just a jump
 to the beginning of the words definition, for example this
@@ -805,6 +804,7 @@ or
 
 Would overflow the return stack. )
 
+hider tail
 : tail ( -- : perform tail recursion in current word definition )
 	immediate
 	latest cfa
@@ -825,8 +825,6 @@ Would overflow the return stack. )
 
 : gcd ( x1 x2 -- x : greatest common divisor )
 	dup if tuck mod tail then drop ;
-
-
 
 ( ========================== Extended Word Set =============================== )
 
@@ -881,8 +879,7 @@ and thus allows us to extend the language easily.
 	' here , ' 3+ , write-compile,        ( Write in the number we want the created word to push )
 	write-quote >mark write-compile,      ( Write in a place holder 0 and push a pointer to to be used by does> )
 	write-quote write-exit write-compile, ( Write in an exit in the word we're compiling. )
-	['] command-mode ,              ( Make sure to change the state back to command mode )
-;
+	['] command-mode , ;            ( Make sure to change the state back to command mode )
 
 : create immediate  ( create word is quite a complex forth word )
 	state @ 
@@ -902,6 +899,7 @@ hider state!
 	dolist , ;   ( write a run in )
 
 hider write-quote
+hider write-compile,
 
 ( Now that we have create...does> we can use it to create arrays, variables
 and constants, as we mentioned before. )
@@ -1125,7 +1123,6 @@ testing and debugging:
 : accepter ( c-addr max delimiter -- i )
 	( store a "max" number of chars at c-addr until "delimiter" encountered,
 	the number of characters stored is returned )
-	key drop ( drop first key after word )
 	delim !  ( store delimiter used to stop string storage when encountered)
 	0
 	do
@@ -1143,11 +1140,16 @@ testing and debugging:
 	until  ;
 hider delim
 
+: skip
+	key drop >r 0 begin drop key dup rdup r> <> until rdrop ;
+
 : word ( c -- c-addr : parse until 'c' is encountered, push transient counted string  )
+	( @todo skip leading delimiters )
+	dup skip chere 1+ c!
 	>r
-	chere 1+
+	chere 2+
 	pad here - chars>
-	r> accepter 
+	r> accepter 1+
 	chere c!
 	chere ;
 
@@ -1205,7 +1207,7 @@ hider delim
 
 128 string sbuf
 : s" ( "ccc<quote>" --, Run Time -- c-addr u )
-	sbuf 0 fill sbuf [char] " accepter sbuf drop swap ;
+	key drop sbuf 0 fill sbuf [char] " accepter sbuf drop swap ;
 hider sbuf
 
 ( @todo these strings really need rethinking, state awareness needs to be removed... )
@@ -1213,10 +1215,10 @@ hider sbuf
 	state @ if ' type , else type then ;
 
 : c" 
-	immediate [char] " do-string ;
+	immediate key drop [char] " do-string ;
 
 : "  
-	immediate [char] " do-string type, ;
+	immediate key drop [char] " do-string type, ;
 
 : sprint ( c -- : print out chars until 'c' is encountered )
 	key drop ( drop next space )
@@ -1232,7 +1234,7 @@ hider sbuf
 hider sprint
 
 : ." 
-	immediate [char] " do-string type, ;
+	immediate key drop [char] " do-string type, ;
 
 hider type,
 
@@ -1452,7 +1454,6 @@ size 8 = [if]
 
 ( ==================== Misc words ============================= )
 
-
 0 variable counter
 
 : counted-column ( index -- : special column printing for dump )
@@ -1630,8 +1631,6 @@ true variable colorize
 hide{ CSI }hide
 ( ==================== ANSI Escape Codes ====================== )
 
-
-
 ( ==================== Unit test framework =================== )
 
 256 string estring    ( string to test )
@@ -1647,15 +1646,26 @@ hide{ CSI }hide
 : -> ( -- : save depth in variable ) 
 	1 check ! depth result ! ; 
 
+: test estring drop #estring @ ; 
+
 : fail ( -- : invalidate the forth interpreter and exit )
 	invalidate bye ;
 
-: test estring drop #estring @ ; 
+: neutral ( -- : neutral color )
+	;
 
-: die test type fail ;
+: bad ( -- : bad color )
+	dark red foreground color ;
+
+: good ( -- : good color )
+	dark green foreground color ;
+
+: die bad test type reset-color cr fail ;
 
 : evaluate? ( bool -- : test if evaluation has failed )
 	if ." evaluation failed" cr fail then ;
+
+: failed bad ." failed" reset-color cr ;
 
 : adjust ( x -- x : adjust a depth to take into account starting depth ) 
 	start @ - ;
@@ -1669,6 +1679,7 @@ hide{ CSI }hide
 	result @ adjust 2* =  ( get results depth, same adjustment, should be
 	                        half size of the depth ) 
 	if exit then ( pass )
+	failed
 	." Unequal depths:" cr
 	." depth:  " depth . cr
 	." result: " result @ . cr
@@ -1678,15 +1689,16 @@ hide{ CSI }hide
 	no-check? if exit then
 	result @ adjust equal
 	if exit then
+	failed
 	." Result is not equal to expected values. " cr  
-	." Got: " cr .s 
+	." Stack: " cr .s cr
 	die ;
 
 : display ( c-addr u -- : print out testing message in estring )
-	verbose if type else 2drop then ;
+	verbose if neutral type else 2drop then ;
 
 : pass ( -- : print out passing message )
-	verbose if ." ok " cr then ;
+	verbose if good ." ok " cr reset-color then ;
 
 : save  ( -- : save current dictionary )
 	pwd @ previous !
@@ -1702,6 +1714,7 @@ hide{ CSI }hide
 	0 check  !     ( reset check variable )
 	estring 0 fill ( zero input string )
 	save           ( save dictionary state )
+	key drop       ( drop next character, which is a space )
 	estring [char] } accepter #estring ! ( read in string to test )
 	test display   ( print which string we are testing )
 	test evaluate  ( perform test )
@@ -1723,7 +1736,7 @@ hide{
 	pass test display
 	adjust start save restore dictionary previous 
 	evaluate? equal? depth? estring #estring result
-	check no-check? die 
+	check no-check? die neutral bad good failed
 }hide
 
 ( ==================== Unit test framework =================== )
@@ -1776,13 +1789,6 @@ and prints prime numbers. )
 			drop 0 leave
 		then
 	loop ;
-
-T{ 2 prime? -> 2 }T
-T{ 4 prime? -> 0 }T
-T{ 3 prime? -> 3 }T
-T{ 5 prime? -> 5 }T
-T{ 15 prime? -> 0 }T
-T{ 17 prime? -> 17 }T
 
 0 variable counter
 
@@ -2098,7 +2104,6 @@ more " The built in words that accessible are:
 	find              find a word in the dictionary and push the location
 	'                 store the address of the following word on the stack
 	,                 write the top of the stack to the dictionary
-	bsave bload       save or load a block at address to indexed file
 	swap              swap first two values on the stack
 	dup               duplicate the top of the stack
 	drop              pop and drop a value
@@ -2347,18 +2352,9 @@ defer matcher
 
 matcher is match
 
-T{ c" hello" drop c" hello" drop match -> 1 }T
-T{ c" hello" drop c" hellx" drop match -> 0 }T
-T{ c" hellx" drop c" hello" drop match -> 0 }T
-T{ c" hello" drop c" hell"  drop match -> 0 }T
-T{ c" hell"  drop c" hello" drop match -> 0 }T
-T{ c" hello" drop c" he.lo" drop match -> 1 }T
-T{ c" hello" drop c" h*"    drop match -> 1 }T
-T{ c" hello" drop c" h*l."  drop match -> 1 }T
-
 hide{ 
 	*str *pat *pat==*str pass reject advance 
-	advance-string advance-regex matcher ++ match
+	advance-string advance-regex matcher ++ 
 }hide
 
 ( ==================== Matcher ================================ )
