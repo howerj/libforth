@@ -31,8 +31,6 @@
 #   |    }                            |
 #   .---------------------------------.
 #
-# @todo the "@todo"s in the document could be collated and removed/moved to the
-# end of the document.
 
 BEGIN {
 
@@ -69,11 +67,10 @@ Options:\n\
 
 /^\*\*\// { state = 0; gsub(/^\*\*\//, "\n") }
 
-/^@(file|author|copyright|license|email)/ { gsub(/^@[a-z]+ +/, "### ") }
+/^@(file|author|copyright|license|email)/ { gsub(/^@[a-z]+ +/, " * ") }
 
 /^@brief/ { gsub(/^@[a-z]+ +/, "") }
 
-# @todo The parameters section needs introducing
 /@(param|return)/ { 
 	if(headers == 0) {
 		$0 = ""
@@ -85,11 +82,14 @@ Options:\n\
 
 {
 	if(state) {
+		if(!($0 ~/^[ \t]/)) {
+			gsub(/_/, "\\_") # escape _ in text, occurs often
+		}
 		print $0
 	} else if($0 ~ /^[ \t\n\r]*$/) {
 		printf "\n"
 	} else {
-		printf "\t%04u %s\n", lines, $0
+		printf "\t%04u %s\n", lines, $0 # print code block with line
 		lines++
 	}
 }

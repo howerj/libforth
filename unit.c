@@ -4,7 +4,8 @@
  *  @license  MIT (see https://opensource.org/licenses/MIT)
  *  @email    howe.r.j.89@gmail.com 
  *  @note     This file could be built into the main program, so that a series
- *            of built in tests can always be run. **/
+ *            of built in tests can always be run. 
+ *  @todo     integrate with "main.c" program, run at startup in silent mode**/
 
 /*** module to test ***/
 #include "libforth.h"
@@ -323,6 +324,7 @@ done:
 
 		state(&tb, forth_free(f));
 		state(&tb, fclose(core));
+		/**@todo use temporary file instead, copy if keep_files set*/
 		if(!keep_files)
 			state(&tb, remove("unit.core"));
 	}

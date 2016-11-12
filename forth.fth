@@ -68,10 +68,10 @@ them will still be included so external tools can process and automatically
 extract the document string for a given work.
 )
 
-: 1+ ( x -- x : increment a number )
+: 1+ ( x -- x : increment a number ) 
 	1 + ;
 
-: 1- ( x -- x : decrement a number )
+: 1- ( x -- x : decrement a number ) 
 	1 - ;
 
 : chars ( c-addr -- addr : convert a character address to an address )
@@ -213,15 +213,10 @@ extract the document string for a given work.
 : 2dup ( x1 x2 -- x1 x2 x1 x2 : duplicate two values )
 	over over ;
 
-: 3drop ( x x x -- : drop three stack items )
-	2drop drop ;
-
-: 3dup ( x -- x x x : triplicate a stack item )
-	2dup dup ;
-
 : mod ( x u -- x : calculate the remainder of x divided by u ) 
 	2dup / * - ;
 
+( @todo implement um/mod in the VM, then use this to implement / and mod )
 : um/mod ( x1 x2 -- rem quot : calculate the remainder and quotient of x1 divided by x2 ) 
 	2dup / >r mod r> ;
 
@@ -265,8 +260,8 @@ extract the document string for a given work.
 : negative? ( x -- bool : is a number negative? )
 	[ 1 address-unit-bits 1- lshift ] literal and logical ;
 
-: mask-byte ( x -- x : mask off a ) 
-	8* 0xff swap lshift ;
+: mask-byte ( x -- x : generate mask byte ) 
+	8* 255 swap lshift ;
 
 : select-byte ( u i -- c ) 
 	8* rshift 0xff and ;
@@ -371,8 +366,8 @@ extract the document string for a given work.
 	    0> if       1 exit then
 	0 ;
 
-: nand ( x x -- x : Logical NAND ) 
-	and not ;
+: nand ( x x -- x : bitwise NAND ) 
+	and invert ;
 
 : odd ( x -- bool : is 'x' odd? )
 	1 and ;
@@ -380,8 +375,8 @@ extract the document string for a given work.
 : even ( x -- bool : is 'x' even? )
 	odd not ;
 
-: nor  ( x x -- x : Logical NOR  )  
-	or not ;
+: nor  ( x x -- x : bitwise NOR  )  
+	or invert ;
 
 : ms ( u -- : wait at least 'u' milliseconds ) 
 	clock +  begin dup clock u< until drop ;
@@ -422,14 +417,8 @@ extract the document string for a given work.
 : bye ( -- : quit the interpreter ) 
 	0 r ! ;
 
-: stack-start ( -- addr : push the address of the start of the stack )
-	max-core `stack-size @ 2* -  ;
-
-: rstack-start ( -- addr : push the address of the start of the return stack )
-	max-core `stack-size @ - ;
-
 : pick ( xu ... x1 x0 u -- xu ... x1 x0 xu )
-	stack-start depth + swap - 1- @ ;
+	sp@ swap cells - cell - @ ;
 
 : rpick ( R: xu ... x1 x0 u -- xu ... x1 x0 xu )
 	r@ swap - @ ;
@@ -502,7 +491,10 @@ extract the document string for a given work.
 	then
 	;
 
-: 2nip   ( n1 n2 n3 n4 -- n3 n4) 
+: under ( x1 x2 -- x1 x1 x2 )
+	>r dup r> ;
+
+: 2nip   ( n1 n2 n3 n4 -- n3 n4 ) 
 	>r >r 2drop r> r> ;
 
 : 2over ( n1 n2 n3 n4 – n1 n2 n3 n4 n1 n2 )
@@ -589,7 +581,7 @@ extract the document string for a given work.
 : poke ( char c-addr -- : poke a real memory address  )
 	>real-address c! ;
 
-: die? ( x -- : controls actions when encountering certain errors )
+: die! ( x -- : controls actions when encountering certain errors )
 	`error-handler ! ;
 
 : start! ( cfa -- : set the word to execute at startup )
@@ -615,7 +607,7 @@ extract the document string for a given work.
 : s>d ( x -- d : convert a signed value to a double width cell )
 	( @note the if...else...then is only necessary as this Forths
 	booleans are 0 and 1, not 0 and -1 as it usually is )
-	dup 0< if true else false then ;
+	dup 0< if -1 else 0 then  ;
 
 : trace ( level -- : set tracing level )
 	`debug ! ;
@@ -956,6 +948,9 @@ and constants, as we mentioned before. )
 : 2variable 
 	create , , does> ;
 
+: enum ( x " ccc" -- x+1 : define a series of enumerations )
+	dup constant 1+ ; 
+
 ( ========================== CREATE DOES> ==================================== )
 
 ( ========================== DO...LOOP ======================================= )
@@ -1139,7 +1134,7 @@ testing and debugging:
 			over  c! 1+
 		else ( terminate string )
 			drop 0 swap c! 
-			i 1+
+			i 
 			leave
 		then
 	loop
@@ -1152,7 +1147,7 @@ hider delim
 	>r
 	chere 1+
 	pad here - chars>
-	r> accepter 1-
+	r> accepter 
 	chere c!
 	chere ;
 
@@ -1182,8 +1177,7 @@ hider delim
 	1+ swap !       ( write place to jump to )
 	drop            ( do not need string length anymore )
 	1+ chars>       ( calculate place to print )
-	r>              ( restore index and address of string )
-	1- ;
+	r> ;            ( restore index and address of string )
 
 : length ( c-addr u -- u : push the length of an ASCIIZ string )
   tuck 0 do dup c@ 0= if 2drop i leave then 1+ loop ;
@@ -1292,23 +1286,16 @@ prints it out, it also does not checking of the returned values from write-file 
 
 ( ==================== CASE statements ======================== )
 
-: error-no-word ( print error indicating last read in word as source )
-	"  error: word '" source drop print " ' not found" cr ;
+: }hide ( should only be matched with 'hide{' )
+	immediate -22 throw ;
 
-: ;hide ( should only be matched with ':hide' )
-	immediate " error: ';hide' without ':hide'" cr ;
-
-: :hide ( -- : hide a list of words, the list is terminated with ";hide" )
+: hide{ ( -- : hide a list of words, the list is terminated with "}hide" )
 	begin
 		find ( find next word )
-		dup [ find ;hide ] literal = if
-			drop exit ( terminate :hide )
+		dup [ find }hide ] literal = if
+			drop exit ( terminate hide{ )
 		then
-		dup 0= if ( word not found )
-			drop
-			error-no-word
-			exit
-		then
+		dup 0= if -15 throw then
 		hide drop
 	again ;
 
@@ -1386,8 +1373,8 @@ if true )
 find [if] [if]-word !
 find [else] [else]-word !
 
-:hide 
-[if]-word [else]-word nest reset-nest unnest? match-[else]? end-nest? nest? ;hide
+hide{ 
+[if]-word [else]-word nest reset-nest unnest? match-[else]? end-nest? nest? }hide
 
 ( ==================== Conditional Compilation ================ )
 
@@ -1477,7 +1464,7 @@ size 8 = [if]
 	size 0 ( from zero to the size of a cell )
 	do
 		dup                     ( copy variable to print out )
-		size i 1+ - select-byte ( select correct bye )
+		size i 1+ - select-byte ( select correct byte )
 		dup printable? not      ( is it not printable )
 		if drop [char] . then   ( print a '.' if it is not )
 		emit                    ( otherwise print it out )
@@ -1485,16 +1472,16 @@ size 8 = [if]
 	space  ( print out space after )
 	drop ; ( drop cell we have printed out )
 
-: lister 
+: lister ( addr u addr -- )
 	0 counter ! 1- swap 
 	do 
-		i counted-column i ? i @ as-chars 
+		dup counted-column 1+ i ? i @ as-chars 
 	loop ;
 
 : dump  ( addr u -- : dump out 'u' cells of memory starting from 'addr' )
-	base @ >r hex 1+ over + lister r> base ! cr ;
+	base @ >r hex 1+ over + under lister drop r> base ! cr ;
 
-:hide counted-column counter lister as-chars ;hide
+hide{ counted-column counter lister as-chars }hide
 
 : forgetter ( pwd-token -- : forget a found word and everything after it )
 	dup @ pwd ! h ! ;
@@ -1536,101 +1523,12 @@ hider forgetter
 		if 0 leave then     ( unequal, finish early )
 	loop 1 ; ( lists must be equal )
 
-:hide a b m ;hide
+hide{ a b m }hide
 
 : ndrop ( drop n items )
 	?dup-if 0 do drop loop then ;
 
 ( ==================== Misc words ============================= )
-
-( ==================== Unit test framework =================== )
-
-256 string estring    ( string to test )
-0 variable #estring   ( actual string length )
-0 variable start      ( starting depth )
-0 variable result     ( result depth )
-0 variable dictionary ( dictionary pointer on entering { )
-0 variable previous   ( PWD register on entering { )
-
-: -> ( -- : save depth in variable ) 
-	depth result ! ; 
-
-: fail ( -- : invalidate the forth interpreter and exit )
-	invalidate bye ;
-
-: evaluate? ( bool -- : test if evaluation has failed )
-	if ." evaluation failed" cr fail then ;
-
-: adjust ( x -- x : adjust a depth to take into account starting depth ) 
-	start @ - ;
-
-: depth? ( -- : check if depth is correct )
-	depth adjust          ( get depth and adjust for starting depth )
-	result @ adjust 2* =  ( get results depth, same adjustment, should be
-	                        half size of the depth ) 
-	0= if 
-		." Unequal depths" cr
-		." depth:  " depth . cr
-		." result: " result @ . cr
-		fail
-	then ;
-
-: equal? ( -- : determine if results equals expected )
-	result @ adjust equal
-	0= if 
-		." Result is not equal to expected values. " cr  
-		." Got: " cr .s 
-		fail
-	then ;
-
-: testing ( -- : print out testing message in estring )
-	verbose if ." Testing: " cr estring type cr then ;
-
-: pass ( -- : print out passing message )
-	verbose if ." Passed. " cr then ;
-
-: save  ( -- : save current dictionary )
-	pwd @ previous !
-	here dictionary ! ;
-
-: restore ( -- : restore dictionary )
-	previous @ pwd ! 
-	dictionary @ h ! ;
-
-: T{  ( -- : perform a unit test )
-	depth start !  ( save start of stack depth )
-	0 result !     ( reset result variable )
-	estring 0 fill ( zero input string )
-	save           ( save dictionary state )
-	estring [char] } accepter #estring ! ( read in string to test )
-	testing        ( print which string we are testing )
-	estring drop #estring @ evaluate ( perform test )
-	evaluate?      ( evaluate successfully? )
-	depth?         ( correct depth )
-	equal?         ( results equal to expected values? )
-	pass           ( print pass message )
-	result @ adjust 2* ndrop ( remove items on stack generated by test )
-	restore ;      ( restore dictionary to previous state )
-( 
-{ 1 2 -> 1 2 }
-{ 1 2 -> 1 2 }
-{ : c 1 2 ; c -> 1 2 } )
-
-T{
-	:noname 2 ;
-	:noname 3 + ;
-	compose execute -> 5
-}
-
-
-:hide 
-	pass testing
-	adjust start save restore dictionary previous 
-	evaluate? equal? depth? estring #estring result
-;hide
-
-( ==================== Unit test framework =================== )
-
 
 ( ==================== Pictured Numeric Output ================ )
 
@@ -1670,51 +1568,18 @@ T{
 : u. ( u -- : display number in base 10 )
 	base @ >r decimal <# #s #> type drop r> base ! ;
 
-:hide nbase ;hide
+hide{ nbase }hide
 
 ( ==================== Pictured Numeric Output ================ )
 
 
 
-( ==================== Random Numbers ========================= )
-
-( 
-See:
-uses xorshift
-https://en.wikipedia.org/wiki/Xorshift
-http://excamera.com/sphinx/article-xorshift.html
-http://www.arklyffe.com/main/2010/08/29/xorshift-pseudorandom-number-generator/
-these constants have be collected from the web 
-)
-
-size 2 = [if] 13 constant a 9  constant b 7  constant c [then]
-size 4 = [if] 13 constant a 17 constant b 5  constant c [then]
-size 8 = [if] 12 constant a 25 constant b 27 constant c [then]
-
-7 variable seed ( must not be zero )
-
-: seed! ( x -- : set the value of the PRNG seed )
-	dup 0= if drop 7 ( zero not allowed ) then seed ! ;
-
-: random ( -- x : assumes word size is 32 bit )
-	seed @
-	dup a lshift xor
-	dup b rshift xor
-	dup c lshift xor
-	dup seed! ;
-
-:hide a b c seed ;hide
-
-( ==================== Random Numbers ========================= )
-
 ( ==================== ANSI Escape Codes ====================== )
-( 
-Terminal colorization module, via ANSI Escape Codes
+( Terminal colorization module, via ANSI Escape Codes
  
 see: https://en.wikipedia.org/wiki/ANSI_escape_code
 These codes will provide a relatively portable means of
-manipulating a terminal
-)
+manipulating a terminal )
 
 27 constant 'escape'
 : CSI 'escape' emit ." [" ;
@@ -1762,15 +1627,145 @@ true variable colorize
 	colorize @ 0= if exit then
 	CSI ." 0m" ;
 
-:hide CSI ;hide
+hide{ CSI }hide
 ( ==================== ANSI Escape Codes ====================== )
+
+
+
+( ==================== Unit test framework =================== )
+
+256 string estring    ( string to test )
+0 variable #estring   ( actual string length )
+0 variable start      ( starting depth )
+0 variable result     ( result depth )
+0 variable check      ( only check depth if -> is called )
+0 variable dictionary ( dictionary pointer on entering { )
+0 variable previous   ( PWD register on entering { )
+
+: T ; ( hack until T{ can process words )
+
+: -> ( -- : save depth in variable ) 
+	1 check ! depth result ! ; 
+
+: fail ( -- : invalidate the forth interpreter and exit )
+	invalidate bye ;
+
+: test estring drop #estring @ ; 
+
+: die test type fail ;
+
+: evaluate? ( bool -- : test if evaluation has failed )
+	if ." evaluation failed" cr fail then ;
+
+: adjust ( x -- x : adjust a depth to take into account starting depth ) 
+	start @ - ;
+
+: no-check? ( -- bool : if true we need to check the depth )
+	check @ 0= ;
+
+: depth? ( -- : check if depth is correct )
+	no-check? if exit then
+	depth adjust          ( get depth and adjust for starting depth )
+	result @ adjust 2* =  ( get results depth, same adjustment, should be
+	                        half size of the depth ) 
+	if exit then ( pass )
+	." Unequal depths:" cr
+	." depth:  " depth . cr
+	." result: " result @ . cr
+	die ;
+
+: equal? ( -- : determine if results equals expected )
+	no-check? if exit then
+	result @ adjust equal
+	if exit then
+	." Result is not equal to expected values. " cr  
+	." Got: " cr .s 
+	die ;
+
+: display ( c-addr u -- : print out testing message in estring )
+	verbose if type else 2drop then ;
+
+: pass ( -- : print out passing message )
+	verbose if ." ok " cr then ;
+
+: save  ( -- : save current dictionary )
+	pwd @ previous !
+	here dictionary ! ;
+
+: restore ( -- : restore dictionary )
+	previous @ pwd ! 
+	dictionary @ h ! ;
+
+: T{  ( -- : perform a unit test )
+	depth start !  ( save start of stack depth )
+	0 result !     ( reset result variable )
+	0 check  !     ( reset check variable )
+	estring 0 fill ( zero input string )
+	save           ( save dictionary state )
+	estring [char] } accepter #estring ! ( read in string to test )
+	test display   ( print which string we are testing )
+	test evaluate  ( perform test )
+	evaluate?      ( evaluate successfully? )
+	depth?         ( correct depth )
+	equal?         ( results equal to expected values? )
+	pass           ( print pass message )
+	result @ adjust 2* ndrop ( remove items on stack generated by test )
+	restore ;      ( restore dictionary to previous state )
+
+T{ }T
+T{ -> }T
+T{ 1 -> 1 }T
+T{ 1 2 -> 1 2 }T
+T{ : c 1 2 ; c -> 1 2 }T
+T{ :noname 2 ; :noname 3 + ; compose execute -> 5 }T
+
+hide{ 
+	pass test display
+	adjust start save restore dictionary previous 
+	evaluate? equal? depth? estring #estring result
+	check no-check? die 
+}hide
+
+( ==================== Unit test framework =================== )
+
+
+( ==================== Random Numbers ========================= )
+
+( 
+See:
+uses xorshift
+https://en.wikipedia.org/wiki/Xorshift
+http://excamera.com/sphinx/article-xorshift.html
+http://www.arklyffe.com/main/2010/08/29/xorshift-pseudorandom-number-generator/
+these constants have be collected from the web 
+)
+
+size 2 = [if] 13 constant a 9  constant b 7  constant c [then]
+size 4 = [if] 13 constant a 17 constant b 5  constant c [then]
+size 8 = [if] 12 constant a 25 constant b 27 constant c [then]
+
+7 variable seed ( must not be zero )
+
+: seed! ( x -- : set the value of the PRNG seed )
+	dup 0= if drop 7 ( zero not allowed ) then seed ! ;
+
+: random ( -- x : assumes word size is 32 bit )
+	seed @
+	dup a lshift xor
+	dup b rshift xor
+	dup c lshift xor
+	dup seed! ;
+
+hide{ a b c seed }hide
+
+( ==================== Random Numbers ========================= )
 
 ( ==================== Prime Numbers ========================== )
 ( From original "third" code from the IOCCC at 
 http://www.ioccc.org/1992/buzzard.2.design, the module works out
 and prints prime numbers. )
 
-: prime? ( x -- x/0 : return number if it is prime, zero otherwise )
+: prime? ( u -- u | 0 : return number if it is prime, zero otherwise )
 	dup 1 = if 1- exit then
 	dup 2 = if    exit then
 	dup 2 / 2     ( loop from 2 to n/2 )
@@ -1781,6 +1776,13 @@ and prints prime numbers. )
 			drop 0 leave
 		then
 	loop ;
+
+T{ 2 prime? -> 2 }T
+T{ 4 prime? -> 0 }T
+T{ 3 prime? -> 3 }T
+T{ 5 prime? -> 5 }T
+T{ 15 prime? -> 0 }T
+T{ 17 prime? -> 17 }T
 
 0 variable counter
 
@@ -2021,11 +2023,11 @@ Also of note, a number greater than "here" must be data )
 		cr
 	again ;
 
-:hide
+hide{
 	word-printer get-branch get-?branch get-original-exit 
 	get-quote branch-increment decompile-literal 
 	decompile-branch decompile-?branch decompile-quote
-;hide
+}hide
 
 : xt-instruction ( extract instruction from execution token )
 	cfa @ >instruction ;
@@ -2048,9 +2050,8 @@ Also of note, a number greater than "here" must be data )
 	print-defined ;
 
 : see ( -- : decompile the next word in the input stream )
-	( decompile a word )
 	find
-	dup 0= if drop error-no-word exit then
+	dup 0= if -32 throw then
 	1- ( move to PWD field )
 	dup print-header
 	dup defined-word?
@@ -2254,7 +2255,7 @@ b/buf string buf
 : get >r buf r> r/o name read throw drop ;
 : block ?invalid ?update if dup update! then dup get loaded ! buf drop ;
 
-:hide dirty ?update update! loaded name get ?invalid write read ;hide
+hide{ dirty ?update update! loaded name get ?invalid write read }hide
 
 : c 
 	1 block update drop
@@ -2311,7 +2312,8 @@ have to be NUL terminated
 
 : pass ( c-addr1 c-addr2 -- : bool ) 
 	2drop 1 ;
-: fail ( c-addr1 c-addr2 -- : bool ) 
+
+: reject ( c-addr1 c-addr2 -- : bool ) 
 	2drop 0 ;
 
 : *pat==*str ( c-addr1 c-addr2 -- c-addr1 c-addr2 bool )
@@ -2323,10 +2325,10 @@ have to be NUL terminated
 defer matcher
 
 : advance ( string regex char -- bool : advance both regex and string )
-	if 1 1 ++ matcher else fail then ;
+	if 1 1 ++ matcher else reject then ;
 
 : advance-string ( string regex char -- bool : advance only the string )
-	if 1 0 ++ matcher else fail then ;
+	if 1 0 ++ matcher else reject then ;
 
 : advance-regex ( string regex -- bool : advance matching )
 	2dup 0 1 ++ matcher if pass else *str advance-string then ;
@@ -2345,22 +2347,29 @@ defer matcher
 
 matcher is match
 
-:hide 
-	*str *pat *pat==*str pass fail advance 
-	advance-string advance-regex matcher ++ 
-;hide
+T{ c" hello" drop c" hello" drop match -> 1 }T
+T{ c" hello" drop c" hellx" drop match -> 0 }T
+T{ c" hellx" drop c" hello" drop match -> 0 }T
+T{ c" hello" drop c" hell"  drop match -> 0 }T
+T{ c" hell"  drop c" hello" drop match -> 0 }T
+T{ c" hello" drop c" he.lo" drop match -> 1 }T
+T{ c" hello" drop c" h*"    drop match -> 1 }T
+T{ c" hello" drop c" h*l."  drop match -> 1 }T
+
+hide{ 
+	*str *pat *pat==*str pass reject advance 
+	advance-string advance-regex matcher ++ match
+}hide
 
 ( ==================== Matcher ================================ )
 
 
 ( ==================== Cons Cells ============================= )
 
-( 
-From http://sametwice.com/cons.fs, this could be improved if the optional
+( From http://sametwice.com/cons.fs, this could be improved if the optional
 memory allocation words were added to the interpreter. This provides
 a simple "cons cell" data structure. There is currently no way to
-free allocated cells 
-)
+free allocated cells )
 
 : car! ( value cons-addr -- : store a value in the car cell of a cons cell ) 
 	! ;
@@ -2379,16 +2388,17 @@ free allocated cells
 
 : cons0 0 0 cons ;
 
+marker cleanup
+77 987 cons constant x
+T{ x car@ -> 77  }T
+T{ x cdr@ -> 987 }T
+T{ 55 x cdr! x car@ x cdr@ -> 77 55 }T
+T{ 44 x car! x car@ x cdr@ -> 44 55 }T
+cleanup
+
 ( ==================== Cons Cells ============================= )
 
 ( ==================== Miscellaneous ========================== )
-
-( @todo use check-within in various primitives like "array" )
-: check-within ( x min max -- : abort if x is not within a range )
-	within not if abort" limit exceeded" then ;
-
-: enum ( x " ccc" -- x+1 : define a series of enumerations )
-	dup constant 1+ ; ( better would be a :enum ;enum syntax )
 
 : license ( -- : print out license information )
 " 
@@ -2416,20 +2426,6 @@ OTHER DEALINGS IN THE SOFTWARE.
 
 " 
 ;
-
-: welcome ( -- : print out a stupid welcome message which most interpreters seems insistent on)
-	" FORTH: libforth successfully loaded." cr
-	" Type 'help' and press return for a basic introduction." cr
-	" Type 'license' and press return to see the license. (MIT license)." cr
-	" Core: " here . " / " here unused + . cr
-	ok ;
-
-( @todo Improve this function! )
-: reader immediate 
-	welcome
-	begin read " ok" cr again ;
-
-( find reader start! warm )
 
 ( ==================== Core utilities ======================== )
 
@@ -2523,7 +2519,7 @@ enum header-magic4
 
 ( s" forth.core" core )
 
-:hide 
+hide{ 
 header-size header? 
 header-magic0 header-magic1 header-magic2 header-magic3
 header-version header-cell-size header-endianess header-magic4
@@ -2533,7 +2529,7 @@ core-cell-size cheader
 core-endianess core-version save-endianess invalid-header
 cleanup size-field csize-field size-field-size
 read-or-abort size?
-;hide
+}hide
 
 ( ==================== Core utilities ======================== )
 
@@ -2613,16 +2609,16 @@ Example usage:
 	2drop ( drop twice because catch will restore stack before 'command' )
 	restore ; ( restore input stream )
 
-:hide literals repeated more redirect restore out run-length command ;hide
+hide{ literals repeated more redirect restore out run-length command }hide
 
 ( ==================== RLE =================================== )
 
 ( ==================== Hex dump ============================== )
 
 ( @todo hexdump can read in too many characters and it does not
-print out the correct address )
-: refill >r cpad 128 r> read-file throw ; ( file-id -- u 0 )
-: input  ' refill catch ; ( file-id -- u 0 | error, XXX not needed now! )
+print out the correct address
+@todo utilities for easy redirecting of file input/output )
+: input >r cpad 128 r> read-file ; ( file-id -- u 0 | error )
 : clean  cpad 128 0 fill ; ( -- )
 : cdump  cpad chars swap aligned chars dump ; ( u -- )
 : hexdump ( file-id -- : [hex]dump a file to the screen )
@@ -2632,21 +2628,19 @@ print out the correct address )
 	?dup-if cdump else drop exit then
 	tail ; 
 
-:hide more cpad clean cdump input refill ;hide
+hide{ more cpad clean cdump input }hide
 
 ( ==================== Hex dump ============================== )
 
-( 
-Looking at most Forths dictionary with "words" command they tend
+( Looking at most Forths dictionary with "words" command they tend
 to have a lot of words that do not mean anything but to the implementers
 of that specific Forth, here we clean up as many non standard words as
-possible.
-)
-:hide
+possible. )
+hide{ 
  do-string ')' alignment-bits 
  compile-instruction dictionary-start hidden? hidden-mask instruction-mask
  max-core dolist x x! x@ write-exit
- max-string-length error-no-word
+ max-string-length 
  original-exit
  pnum evaluator 
  TrueFalse >instruction print-header
@@ -2656,7 +2650,7 @@ possible.
  `source-id `sin `sidx `slen `start-address `fin `fout `stdin
  `stdout `stderr `argc `argv `debug `invalid `top `instruction
  `stack-size `error-handler `x `y `handler
-;hide
+}hide
 
 ( 
 ## Forth To List
@@ -2677,8 +2671,7 @@ if any
 * here documents, string literals
 * proper booleans should be used throughout
 * Implement as many things from http://lars.nocrew.org/forth2012/implement.html
-as is sensible.
-)
+as is sensible. )
 
 ( 
 The following will not work as we might actually be reading from a string [`sin]
@@ -2695,5 +2688,31 @@ not `fin.
 	loop
 	2drop 0 ; )
 
-verbose [if] welcome [then]
+verbose [if] 
+	.( FORTH: libforth successfully loaded.) cr
+	.( Type 'help' and press return for a basic introduction.) cr
+	.( Core: ) here . " / " here unused + . cr
+	 
+	.( The MIT License ) cr
+	.( ) cr
+	.( Copyright 2016 Richard James Howe) cr
+	.( ) cr
+	.( Permission is hereby granted, free of charge, to any person obtaining a) cr
+	.( copy of this software and associated documentation files [the "Software"],) cr
+	.( to deal in the Software without restriction, including without limitation) cr
+	.( the rights to use, copy, modify, merge, publish, distribute, sublicense,) cr
+	.( and/or sell copies of the Software, and to permit persons to whom the) cr
+	.( Software is furnished to do so, subject to the following conditions:) cr
+	.( ) cr
+	.( The above copyright notice and this permission notice shall be included) cr
+	.( in all copies or substantial portions of the Software.) cr
+	.( ) cr
+	.( THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR) cr
+	.( IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,) cr
+	.( FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL) cr
+	.( THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR) cr
+	.( OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,) cr
+	.( ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR) cr
+	.( OTHER DEALINGS IN THE SOFTWARE. ) cr
+[then]
 

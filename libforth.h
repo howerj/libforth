@@ -44,8 +44,8 @@ defined elsewhere, which is particularly useful for allowing the interpreter
 to use non-portable functions.
 
 @todo rewrite structure so static allocation of functions can be done,
-thus removing the need for **forth\_new\_function\_list** and 
-**forth\_delete\_function\_list**.
+thus removing the need for **forth_new_function_list** and 
+**forth_delete_function_list**.
 
 **/
 struct forth_functions
@@ -152,8 +152,8 @@ read from a string until there is no more. It will like-
 wise invalidate objects if there is an error evaluating the
 string. Do not forget to call either forth_set_file_input() or 
 forth_set_string_input() or to close any previous files 
-passed to forth\_eval() after you have called forth\_eval(). 
-Multiple calls to forth\_eval()
+passed to forth_eval() after you have called forth_eval(). 
+Multiple calls to forth_eval()
 will work however.
 
 @param   o   An initialized forth environment. Caller frees.
@@ -164,7 +164,7 @@ int forth_eval(forth_t *o, const char *s);
 
 /** 
 @brief  Dump a raw forth object to disk, for debugging purposes, this
-cannot be loaded with "forth\_load\_core".
+cannot be loaded with "forth_load_core".
 
 @param  o    forth object to dump, caller frees, asserted.
 @param  dump file to dump to (opened as "wb"), caller frees, asserted.
@@ -174,7 +174,7 @@ int forth_dump_core(forth_t *o, FILE *dump);
 
 /** 
 @brief   Save the opaque FORTH object to file, this file may be
-loaded again with forth\_load\_core. The file passed in should
+loaded again with forth_load_core. The file passed in should
 be have been opened up in binary mode ("wb"). These files
 are not portable, files generated on machines with different
 machine word sizes or endianess will not work with each
@@ -212,7 +212,7 @@ forth_t *forth_load_core(FILE *dump);
 length as only they will be used in defining the new
 name
 @param   c    Value of constant
-@return  Same return status as forth\_eval 
+@return  Same return status as forth_eval 
 **/
 int forth_define_constant(forth_t *o, const char *name, forth_cell_t c);
 
@@ -255,15 +255,15 @@ void forth_set_args(forth_t *o, int argc, char **argv);
 @brief  This implements a FORTH REPL whose behavior is documented in
 the man pages for this library. You pass in the same format as
 is expected to main(). The only option possible to pass to argv
-is "-d" which automatically performs a forth\_coredump() after
+is "-d" which automatically performs a forth_coredump() after
 it has read all the files passed in argv. All other strings
 are treated as file names to open and read input from, apart
 from "-", which sets the interpreter to read from stdin. Consult
 the man pages.
 
-Currently there is no mechanism for passing a struct forth\_functions
+Currently there is no mechanism for passing a struct forth_functions
 to this call, this is deliberate. A saved Forth file will not make
-sense without the correct forth\_functions structure and associated
+sense without the correct forth_functions structure and associated
 functions.
 
 @param  argc  An argument count, like in main().

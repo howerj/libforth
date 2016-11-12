@@ -767,30 +767,28 @@ can be used for timing and implementing sleep functionality, the counter
 will not increase the interpreter is blocking and waiting for input, although
 this is implementation dependent.
 
-* 'evaluator'   ( char-address -- x )
+* 'evaluator'   ( c-addr u 0 | file-id 0 1 -- x )
 
-This word is a primitive used to implement 'evaluate'. It takes a pointer to a
-string to be evaluated as if it had been typed in. It pushes a status code,
-zero on success, anything else on failure of some sort.
+This word is a primitive used to implement 'evaluate' and 'include-file', it
+takes a boolean to decide whether it will read from a file (1) or a string (0),
+and then takes either a forth string, or a **file-id**.
 
 * 'system'      ( c-addr u -- status )
 
 Execute a command with the systems command interpreter.
 
-@todo Document file related words and 'call' function.
-
 ##### File Access Words
 
 The following compiling words are part of the File Access Word set, a few of
-the fields need explaining in the stack comments. "fileid" refers to a
+the fields need explaining in the stack comments. "file-id" refers to a
 previously opened file as returned by "open-file", "ior" refers to a return
 status provided by the file operations. "fam" is a file access method, 
 
-* 'close-file'  ( fileid -- ior )
+* 'close-file'  ( file-id -- ior )
 
 Close an already opened file.
 
-* 'open-file'   ( c-addr u fam -- fileid ior )
+* 'open-file'   ( c-addr u fam -- file-id ior )
 
 Open a file, given a Forth string (the 'c-addr' and the 'u' arguments), and a
 file access method, which is defined within "forth.fth". Possible file access
@@ -801,25 +799,25 @@ respectively.
 
 Delete a file on the file system given a Forth string.
 
-* 'read-file'   ( c-addr u fileid -- ior )
+* 'read-file'   ( c-addr u file-id -- ior )
 
 Read in 'u' characters into 'c-addr' given a file identifier.
 
-* 'write-file'  ( c-addr u fileid -- ior )
+* 'write-file'  ( c-addr u file-id -- ior )
 
 Write 'u' characters from 'c-addr' to a given file identifier.
 
-* 'file-position'   ( fileid -- ud ior )
+* 'file-position'   ( file-id -- ud ior )
 
 Get the file position offset from the beginning of the file given a file
 identifier.
 
-* 'reposition-file' ( ud fileid -- ior )
+* 'reposition-file' ( ud file-id -- ior )
 
 Reposition a files offset relative to the beginning of the file given a file
 identifier.
 
-* flush-file ( fileid -- ior )
+* flush-file ( file-id -- ior )
 
 Attempt to flush any buffered information written to a file.
 

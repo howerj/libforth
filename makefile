@@ -44,8 +44,8 @@ help:
 	@echo "cc $< -c -o $@"
 	@${CC} ${CFLAGS} $< -c -o $@
 
-%.md: %.c convert
-	./convert $< > $@
+%.md: %.c util/convert
+	util/./convert $< > $@
 
 lib${TARGET}.a: lib${TARGET}.o
 	${AR} rcs $@ $<
@@ -92,11 +92,11 @@ dist: ${TARGET} ${TARGET}.1 lib${TARGET}.[a3] lib${TARGET}.htm ${DOCS} forth.cor
 %.1: %.md
 	pandoc -s -t man $< -o $@
 
-%.md: %.h convert
-	./convert -H $< -o $@
+%.md: %.h util/convert
+	util/./convert -H $< -o $@
 
 %.3: %.h
-	./convert -H $< | pandoc -f markdown -s -t man -o $@
+	util/./convert -H $< | pandoc -f markdown -s -t man -o $@
 
 ${TARGET}.1: readme.1
 	${CP} $^ $@
@@ -106,14 +106,6 @@ doc: lib${TARGET}.htm ${DOCS}
 doxygen: *.c *.h *.md
 	doxygen -g
 	doxygen 2> doxygen_warnings.log
-
-libline/libline.a:
-	make -C libline libline.a
-
-# This option requires a clean build
-line: LDFLAGS += -lline
-line: CFLAGS += -L${INCLUDE} -I${INCLUDE} -DUSE_LINE_EDITOR
-line: libline/libline.a ${TARGET}
 
 small: CFLAGS = -m32 -DNDEBUG -std=c99 -Os 
 small: ${TARGET}
