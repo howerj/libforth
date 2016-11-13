@@ -1,5 +1,4 @@
 /**
-# forth.c.md
 @file       forth.c
 @author     Richard James Howe.
 @copyright  Copyright 2015,2016 Richard James Howe.
@@ -7,13 +6,12 @@
 
 @brief      A FORTH as a kernel module
 
-This file implements the core Forth interpreter, it is written in portable
-C99. The file contains a virtual machine that can interpret threaded Forth
-code and a simple compiler for the virtual machine, which is one of its
-instructions. The interpreter can be embedded in another application and
-there should be no problem instantiating multiple instances of the
-interpreter.
+This file implements the core Forth interpreter, as a Linux kernel module. 
 
+The file contains a virtual machine that can interpret threaded Forth
+code and a simple compiler for the virtual machine, which is one of its
+instructions. 
+ 
 **/
 
 #include <linux/init.h>   
@@ -82,6 +80,7 @@ static int forth_run(void);
 #define IS_BIG_ENDIAN (!(union { uint16_t u16; uint8_t c; }){ .u16 = 1 }.c)
 #define CORE_VERSION        (0x02u)
 
+/** @todo add more words to the startup program **/
 static const char *initial_forth_program = 
 ": here h @ ; \n"
 ": [ immediate 0 state ! ; \n"
@@ -104,6 +103,7 @@ static const char *initial_forth_program =
 ": bl 32 ; \n"
 ": emit _emit drop ; \n"
 ": space bl emit ; \n"
+": cr 10 emit ; \n"
 ": . pnum drop space ; \n";
 
 static const char conv[] = "0123456789abcdefghijklmnopqrstuvwxzy";
@@ -114,7 +114,7 @@ static struct forth o;
 static int    major_number;
 static char   input[MAX_BUFFER_LENGTH] = {0};
 static short  input_count;
-static short  input_index;
+static unsigned long cycle_counter = 0;
 
 static char   output[MAX_BUFFER_LENGTH] = {0};
 static short  output_index;
@@ -123,7 +123,7 @@ static int    open_count = 0;
 static struct class*  class  = NULL;
 static struct device* device = NULL;
 
-static DEFINE_MUTEX(forthchar_mutex);
+static DEFINE_MUTEX(forth_mutex);
 
 static int     dev_open(struct inode *, struct file *);
 static int     dev_release(struct inode *, struct file *);
@@ -161,27 +161,20 @@ enum registers {          /**< virtual machine registers */
 	STATE       =  8, /**< interpreter state; compile or command mode */
 	BASE        =  9, /**< base conversion variable */
 	PWD         = 10, /**< pointer to previous word */
-	SOURCE_ID   = 11, /**< input source selector */
-	SIN         = 12, /**< string input pointer */
-	SIDX        = 13, /**< string input index */
-	SLEN        = 14, /**< string input length */
-	START_ADDR  = 15, /**< pointer to start of VM */
-	DEBUG       = 16, /**< turn debugging on/off if enabled */
-	INVALID     = 17, /**< if non zero, this interpreter is invalid */
-	TOP         = 18, /**< *stored* version of top of stack */
-	INSTRUCTION = 19, /**< start up instruction */
-	STACK_SIZE  = 20, /**< size of the stacks */
-	ERROR_HANDLER = 21, /**< actions to take on error */
-};
-
-enum input_stream {
-	FILE_IN,       /**< file input; this could be interactive input */
-	STRING_IN = -1 /**< string input */
+	SIN         = 11, /**< string input pointer */
+	SIDX        = 12, /**< string input index */
+	SLEN        = 13, /**< string input length */
+	START_ADDR  = 14, /**< pointer to start of VM */
+	DEBUG       = 15, /**< turn debugging on/off if enabled */
+	INVALID     = 16, /**< if non zero, this interpreter is invalid */
+	TOP         = 17, /**< *stored* version of top of stack */
+	INSTRUCTION = 18, /**< start up instruction */
+	STACK_SIZE  = 19, /**< size of the stacks */
+	ERROR_HANDLER = 20, /**< actions to take on error */
 };
 
 static const char *register_names[] = { "h", "r", "`state", "base", "pwd",
-"`source-id", "`sin", "`sidx", "`slen", "`start-address", 
-"`debug", "`invalid", 
+"`sin", "`sidx", "`slen", "`start-address", "`debug", "`invalid", 
 "`top", "`instruction", "`stack-size", "`error-handler", NULL };
 
 #define XMACRO_INSTRUCTIONS\
@@ -247,20 +240,12 @@ static int logger(const char *prefix, const char *func,
 {
 	int r;
 	va_list ap;
-	printk("%s [FORTH-LKM %s %u]: ", prefix, func, line);
+	printk("%s[FORTH-LKM %s %u]: ", prefix, func, line);
 	va_start(ap, fmt);
 	r = vprintk(fmt, ap);
 	va_end(ap);
 	printk("\n");
 	return r;
-}
-
-/**@todo fix this */
-static int dgetc(void)
-{
-	if(input_index >= input_count)
-		return -1;
-	return input[input_index++];
 }
 
 static int dputc(char c)
@@ -271,22 +256,12 @@ static int dputc(char c)
 	return c;
 }
 
-static int dscanf(const char *fmt, ...)
-{
-	int r = 0;
-	va_list ap;
-	va_start(ap, fmt);
-	r = vsscanf(input, fmt, ap);
-	if(r > 0)
-		input_index += r;
-	va_end(ap);
-	return r;
-}
-
 static int dprintf(const char *fmt, ...)
 {
 	int r = 0;
 	va_list ap;
+	if(output_index >= MAX_BUFFER_LENGTH - 1)
+		return -1;
 	va_start(ap, fmt);
 	r = vsnprintf(output, (MAX_BUFFER_LENGTH - 1) - output_index, fmt, ap);
 	va_end(ap);
@@ -297,28 +272,18 @@ static int dprintf(const char *fmt, ...)
 
 static int forth_get_char(void)
 {
-	switch(o.m[SOURCE_ID]) {
-	case FILE_IN:   return dgetc();
-	case STRING_IN: return o.m[SIDX] >= o.m[SLEN] ? 
-				-1 : 
-				((char*)(o.m[SIN]))[o.m[SIDX]++];
-	default:        return -1;
-	}
-	return -1;
+	return o.m[SIDX] >= o.m[SLEN] ? -1 : ((char*)(o.m[SIN]))[o.m[SIDX]++];
 }
 
 static int forth_get_word(uint8_t *p)
 {
 	int n = 0;
-	switch(o.m[SOURCE_ID]) {
-	case FILE_IN:   return dscanf(o.word_fmt, p, &n);
-	case STRING_IN:
-		if(sscanf((char *)&(((char*)(o.m[SIN]))[o.m[SIDX]]), o.word_fmt, p, &n) <= 0)
-			return -1;
-		o.m[SIDX] += n;
-		return n;
-	default:       return -1;
-	}
+	if(sscanf((char *)&(((char*)(o.m[SIN]))[o.m[SIDX]]), o.word_fmt, p, &n) <= 0)
+		return -1;
+	if(!((char*)o.s)[0])
+		return -1;
+	o.m[SIDX] += n;
+	return n;
 }
 
 static void compile(forth_cell_t code, const char *str)
@@ -387,6 +352,7 @@ static forth_cell_t check_bounds(forth_cell_t f, unsigned line, forth_cell_t bou
 	if(f >= bound) {
 		fatal("bounds check failed (%" PRIdCell " >= %zu)", f, (size_t)bound);
 		o.m[INVALID] = 1;
+		return 0;
 	}
 	return f;
 }
@@ -409,6 +375,7 @@ static forth_cell_t check_dictionary(forth_cell_t dptr)
 	if((o.m + dptr) >= (o.vstart)) {
 		fatal("dictionary pointer is in stack area %"PRIdCell, dptr);
 		o.m[INVALID] = 1;
+		return 0;
 	}
 	return dptr;
 }
@@ -428,22 +395,22 @@ static void print_stack(forth_cell_t *S, forth_cell_t f)
 	dputc('\n');
 }
 
-static void forth_set_file_input(void)
-{
-	o.m[SOURCE_ID] = FILE_IN;
-}
-
-static void forth_set_string_input(const char *s)
+static void forth_set_string_input(const char *s, size_t length)
 {
 	o.m[SIDX] = 0;              /* m[SIDX] == current character in string */
-	o.m[SLEN] = strlen(s) + 1;  /* m[SLEN] == string len */
-	o.m[SOURCE_ID] = STRING_IN; /* read from string, not a file handle */
+	o.m[SLEN] = length;         /* m[SLEN] == string len */
 	o.m[SIN] = (forth_cell_t)s; /* sin  == pointer to string input */
 }
 
 static int forth_eval(const char *s)
 {
-	forth_set_string_input(s);
+	forth_set_string_input(s, strlen(s) + 1);
+	return forth_run();
+}
+
+static int forth_eval_block(const char *s, size_t length)
+{
+	forth_set_string_input(s, length);
 	return forth_run();
 }
 
@@ -468,10 +435,9 @@ static void forth_make_default(void)
 	o.vend    = o.vstart + o.m[STACK_SIZE];
 	sprintf(o.hex_fmt, "0x%%0%d"PRIxCell, (int)sizeof(forth_cell_t)*2);
 	sprintf(o.word_fmt, "%%%ds%%n", MAXIMUM_WORD_LENGTH - 1);
-	forth_set_file_input();  /* set up input after our eval */
 }
 
-static int forth_init(void)
+static int forth_core_init(void)
 {
 	forth_cell_t *m, i, w, t;
 
@@ -492,7 +458,7 @@ static int forth_init(void)
 	m[m[DIC]++] = t;    /* call to I_TAIL */
 	m[m[DIC]++] = o.m[INSTRUCTION] - 1; /* recurse*/
 
-	note("compiling first words");
+	debug("compiling first words");
 
 	compile(I_DEFINE,    ":");
 	compile(I_IMMEDIATE, "immediate");
@@ -502,29 +468,38 @@ static int forth_init(void)
 		m[m[DIC]++] = w++; /*This adds the actual VM instruction */
 	}
 
-	note("first evaluation");
+	debug("first evaluation");
 
 	if(forth_eval(": state 8 exit : ; immediate ' exit , 0 state ! ;") < 0)
 		return -1;
 
-	note("defining constants");
+	debug("defining constants");
 
 	for(i = 0; register_names[i]; i++)
 		if(forth_define_constant(register_names[i], i+DIC) < 0)
 			return -1;
 
-	forth_define_constant("size", sizeof(forth_cell_t));
-	forth_define_constant("stack-start", CORE_SIZE - (2 * o.m[STACK_SIZE]));
-	forth_define_constant("max-core", CORE_SIZE );
-	forth_define_constant("dictionary-start",  DICTIONARY_START);
-	forth_define_constant(">in",  STRING_OFFSET * sizeof(forth_cell_t));
+	if(forth_define_constant("size", sizeof(forth_cell_t)) < 0)
+		return -1;
 
-	note("evaluating startup program");
+	if(forth_define_constant("stack-start", CORE_SIZE - (2 * o.m[STACK_SIZE])) < 0)
+		return -1;
+
+	if(forth_define_constant("max-core", CORE_SIZE) < 0)
+		return -1;
+
+	if(forth_define_constant("dictionary-start",  DICTIONARY_START) < 0)
+		return -1;
+
+	if(forth_define_constant(">in",  STRING_OFFSET * sizeof(forth_cell_t)))
+		return -1;
+
+	debug("evaluating startup program");
 
 	if(forth_eval(initial_forth_program) < 0)
 		return -1;
 
-	forth_set_file_input();  /*set up input after our eval */
+	debug("finished forth core initialization successfully");
 	return 0;
 }
 
@@ -540,9 +515,10 @@ static int forth_run(void)
 restart:
 	
 	for(;(pc = m[ck(I++)]);) { 
+	INNER:  
+		cycle_counter++;
 		if(o.m[INVALID])
 			return -1;
-	INNER:  
 		w = instruction(m[ck(pc++)]);
 		switch (w) { 
 		case I_PUSH:    *++S = f;     f = m[ck(I++)];          break;
@@ -565,6 +541,7 @@ restart:
 		{
 			if(forth_get_word(o.s) < 0)
 				goto end;
+			/*debug("word: %s", (char*)(o.s));*/
 			if ((w = forth_find((char*)o.s)) > 1) {
 				pc = w;
 				if (!m[STATE] && instruction(m[ck(pc)]) == I_COMPILE)
@@ -656,13 +633,12 @@ end:	o.S = S;
 	return 0;
 }
 
-
-static int __init forthchar_init(void)
+static int __init forth_init(void)
 {
 	void *ptr = NULL;
-	printk("Initializing FORTH-LKM\n");
+	note("Initializing FORTH-LKM");
 
-	if(forth_init() < 0) {
+	if(forth_core_init() < 0) {
 		fatal("failed to initialize forth core");
 		return -EINVAL;
 	}
@@ -690,7 +666,7 @@ static int __init forthchar_init(void)
 		goto fail;
 	}
 
-	mutex_init(&forthchar_mutex);
+	mutex_init(&forth_mutex);
 
 	note("module initialized");
 	return 0;
@@ -704,9 +680,9 @@ fail:
 	return PTR_ERR(ptr);
 }
 
-static void __exit forthchar_exit(void)
+static void __exit forth_exit(void)
 {
-	mutex_destroy(&forthchar_mutex);
+	mutex_destroy(&forth_mutex);
 	device_destroy(class, MKDEV(major_number, 0));
 	class_unregister(class);
 	class_destroy(class);
@@ -716,7 +692,7 @@ static void __exit forthchar_exit(void)
 
 static int dev_open(struct inode *inodep, struct file *filep) 
 {
-	if(!mutex_trylock(&forthchar_mutex)) {
+	if(!mutex_trylock(&forth_mutex)) {
 		error("Device is busy or in use by another process");
 		return -EBUSY;
 	}
@@ -729,33 +705,48 @@ static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *of
 {
 	/**@todo blocking on no data? */
 	int err = 0;
+	short rval = output_index;
 	err = copy_to_user(buffer, output, output_index);
+	output_index = 0;
 	if(err == 0) {
-		output_index = 0;
-		return 0;
+		debug("sent %hd chars", rval);
+		return rval;
 	} else {
 		error("failed to send %d chars to user", output_index);
-		return -EFAULT;
+		return -EINVAL;
 	}
 }
 
 static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, loff_t *offset)
 {
+	int r = 0;
 	if(len > MAX_BUFFER_LENGTH-1) {
 		debug("write to large (%zu > %d)", len, MAX_BUFFER_LENGTH-1);
 		return -EINVAL;
 	}
 	input_count = snprintf(input, MAX_BUFFER_LENGTH-1, "%s", buffer);
-	debug("received %zu chars", len);
+	debug("received %zu chars: %s", len, input);
+	if(input_count > 0) {
+		debug("running forth interpreter");
+		r = forth_eval_block(input, len);
+		if(r < 0) {
+			error("forth_eval_block returned: %d", r);
+			/**@todo reinitialize if invalid*/
+			return -EINVAL;
+		} else {
+			debug("interpreter ran for %ld cycles, wrote %hd", cycle_counter, output_index);
+		}
+	}
+
 	return len;
 }
 
 static int dev_release(struct inode *inodep, struct file *filep)
 {
-	mutex_unlock(&forthchar_mutex);
+	mutex_unlock(&forth_mutex);
 	note("device closed");
 	return 0;
 }
 
-module_init(forthchar_init);
-module_exit(forthchar_exit);
+module_init(forth_init);
+module_exit(forth_exit);
