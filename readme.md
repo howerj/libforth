@@ -35,6 +35,43 @@ The documentation is non-existent at the moment, and will not be rewritten
 until the features and implementation have become somewhat stable. As such, the
 only documentation is the source, [forth.c][].
 
+However, here is some minimal information to get you start:
+
+### building
+
+This module was built against kernel version 3.16, on Debian 8, x86-64. There
+is nothing hardware specific or special about the module, it should be quite
+portable.
+
+To build:
+
+	make
+
+This should build a test program, called **test**, and a kernel module,
+**forth.ko**.
+
+To load the module, as *root*:
+
+	insmod forth.ko
+	
+You can view the output of [dmesg][], the module is quite verbose and will tell
+you if it succeeded. If it did, **/dev/forth** should have now appeared on your
+system.
+
+To run the test program, [test.c][], again as *root*:
+
+	./test
+
+This should sent a simple test program to the device, the program then reads
+back the output, then exits.
+
+The module will also create files under:
+
+	/sys/class/forth
+
+The devices under here will be subject to a lot of change, so will not be
+documented for now.
+
 ## Security
 
 Much like **/dev/mem** and **/dev/kmem** this device should be accessible by
@@ -56,7 +93,9 @@ one as used by the rest of the kernel.
 [udev]: https://en.wikipedia.org/wiki/Udev
 [99-forth.rules]: 99-forth.rules
 [forth.c]: forth.c
+[test.c]: test.c
 [Forth blocks]: http://wiki.c2.com/?ForthBlocks
 [character device]: https://en.wikipedia.org/wiki/Device_file#Character_devices
+[dmesg]: http://www.linfo.org/dmesg.html
 
 <style type="text/css">body{margin:40px auto;max-width:850px;line-height:1.6;font-size:16px;color:#444;padding:0 10px}h1,h2,h3{line-height:1.2}</style>

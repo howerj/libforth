@@ -11,7 +11,25 @@ This file implements the core Forth interpreter, as a Linux kernel module.
 The file contains a virtual machine that can interpret threaded Forth
 code and a simple compiler for the virtual machine, which is one of its
 instructions. 
- 
+
+@todo either setup an ioctrl, or create a file in "/sys", to control and 
+display information about the forth interpreter.
+
+Information to display in "/sys":
+
+Output:
+* cycle count
+* error log
+* help message
+* version information
+
+Input:
+* max cycle count to run interpreter for
+
+See:
+* https://stackoverflow.com/questions/15807846/ioctl-linux-device-driver
+* https://www.kernel.org/doc/Documentation/filesystems/sysfs.txt 
+
 **/
 
 #include <linux/init.h>   
@@ -21,6 +39,10 @@ instructions.
 #include <linux/fs.h>
 #include <asm/uaccess.h>
 #include <linux/mutex.h>
+#include <linux/ctype.h>
+#include <linux/limits.h>
+#include <linux/string.h>
+#include <stdarg.h>
 
 #define  DEVICE_NAME "forth"
 #define  CLASS_NAME  "forth"
@@ -30,23 +52,21 @@ MODULE_AUTHOR("Richard Howe");
 MODULE_DESCRIPTION("A Forth interpreter as a device");
 MODULE_VERSION("0.1");
 
-#include <linux/ctype.h>
-#include <linux/limits.h>
-#include <linux/string.h>
-//#include <stdint.h>
-#include <stdarg.h>
-
-#define CORE_SIZE (4096)
-
 typedef uintptr_t forth_cell_t; /**< FORTH cell large enough for a pointer*/
-
-/* linux requires: sizeof(void*) == sizeof(long) ??? */
-#define PRIdCell "ld" /**< Decimal format specifier for a Forth cell */
-#define PRIxCell "lx" /**< Hex format specifier for a Forth word */
 
 static int logger(const char *prefix, const char *func, 
 		unsigned line, const char *fmt, ...);
 static int forth_run(void); 
+static ssize_t forth_info_show(struct device *dev, struct device_attribute *attr, char *buf);
+static int     dev_open(struct inode *, struct file *);
+static int     dev_release(struct inode *, struct file *);
+static ssize_t dev_read(struct file *, char *, size_t, loff_t *);
+static ssize_t dev_write(struct file *, const char *, size_t, loff_t *);
+
+#define CORE_SIZE (4096)
+/* linux requires: sizeof(void*) == sizeof(long) ??? */
+#define PRIdCell "ld" /**< Decimal format specifier for a Forth cell */
+#define PRIxCell "lx" /**< Hex format specifier for a Forth word */
 
 #define fatal(FMT,...)   logger(KERN_ALERT,  __func__, __LINE__, FMT, ##__VA_ARGS__)
 #define error(FMT,...)   logger(KERN_CRIT,   __func__, __LINE__, FMT, ##__VA_ARGS__)
@@ -79,6 +99,8 @@ static int forth_run(void);
 #define instruction(k)      ((k) & INSTRUCTION_MASK)
 #define IS_BIG_ENDIAN (!(union { uint16_t u16; uint8_t c; }){ .u16 = 1 }.c)
 #define CORE_VERSION        (0x02u)
+#define MAX_BUFFER_LENGTH   (256)
+#define FORTH_VERSION       "2"
 
 /** @todo add more words to the startup program **/
 static const char *initial_forth_program = 
@@ -109,7 +131,6 @@ static const char *initial_forth_program =
 static const char conv[] = "0123456789abcdefghijklmnopqrstuvwxzy";
 static struct forth o;
 
-#define MAX_BUFFER_LENGTH (256)
 
 static int    major_number;
 static char   input[MAX_BUFFER_LENGTH] = {0};
@@ -124,11 +145,7 @@ static struct class*  class  = NULL;
 static struct device* device = NULL;
 
 static DEFINE_MUTEX(forth_mutex);
-
-static int     dev_open(struct inode *, struct file *);
-static int     dev_release(struct inode *, struct file *);
-static ssize_t dev_read(struct file *, char *, size_t, loff_t *);
-static ssize_t dev_write(struct file *, const char *, size_t, loff_t *);
+static DEVICE_ATTR(info, S_IRUGO, forth_info_show, NULL);
 
 static struct file_operations fops =
 {
@@ -633,10 +650,16 @@ end:	o.S = S;
 	return 0;
 }
 
+static ssize_t forth_info_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+    return sprintf(buf, "FORTH-LKM Version: %s\n", FORTH_VERSION);
+}
+
 static int __init forth_init(void)
 {
 	void *ptr = NULL;
-	note("Initializing FORTH-LKM");
+	int rval = 0, file_failed = 0;
+	debug("Initializing FORTH-LKM");
 
 	if(forth_core_init() < 0) {
 		fatal("failed to initialize forth core");
@@ -649,7 +672,7 @@ static int __init forth_init(void)
 		return major_number;
 	}
 
-	note("registered major number: %d", major_number);
+	debug("registered major number: %d", major_number);
 
 	class = class_create(THIS_MODULE, CLASS_NAME);
 	if(IS_ERR(class)) {
@@ -657,7 +680,7 @@ static int __init forth_init(void)
 		fatal("failed to register device class");
 		goto fail;
 	}
-	note("register device class");
+	debug("register device class");
 
 	device = device_create(class, NULL, MKDEV(major_number, 0), NULL, DEVICE_NAME);
 	if(IS_ERR(device)) {
@@ -666,12 +689,21 @@ static int __init forth_init(void)
 		goto fail;
 	}
 
-	mutex_init(&forth_mutex);
+	rval = device_create_file(device, &dev_attr_info);
+	if(rval) {
+		fatal("failed to created info file");
+		file_failed = 1;
+		goto fail;
+	}
 
-	note("module initialized");
+	mutex_init(&forth_mutex);
+	debug("module initialized");
 	return 0;
 fail:
-	/*if(device)
+	if(file_failed)
+		device_remove_file(device, &dev_attr_info);
+	/** @todo destroy device correctly
+	if(device)
 		device_destroy(class, device);*/
 	if(class)
 		class_destroy(class);
@@ -683,6 +715,7 @@ fail:
 static void __exit forth_exit(void)
 {
 	mutex_destroy(&forth_mutex);
+	device_remove_file(device, &dev_attr_info);
 	device_destroy(class, MKDEV(major_number, 0));
 	class_unregister(class);
 	class_destroy(class);
@@ -750,3 +783,5 @@ static int dev_release(struct inode *inodep, struct file *filep)
 
 module_init(forth_init);
 module_exit(forth_exit);
+
+
