@@ -9,6 +9,12 @@ test: test.c
 forth.ko: forth.c
 	make -C /lib/modules/${shell uname -r}/build/ M=${PWD} modules
 
+libline/libline.a:
+	make -C libline
+
+line: line.c libline/libline.a
+	${CC} -Wall -Wextra -Ilibline -Llibline $^ -o $@
+
 clean:
 	make -C /lib/modules/${shell uname -r}/build/ M=${PWD} clean
 	rm -f test

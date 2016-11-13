@@ -32,6 +32,7 @@ html/*
 latex
 latex/*
 libforth.md
+line
 *.log
 *.mod
 *.mod.c

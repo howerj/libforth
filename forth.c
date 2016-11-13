@@ -14,6 +14,8 @@ instructions.
 
 @todo either setup an ioctrl, or create a file in "/sys", to control and 
 display information about the forth interpreter.
+todo error handling needs to be improved, what with no setjmp/longjmp which
+the original program used
 
 Information to display in "/sys":
 
@@ -131,7 +133,6 @@ static const char *initial_forth_program =
 static const char conv[] = "0123456789abcdefghijklmnopqrstuvwxzy";
 static struct forth o;
 
-
 static int    major_number;
 static char   input[MAX_BUFFER_LENGTH] = {0};
 static short  input_count;
@@ -172,27 +173,56 @@ enum trace_level
 	DEBUG_CHECKS       /**< bounds checks are printed out */
 };
 
-enum registers {          /**< virtual machine registers */
-	DIC         =  6, /**< dictionary pointer */
-	RSTK        =  7, /**< return stack pointer */
-	STATE       =  8, /**< interpreter state; compile or command mode */
-	BASE        =  9, /**< base conversion variable */
-	PWD         = 10, /**< pointer to previous word */
-	SIN         = 11, /**< string input pointer */
-	SIDX        = 12, /**< string input index */
-	SLEN        = 13, /**< string input length */
-	START_ADDR  = 14, /**< pointer to start of VM */
-	DEBUG       = 15, /**< turn debugging on/off if enabled */
-	INVALID     = 16, /**< if non zero, this interpreter is invalid */
-	TOP         = 17, /**< *stored* version of top of stack */
-	INSTRUCTION = 18, /**< start up instruction */
-	STACK_SIZE  = 19, /**< size of the stacks */
-	ERROR_HANDLER = 20, /**< actions to take on error */
+typedef int (*forth_function_t)(void);
+
+/* Setup for CALL instruction: CALL indexes into a function pointer table */
+
+#define FUNCTION_COUNT (1)
+
+static int forth_call_test(void)
+{
+	printk("Test function\n");
+	return 0;
+}
+
+struct forth_functions {
+	unsigned depth; 
+	forth_function_t function; 
 };
 
-static const char *register_names[] = { "h", "r", "`state", "base", "pwd",
-"`sin", "`sidx", "`slen", "`start-address", "`debug", "`invalid", 
-"`top", "`instruction", "`stack-size", "`error-handler", NULL };
+static struct forth_functions functions[FUNCTION_COUNT] = {
+	{ 0, forth_call_test }
+};
+
+#define XMACRO_REGISTERS\
+ X(DIC,           "h",               6, "dictionary pointer")\
+ X(RSTK,          "r",               7, "return stack pointer")\
+ X(STATE,         "`state",          8, "interpreter state; compile or command mode")\
+ X(BASE,          "base",            9, "base conversion variable")\
+ X(PWD,           "pwd",            10, "pointer to previous word")\
+ X(SIN,           "`sin",           11, "string input pointer")\
+ X(SIDX,          "`sidx",          12, "string input index")\
+ X(SLEN,          "`slen",          13, "string input length")\
+ X(START_ADDR,    "`start-address", 14, "pointer to start of VM")\
+ X(DEBUG,         "`debug",         15, "turn debugging on/off if enabled")\
+ X(INVALID,       "`invalid",       16, "if non zero, this interpreter is invalid")\
+ X(TOP,           "`top",           17, "*stored* version of top of stack")\
+ X(INSTRUCTION,   "`instruction",   18, "start up instruction")\
+ X(STACK_SIZE,    "`stack-size",    19, "size of the stacks")\
+ X(ERROR_HANDLER, "`error-handler", 20, "actions to take on error")
+
+enum registers {          /**< virtual machine registers */
+#define X(ENUM, NAME, VALUE, HELP) ENUM = VALUE,
+	XMACRO_REGISTERS
+#undef X
+};
+
+static const char *register_names[] = { 
+#define X(ENUM, NAME, VALUE, HELP) NAME,
+	XMACRO_REGISTERS
+#undef X
+	NULL 
+};
 
 #define XMACRO_INSTRUCTIONS\
  X(I_PUSH,      "push",       " -- x : push a literal")\
@@ -238,6 +268,7 @@ static const char *register_names[] = { "h", "r", "`state", "base", "pwd",
  X(I_CLOCK,     "clock",      " -- x : push a time value")\
  X(I_PSTK,      ".s",         " -- : print out values on the stack")\
  X(I_RESTART,   "restart",    " error -- : restart system, cause error")\
+ X(I_CALL,      "call",       " ??? x -- ??? x : call C function")\
  X(LAST_INSTRUCTION, NULL, "")
 
 enum instructions { /**< instruction enumerations */
@@ -302,6 +333,26 @@ static int forth_get_word(uint8_t *p)
 	o.m[SIDX] += n;
 	return n;
 }
+
+/*
+static void forth_push(forth_cell_t f)
+{
+	*++(o.S) = o.m[TOP];
+	o.m[TOP] = f;
+}
+
+static forth_cell_t forth_pop(void)
+{
+	forth_cell_t f = o.m[TOP];
+	o.m[TOP] = *(o.S)--;
+	return f;
+}
+
+static forth_cell_t forth_stack_position(void)
+{
+	return o.S - o.vstart;
+}
+*/
 
 static void compile(forth_cell_t code, const char *str)
 { 
@@ -458,7 +509,7 @@ static int forth_core_init(void)
 {
 	forth_cell_t *m, i, w, t;
 
-	note("initializing forth core");
+	debug("initializing forth core");
 
 	forth_make_default();
 
@@ -638,7 +689,29 @@ restart:
 			f = jiffies;
 			break;
 		case I_PSTK:    print_stack(S, f);   break;
-		case I_RESTART: cd(1); goto restart; break;
+		case I_RESTART: goto restart; break;
+		case I_CALL:
+		{
+			forth_cell_t i;
+			cd(1);
+			if(o.m[INVALID])
+				return -1;
+			i = f;
+			if(i >= FUNCTION_COUNT) {
+				warning("invalid call (%ld > %d)", i, FUNCTION_COUNT);
+				break;
+			}
+			/**@todo check depth */
+			f = *S--; /* pop call number */
+			o.S = S; /* save stack */
+			o.m[TOP] = f; /* save top of stack */
+			w = functions[i].function(); /* call function */
+			S = o.S; /* restore modified stack */
+			f = o.m[TOP]; /* restore modified top */
+			*++S = f; /* push top */
+			f = w; /* push return code */
+			break;
+		}
 		default:
 			fatal("illegal operation %" PRIdCell, w);
 			o.m[INVALID] = 1;
