@@ -2645,7 +2645,7 @@ hide{
  `state
  `source-id `sin `sidx `slen `start-address `fin `fout `stdin
  `stdout `stderr `argc `argv `debug `invalid `top `instruction
- `stack-size `error-handler `x `y `handler
+ `stack-size `error-handler `x `y `handler _emit
 }hide
 
 ( 

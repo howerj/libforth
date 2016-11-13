@@ -375,8 +375,8 @@ code in *forth.fth* will not work.
 #define MINIMUM_STACK_SIZE  (64u)
 
 /** 
-@brief The start of the dictionary is after the registers and the **STRING_OFFSET**,
-this is the area where Forth definitions are placed. 
+@brief The start of the dictionary is after the registers and the 
+**STRING_OFFSET**, this is the area where Forth definitions are placed. 
 
 @note The string offset could be placed after the end of the dictionary
 to save space, in the area between the end of the dictionary and the
@@ -755,10 +755,10 @@ they are actually indexes into the virtual machines main memory, this is so
 that the programs running on the virtual machine can access them. 
 
 There are other registers that are in use that the virtual machine cannot 
-access directly (such as the program counter or instruction pointer). Some of these
-registers correspond directly to well known Forth concepts, such as the
-dictionary and return stack pointers, others are just implementation
-details. 
+access directly (such as the program counter or instruction pointer). 
+Some of these registers correspond directly to well known Forth concepts, 
+such as the dictionary and return stack pointers, others are just 
+implementation details. 
 
 X-Macros are an unusual but useful method of making tables
 of data. We use this to store the registers name, it's address within
@@ -775,7 +775,7 @@ More information about X-Macros can be found here:
 #define XMACRO_REGISTERS \
  X("h",               DIC,            6,   "dictionary pointer")\
  X("r",               RSTK,           7,   "return stack pointer")\
- X("`state",          STATE,          8,   "interpreter state; compile or command mode")\
+ X("`state",          STATE,          8,   "interpreter state")\
  X("base",            BASE,           9,   "base conversion variable")\
  X("pwd",             PWD,            10,  "pointer to previous word")\
  X("`source-id",      SOURCE_ID,      11,  "input source selector")\
@@ -791,12 +791,12 @@ More information about X-Macros can be found here:
  X("`argc",           ARGC,           21,  "argument count")\
  X("`argv",           ARGV,           22,  "arguments")\
  X("`debug",          DEBUG,          23,  "turn debugging on/off if enabled")\
- X("`invalid",        INVALID,        24,  "if non zero,this interpreter is invalid")\
+ X("`invalid",        INVALID,        24,  "non-zero on serious error")\
  X("`top",            TOP,            25,  "*stored* version of top of stack")\
  X("`instruction",    INSTRUCTION,    26,  "start up instruction")\
  X("`stack-size",     STACK_SIZE,     27,  "size of the stacks")\
  X("`error-handler",  ERROR_HANDLER,  28,  "actions to take on error")\
- X("`handler",        THROW,          29,  "place where exception handler is stored")\
+ X("`handler",        THROW,          29,  "exception handler is stored here")\
  X("`x",              SCRATCH_X,      30,  "scratch variable x")\
  X("`y",              SCRATCH_Y,      31,  "scratch variable y")
 
@@ -1051,7 +1051,8 @@ static int forth_get_word(forth_t *o, uint8_t *p)
 	switch(o->m[SOURCE_ID]) {
 	case FILE_IN:   return fscanf((FILE*)(o->m[FIN]), o->word_fmt, p, &n);
 	case STRING_IN:
-		if(sscanf((char *)&(((char*)(o->m[SIN]))[o->m[SIDX]]), o->word_fmt, p, &n) < 0)
+		if(sscanf((char *)&(((char*)(o->m[SIN]))[o->m[SIDX]]), 
+					o->word_fmt, p, &n) <= 0)
 			return EOF;
 		o->m[SIDX] += n;
 		return n;
@@ -1153,28 +1154,29 @@ the conversion are stored in **n**, even if the conversion failed.
 @param  base base to convert string from, valid values are 0, and 2-26
 @param  n    out parameter, the result of the conversion is stored here
 @param  s    string to convert
-@return int return code indicating failure or success 
+@return int return code indicating failure (non zero) or success (zero)
 **/
 static int numberify(int base, forth_cell_t *n, const char *s)
 {
 	char *end = NULL;
 	errno = 0;
 	*n = strtol(s, &end, base);
-	return !errno && *s != '\0' && *end == '\0';
+	return errno || *s == '\0' || *end != '\0';
 }
 
 /** 
-@brief Forths are usually case insensitive and are required to be (or at least accept
-only uppercase characters only) by the majority of the standards for Forth.  
-As an aside I do not believe case insensitivity is a good idea as it complicates
-interfaces and creates as much confusion as it tries to solve (not only that,
-but different case letters do convey information). However, in keeping with
-other implementations, this Forth is also made insensitive to case **DUP**
-is treated the same as **dup** and **Dup**.
+@brief Forths are usually case insensitive and are required to be (or
+at least accept only uppercase characters only) by the majority of the
+standards for Forth.  As an aside I do not believe case insensitivity is
+a good idea as it complicates interfaces and creates as much confusion
+as it tries to solve (not only that, but different case letters do convey
+information). However, in keeping with other implementations, this Forth
+is also made insensitive to case **DUP** is treated the same as **dup**
+and **Dup**.
 
-This comparison function, **istrcmp**, is only used in one place however, in
-the C function **forth_find**, replacing it with **strcmp** will bring back the
-more logical, case sensitive, behavior. 
+This comparison function, **istrcmp**, is only used in one place however,
+in the C function **forth_find**, replacing it with **strcmp** will
+bring back the more logical, case sensitive, behavior.
 
 @param  a   first string to compare
 @param  b   second string
@@ -1188,6 +1190,16 @@ static int istrcmp(const char *a, const char *b)
 	return tolower(*a) - tolower(*b);
 }
 
+/**
+The **match** function returns true if the word is not hidden and if
+a case sensitive case sensitive has succeeded.
+**/
+static int match(forth_cell_t *m, forth_cell_t pwd, const char *s)
+{
+	forth_cell_t len = WORD_LENGTH(m[pwd + 1]);
+	return !WORD_HIDDEN(m[pwd+1]) && !istrcmp(s, (char*)(&m[pwd-len]));
+}
+
 /** 
 **forth_find** finds a word in the dictionary and if it exists it returns a
 pointer to its **PWD** field. If it is not found it will return zero, also of
@@ -1195,16 +1207,14 @@ notes is the fact that it will skip words that are hidden, that is the
 hidden bit in the **MISC** field of a word is set. The structure of the
 dictionary has already been explained, so there should be no surprises in
 this word. Any improvements to the speed of this word would speed up the
-interpreter a lot. 
+text interpreter a lot, but not the virtual machine in general.
 **/
 forth_cell_t forth_find(forth_t *o, const char *s)
 {
-	forth_cell_t *m = o->m, w = m[PWD], len = WORD_LENGTH(m[w+1]);
-	for (;w > DICTIONARY_START && (WORD_HIDDEN(m[w+1]) || istrcmp(s,(char*)(&o->m[w-len])));) {
-		w = m[w];
-		len = WORD_LENGTH(m[w+1]);
-	}
-	return w > DICTIONARY_START ? w+1 : 0;
+	forth_cell_t *m = o->m, pwd = m[PWD];
+	for (;pwd > DICTIONARY_START && !match(m, pwd, s);)
+		pwd = m[pwd];
+	return pwd > DICTIONARY_START ? pwd + 1 : 0;
 }
 
 /**
@@ -1259,7 +1269,8 @@ static forth_cell_t check_bounds(forth_t *o, jmp_buf *on_error,
 	if(o->m[DEBUG] >= DEBUG_CHECKS)
 		debug("0x%"PRIxCell " %u", f, line);
 	if(f >= bound) {
-		fatal("bounds check failed (%" PRIdCell " >= %zu) line %u", f, (size_t)bound, line);
+		fatal("bounds check failed (%"PRIdCell" >= %zu) line %u", 
+				f, (size_t)bound, line);
 		longjmp(*on_error, FATAL);
 	}
 	return f;
@@ -1452,8 +1463,9 @@ static void forth_make_default(forth_t *o, size_t size, FILE *in, FILE *out)
 	o->S       = o->m + size - (2 * o->m[STACK_SIZE]); /* v. stk pointer */
 	o->vstart  = o->m + size - (2 * o->m[STACK_SIZE]);
 	o->vend    = o->vstart + o->m[STACK_SIZE];
-	sprintf(o->hex_fmt, "0x%%0%d"PRIxCell, (int)sizeof(forth_cell_t)*2);
-	sprintf(o->word_fmt, "%%%ds%%n", MAXIMUM_WORD_LENGTH - 1);
+	VERIFY(sprintf(o->hex_fmt, "0x%%0%d"PRIxCell, 
+				(int)sizeof(forth_cell_t)*2) > 0);
+	VERIFY(sprintf(o->word_fmt, "%%%ds%%n", MAXIMUM_WORD_LENGTH - 1) > 0);
 	forth_set_file_input(o, in);  /* set up input after our eval */
 }
 
@@ -1614,7 +1626,7 @@ More constants are now defined:
 	VERIFY(forth_define_constant(o, "r/w",      FAM_RW) >= 0);
 	VERIFY(forth_define_constant(o, "dictionary-start",  DICTIONARY_START) >= 0);
 	VERIFY(forth_define_constant(o, "tib",  STRING_OFFSET * sizeof(forth_cell_t)) >= 0);
-	VERIFY(forth_define_constant(o, "#tib",  MAXIMUM_WORD_LENGTH * sizeof(forth_cell_t)) >= 0);
+	VERIFY(forth_define_constant(o, "#tib", MAXIMUM_WORD_LENGTH * sizeof(forth_cell_t)) >= 0);
 
 /**
 Now we finally are in a state to load the slightly inaccurately
@@ -1658,8 +1670,8 @@ int forth_save_core(forth_t *o, FILE *dump)
 		return -1;
 	r1 = fwrite(o->header,  1, sizeof(o->header), dump);
 	r2 = fwrite(&core_size, sizeof(core_size), 1, dump);
-	r3 = fwrite(o->m,       1, sizeof(forth_cell_t) * o->core_size, dump);
-	if(r1 + r2 + r3 != (sizeof(o->header) + 1 + sizeof(forth_cell_t) * o->core_size))
+	r3 = fwrite(o->m,       1, sizeof(forth_cell_t) * core_size, dump);
+	if(r1+r2+r3 != (sizeof(o->header) + 1 + sizeof(forth_cell_t)*core_size))
 		return -1;
 	return 0;
 }
@@ -1826,12 +1838,16 @@ int forth_run(forth_t *o)
 			 * virtual machine. */
 			case RECOVERABLE:
 				switch(o->m[ERROR_HANDLER]) {
-				case ERROR_INVALIDATE: o->m[INVALID] = 1;
-				case ERROR_HALT:       return -(o->m[INVALID]);
-				case ERROR_RECOVER:    o->m[RSTK] = o->core_size - o->m[STACK_SIZE];
-						       break;
+				case ERROR_INVALIDATE: 
+					o->m[INVALID] = 1;
+				case ERROR_HALT:       
+					return -(o->m[INVALID]);
+				case ERROR_RECOVER:    
+					o->m[RSTK] = o->core_size - o->m[STACK_SIZE];
+					break;
 				}
-			case OK: break;
+			case OK: 
+				break;
 		}
 	}
 	
@@ -2124,7 +2140,7 @@ recursively).
 				if (!m[STATE] && instruction(m[ck(pc)]) == COMPILE)
 					pc++; /* in command mode, execute word */
 				goto INNER;
-			} else if(!numberify(o->m[BASE], &w, (char*)o->s)) {
+			} else if(numberify(o->m[BASE], &w, (char*)o->s)) {
 				error("'%s' is not a word", o->s);
 				longjmp(on_error, RECOVERABLE);
 				break;
@@ -2557,7 +2573,7 @@ static void help(void)
 "\t-s file   save state of forth interpreter to file\n"
 "\t-d        save state to 'forth.core'\n"
 "\t-l file   load previously saved state from file\n"
-"\t-m size   specify forth memory size in kilobytes (cannot be used with '-l')\n"
+"\t-m size   specify forth memory size in KiB (cannot be used with '-l')\n"
 "\t-t        process stdin after processing forth files\n"
 "\t-v        turn verbose mode on\n"
 "\t-V        print out version information and exit\n"
@@ -2667,7 +2683,7 @@ sacrifice portability.
 			save = 1;
 			break;
 		case 'm':
-			if(o || (i >= argc - 1) || !numberify(10, &core_size, argv[++i]))
+			if(o || (i >= argc - 1) || numberify(10, &core_size, argv[++i]))
 				goto fail;
 			if((core_size *= kbpc) < MINIMUM_CORE_SIZE) {
 				fatal("-m too small (minimum %zu)", MINIMUM_CORE_SIZE / kbpc);
