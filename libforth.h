@@ -10,6 +10,8 @@
 @license    MIT 
 @email      howe.r.j.89@gmail.com 
 @todo       Generate the manual page for the library from this header 
+@todo       Add more functions to the API, like setting debugging level,
+header manipulation, etcetera.
 **/
 #ifndef FORTH_H
 #define FORTH_H
@@ -25,6 +27,17 @@ extern "C" {
 Forth cells, not bytes. 
 **/
 #define MINIMUM_CORE_SIZE (2048)
+
+/**
+@brief When designing a binary format, which this interpreter uses and
+saves to disk, it is imperative that certain information is saved to
+disk - one of those pieces of information is the version of the
+interpreter. This value is used for compatibility checking. Each version
+is incompatible with previous or later versions, which is a deficiency of the
+program. A way to migrate core files would be useful, but the task is
+too difficult.
+**/
+#define FORTH_CORE_VERSION  (0x03u)
 
 struct forth; /**< An opaque object that holds a running FORTH environment**/
 typedef struct forth forth_t;
@@ -164,7 +177,7 @@ int forth_eval(forth_t *o, const char *s);
 
 /** 
 @brief  Dump a raw forth object to disk, for debugging purposes, this
-cannot be loaded with "forth_load_core".
+cannot be loaded with "forth_load_core_file".
 
 @param  o    forth object to dump, caller frees, asserted.
 @param  dump file to dump to (opened as "wb"), caller frees, asserted.
@@ -174,7 +187,7 @@ int forth_dump_core(forth_t *o, FILE *dump);
 
 /** 
 @brief   Save the opaque FORTH object to file, this file may be
-loaded again with forth_load_core. The file passed in should
+loaded again with forth_load_core_file. The file passed in should
 be have been opened up in binary mode ("wb"). These files
 are not portable, files generated on machines with different
 machine word sizes or endianess will not work with each
@@ -191,18 +204,41 @@ passed NULL.
 @param   dump Core dump file handle ("wb"). Caller closes. Asserted.
 @return  int  An error code, negative on error. 
 **/
-int forth_save_core(forth_t *o, FILE *dump);
+int forth_save_core_file(forth_t *o, FILE *dump);
 
 /** 
 @brief  Load a Forth file from disk, returning a forth object that
-can be passed to forth_run.
+can be passed to forth_run. The loaded core file will have it's
+input and output file-handles defaulted so it reads from standard
+in and writes to standard error.
 
 @param  dump    a file handle opened on a Forth core dump, previously
 saved with forth_save_core, this must be opened
 in binary mode ("rb").
 @return forth_t a reinitialized forth object, or NULL on failure
 **/
-forth_t *forth_load_core(FILE *dump);
+forth_t *forth_load_core_file(FILE *dump);
+
+/**
+@brief Load a core file from memory, much like forth_load_core_file. The
+size parameter must be greater or equal to the MINIMUM_CORE_SIZE, this
+is asserted. A header should *not* be present in the data.
+
+@param m    memory containing a Forth core file
+@param size size of core file in memory in bytes
+@return forth_t a reinitialized forth object, or NULL on failure
+**/
+forth_t *forth_load_core_memory(forth_cell_t *m, forth_cell_t size);
+
+/**
+@brief Save a Forth object to memory, this function will allocate
+enough memory to store the core file. It will *not* include the
+header.
+@param o    forth object to save to memory, Asserted.
+@param[out] size of returned object, in bytes
+@return pointer to saved memory on success.
+**/
+forth_cell_t *forth_save_core_memory(forth_t *o, forth_cell_t *size);
 
 /** 
 @brief   Define a new constant in an Forth environment.

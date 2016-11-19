@@ -280,7 +280,7 @@ done:
 		state(&tb, forth_set_file_input(f, stdin));
 
 		/* save core for later tests */
-		test(&tb, forth_save_core(f, core) >= 0);
+		test(&tb, forth_save_core_file(f, core) >= 0);
 		state(&tb, fclose(core));
 
 		/* more simple tests of arithmetic */
@@ -311,7 +311,7 @@ done:
 		must(&tb, core);
 
 		/* test that definitions persist across core dumps */
-		state(&tb, f = forth_load_core(core));
+		state(&tb, f = forth_load_core_file(core));
 		/* stack position does no persist across loads, this might
 		 * change, but is the current functionality */
 		test(&tb, 0 == forth_stack_position(f)); 

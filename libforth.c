@@ -448,16 +448,6 @@ For more information and alternatives.
 **/
 #define IS_BIG_ENDIAN (!(union { uint16_t u16; uint8_t c; }){ .u16 = 1 }.c)
 
-/**
-@brief When designing a binary format, which this interpreter uses and
-saves to disk, it is imperative that certain information is saved to
-disk - one of those pieces of information is the version of the
-interpreter. Something such as this may seem trivial, but only once you
-start to deploy applications to different machines and to different users
-does it become apparent how important this is. 
-**/
-#define CORE_VERSION        (0x02u)
-
 /** 
 ## Enumerations and Constants
 **/
@@ -656,7 +646,7 @@ static const uint8_t header[MAGIC7+1] = {
 	[MAGIC2]    = 'T',
 	[MAGIC3]    = 'H',
 	[CELL_SIZE] = sizeof(forth_cell_t),
-	[VERSION]   = CORE_VERSION,
+	[VERSION]   = FORTH_CORE_VERSION,
 	[ENDIAN]    = -1,
 	[MAGIC7]    = 0xFF
 };
@@ -1450,7 +1440,7 @@ and sets up the input and output streams.
 @param out   the output file
 
 **forth_make_default** default is called by **forth_init** and
-**forth_load_core**, it is a routine which deals that sets up registers for
+**forth_load_core_file**, it is a routine which deals that sets up registers for
 the virtual machines memory, and especially with values that may only be
 valid for a limited period (such as pointers to **stdin**). 
 **/
@@ -1672,7 +1662,7 @@ such that we can load the saved file back in and continue execution using this
 save environment. Only the three previously mentioned fields are serialized;
 **m**, **core_size** and the **header**.
 **/
-int forth_save_core(forth_t *o, FILE *dump)
+int forth_save_core_file(forth_t *o, FILE *dump)
 {
 	assert(o && dump);
 	uint64_t r1, r2, r3, core_size = o->core_size;
@@ -1697,7 +1687,7 @@ are correct and compatible with this interpreter.
 **forth_make_default** is called to replace any instances of pointers stored
 in registers which are now invalid after we have loaded the file from disk.
 **/
-forth_t *forth_load_core(FILE *dump)
+forth_t *forth_load_core_file(FILE *dump)
 { 
 	uint8_t actual[sizeof(header)] = {0},   /* read in header */
 		expected[sizeof(header)] = {0}; /* what we expected */
@@ -1739,8 +1729,50 @@ fail:
 }
 
 /**
-Free the Forth interpreter we make sure to invalidate the interpreter
-in case there is a use after free 
+The following function allows us to load a core file from memory:
+**/
+forth_t *forth_load_core_memory(forth_cell_t *m, forth_cell_t size)
+{
+	assert(m && (size / sizeof(forth_cell_t)) >= MINIMUM_CORE_SIZE);
+	forth_t *o;
+	size /= sizeof(forth_cell_t);
+	size_t w = sizeof(*o) + (sizeof(forth_cell_t) * size);
+	errno = 0;
+	o = calloc(w, 1);
+	if(!o) {
+		error("allocation of size %zu failed, %s", w, emsg());
+		return NULL;
+	}
+	make_header(o->header);
+	memcpy(o->m, m, size * sizeof(forth_cell_t));
+	forth_make_default(o, size, stdin, stdout);
+	return o;
+}
+
+/**
+And likewise we will want to be able to save to memory as well, the
+load and save functions for memory expect headers *not* to be present.
+**/
+forth_cell_t *forth_save_core_memory(forth_t *o, forth_cell_t *size)
+{
+	assert(o && size);
+	forth_cell_t *m;
+	*size = 0;
+	errno = 0;
+	m = malloc(o->core_size * sizeof(forth_cell_t));
+	if(!m) {
+		error("allocation of size %zu failed, %s", 
+				o->core_size * sizeof(forth_cell_t), emsg());
+		return NULL;
+	}
+	memcpy(m, o->m, o->core_size);
+	*size = o->core_size * sizeof(forth_cell_t);
+	return m;
+}
+
+/**
+Free the Forth interpreter, we make sure to invalidate the interpreter
+in case there is a use after free.
 **/
 void forth_free(forth_t *o)
 {
@@ -2618,7 +2650,7 @@ static void version(void)
 		"\tsize:        %u\n"
 		"\tendianess:   %u\n"
 		"initial forth program:\n%s\n",
-		CORE_VERSION, 
+		FORTH_CORE_VERSION, 
 		(unsigned)sizeof(forth_cell_t) * CHAR_BIT, 
 		(unsigned)IS_BIG_ENDIAN,
 		initial_forth_program);
@@ -2724,7 +2756,7 @@ sacrifice portability.
 			optarg = argv[++i];
 			if(verbose >= DEBUG_NOTE)
 				note("loading core file '%s'", optarg);
-			if(!(o = forth_load_core(dump = fopen_or_die(optarg, "rb")))) {
+			if(!(o = forth_load_core_file(dump = fopen_or_die(optarg, "rb")))) {
 				fatal("%s, core load failed", optarg);
 				return -1;
 			}
@@ -2793,7 +2825,7 @@ state with invalid data.
 		}
 		if(verbose >= DEBUG_NOTE)
 			note("saving for file to '%s'", dump_name);
-		if(forth_save_core(o, dump = fopen_or_die(dump_name, "wb"))) {
+		if(forth_save_core_file(o, dump = fopen_or_die(dump_name, "wb"))) {
 			fatal("core file save to '%s' failed", dump_name);
 			rval = -1;
 		}
