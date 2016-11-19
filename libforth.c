@@ -274,7 +274,10 @@ static int logger(const char *prefix, const char *func,
 		unsigned line, const char *fmt, ...);
 
 /**
-As are some macros.
+Some macros are also needed for logging. As an aside, **__VA_ARGS__** should 
+be prepended with '##' in case zero extra arguments are passed into the 
+variadic macro, to swallow the extra comma, but it is not *standard* C, even
+if most compilers support the extension.
 **/
 #define fatal(FMT,...)   logger("fatal",  __func__, __LINE__, FMT, __VA_ARGS__)
 #define error(FMT,...)   logger("error",  __func__, __LINE__, FMT, __VA_ARGS__)
@@ -518,14 +521,14 @@ named registers being defined, as well as **state** and **;**.
 	]         - enter compile mode
 	>mark     - make a hole in the dictionary and push a pointer to it
 	:noname   - make an anonymous word definition, push token to it, the
-	    definition is terminated by ';' like normal word defitions.
+	    definition is terminated by ';' like normal word definitions.
 	if        - immediate word, begin if...else...then clause
 	else      - immediate word, optional else clause
 	then      - immediate word, end if...else...then clause
 	begin     - immediate word, start a begin...until loop
 	until     - immediate word, end begin...until loop, jump to matching
 	    begin at run time if top of stack is zero.
-	'('       - push a ")" character to the stack
+	')'       - push a ")" character to the stack
 	(         - begin a Forth comment, terminated by a )
 	rot       - perform stack manipulation: x y z => y z x
 	-rot      - perform stack manipulation: x y z => z x y
@@ -581,11 +584,13 @@ enum fams {
 @brief These are the file access methods available for use when the virtual
 machine is up and running, they are passed to the built in primitives that
 deal with file input and output (such as open-file).
+
+@note It might be worth adding more *fams*, which **fopen** can accept.
 **/
 static const char *fams[] = { 
 	[FAM_WO] = "wb", 
 	[FAM_RO] = "rb", 
-	[FAM_RW] = "r+b", 
+	[FAM_RW] = "w+b", 
 	NULL 
 };
 
@@ -861,6 +866,10 @@ execution).
 
 The instruction name, enumeration and a help string, are all stored with
 an X-Macro. 
+
+Some of these words are not necessary, that is they can be implemented in
+Forth, but they are useful to have around when the interpreter starts
+up for debugging purposes (like **pnum**).
  
 **/
 
@@ -922,7 +931,8 @@ an X-Macro.
  X(FSEEK,     "reposition-file", "file-id u -- ior : reposition file")\
  X(FFLUSH,    "flush-file",      "file-id -- ior : flush a file")\
  X(FRENAME,   "rename-file",     "c-addr1 u1 c-addr2 u2 -- ior : rename file")\
- X(LAST_INSTRUCTION, NULL, "")\
+ X(TMPFILE,   "temporary-file",  "-- file-id ior : open a temporary file")\
+ X(LAST_INSTRUCTION, NULL, "")
 
 enum instructions { /**< instruction enumerations */
 #define X(ENUM, STRING, HELP) ENUM,
@@ -2022,6 +2032,10 @@ special read-and-loop word defined in the initialization code.
 The **READ** routine must make sure the correct field is executed when
 a word is read in which depends on the state of the interpreter (held
 in **STATE** register). 
+
+It should be noted that for compatibility with future versions of the
+virtual machine that instructions can be added to the end (after the last 
+defined instruction) but not removed.
 **/
 	for(;(pc = m[ck(I++)]);) { 
 	INNER:  
@@ -2423,16 +2437,6 @@ instruction, and would be a useful abstraction.
 				f = r == -1 ? errno : 0;
 				break;
 			}
-		case FRENAME:  
-			cd(3); 
-			{
-				const char *f1 = forth_get_fam(&on_error, f);
-				f = *S--;
-				char *f2 = forth_get_string(o, &on_error, &S, f);
-				errno = 0;
-				f = rename(f2, f1) ? errno : 0;
-			}
-			break;
 		case FOPEN: 
 			cd(3);
 			{
@@ -2466,7 +2470,24 @@ instruction, and would be a useful abstraction.
 				clearerr(file);
 			}
 			break;
-		break;
+		case FRENAME:  
+			cd(3); 
+			{
+				const char *f1 = forth_get_fam(&on_error, f);
+				f = *S--;
+				char *f2 = forth_get_string(o, &on_error, &S, f);
+				errno = 0;
+				f = rename(f2, f1) ? errno : 0;
+			}
+			break;
+		case TMPFILE:
+			{
+				*++S = f;
+				errno = 0;
+				*++S = (forth_cell_t)tmpfile();
+				f = errno ? errno : 0;
+			}
+			break;
 /**
 This should never happen, and if it does it is an indication that virtual
 machine memory has been corrupted somehow.
@@ -2625,6 +2646,10 @@ This make implementing a Forth interpreter as simple as:
 
 To keep things simple options are parsed first then arguments like files,
 although some options take arguments immediately after them. 
+
+A library for parsing command line options like *getopt* should be used,
+this would reduce the portability of the program. It is not recommended 
+that arguments are parsed in this manner.
 **/
 int main_forth(int argc, char **argv)
 {

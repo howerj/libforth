@@ -143,7 +143,7 @@ would need to be done to get useful information after doing those
 evaluations, but the library works quite well.
 
 *main.c* is simply a wrapper around one the functions that implements
-a simple REPL.
+a simple [REPL][].
 
 This project implements a [Forth][] interpreter library which can be embedded
 in other projects, it is incredibly minimalistic, but usable. To build the
@@ -151,7 +151,7 @@ project a [C][] compiler is needed, and a copy of [Make][], type:
 
 	make help
 
-For a list of build options. But running:
+For a list of build options. By running:
 
 	make run
 
@@ -1039,24 +1039,33 @@ performed in this implementation and must be done 'manually'.
 
 ## Porting this interpreter
 
-The interpreter code is written in C99, and is written to be portable, however
+The interpreter code is written in [C99][], and is written to be portable, however
 porting it to embedded platforms that lack a C standard library (which is most
 of them) would mean replacing the most of the C standard library functions used, 
 and implementing a new I/O mechanism for reading, printing and block storage.
 
 The interpreter has been tested on the following platforms:
 
-* Linux ARM 32-bit Little Endian
-* Linux x86-64
-* Windows 7 x86-64
+* Linux x86-64 with,
+  - Debian Jessie (8.x)
+  - GCC version 4.9.2
+* Windows 7 x86-64 (not recently)
+* Linux ARM 32-bit Little Endian (not recently)
+* OSX Sierra 10.12.1 (tested by Rikard Lang).
 
-And the different virtual machine word size options (16, 32 and 64 bit machine
-words) have been tested.
+And the different virtual machine word size options (32 and 64 bit machine
+words) have been tested. There is no reason it should not also work on 16-bit
+platforms.
+
+libforth is also available as a [Linux Kernel Module][], on a branch of libforth,
+see <https://github.com/howerj/libforth/tree/linux-kernel-module>. This is
+module is very experimental, and it is quite possible that it will make your
+system unstable.
 
 ## Standards compliance
 
 This Forth interpreter is in no way compliant with any of the standards
-relating to Forth, such as [ANS Forth][], previous Forth standardization
+relating to Forth, such as [ANS Forth][], or previous Forth standardization
 efforts. However attempts to support words and behavior typical of these
 standards are made.
 
@@ -1069,13 +1078,13 @@ inside it like this:
 
         : word ... ; immediate
 
-Instead of how this interpreter does it:
+Instead this interpreter does it:
 
         : word immediate ... ;
 
-
 This behavior will not be changed for the foreseeable future, although it is
-the biggest difference.
+the biggest difference. This is due to how the internals of the interpreter
+work.
 
 * recursion and definition hiding
 
@@ -1092,6 +1101,18 @@ reasons, firstly because of limitations in the implementation, and secondly
 there is no reason for cluttering up the output window with this. The
 implementation should be silent by default.
 
+## Bugs
+
+As mentioned in the standards compliance section, this Forth does things in a
+non-standard way. Apart from that:
+
+* Passing invalid pointers to instructions like **open-file** or **system** can
+cause undefined behavior (your program will most likely crash). There is no
+simple way to handle this (apart from not doing it).
+* The core interpreter does not currently make use of the throw and catch
+mechanism when handling certain errors (like division by zero), in effect there
+are two error handlers. These mechanisms need unifying.
+
 ## To-Do
 
 * Port this to a micro controller, and a Linux kernel module device
@@ -1100,14 +1121,39 @@ implementation should be silent by default.
   interpreter and user specific startup files.
 * Add save-core, number, parse, load-core, more-core to the
   virtual machine.
+* Signal handling should be added, so the Forth program can handle them.
 * Add loading in a Forth image from a memory structure, this will need
   to be in a portable Format.
 * Error handling could be improved - the latest word definition should be
   erased if an error occurs before the terminating ';'
-* Make a compiler (a separate program) that targets the Forth virtual
-  machine.
 * For a Forth only related "To-Do" list see the end of the file [forth.fth][].
-* This manual needs updating
+* A compiler for the virtual machine itself should be made, as a separate
+program. This could be used to make a more advanced read-evaluate loop.
+* Core files are currently not portable across machines of different words
+sizes or endianess, which needs addressing.
+* Character addressing should be used throughout the interpreter, instead of
+cell addressing and conversion to/from character addresses. Real address 
+could also be used, but this would make core files non-portable.
+* The unit tests in [unit.c][] could be integrated with the main program.
+* Due to the way Windows opens stdin, stdout, and stderr, there are problems
+reading in binary files, this can be remedied quite easily with some code
+that executes before **main\_forth** is called.
+
+	#include "libforth.h"
+	#ifdef _WIN32
+	#include <io.h>
+	#include <fcntl.h>
+	#include <stdio.h>
+	#endif
+
+	int main(int argc, char **argv)
+	{
+	#ifdef _WIN32
+		_setmode(_fileno(stdin), _O_BINARY);
+		_setmode(_fileno(stdout), _O_BINARY);
+	#endif
+		return main_forth(argc, argv);
+	}
 
 ## Notes
 
@@ -1134,6 +1180,7 @@ you should use a different language, or implementation.
 [tail calls]: https://en.wikipedia.org/wiki/Tail_call
 [libforth.c]: libforth.c
 [libforth.h]: libforth.h
+[unit.c]: unit.c
 [ANS Forth]: http://lars.nocrew.org/dpans/dpans.htm
 [musl]: https://www.musl-libc.org/
 [MIT]: https://opensource.org/licenses/MIT
@@ -1149,5 +1196,7 @@ you should use a different language, or implementation.
 [line editor]: https://github.com/howerj/libline
 [pandoc]: http://pandoc.org/
 [markdown script]: https://daringfireball.net/projects/markdown/
+[C99]: https://en.wikipedia.org/wiki/C99
+[Linux Kernel Module]: http://tldp.org/LDP/lkmpg/2.6/html/
 
 <style type="text/css">body{margin:40px auto;max-width:850px;line-height:1.6;font-size:16px;color:#444;padding:0 10px}h1,h2,h3{line-height:1.2}</style>
