@@ -122,6 +122,15 @@ word name, the entire string will be searched for.
 **/
 forth_cell_t forth_find(forth_t *o, const char *s);
 
+/**
+@brief Convert a string, representing a numeric value, into a forth cell.
+@param  base base to convert string from, valid values are 0, and 2-26
+@param[out]  n the result of the conversion is stored here
+@param  s    string to convert
+@return int return code indicating failure (non zero) or success (zero)
+**/
+int forth_string_to_cell(int base, forth_cell_t *n, const char *s);
+
 /** 
 @brief  push a value onto the variable stack
 
@@ -145,6 +154,22 @@ forth_cell_t forth_pop(forth_t *o);
 @return stack position, number of items on the stack 
 **/
 forth_cell_t forth_stack_position(forth_t *o);
+
+/**
+@brief  Check whether a forth environment is still valid, that
+is if the environment makes sense and is still runnable, an invalid
+forth environment cannot be saved to disk or run. Once a core is
+invalidated it cannot be made valid again.
+@param   o initialized forth environment
+@return  zero if environment is still valid, non zero if it is not
+**/
+int forth_is_invalid(forth_t *o);
+
+/**
+@brief Invalidate a Forth environment.
+@param o initialized forth environment to invalidate.
+**/
+void forth_invalidate(forth_t *o);
 
 /** 
 @brief   Execute an initialized forth environment, this will read
@@ -228,7 +253,7 @@ is asserted. A header should *not* be present in the data.
 @param size size of core file in memory in bytes
 @return forth_t a reinitialized forth object, or NULL on failure
 **/
-forth_t *forth_load_core_memory(forth_cell_t *m, forth_cell_t size);
+forth_t *forth_load_core_memory(char *m, forth_cell_t size);
 
 /**
 @brief Save a Forth object to memory, this function will allocate
@@ -238,7 +263,7 @@ header.
 @param[out] size of returned object, in bytes
 @return pointer to saved memory on success.
 **/
-forth_cell_t *forth_save_core_memory(forth_t *o, forth_cell_t *size);
+char *forth_save_core_memory(forth_t *o, forth_cell_t *size);
 
 /** 
 @brief   Define a new constant in an Forth environment.
@@ -286,6 +311,16 @@ accessible within the interpreter
 @param argv argv, as is passed into main() 
 **/
 void forth_set_args(forth_t *o, int argc, char **argv);
+
+/**
+@brief A wrapper around fopen, exposed as a utility function, this
+function either succeeds or calls "exit(EXIT_FAILURE)" after printing
+an error message.
+@param  name of file to open
+@param  mode to open file in
+@return always returns a file handle
+**/
+FILE *forth_fopen_or_die(const char *name, char *mode);
 
 /** 
 @brief  This implements a FORTH REPL whose behavior is documented in

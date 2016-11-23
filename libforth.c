@@ -1150,13 +1150,8 @@ static void compile(forth_t *o, forth_cell_t code, const char *str)
 @brief This function turns a string into a number using a base and 
 returns an error code to indicate success or failure, the results of 
 the conversion are stored in **n**, even if the conversion failed.
-
-@param  base base to convert string from, valid values are 0, and 2-26
-@param  n    out parameter, the result of the conversion is stored here
-@param  s    string to convert
-@return int return code indicating failure (non zero) or success (zero)
 **/
-static int numberify(int base, forth_cell_t *n, const char *s)
+int forth_string_to_cell(int base, forth_cell_t *n, const char *s)
 {
 	char *end = NULL;
 	errno = 0;
@@ -1302,7 +1297,7 @@ static forth_cell_t check_dictionary(forth_t *o, jmp_buf *on_error,
 {
 	if((o->m + dptr) >= (o->vstart)) {
 		fatal("dictionary pointer is in stack area %"PRIdCell, dptr);
-		o->m[INVALID] = 1;
+		forth_invalidate(o);
 		longjmp(*on_error, FATAL);
 	}
 	return dptr;
@@ -1428,6 +1423,25 @@ int forth_define_constant(forth_t *o, const char *name, forth_cell_t c)
 	assert(o && strlen(name) < MAXIMUM_WORD_LENGTH);
 	sprintf(e, ": %31s %" PRIdCell " ; \n", name, c);
 	return forth_eval(o, e);
+}
+
+void forth_set_args(forth_t *o, int argc, char **argv)
+{ /* currently this is of little use to the interpreter */
+	assert(o);
+	o->m[ARGC] = argc;
+	o->m[ARGV] = (forth_cell_t)argv;
+}
+
+int forth_is_invalid(forth_t *o)
+{
+	assert(o);
+	return !!(o->m[INVALID]);
+}
+
+void forth_invalidate(forth_t *o)
+{
+	assert(o);
+	o->m[INVALID] = 1;
 }
 
 /**
@@ -1666,7 +1680,7 @@ int forth_save_core_file(forth_t *o, FILE *dump)
 {
 	assert(o && dump);
 	uint64_t r1, r2, r3, core_size = o->core_size;
-	if(o->m[INVALID])
+	if(forth_is_invalid(o))
 		return -1;
 	r1 = fwrite(o->header,  1, sizeof(o->header), dump);
 	r2 = fwrite(&core_size, sizeof(core_size), 1, dump);
@@ -1731,21 +1745,22 @@ fail:
 /**
 The following function allows us to load a core file from memory:
 **/
-forth_t *forth_load_core_memory(forth_cell_t *m, forth_cell_t size)
+forth_t *forth_load_core_memory(char *m, forth_cell_t size)
 {
 	assert(m && (size / sizeof(forth_cell_t)) >= MINIMUM_CORE_SIZE);
 	forth_t *o;
-	size /= sizeof(forth_cell_t);
-	size_t w = sizeof(*o) + (sizeof(forth_cell_t) * size);
+	size_t offset = sizeof(o->header) + sizeof(o->core_size);
+	size -= sizeof(o->header) + offset;
 	errno = 0;
-	o = calloc(w, 1);
+	/**@todo check header */
+	o = calloc(sizeof(*o) + size, 1);
 	if(!o) {
-		error("allocation of size %zu failed, %s", w, emsg());
+		error("allocation of size %zu failed, %s", sizeof(*o) + size, emsg());
 		return NULL;
 	}
 	make_header(o->header);
-	memcpy(o->m, m, size * sizeof(forth_cell_t));
-	forth_make_default(o, size, stdin, stdout);
+	memcpy(o->m, m + offset, size);
+	forth_make_default(o, size / sizeof(forth_cell_t), stdin, stdout);
 	return o;
 }
 
@@ -1753,20 +1768,22 @@ forth_t *forth_load_core_memory(forth_cell_t *m, forth_cell_t size)
 And likewise we will want to be able to save to memory as well, the
 load and save functions for memory expect headers *not* to be present.
 **/
-forth_cell_t *forth_save_core_memory(forth_t *o, forth_cell_t *size)
+char *forth_save_core_memory(forth_t *o, forth_cell_t *size)
 {
 	assert(o && size);
-	forth_cell_t *m;
+	char *m;
 	*size = 0;
 	errno = 0;
-	m = malloc(o->core_size * sizeof(forth_cell_t));
+	m = malloc(o->core_size * sizeof(forth_cell_t) + sizeof(o->header) + sizeof(o->core_size));
 	if(!m) {
 		error("allocation of size %zu failed, %s", 
 				o->core_size * sizeof(forth_cell_t), emsg());
 		return NULL;
 	}
-	memcpy(m, o->m, o->core_size);
-	*size = o->core_size * sizeof(forth_cell_t);
+	memcpy(m, o->header, sizeof(o->header)); /* copy header */
+	memcpy(m + sizeof(o->header), &o->core_size, sizeof(o->core_size)); /* core size */
+	memcpy(m + sizeof(o->header) + sizeof(o->core_size), o->m, o->core_size); /* core */
+	*size = o->core_size * sizeof(forth_cell_t) + sizeof(o->header) + sizeof(o->core_size);
 	return m;
 }
 
@@ -1779,7 +1796,7 @@ void forth_free(forth_t *o)
 	assert(o);
 	/* invalidate the forth core, a sufficiently "smart" compiler 
 	 * might optimize this out */
-	o->m[INVALID] = 1; 
+	forth_invalidate(o);
 	free(o);
 }
 
@@ -1857,8 +1874,8 @@ int forth_run(forth_t *o)
 	int errorval = 0;
 	assert(o);
 	jmp_buf on_error;
-	if(o->m[INVALID]) {
-		fatal("refusing to run an invalid forth, %"PRIdCell, o->m[INVALID]);
+	if(forth_is_invalid(o)) {
+		fatal("refusing to run an invalid forth, %"PRIdCell, forth_is_invalid(o));
 		return -1;
 	}
 
@@ -1867,23 +1884,24 @@ int forth_run(forth_t *o)
 	 *
 	 * @todo This code needs to be rethought to be made more compliant with
 	 * how "throw" and "catch" work in Forth. */
-	if ((errorval = setjmp(on_error)) || o->m[INVALID]) {
+	if ((errorval = setjmp(on_error)) || forth_is_invalid(o)) {
 		/* if the interpreter is invalid we always exit*/
-		if(o->m[INVALID])
+		if(forth_is_invalid(o))
 			return -1;
 		switch(errorval) {
 			default:
 			case FATAL:
-				return -(o->m[INVALID] = 1);
+				forth_invalidate(o);
+				return -1;
 			/* recoverable errors depend on o->m[ERROR_HANDLER],
 			 * a register which can be set within the running
 			 * virtual machine. */
 			case RECOVERABLE:
 				switch(o->m[ERROR_HANDLER]) {
 				case ERROR_INVALIDATE: 
-					o->m[INVALID] = 1;
+					forth_invalidate(o);
 				case ERROR_HALT:       
-					return -(o->m[INVALID]);
+					return -forth_is_invalid(o);
 				case ERROR_RECOVER:    
 					o->m[RSTK] = o->core_size - o->m[STACK_SIZE];
 					break;
@@ -2186,7 +2204,7 @@ recursively).
 				if (!m[STATE] && instruction(m[ck(pc)]) == COMPILE)
 					pc++; /* in command mode, execute word */
 				goto INNER;
-			} else if(numberify(o->m[BASE], &w, (char*)o->s)) {
+			} else if(forth_string_to_cell(o->m[BASE], &w, (char*)o->s)) {
 				error("'%s' is not a word", o->s);
 				longjmp(on_error, RECOVERABLE);
 				break;
@@ -2377,7 +2395,7 @@ or from a file.
 			o->m[SLEN] = slen;
 			o->m[FIN]  = fin;
 			o->m[SOURCE_ID] = source;
-			if(o->m[INVALID])
+			if(forth_is_invalid(o))
 				return -1;
 		}
 		break;
@@ -2568,13 +2586,6 @@ static void fclose_input(FILE **in)
 	*in = stdin;
 }
 
-void forth_set_args(forth_t *o, int argc, char **argv)
-{ /* currently this is of little use to the interpreter */
-	assert(o);
-	o->m[ARGC] = argc;
-	o->m[ARGV] = (forth_cell_t)argv;
-}
-
 /**
 **main_forth** implements a Forth interpreter which is a wrapper around the
 C API, there is an assumption that main_forth will be the only thing running
@@ -2585,7 +2596,7 @@ error occurs, the **fopen_or_die** is an example of this philosophy, one
 which does not apply to functions like **forth_run** (which makes attempts
 to recover from a sensible error).
 **/
-static FILE *fopen_or_die(const char *name, char *mode)
+FILE *forth_fopen_or_die(const char *name, char *mode)
 {
 	errno = 0;
 	FILE *file = fopen(name, mode);
@@ -2740,7 +2751,7 @@ sacrifice portability.
 			save = 1;
 			break;
 		case 'm':
-			if(o || (i >= argc - 1) || numberify(10, &core_size, argv[++i]))
+			if(o || (i >= argc - 1) || forth_string_to_cell(10, &core_size, argv[++i]))
 				goto fail;
 			if((core_size *= kbpc) < MINIMUM_CORE_SIZE) {
 				fatal("-m too small (minimum %zu)", MINIMUM_CORE_SIZE / kbpc);
@@ -2756,7 +2767,7 @@ sacrifice portability.
 			optarg = argv[++i];
 			if(verbose >= DEBUG_NOTE)
 				note("loading core file '%s'", optarg);
-			if(!(o = forth_load_core_file(dump = fopen_or_die(optarg, "rb")))) {
+			if(!(o = forth_load_core_file(dump = forth_fopen_or_die(optarg, "rb")))) {
 				fatal("%s, core load failed", optarg);
 				return -1;
 			}
@@ -2791,7 +2802,7 @@ done:
 	for(; i < argc; i++) { /* process all files on command line */
 		if(verbose >= DEBUG_NOTE)
 			note("reading from file '%s'", argv[i]);
-		forth_set_file_input(o, in = fopen_or_die(argv[i], "rb"));
+		forth_set_file_input(o, in = forth_fopen_or_die(argv[i], "rb"));
 		/* shebang line '#!', core files could also be detected */
 		if((c = fgetc(in)) == '#') 
 			while(((c = forth_get_char(o)) > 0) && (c != '\n'));
@@ -2819,13 +2830,13 @@ purposes, but in general we do not want to over write valid previously saved
 state with invalid data.
 **/
 	if(save) { /* save core file */
-		if(rval || o->m[INVALID]) {
-			fatal("refusing to save invalid core, %u/%"PRIdCell, rval, o->m[INVALID]);
+		if(rval || forth_is_invalid(o)) {
+			fatal("refusing to save invalid core, %u/%d", rval, forth_is_invalid(o));
 			return -1;
 		}
 		if(verbose >= DEBUG_NOTE)
 			note("saving for file to '%s'", dump_name);
-		if(forth_save_core_file(o, dump = fopen_or_die(dump_name, "wb"))) {
+		if(forth_save_core_file(o, dump = forth_fopen_or_die(dump_name, "wb"))) {
 			fatal("core file save to '%s' failed", dump_name);
 			rval = -1;
 		}

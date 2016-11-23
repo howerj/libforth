@@ -1825,7 +1825,6 @@ hider .s
 	cr ;
 
 1 variable hide-words ( do we want to hide hidden words or not )
-
 ( This function prints out all of the defined words, excluding hidden words.
 An understanding of the layout of a Forth word helps here. The dictionary
 contains a linked list of words, each forth word has a pointer to the previous
@@ -1858,8 +1857,7 @@ address by the word size in bytes. )
 		@  ( Get pointer to previous word )
 		dup dictionary-start u< ( stop if pwd no longer points to a word )
 	until
-	drop cr
-;
+	drop cr ;
 hider hide-words
 
 : TrueFalse ( -- : print true or false )
@@ -2714,4 +2712,11 @@ verbose [if]
 	.( ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR) cr
 	.( OTHER DEALINGS IN THE SOFTWARE. ) cr
 [then]
+
+( \ integrate simple 'dump' and 'words' into initial forth program 
+: ?? \ addr1 
+	dup . ? cr ;
+: dump \ addr n --
+	over + swap 1- begin 1+ 2dup dup ?? 2+ u< until ; )
+
 

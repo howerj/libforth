@@ -1,11 +1,15 @@
-/** @file     unit.c
- *  @brief    unit tests for libforth interpreter public interface
- *  @author   Richard Howe
- *  @license  MIT (see https://opensource.org/licenses/MIT)
- *  @email    howe.r.j.89@gmail.com 
- *  @note     This file could be built into the main program, so that a series
- *            of built in tests can always be run. 
- *  @todo     integrate with "main.c" program, run at startup in silent mode**/
+/** 
+@file     unit.c
+@brief    unit tests for libforth interpreter public interface
+@author   Richard Howe
+@license  MIT (see https://opensource.org/licenses/MIT)
+@email    howe.r.j.89@gmail.com 
+@note     This file could be built into the main program, so that a series
+of built in tests can always be run. This would not create a circular 
+dependency if placed in the "main.c" file, however argument parsing would
+have to be moved out of "libforth.c" "main_forth" function. The "main_forth"
+function would the be simplified, and used only for demonstration purposes.
+**/  
 
 /*** module to test ***/
 #include "libforth.h"
@@ -324,9 +328,23 @@ done:
 
 		state(&tb, forth_free(f));
 		state(&tb, fclose(core));
-		/**@todo use temporary file instead, copy if keep_files set*/
-		if(!keep_files)
-			state(&tb, remove("unit.core"));
+	}
+	{ /* test invalidation fails */
+		FILE *core;
+		forth_t *f;
+		state(&tb, core = fopen("unit.core", "rb+"));
+		must(&tb, core);
+		state(&tb, rewind(core));
+
+		state(&tb, f = forth_load_core_file(core));
+		test(&tb, !forth_is_invalid(f));
+		state(&tb, forth_invalidate(f));
+		test(&tb,  forth_is_invalid(f));
+		/* saving should fail as we have invalidated the core */
+		test(&tb, forth_save_core_file(f, core) < 0);
+		state(&tb, forth_free(f));
+		state(&tb, fclose(core));
+		state(&tb, remove("unit.core"));
 	}
 	{
 		/* test the built in words, there is a set of built in words
@@ -415,7 +433,7 @@ done:
 
 		state(&tb, forth_free(f));
 	}
-	{
+	{ /* tests for CALL */
 		forth_t *f = NULL;
 		struct forth_functions *ff;
 		state(&tb, ff = forth_new_function_list(2));
@@ -444,6 +462,8 @@ done:
 
 		state(&tb, forth_free(f));
 		state(&tb, forth_delete_function_list(ff));
+	}
+	{ /**@todo tests for forth_load_core_memory and forth_save_core_memory */
 	}
 	return !!unit_test_end(&tb, "libforth");
 }

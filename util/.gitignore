@@ -6,7 +6,7 @@ mini
 core2c
 *.gen.c
 core
-core2
 forthcore.o
 vgcore.*
 core
+pl0
