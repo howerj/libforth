@@ -270,20 +270,6 @@ more memory.
 Some forward declarations are needed for functions relating to logging.
 **/
 static const char *emsg(void);
-static int logger(const char *prefix, const char *func, 
-		unsigned line, const char *fmt, ...);
-
-/**
-Some macros are also needed for logging. As an aside, **__VA_ARGS__** should 
-be prepended with '##' in case zero extra arguments are passed into the 
-variadic macro, to swallow the extra comma, but it is not *standard* C, even
-if most compilers support the extension.
-**/
-#define fatal(FMT,...)   logger("fatal",  __func__, __LINE__, FMT, __VA_ARGS__)
-#define error(FMT,...)   logger("error",  __func__, __LINE__, FMT, __VA_ARGS__)
-#define warning(FMT,...) logger("warning",__func__, __LINE__, FMT, __VA_ARGS__)
-#define note(FMT,...)    logger("note",   __func__, __LINE__, FMT, __VA_ARGS__)
-#define debug(FMT,...)   logger("debug",  __func__, __LINE__, FMT, __VA_ARGS__)
 
 /**
 Traditionally Forth implementations were the only program running on the
@@ -732,19 +718,6 @@ enum actions_on_error
 };
 
 /**
-@brief These are the possible options for the debug registers.
-**/
-enum trace_level
-{
-	DEBUG_OFF,         /**< tracing is off */
-	DEBUG_FORTH_CODE,  /**< used within the forth interpreter */
-	DEBUG_NOTE,        /**< print notes */
-	DEBUG_INSTRUCTION, /**< instructions and stack are traced */
-	DEBUG_CHECKS,      /**< bounds checks are printed out */
-	DEBUG_ALL,         /**< trace everything that can be traced */
-};
-
-/**
 @brief There are a small number of registers available to the virtual machine, 
 they are actually indexes into the virtual machines main memory, this is so 
 that the programs running on the virtual machine can access them. 
@@ -971,18 +944,7 @@ static const char *emsg(void)
 	return r;
 }
 
-/**
-@brief The logging function is used to print error messages,
-warnings and notes within this program.
-@param prefix prefix to add to any logged messages
-@param file   file in which logging function is called
-@param func   function in which logging function is called
-@param line   line number logging function was called at
-@param fmt    logging format string
-@param ...    arguments for format string
-@return int < 0 is failure
-**/
-static int logger(const char *prefix, const char *func, 
+int forth_logger(const char *prefix, const char *func, 
 		unsigned line, const char *fmt, ...)
 {
 	int r;
@@ -1261,7 +1223,7 @@ compile time defines, removing the check and the debugging code.
 static forth_cell_t check_bounds(forth_t *o, jmp_buf *on_error, 
 		forth_cell_t f, unsigned line, forth_cell_t bound)
 {
-	if(o->m[DEBUG] >= DEBUG_CHECKS)
+	if(o->m[DEBUG] >= FORTH_DEBUG_CHECKS)
 		debug("0x%"PRIxCell " %u", f, line);
 	if(f >= bound) {
 		fatal("bounds check failed (%"PRIdCell" >= %zu) line %u", 
@@ -1278,7 +1240,7 @@ before an operation takes place. It is wrapped up in the **cd** macro.
 static void check_depth(forth_t *o, jmp_buf *on_error, 
 		forth_cell_t *S, forth_cell_t expected, unsigned line)
 {
-	if(o->m[DEBUG] >= DEBUG_CHECKS)
+	if(o->m[DEBUG] >= FORTH_DEBUG_CHECKS)
 		debug("0x%"PRIxCell " %u", (forth_cell_t)(S - o->vstart), line);
 	if((uintptr_t)(S - o->vstart) < expected) {
 		error("stack underflow %p -> %u", S, line);
@@ -1373,7 +1335,7 @@ is going on in the environment. This function will be compiled out if
 static void trace(forth_t *o, forth_cell_t instruction, 
 		forth_cell_t *S, forth_cell_t f)
 {
-	if(o->m[DEBUG] < DEBUG_INSTRUCTION)
+	if(o->m[DEBUG] < FORTH_DEBUG_INSTRUCTION)
 		return;
 	if(instruction > LAST_INSTRUCTION) {
 		error("traced invalid instruction %"PRIdCell, instruction);
@@ -1442,6 +1404,11 @@ void forth_invalidate(forth_t *o)
 {
 	assert(o);
 	o->m[INVALID] = 1;
+}
+
+void forth_set_debug_level(forth_t *o, enum forth_debug_level level)
+{
+	o->m[DEBUG] = level;
 }
 
 /**
@@ -1749,8 +1716,8 @@ forth_t *forth_load_core_memory(char *m, forth_cell_t size)
 {
 	assert(m && (size / sizeof(forth_cell_t)) >= MINIMUM_CORE_SIZE);
 	forth_t *o;
-	size_t offset = sizeof(o->header) + sizeof(o->core_size);
-	size -= sizeof(o->header) + offset;
+	size_t offset = sizeof(o->header) + sizeof(uint64_t);
+	size -= offset;
 	errno = 0;
 	/**@todo check header */
 	o = calloc(sizeof(*o) + size, 1);
@@ -1774,16 +1741,17 @@ char *forth_save_core_memory(forth_t *o, forth_cell_t *size)
 	char *m;
 	*size = 0;
 	errno = 0;
-	m = malloc(o->core_size * sizeof(forth_cell_t) + sizeof(o->header) + sizeof(o->core_size));
+	uint64_t w = o->core_size;
+	m = malloc(w * sizeof(forth_cell_t) + sizeof(o->header) + sizeof(w));
 	if(!m) {
 		error("allocation of size %zu failed, %s", 
 				o->core_size * sizeof(forth_cell_t), emsg());
 		return NULL;
 	}
 	memcpy(m, o->header, sizeof(o->header)); /* copy header */
-	memcpy(m + sizeof(o->header), &o->core_size, sizeof(o->core_size)); /* core size */
-	memcpy(m + sizeof(o->header) + sizeof(o->core_size), o->m, o->core_size); /* core */
-	*size = o->core_size * sizeof(forth_cell_t) + sizeof(o->header) + sizeof(o->core_size);
+	memcpy(m + sizeof(o->header), &w, sizeof(w)); /* core size */
+	memcpy(m + sizeof(o->header) + sizeof(w), o->m, w); /* core */
+	*size = o->core_size * sizeof(forth_cell_t) + sizeof(o->header) + sizeof(w);
 	return m;
 }
 
@@ -2700,9 +2668,9 @@ int main_forth(int argc, char **argv)
 	int rval = 0, c = 0, i = 1;
        	int save = 0,            /* attempt to save core if true */
 	    eval = 0,            /* have we evaluated anything? */
-	    verbose = 0,         /* verbosity level */
 	    readterm = 0,        /* read from standard in */
 	    mset = 0;            /* memory size specified */
+	enum forth_debug_level verbose = FORTH_DEBUG_OFF; /* verbosity level */
 	static const size_t kbpc = 1024 / sizeof(forth_cell_t); /*kilobytes per cell*/
 	static const char *dump_name = "forth.core";
 	char *optarg = NULL;
@@ -2733,9 +2701,9 @@ sacrifice portability.
 				fatal("initialization failed, %s", emsg());
 				return -1;
 			}
-			o->m[DEBUG] = verbose;
+			forth_set_debug_level(o, verbose);
 			optarg = argv[++i];
-			if(verbose >= DEBUG_NOTE)
+			if(verbose >= FORTH_DEBUG_NOTE)
 				note("evaluating '%s'", optarg);
 			if(forth_eval(o, optarg) < 0)
 				goto end;
@@ -2746,7 +2714,7 @@ sacrifice portability.
 				goto fail;
 			dump_name = argv[++i];
 		case 'd':  /*use default name */
-			if(verbose >= DEBUG_NOTE)
+			if(verbose >= FORTH_DEBUG_NOTE)
 				note("saving core file to '%s' (on exit)", dump_name);
 			save = 1;
 			break;
@@ -2757,7 +2725,7 @@ sacrifice portability.
 				fatal("-m too small (minimum %zu)", MINIMUM_CORE_SIZE / kbpc);
 				return -1;
 			}
-			if(verbose >= DEBUG_NOTE)
+			if(verbose >= FORTH_DEBUG_NOTE)
 				note("memory size set to %zu", core_size);
 			mset = 1;
 			break;
@@ -2765,13 +2733,13 @@ sacrifice portability.
 			if(o || mset || (i >= argc - 1))
 				goto fail;
 			optarg = argv[++i];
-			if(verbose >= DEBUG_NOTE)
+			if(verbose >= FORTH_DEBUG_NOTE)
 				note("loading core file '%s'", optarg);
 			if(!(o = forth_load_core_file(dump = forth_fopen_or_die(optarg, "rb")))) {
 				fatal("%s, core load failed", optarg);
 				return -1;
 			}
-			o->m[DEBUG] = verbose;
+			forth_set_debug_level(o, verbose);
 			fclose(dump);
 			break;
 		case 'v':
@@ -2796,11 +2764,11 @@ done:
 			fatal("forth initialization failed, %s", emsg());
 			return -1;
 		}
-		o->m[DEBUG] = verbose;
+		forth_set_debug_level(o, verbose);
 	}
 	forth_set_args(o, argc, argv);
 	for(; i < argc; i++) { /* process all files on command line */
-		if(verbose >= DEBUG_NOTE)
+		if(verbose >= FORTH_DEBUG_NOTE)
 			note("reading from file '%s'", argv[i]);
 		forth_set_file_input(o, in = forth_fopen_or_die(argv[i], "rb"));
 		/* shebang line '#!', core files could also be detected */
@@ -2816,7 +2784,7 @@ close:
 		fclose_input(&in);
 	}
 	if(readterm) { /* if '-t' or no files given, read from stdin */
-		if(verbose >= DEBUG_NOTE)
+		if(verbose >= FORTH_DEBUG_NOTE)
 			note("reading from stdin (%p)", stdin);
 		forth_set_file_input(o, stdin);
 		rval = forth_run(o);
@@ -2834,7 +2802,7 @@ state with invalid data.
 			fatal("refusing to save invalid core, %u/%d", rval, forth_is_invalid(o));
 			return -1;
 		}
-		if(verbose >= DEBUG_NOTE)
+		if(verbose >= FORTH_DEBUG_NOTE)
 			note("saving for file to '%s'", dump_name);
 		if(forth_save_core_file(o, dump = forth_fopen_or_die(dump_name, "wb"))) {
 			fatal("core file save to '%s' failed", dump_name);

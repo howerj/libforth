@@ -54,6 +54,15 @@ static char *(sig_lookup[]) = { /*List of C89 signals and their names*/
 	[MAX_SIGNALS]   = NULL
 };
 
+/*
+static size_t compare(const char *restrict a, const char *restrict b, size_t c)
+{
+	for(size_t i = 0; i < c; i++)
+		if(a[i] != b[i])
+			return i;
+	return 0;
+}*/
+
 static void print_caught_signal_name(test_t *t) 
 {
 	char *sig_name = "UNKNOWN SIGNAL";
@@ -463,7 +472,34 @@ done:
 		state(&tb, forth_free(f));
 		state(&tb, forth_delete_function_list(ff));
 	}
-	{ /**@todo tests for forth_load_core_memory and forth_save_core_memory */
+	{ 
+		FILE *core = NULL;
+		forth_t *f1 = NULL, *f2 = NULL;
+		char *m1 = NULL, *m2 = NULL;
+		forth_cell_t size1, size2;
+		must(&tb, f1 = forth_init(MINIMUM_CORE_SIZE, stdin, stdout, NULL));
+		state(&tb, core = fopen("unit.core", "wb+"));
+		must(&tb, core);
+		test(&tb, forth_save_core_file(f1, core) >= 0);
+		state(&tb, rewind(core));
+
+		must(&tb, m1 = forth_save_core_memory(f1, &size1));
+		must(&tb, f2 = forth_load_core_memory(m1,  size1));
+		must(&tb, m2 = forth_save_core_memory(f2, &size2));
+		must(&tb, size2 == size1);
+		test(&tb, size1/sizeof(forth_cell_t) > MINIMUM_CORE_SIZE);
+
+		/**@todo Get this working, might have to skip register section */
+		/*test(&tb, !memcmp(m1, m2, size1));*/
+
+		state(&tb, fclose(core));
+		state(&tb, forth_free(f1));
+		state(&tb, forth_free(f2));
+		state(&tb, free(m1));
+		state(&tb, free(m2));
+
+		if(!keep_files)
+			state(&tb, remove("unit.core"));
 	}
 	return !!unit_test_end(&tb, "libforth");
 }

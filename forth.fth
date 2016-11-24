@@ -1598,7 +1598,7 @@ manipulating a terminal )
 : background 40 + ;
 0 constant dark
 1 constant bright
-true variable colorize 
+false variable colorize 
 
 : color ( brightness color-code -- : set the terminal color )
 	( set color on an ANSI compliant terminal,

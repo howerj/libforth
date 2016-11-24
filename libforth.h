@@ -9,9 +9,6 @@
 @copyright  Copyright 2015,2016 Richard James Howe.
 @license    MIT 
 @email      howe.r.j.89@gmail.com 
-@todo       Generate the manual page for the library from this header 
-@todo       Add more functions to the API, like setting debugging level,
-header manipulation, etcetera.
 **/
 #ifndef FORTH_H
 #define FORTH_H
@@ -68,6 +65,47 @@ struct forth_functions
 		unsigned depth; /**< depth expected on stack before call */
 		forth_function_t function; /**< function to execute */
 	} functions[]; /**< list of possible functions for CALL */
+};
+
+/**
+@brief The logging function is used to print error messages,
+warnings and notes within this program.
+@param prefix prefix to add to any logged messages
+@param file   file in which logging function is called
+@param func   function in which logging function is called
+@param line   line number logging function was called at
+@param fmt    logging format string
+@param ...    arguments for format string
+@return int < 0 is failure
+**/
+int forth_logger(const char *prefix, const char *func, 
+		unsigned line, const char *fmt, ...);
+
+/**
+Some macros are also needed for logging. As an aside, **__VA_ARGS__** should 
+be prepended with '##' in case zero extra arguments are passed into the 
+variadic macro, to swallow the extra comma, but it is not *standard* C, even
+if most compilers support the extension.
+**/
+#define fatal(FMT,...)   forth_logger("fatal",  __func__, __LINE__, FMT, __VA_ARGS__)
+#define error(FMT,...)   forth_logger("error",  __func__, __LINE__, FMT, __VA_ARGS__)
+#define warning(FMT,...) forth_logger("warning",__func__, __LINE__, FMT, __VA_ARGS__)
+#define note(FMT,...)    forth_logger("note",   __func__, __LINE__, FMT, __VA_ARGS__)
+#define debug(FMT,...)   forth_logger("debug",  __func__, __LINE__, FMT, __VA_ARGS__)
+
+
+/**
+@brief These are the possible options for the debug registers. Higher levels
+mean more verbose error messages are generated.
+**/
+enum forth_debug_level
+{
+	FORTH_DEBUG_OFF,         /**< tracing is off */
+	FORTH_DEBUG_FORTH_CODE,  /**< used within the forth interpreter */
+	FORTH_DEBUG_NOTE,        /**< print notes */
+	FORTH_DEBUG_INSTRUCTION, /**< instructions and stack are traced */
+	FORTH_DEBUG_CHECKS,      /**< bounds checks are printed out */
+	FORTH_DEBUG_ALL,         /**< trace everything that can be traced */
 };
 
 /**
@@ -171,6 +209,14 @@ int forth_is_invalid(forth_t *o);
 **/
 void forth_invalidate(forth_t *o);
 
+/**
+@brief Set the verbosity/log/debug level of the interpreter, higher
+values mean more verbose output.
+@param o initialized forth environment.
+@param level to set environment to.
+**/
+void forth_set_debug_level(forth_t *o, enum forth_debug_level level);
+
 /** 
 @brief   Execute an initialized forth environment, this will read
 from input until there is no more or an error occurs. If
@@ -247,7 +293,7 @@ forth_t *forth_load_core_file(FILE *dump);
 /**
 @brief Load a core file from memory, much like forth_load_core_file. The
 size parameter must be greater or equal to the MINIMUM_CORE_SIZE, this
-is asserted. A header should *not* be present in the data.
+is asserted. 
 
 @param m    memory containing a Forth core file
 @param size size of core file in memory in bytes
@@ -257,8 +303,8 @@ forth_t *forth_load_core_memory(char *m, forth_cell_t size);
 
 /**
 @brief Save a Forth object to memory, this function will allocate
-enough memory to store the core file. It will *not* include the
-header.
+enough memory to store the core file. 
+
 @param o    forth object to save to memory, Asserted.
 @param[out] size of returned object, in bytes
 @return pointer to saved memory on success.

@@ -25,7 +25,7 @@ int main(void)
 			putchar('\n');
 	}
 	puts("\n};");
-	printf("forth_cell_t forth_core_size = %zu;\n", size * sizeof(forth_cell_t));
+	printf("forth_cell_t forth_core_size = %zu;\n", size);
 	puts("");
 	return 0;
 }
