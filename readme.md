@@ -1135,25 +1135,6 @@ sizes or endianess, which needs addressing.
 cell addressing and conversion to/from character addresses. Real address 
 could also be used, but this would make core files non-portable.
 * The unit tests in [unit.c][] could be integrated with the main program.
-* Due to the way Windows opens stdin, stdout, and stderr, there are problems
-reading in binary files, this can be remedied quite easily with some code
-that executes before **main\_forth** is called.
-
-	#include "libforth.h"
-	#ifdef _WIN32
-	#include <io.h>
-	#include <fcntl.h>
-	#include <stdio.h>
-	#endif
-
-	int main(int argc, char **argv)
-	{
-	#ifdef _WIN32
-		_setmode(_fileno(stdin), _O_BINARY);
-		_setmode(_fileno(stdout), _O_BINARY);
-	#endif
-		return main_forth(argc, argv);
-	}
 
 ## Notes
 

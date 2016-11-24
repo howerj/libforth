@@ -21,6 +21,7 @@ all: shorthelp ${TARGET}
 
 shorthelp:
 	@${ECHO} "Use 'make help' for a list of all options"
+
 help:
 	@${ECHO} ""
 	@${ECHO} "project:      lib${TARGET}"
@@ -43,9 +44,6 @@ help:
 %.o: %.c *.h
 	@echo "cc $< -c -o $@"
 	@${CC} ${CFLAGS} $< -c -o $@
-
-%.md: %.c util/convert
-	util/./convert $< > $@
 
 lib${TARGET}.a: lib${TARGET}.o
 	${AR} rcs $@ $<
@@ -86,11 +84,20 @@ dist: ${TARGET} ${TARGET}.1 lib${TARGET}.[a3] lib${TARGET}.htm ${DOCS} forth.cor
 %.htm: %.md
 	markdown $< > $@
 
+libforth.md: libforth.c libforth.h
+	./util/./convert    libforth.c >  $@
+	echo "## Appendix "            >> $@
+	echo "### libforth header"     >> $@
+	./util/./convert -H libforth.h >> $@
+
 %.pdf: %.md
 	pandoc --toc $< -o $@
 
 %.1: %.md
 	pandoc -s -t man $< -o $@
+
+%.md: %.c util/convert
+	util/./convert $< > $@
 
 %.md: %.h util/convert
 	util/./convert -H $< -o $@

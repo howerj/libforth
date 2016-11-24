@@ -1,11 +1,15 @@
-/** @file     unit.c
- *  @brief    unit tests for libforth interpreter public interface
- *  @author   Richard Howe
- *  @license  MIT (see https://opensource.org/licenses/MIT)
- *  @email    howe.r.j.89@gmail.com 
- *  @note     This file could be built into the main program, so that a series
- *            of built in tests can always be run. 
- *  @todo     integrate with "main.c" program, run at startup in silent mode**/
+/** 
+@file     unit.c
+@brief    unit tests for libforth interpreter public interface
+@author   Richard Howe
+@license  MIT (see https://opensource.org/licenses/MIT)
+@email    howe.r.j.89@gmail.com 
+@note     This file could be built into the main program, so that a series
+of built in tests can always be run. This would not create a circular 
+dependency if placed in the "main.c" file, however argument parsing would
+have to be moved out of "libforth.c" "main_forth" function. The "main_forth"
+function would the be simplified, and used only for demonstration purposes.
+**/  
 
 /*** module to test ***/
 #include "libforth.h"
@@ -49,6 +53,15 @@ static char *(sig_lookup[]) = { /*List of C89 signals and their names*/
 	[SIGTERM]       = "SIGTERM",
 	[MAX_SIGNALS]   = NULL
 };
+
+/*
+static size_t compare(const char *restrict a, const char *restrict b, size_t c)
+{
+	for(size_t i = 0; i < c; i++)
+		if(a[i] != b[i])
+			return i;
+	return 0;
+}*/
 
 static void print_caught_signal_name(test_t *t) 
 {
@@ -280,7 +293,7 @@ done:
 		state(&tb, forth_set_file_input(f, stdin));
 
 		/* save core for later tests */
-		test(&tb, forth_save_core(f, core) >= 0);
+		test(&tb, forth_save_core_file(f, core) >= 0);
 		state(&tb, fclose(core));
 
 		/* more simple tests of arithmetic */
@@ -311,7 +324,7 @@ done:
 		must(&tb, core);
 
 		/* test that definitions persist across core dumps */
-		state(&tb, f = forth_load_core(core));
+		state(&tb, f = forth_load_core_file(core));
 		/* stack position does no persist across loads, this might
 		 * change, but is the current functionality */
 		test(&tb, 0 == forth_stack_position(f)); 
@@ -324,9 +337,23 @@ done:
 
 		state(&tb, forth_free(f));
 		state(&tb, fclose(core));
-		/**@todo use temporary file instead, copy if keep_files set*/
-		if(!keep_files)
-			state(&tb, remove("unit.core"));
+	}
+	{ /* test invalidation fails */
+		FILE *core;
+		forth_t *f;
+		state(&tb, core = fopen("unit.core", "rb+"));
+		must(&tb, core);
+		state(&tb, rewind(core));
+
+		state(&tb, f = forth_load_core_file(core));
+		test(&tb, !forth_is_invalid(f));
+		state(&tb, forth_invalidate(f));
+		test(&tb,  forth_is_invalid(f));
+		/* saving should fail as we have invalidated the core */
+		test(&tb, forth_save_core_file(f, core) < 0);
+		state(&tb, forth_free(f));
+		state(&tb, fclose(core));
+		state(&tb, remove("unit.core"));
 	}
 	{
 		/* test the built in words, there is a set of built in words
@@ -415,7 +442,7 @@ done:
 
 		state(&tb, forth_free(f));
 	}
-	{
+	{ /* tests for CALL */
 		forth_t *f = NULL;
 		struct forth_functions *ff;
 		state(&tb, ff = forth_new_function_list(2));
@@ -444,6 +471,35 @@ done:
 
 		state(&tb, forth_free(f));
 		state(&tb, forth_delete_function_list(ff));
+	}
+	{ 
+		FILE *core = NULL;
+		forth_t *f1 = NULL, *f2 = NULL;
+		char *m1 = NULL, *m2 = NULL;
+		forth_cell_t size1, size2;
+		must(&tb, f1 = forth_init(MINIMUM_CORE_SIZE, stdin, stdout, NULL));
+		state(&tb, core = fopen("unit.core", "wb+"));
+		must(&tb, core);
+		test(&tb, forth_save_core_file(f1, core) >= 0);
+		state(&tb, rewind(core));
+
+		must(&tb, m1 = forth_save_core_memory(f1, &size1));
+		must(&tb, f2 = forth_load_core_memory(m1,  size1));
+		must(&tb, m2 = forth_save_core_memory(f2, &size2));
+		must(&tb, size2 == size1);
+		test(&tb, size1/sizeof(forth_cell_t) > MINIMUM_CORE_SIZE);
+
+		/**@todo Get this working, might have to skip register section */
+		/*test(&tb, !memcmp(m1, m2, size1));*/
+
+		state(&tb, fclose(core));
+		state(&tb, forth_free(f1));
+		state(&tb, forth_free(f2));
+		state(&tb, free(m1));
+		state(&tb, free(m2));
+
+		if(!keep_files)
+			state(&tb, remove("unit.core"));
 	}
 	return !!unit_test_end(&tb, "libforth");
 }

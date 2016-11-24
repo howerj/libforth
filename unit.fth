@@ -114,6 +114,8 @@ T{ -5 s>d -> -5 -1 }T
 
 T{ 4 5 bounds -> 9 4 }T
 
+( @todo tests when alignment is 2 and 4 bytes )
+size 8 = [if]
 T{ 0  aligned -> 0 }T
 T{ 1  aligned -> size }T
 T{ 7  aligned -> size }T
@@ -122,6 +124,7 @@ T{ 9  aligned -> size 2* }T
 T{ 10 aligned -> size 2* }T
 T{ 16 aligned -> size 2* }T
 T{ 17 aligned -> size 3 * }T
+[then]
 
 T{ 8 16 4 /string -> 12 12 }T
 T{ 0 17 3 /string -> 3  14 }T

@@ -9,7 +9,6 @@
 @copyright  Copyright 2015,2016 Richard James Howe.
 @license    MIT 
 @email      howe.r.j.89@gmail.com 
-@todo       Generate the manual page for the library from this header 
 **/
 #ifndef FORTH_H
 #define FORTH_H
@@ -25,6 +24,17 @@ extern "C" {
 Forth cells, not bytes. 
 **/
 #define MINIMUM_CORE_SIZE (2048)
+
+/**
+@brief When designing a binary format, which this interpreter uses and
+saves to disk, it is imperative that certain information is saved to
+disk - one of those pieces of information is the version of the
+interpreter. This value is used for compatibility checking. Each version
+is incompatible with previous or later versions, which is a deficiency of the
+program. A way to migrate core files would be useful, but the task is
+too difficult.
+**/
+#define FORTH_CORE_VERSION  (0x03u)
 
 struct forth; /**< An opaque object that holds a running FORTH environment**/
 typedef struct forth forth_t;
@@ -55,6 +65,47 @@ struct forth_functions
 		unsigned depth; /**< depth expected on stack before call */
 		forth_function_t function; /**< function to execute */
 	} functions[]; /**< list of possible functions for CALL */
+};
+
+/**
+@brief The logging function is used to print error messages,
+warnings and notes within this program.
+@param prefix prefix to add to any logged messages
+@param file   file in which logging function is called
+@param func   function in which logging function is called
+@param line   line number logging function was called at
+@param fmt    logging format string
+@param ...    arguments for format string
+@return int < 0 is failure
+**/
+int forth_logger(const char *prefix, const char *func, 
+		unsigned line, const char *fmt, ...);
+
+/**
+Some macros are also needed for logging. As an aside, **__VA_ARGS__** should 
+be prepended with '##' in case zero extra arguments are passed into the 
+variadic macro, to swallow the extra comma, but it is not *standard* C, even
+if most compilers support the extension.
+**/
+#define fatal(FMT,...)   forth_logger("fatal",  __func__, __LINE__, FMT, __VA_ARGS__)
+#define error(FMT,...)   forth_logger("error",  __func__, __LINE__, FMT, __VA_ARGS__)
+#define warning(FMT,...) forth_logger("warning",__func__, __LINE__, FMT, __VA_ARGS__)
+#define note(FMT,...)    forth_logger("note",   __func__, __LINE__, FMT, __VA_ARGS__)
+#define debug(FMT,...)   forth_logger("debug",  __func__, __LINE__, FMT, __VA_ARGS__)
+
+
+/**
+@brief These are the possible options for the debug registers. Higher levels
+mean more verbose error messages are generated.
+**/
+enum forth_debug_level
+{
+	FORTH_DEBUG_OFF,         /**< tracing is off */
+	FORTH_DEBUG_FORTH_CODE,  /**< used within the forth interpreter */
+	FORTH_DEBUG_NOTE,        /**< print notes */
+	FORTH_DEBUG_INSTRUCTION, /**< instructions and stack are traced */
+	FORTH_DEBUG_CHECKS,      /**< bounds checks are printed out */
+	FORTH_DEBUG_ALL,         /**< trace everything that can be traced */
 };
 
 /**
@@ -109,6 +160,15 @@ word name, the entire string will be searched for.
 **/
 forth_cell_t forth_find(forth_t *o, const char *s);
 
+/**
+@brief Convert a string, representing a numeric value, into a forth cell.
+@param  base base to convert string from, valid values are 0, and 2-26
+@param[out]  n the result of the conversion is stored here
+@param  s    string to convert
+@return int return code indicating failure (non zero) or success (zero)
+**/
+int forth_string_to_cell(int base, forth_cell_t *n, const char *s);
+
 /** 
 @brief  push a value onto the variable stack
 
@@ -132,6 +192,30 @@ forth_cell_t forth_pop(forth_t *o);
 @return stack position, number of items on the stack 
 **/
 forth_cell_t forth_stack_position(forth_t *o);
+
+/**
+@brief  Check whether a forth environment is still valid, that
+is if the environment makes sense and is still runnable, an invalid
+forth environment cannot be saved to disk or run. Once a core is
+invalidated it cannot be made valid again.
+@param   o initialized forth environment
+@return  zero if environment is still valid, non zero if it is not
+**/
+int forth_is_invalid(forth_t *o);
+
+/**
+@brief Invalidate a Forth environment.
+@param o initialized forth environment to invalidate.
+**/
+void forth_invalidate(forth_t *o);
+
+/**
+@brief Set the verbosity/log/debug level of the interpreter, higher
+values mean more verbose output.
+@param o initialized forth environment.
+@param level to set environment to.
+**/
+void forth_set_debug_level(forth_t *o, enum forth_debug_level level);
 
 /** 
 @brief   Execute an initialized forth environment, this will read
@@ -164,7 +248,7 @@ int forth_eval(forth_t *o, const char *s);
 
 /** 
 @brief  Dump a raw forth object to disk, for debugging purposes, this
-cannot be loaded with "forth_load_core".
+cannot be loaded with "forth_load_core_file".
 
 @param  o    forth object to dump, caller frees, asserted.
 @param  dump file to dump to (opened as "wb"), caller frees, asserted.
@@ -174,7 +258,7 @@ int forth_dump_core(forth_t *o, FILE *dump);
 
 /** 
 @brief   Save the opaque FORTH object to file, this file may be
-loaded again with forth_load_core. The file passed in should
+loaded again with forth_load_core_file. The file passed in should
 be have been opened up in binary mode ("wb"). These files
 are not portable, files generated on machines with different
 machine word sizes or endianess will not work with each
@@ -191,18 +275,41 @@ passed NULL.
 @param   dump Core dump file handle ("wb"). Caller closes. Asserted.
 @return  int  An error code, negative on error. 
 **/
-int forth_save_core(forth_t *o, FILE *dump);
+int forth_save_core_file(forth_t *o, FILE *dump);
 
 /** 
 @brief  Load a Forth file from disk, returning a forth object that
-can be passed to forth_run.
+can be passed to forth_run. The loaded core file will have it's
+input and output file-handles defaulted so it reads from standard
+in and writes to standard error.
 
 @param  dump    a file handle opened on a Forth core dump, previously
 saved with forth_save_core, this must be opened
 in binary mode ("rb").
 @return forth_t a reinitialized forth object, or NULL on failure
 **/
-forth_t *forth_load_core(FILE *dump);
+forth_t *forth_load_core_file(FILE *dump);
+
+/**
+@brief Load a core file from memory, much like forth_load_core_file. The
+size parameter must be greater or equal to the MINIMUM_CORE_SIZE, this
+is asserted. 
+
+@param m    memory containing a Forth core file
+@param size size of core file in memory in bytes
+@return forth_t a reinitialized forth object, or NULL on failure
+**/
+forth_t *forth_load_core_memory(char *m, forth_cell_t size);
+
+/**
+@brief Save a Forth object to memory, this function will allocate
+enough memory to store the core file. 
+
+@param o    forth object to save to memory, Asserted.
+@param[out] size of returned object, in bytes
+@return pointer to saved memory on success.
+**/
+char *forth_save_core_memory(forth_t *o, forth_cell_t *size);
 
 /** 
 @brief   Define a new constant in an Forth environment.
@@ -250,6 +357,16 @@ accessible within the interpreter
 @param argv argv, as is passed into main() 
 **/
 void forth_set_args(forth_t *o, int argc, char **argv);
+
+/**
+@brief A wrapper around fopen, exposed as a utility function, this
+function either succeeds or calls "exit(EXIT_FAILURE)" after printing
+an error message.
+@param  name of file to open
+@param  mode to open file in
+@return always returns a file handle
+**/
+FILE *forth_fopen_or_die(const char *name, char *mode);
 
 /** 
 @brief  This implements a FORTH REPL whose behavior is documented in

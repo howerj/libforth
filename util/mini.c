@@ -7,7 +7,7 @@ int main(void)
 	forth_t *f = NULL;
 	int r = 0;
 	if(core) {
-		f = forth_load_core(core);
+		f = forth_load_core_file(core);
 		fclose(core);
 	}
 	if(!f)
@@ -18,6 +18,6 @@ int main(void)
 		return r;
 	if(!(core = fopen("forth.core", "wb")))
 		return -1;
-	return forth_save_core(f, core);
+	return forth_save_core_file(f, core);
 }
 

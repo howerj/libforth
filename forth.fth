@@ -1479,6 +1479,8 @@ size 8 = [if]
 		dup counted-column 1+ i ? i @ as-chars 
 	loop ;
 
+( @todo this function should make use of 'defer' and 'is', then different
+version of dump could be made that swapped out 'lister' )
 : dump  ( addr u -- : dump out 'u' cells of memory starting from 'addr' )
 	base @ >r hex 1+ over + under lister drop r> base ! cr ;
 
@@ -1596,7 +1598,7 @@ manipulating a terminal )
 : background 40 + ;
 0 constant dark
 1 constant bright
-true variable colorize 
+false variable colorize 
 
 : color ( brightness color-code -- : set the terminal color )
 	( set color on an ANSI compliant terminal,
@@ -1823,7 +1825,6 @@ hider .s
 	cr ;
 
 1 variable hide-words ( do we want to hide hidden words or not )
-
 ( This function prints out all of the defined words, excluding hidden words.
 An understanding of the layout of a Forth word helps here. The dictionary
 contains a linked list of words, each forth word has a pointer to the previous
@@ -1856,8 +1857,7 @@ address by the word size in bytes. )
 		@  ( Get pointer to previous word )
 		dup dictionary-start u< ( stop if pwd no longer points to a word )
 	until
-	drop cr
-;
+	drop cr ;
 hider hide-words
 
 : TrueFalse ( -- : print true or false )
@@ -2473,7 +2473,7 @@ enum header-magic4
 
 : check-version-compatibility ( char -- : checks the version compatibility of the core file ) 
 	core-version !
-	core-version @ 2 = if " version: 2" cr exit then
+	core-version @ 3 = if " version: 3" cr exit then
 	cleanup core-version @ . abort" : unknown version number" ;
 
 : save-endianess ( char -- : save the endianess, checking if it is valid )
@@ -2665,6 +2665,7 @@ will allow easier interaction with the world outside the virtual machine
 definitions of other words, their standards compliant version found
 if any
 * here documents, string literals
+* Add more words to the initial start program, like "words".
 * proper booleans should be used throughout
 * Implement as many things from http://lars.nocrew.org/forth2012/implement.html
 as is sensible. )
@@ -2711,4 +2712,11 @@ verbose [if]
 	.( ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR) cr
 	.( OTHER DEALINGS IN THE SOFTWARE. ) cr
 [then]
+
+( \ integrate simple 'dump' and 'words' into initial forth program 
+: ?? \ addr1 
+	dup . ? cr ;
+: dump \ addr n --
+	over + swap 1- begin 1+ 2dup dup ?? 2+ u< until ; )
+
 
