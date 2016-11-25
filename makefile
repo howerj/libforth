@@ -1,3 +1,4 @@
+# @todo clean up make file
 ECHO	= echo
 AR	= ar
 CC	= gcc
@@ -34,7 +35,7 @@ help:
 	@${ECHO} "      test            execute the unit tests"
 	@${ECHO} "      doc             make the project documentation"
 	@${ECHO} "      lib${TARGET}.a      make a static ${TARGET} library"
-	@${ECHO} "      line            make ${TARGET} with line editor"
+	@${ECHO} "      libforth        make ${TARGET} with built in core file"
 	@${ECHO} "      clean           remove generated files"
 	@${ECHO} "      dist            create a distribution archive"
 	@${ECHO} "      profile         generate lots of profiling information"
@@ -64,7 +65,7 @@ util/core2c:
 	make -C util/ core2c
 
 core.gen.c: forth.core util/core2c
-	./util/core2c < $< > $@
+	./util/core2c $< $@
 
 lib${TARGET}: main.c unit.o core.gen.c lib${TARGET}.a
 	${CC} ${CFLAGS} -I. -DUSE_BUILT_IN_CORE $^ -o $@
@@ -149,4 +150,5 @@ clean:
 	${RM} *.i *.s *.gcov *.gcda *.gcno *.out
 	${RM} html latex Doxyfile *.db *.bak
 	${RM} libforth.md
+	make -C util/ clean
 

@@ -1,6 +1,8 @@
 /**
 @todo cleanup comments / explain two stage compilation
 @todo add -f argument for executing files immediately 
+@todo process multiple options like "-vv" 
+@todo add back in line editor option
 **/
 #include "libforth.h"
 #include "unit.h"

@@ -610,7 +610,7 @@ static const uint8_t header[MAGIC7+1] = {
 	[CELL_SIZE] = sizeof(forth_cell_t),
 	[VERSION]   = FORTH_CORE_VERSION,
 	[ENDIAN]    = -1,
-	[MAGIC7]    = 0xFF
+	[MAGIC7]    = 0xFF /**@todo store size here as 1 << This field */
 };
 
 /**
@@ -660,6 +660,8 @@ are serialized, the serialization takes place in order. Values are written
 out as they are with the exception of **core_size** which is converted
 to a **uint64_t** before serialization (it being a fixed width makes reading
 it back in from a file easier).
+
+@note It might be better to store the size in a single byte, 
 
 **/
 struct forth { /**< FORTH environment */
@@ -873,6 +875,12 @@ up for debugging purposes (like **pnum**).
  X(TMPFILE,   "temporary-file",  "-- file-id ior : open a temporary file")\
  X(LAST_INSTRUCTION, NULL, "")
 
+/**
+@todo Add the following instructions:
+ * peek, poke, cpeek, cpoke
+ * resize-core 
+**/
+
 enum instructions { /**< instruction enumerations */
 #define X(ENUM, STRING, HELP) ENUM,
 	XMACRO_INSTRUCTIONS
@@ -978,11 +986,17 @@ static int forth_get_word(forth_t *o, uint8_t *p)
 {
 	int n = 0;
 	switch(o->m[SOURCE_ID]) {
-	case FILE_IN:   return fscanf((FILE*)(o->m[FIN]), o->word_fmt, p, &n);
+	case FILE_IN:   
+		n = fscanf((FILE*)(o->m[FIN]), o->word_fmt, p, &n);
+		if(!((char*)o->s)[0]) /* empty word */
+			return -1; /** @note this should throw -16 **/
+		return n;
 	case STRING_IN:
 		if(sscanf((char *)&(((char*)(o->m[SIN]))[o->m[SIDX]]), 
 					o->word_fmt, p, &n) <= 0)
 			return EOF;
+		if(!((char*)o->s)[0]) /* empty word */
+			return -1;  /** @note this should throw -16 **/
 		o->m[SIDX] += n;
 		return n;
 	default:       return EOF;

@@ -9,6 +9,7 @@
 @copyright  Copyright 2015,2016 Richard James Howe.
 @license    MIT 
 @email      howe.r.j.89@gmail.com 
+@todo       change forth_load_core_memory to use size_t
 **/
 #ifndef FORTH_H
 #define FORTH_H

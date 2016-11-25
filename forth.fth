@@ -724,6 +724,7 @@ extract the document string for a given work.
         -57     exception in sending or receiving a character
         -58     [IF], [ELSE], or [THEN] exception )
 
+( @todo integrate catch/throw into the interpreter as primitives )
 : catch  ( xt -- exception# | 0 : return addr on stack )
 	sp@ >r        ( xt : save data stack pointer )
 	`handler @ >r ( xt : and previous handler )
@@ -747,10 +748,14 @@ extract the document string for a given work.
 
 : interpret begin 
 	' read catch 
-	?dup-if [char] ! emit tab . cr then
+	?dup-if [char] ! emit tab . cr then ( exception handler of last resort )
 	0 until ;
 
-interpret 
+: [interpret] 
+	immediate interpret ;
+
+interpret ( use the new interpret word, which can catch exceptions )
+find [interpret] cfa start! ( the word executed on restart is now our new word )
 
 ( ========================== Basic Word Set ================================== )
 
@@ -2606,9 +2611,46 @@ Example usage:
 	2drop ( drop twice because catch will restore stack before 'command' )
 	restore ; ( restore input stream )
 
-hide{ literals repeated more redirect restore out run-length command }hide
+hide{ literals repeated more out run-length command }hide
 
 ( ==================== RLE =================================== )
+
+( ==================== Save/Load Core file =================== )
+
+: header 
+	0xff       emit ( magic 0 )
+	[char] 4   emit ( magic 1 )
+	[char] T   emit ( magic 2 )
+	[char] H   emit ( magic 3 )
+	size       emit ( cell size in bytes )
+	3          emit ( core version )
+	endian not emit ( endianess )
+	0xff       emit ; ( magic 7 )
+
+8 string size-field
+( @todo fix this for little endian )
+size 8 = [if] max-core size-field drop chars     ! [then]
+size 4 = [if] max-core size-field drop chars 4 + ! [then]
+size 2 = [if] max-core size-field drop chars 6 + ! [then]
+
+: do-size
+	size-field `fout @ write-file throw drop ;
+
+: core-file
+	0 max-core chars> `fout @ write-file throw drop ;
+
+: encore
+	header
+	do-size
+	core-file ;
+
+: save-core ( c-addr u -- throw ) 
+	w/o open-file throw dup
+	redirect 
+		' encore catch swap close-file drop
+	restore ;
+
+hide{ redirect restore core-file encore size-field header }hide
 
 ( ==================== Hex dump ============================== )
 
@@ -2667,6 +2709,7 @@ definitions of other words, their standards compliant version found
 if any
 * here documents, string literals
 * Add more words to the initial start program, like "words".
+* add rewind function
 * proper booleans should be used throughout
 * Implement as many things from http://lars.nocrew.org/forth2012/implement.html
 as is sensible. )

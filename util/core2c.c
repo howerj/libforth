@@ -10,23 +10,31 @@ Length Compression would save a lot of space. */
 #include <limits.h>
 #include <stdint.h>
 
-int main(void)
+int main(int argc, char **argv)
 {
 	unsigned mod = 1;
 	int c;
 	forth_cell_t size = 0;
 
-	puts("#include <libforth.h>");
-	puts("unsigned char forth_core_data[] = {");
-	while(EOF != (c = fgetc(stdin))) {
-		size++;
-		printf("0x%02x"", ", c);
-		if(!(mod++ % 16))
-			putchar('\n');
+	if(argc != 3) {
+		fprintf(stderr, "usage: %s input.bin output.c\n", argv[0]);
+		return -1;
 	}
-	puts("\n};");
-	printf("forth_cell_t forth_core_size = %zu;\n", size);
-	puts("");
+
+	FILE *in = forth_fopen_or_die(argv[1], "rb"), 
+	     *out = forth_fopen_or_die(argv[2], "wb");
+
+	fputs("#include <libforth.h>\n", out);
+	fputs("unsigned char forth_core_data[] = {\n", out);
+	while(EOF != (c = fgetc(in))) {
+		size++;
+		fprintf(out, "0x%02x"", ", c);
+		if(!(mod++ % 16))
+			fputc('\n', out);
+	}
+	fputs("\n};", out);
+	fprintf(out, "forth_cell_t forth_core_size = %zu;\n", size);
+	fputs("\n", out);
 	return 0;
 }
 

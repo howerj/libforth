@@ -20,5 +20,4 @@ core2c: core2c.c ../libforth.a
 
 clean:
 	rm -f ${TARGETS}
-	make -C ../ clean
 
