@@ -267,11 +267,6 @@ more memory.
 #include <time.h>
 
 /**
-Some forward declarations are needed for functions relating to logging.
-**/
-static const char *emsg(void);
-
-/**
 Traditionally Forth implementations were the only program running on the
 (micro)computer, running on processors orders of magnitude slower than
 this one, as such checks to make sure memory access was in bounds did not
@@ -336,11 +331,6 @@ the debug code.
 #define dic(DPTR) check_dictionary(o, &on_error, (DPTR))
 #define TRACE(ENV, INSTRUCTION, STK, TOP)
 #endif
-
-/**
-@brief Default VM size which should be large enough for any Forth application.
-**/
-#define DEFAULT_CORE_SIZE   (32 * 1024) 
 
 /**
 @brief When we are reading input to be parsed we need a space to hold that
@@ -419,20 +409,6 @@ regardless of whether **NDEBUG** is defined.
 @param X expression to verify
 **/
 #define VERIFY(X)           do { if(!(X)) { abort(); } } while(0)
-
-/**
-@brief The **IS_BIG_ENDIAN** macro looks complicated, however all it does is
-determine the endianess of the machine using trickery.
-
-See:
-
-* <https://stackoverflow.com/questions/2100331>
-* <https://en.wikipedia.org/wiki/Endianness>
-
-For more information and alternatives.
-
-**/
-#define IS_BIG_ENDIAN (!(union { uint16_t u16; uint8_t c; }){ .u16 = 1 }.c)
 
 /** 
 ## Enumerations and Constants
@@ -918,24 +894,15 @@ static const char *instruction_names[] = { /**< instructions with names */
 };
 
 /**
-The help strings are made available in the following array:
-**/
-static const char *instruction_help_strings[] = {
-#define X(ENUM, STRING, HELP) HELP,
-	XMACRO_INSTRUCTIONS
-#undef X
-};
-
-/**
 ## Helping Functions For The Compiler
 **/
 
 /**
-@brief  **emsg** returns a possible reason for a failure in a library function,
+@brief  **forth_strerror** returns a possible reason for a failure in a library function,
 in the form of a string
 @return an error message string
 **/
-static const char *emsg(void)
+const char *forth_strerror(void)
 {
 	static const char *unknown = "unknown reason";
 	const char *r = errno ? strerror(errno) : unknown;
@@ -1411,6 +1378,17 @@ void forth_set_debug_level(forth_t *o, enum forth_debug_level level)
 	o->m[DEBUG] = level;
 }
 
+FILE *forth_fopen_or_die(const char *name, char *mode)
+{
+	errno = 0;
+	FILE *file = fopen(name, mode);
+	if(!file) {
+		fatal("opening file \"%s\" => %s", name, forth_strerror());
+		exit(EXIT_FAILURE);
+	}
+	return file;
+}
+
 /**
 @brief This function defaults all of the registers in a Forth environment
 and sets up the input and output streams.
@@ -1692,7 +1670,7 @@ forth_t *forth_load_core_file(FILE *dump)
 	w = sizeof(*o) + (sizeof(forth_cell_t) * core_size);
 	errno = 0;
 	if(!(o = calloc(w, 1))) {
-		error("allocation of size %"PRId64" failed, %s", w, emsg());
+		error("allocation of size %"PRId64" failed, %s", w, forth_strerror());
 		goto fail; 
 	}
 	w = sizeof(forth_cell_t) * core_size;
@@ -1722,7 +1700,7 @@ forth_t *forth_load_core_memory(char *m, forth_cell_t size)
 	/**@todo check header */
 	o = calloc(sizeof(*o) + size, 1);
 	if(!o) {
-		error("allocation of size %zu failed, %s", sizeof(*o) + size, emsg());
+		error("allocation of size %zu failed, %s", sizeof(*o) + size, forth_strerror());
 		return NULL;
 	}
 	make_header(o->header);
@@ -1745,7 +1723,7 @@ char *forth_save_core_memory(forth_t *o, forth_cell_t *size)
 	m = malloc(w * sizeof(forth_cell_t) + sizeof(o->header) + sizeof(w));
 	if(!m) {
 		error("allocation of size %zu failed, %s", 
-				o->core_size * sizeof(forth_cell_t), emsg());
+				o->core_size * sizeof(forth_cell_t), forth_strerror());
 		return NULL;
 	}
 	memcpy(m, o->header, sizeof(o->header)); /* copy header */
@@ -1778,7 +1756,7 @@ struct forth_functions *forth_new_function_list(forth_cell_t count)
 	errno = 0;
 	ff = calloc(sizeof(*ff) + sizeof(ff->functions[0]) * count + 1, 1);
 	if(!ff) 
-		warning("calloc failed: %s", emsg());
+		warning("calloc failed: %s", forth_strerror());
 	else
 		ff->count = count;
 	return ff;
@@ -2528,119 +2506,10 @@ end:	o->S = S;
 }
 
 /**    
-## An example main function called **main_forth** and support functions 
-**/
+## An example main function called **main_forth**
 
-/** 
-This section is not needed to understand how Forth works, or how the C API
-into the Forth interpreter works. It provides a function which uses all
-the functions available to the API programmer in order to create an example
-program that implements a Forth interpreter with a Command Line Interface.
-
-This program can be used as a filter in a Unix pipe chain, or as a standalone
-interpreter for Forth. It tries to follow the Unix philosophy and way of
-doing things (see <http://www.catb.org/esr/writings/taoup/html/ch01s06.html>
-and <https://en.wikipedia.org/wiki/Unix_philosophy>). Whether this is
-achieved is a matter of opinion. There are a things this interpreter does
-differently to most Forth interpreters that support this philosophy however,
-it is silent by default and does not clutter up the output window with "ok",
-or by printing a banner at start up (which would contain no useful information
-whatsoever). It is simple, and only does one thing (but does it do it well?).
-**/
-static void fclose_input(FILE **in)
-{
-	if(*in && (*in != stdin))
-		fclose(*in);
-	*in = stdin;
-}
-
-/**
-**main_forth** implements a Forth interpreter which is a wrapper around the
-C API, there is an assumption that main_forth will be the only thing running
-in a process (it does not seem sensible to run multiple instances of it at
-the same time - it is just for demonstration purposes), as such the only
-error handling should do is to die after printing an error message if an
-error occurs, the **fopen_or_die** is an example of this philosophy, one
-which does not apply to functions like **forth_run** (which makes attempts
-to recover from a sensible error).
-**/
-FILE *forth_fopen_or_die(const char *name, char *mode)
-{
-	errno = 0;
-	FILE *file = fopen(name, mode);
-	if(!file) {
-		fatal("opening file \"%s\" => %s", name, emsg());
-		exit(EXIT_FAILURE);
-	}
-	return file;
-}
-
-/**
-It is customary for Unix programs to have a usage string, which we
-can print out as a quick reminder to the user as to what the command
-line options are.
-**/
-static void usage(const char *name)
-{
-	fprintf(stderr, 
-		"usage: %s "
-		"[-(s|l) file] [-e expr] [-m size] [-Vthv] [-] files\n", 
-		name);
-}
-
-/** 
-We try to keep the interface to the example program as simple as possible,
-so there are limited, uncomplicated options. What they do
-should come as no surprise to an experienced Unix programmer, it is important
-to pick option names that they would expect (for example *-l* for loading,
-*-e* for evaluation, and not using *-h* for help would be a hanging offense).
-**/
-
-static void help(void)
-{
-	static const char help_text[] =
-"Forth: A small forth interpreter build around libforth\n\n"
-"\t-h        print out this help and exit unsuccessfully\n"
-"\t-e string evaluate a string\n"
-"\t-s file   save state of forth interpreter to file\n"
-"\t-d        save state to 'forth.core'\n"
-"\t-l file   load previously saved state from file\n"
-"\t-m size   specify forth memory size in KiB (cannot be used with '-l')\n"
-"\t-t        process stdin after processing forth files\n"
-"\t-v        turn verbose mode on\n"
-"\t-V        print out version information and exit\n"
-"\t-         stop processing options\n\n"
-"Options must come before files to execute.\n\n"
-"The following words are built into the interpreter:\n\n";
-;
-	fputs(help_text, stderr);
-
-	for(unsigned i = 0; i < LAST_INSTRUCTION; i++)
-		fprintf(stderr, "%s\t\t%s\n", 
-				instruction_names[i],
-				instruction_help_strings[i]);
-}
-
-static void version(void)
-{
-	fprintf(stdout, 
-		"libforth:\n" 
-		"\tversion:     %d\n"
-		"\tsize:        %u\n"
-		"\tendianess:   %u\n"
-		"initial forth program:\n%s\n",
-		FORTH_CORE_VERSION, 
-		(unsigned)sizeof(forth_cell_t) * CHAR_BIT, 
-		(unsigned)IS_BIG_ENDIAN,
-		initial_forth_program);
-}
-
-/**
-**main_forth** is the second largest function is this file, but is not as
-complex as **forth_run** (currently the largest and most complex function), it
-brings together all the API functions offered by this library and provides
-a quick way for programmers to implement a working Forth interpreter for
-testing purposes.
+This is a very simple, limited, example of what can be done with the
+libforth.
 
 This make implementing a Forth interpreter as simple as:
 
@@ -2655,174 +2524,37 @@ This make implementing a Forth interpreter as simple as:
 
 	==== main.c =============================
 
-To keep things simple options are parsed first then arguments like files,
-although some options take arguments immediately after them. 
-
-A library for parsing command line options like *getopt* should be used,
-this would reduce the portability of the program. It is not recommended 
-that arguments are parsed in this manner.
 **/
+
 int main_forth(int argc, char **argv)
 {
-	FILE *in = NULL, *dump = NULL;
-	int rval = 0, c = 0, i = 1;
-       	int save = 0,            /* attempt to save core if true */
-	    eval = 0,            /* have we evaluated anything? */
-	    readterm = 0,        /* read from standard in */
-	    mset = 0;            /* memory size specified */
-	enum forth_debug_level verbose = FORTH_DEBUG_OFF; /* verbosity level */
-	static const size_t kbpc = 1024 / sizeof(forth_cell_t); /*kilobytes per cell*/
-	static const char *dump_name = "forth.core";
-	char *optarg = NULL;
-	forth_cell_t core_size = DEFAULT_CORE_SIZE;
+	FILE *core = fopen("forth.core", "rb");
 	forth_t *o = NULL;
-/**
-This loop processes any options that may have been passed to the program, it
-looks for arguments beginning with '-' and attempts to process that option,
-if the argument does not start with '-' the option processing stops. It is
-a simple mechanism for processing program arguments and there are better
-ways of doing it (such as "getopt" and "getopts"), but by using them we
-sacrifice portability.
-**/
-
-	for(i = 1; i < argc && argv[i][0] == '-'; i++)
-		switch(argv[i][1]) {
-		case '\0': goto done; /* stop processing options */
-		case 'h':  usage(argv[0]); 
-			   help(); 
-			   return -1;
-		case 't':  readterm = 1; 
-			   break;
-		case 'e':
-			if(i >= (argc - 1))
-				goto fail;
-			errno = 0;
-			if(!(o = o ? o : forth_init(core_size, stdin, stdout, NULL))) {
-				fatal("initialization failed, %s", emsg());
-				return -1;
-			}
-			forth_set_debug_level(o, verbose);
-			optarg = argv[++i];
-			if(verbose >= FORTH_DEBUG_NOTE)
-				note("evaluating '%s'", optarg);
-			if(forth_eval(o, optarg) < 0)
-				goto end;
-			eval = 1;
-			break;
-		case 's':
-			if(i >= (argc - 1))
-				goto fail;
-			dump_name = argv[++i];
-		case 'd':  /*use default name */
-			if(verbose >= FORTH_DEBUG_NOTE)
-				note("saving core file to '%s' (on exit)", dump_name);
-			save = 1;
-			break;
-		case 'm':
-			if(o || (i >= argc - 1) || forth_string_to_cell(10, &core_size, argv[++i]))
-				goto fail;
-			if((core_size *= kbpc) < MINIMUM_CORE_SIZE) {
-				fatal("-m too small (minimum %zu)", MINIMUM_CORE_SIZE / kbpc);
-				return -1;
-			}
-			if(verbose >= FORTH_DEBUG_NOTE)
-				note("memory size set to %zu", core_size);
-			mset = 1;
-			break;
-		case 'l':
-			if(o || mset || (i >= argc - 1))
-				goto fail;
-			optarg = argv[++i];
-			if(verbose >= FORTH_DEBUG_NOTE)
-				note("loading core file '%s'", optarg);
-			if(!(o = forth_load_core_file(dump = forth_fopen_or_die(optarg, "rb")))) {
-				fatal("%s, core load failed", optarg);
-				return -1;
-			}
-			forth_set_debug_level(o, verbose);
-			fclose(dump);
-			break;
-		case 'v':
-			verbose++;
-			break;
-		case 'V':
-			version();
-			return EXIT_SUCCESS;
-			break;
-		default:
-		fail:
-			fatal("invalid argument '%s'", argv[i]);
-			usage(argv[0]);
-			return -1;
-		}
-done:
-	/* if no files are given, read stdin */
-	readterm = (!eval && i == argc) || readterm;
+	int r = 0;
+	if(core) {
+		o = forth_load_core_file(core);
+		fclose(core);
+	}
+	if(!o)
+		o = forth_init(DEFAULT_CORE_SIZE, stdin, stdout, NULL);
 	if(!o) {
-		errno = 0;
-		if(!(o = forth_init(core_size, stdin, stdout, NULL))) {
-			fatal("forth initialization failed, %s", emsg());
-			return -1;
-		}
-		forth_set_debug_level(o, verbose);
+		fatal("failed to initialize forth: %s", forth_strerror());
+		return -1;
 	}
 	forth_set_args(o, argc, argv);
-	for(; i < argc; i++) { /* process all files on command line */
-		if(verbose >= FORTH_DEBUG_NOTE)
-			note("reading from file '%s'", argv[i]);
-		forth_set_file_input(o, in = forth_fopen_or_die(argv[i], "rb"));
-		/* shebang line '#!', core files could also be detected */
-		if((c = fgetc(in)) == '#') 
-			while(((c = forth_get_char(o)) > 0) && (c != '\n'));
-		else if(c == EOF)
-			goto close;
-		else
-			ungetc(c, in);
-		if((rval = forth_run(o)) < 0)
-			goto end;
-close:	
-		fclose_input(&in);
+	if((r = forth_run(o)) < 0)
+		return r;
+	errno = 0;
+	if(!(core = fopen("forth.core", "wb"))) {
+		fatal("failed to save core file: %s", forth_strerror());
+		return -1;
 	}
-	if(readterm) { /* if '-t' or no files given, read from stdin */
-		if(verbose >= FORTH_DEBUG_NOTE)
-			note("reading from stdin (%p)", stdin);
-		forth_set_file_input(o, stdin);
-		rval = forth_run(o);
-	}
-end:	
-	fclose_input(&in);
-/**
-If the save option has been given we only want to save valid core files,
-we might want to make an option to force saving of core files for debugging
-purposes, but in general we do not want to over write valid previously saved
-state with invalid data.
-**/
-	if(save) { /* save core file */
-		if(rval || forth_is_invalid(o)) {
-			fatal("refusing to save invalid core, %u/%d", rval, forth_is_invalid(o));
-			return -1;
-		}
-		if(verbose >= FORTH_DEBUG_NOTE)
-			note("saving for file to '%s'", dump_name);
-		if(forth_save_core_file(o, dump = forth_fopen_or_die(dump_name, "wb"))) {
-			fatal("core file save to '%s' failed", dump_name);
-			rval = -1;
-		}
-		fclose(dump);
-	}
-/** 
-Whilst the following **forth_free** is not strictly necessary, there
-is often a debate that comes up making short lived programs or programs whose
-memory use stays either constant or only goes up, when these programs exit
-it is not necessary to clean up the environment and in some case (although
-not this one) it can slow down the exit of the program for
-no reason.  However not freeing the memory after use does not play nice with
-programs that detect memory leaks, like Valgrind. Either way, we free the
-memory used here, but only if no other errors have occurred before hand. 
-**/
+	fclose(core);
+	r = forth_save_core_file(o, core);
 	forth_free(o);
-	return rval;
+	return r;
 }
+
 /**
 And that completes the program, and the documentation describing it.
 **/

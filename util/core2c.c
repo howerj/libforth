@@ -17,7 +17,7 @@ int main(void)
 	forth_cell_t size = 0;
 
 	puts("#include <libforth.h>");
-	puts("char forth_core_data[] = {");
+	puts("unsigned char forth_core_data[] = {");
 	while(EOF != (c = fgetc(stdin))) {
 		size++;
 		printf("0x%02x"", ", c);

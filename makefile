@@ -8,7 +8,6 @@ TARGET	= forth
 RM      = rm -rf
 CTAGS  ?= ctags
 CP      = cp
-COLOR   = 
 
 MDS     := ${wildcard *.md}
 DOCS    := ${MDS:%.md=%.htm}
@@ -48,7 +47,7 @@ help:
 lib${TARGET}.a: lib${TARGET}.o
 	${AR} rcs $@ $<
 
-${TARGET}: main.o lib${TARGET}.a
+${TARGET}: main.o unit.o lib${TARGET}.a
 	@echo "cc $^ -o $@"
 	@${CC} ${CFLAGS} $^ ${LDFLAGS} -o $@
 
@@ -61,11 +60,18 @@ forth.dump: forth.core ${TARGET}
 run: ${TARGET} ${FORTH_FILE}
 	./$< -t ${FORTH_FILE}
 
-unit: unit.o lib${TARGET}.a
+util/core2c:
+	make -C util/ core2c
+
+core.gen.c: forth.core util/core2c
+	./util/core2c < $< > $@
+
+lib${TARGET}: main.c unit.o core.gen.c lib${TARGET}.a
+	${CC} ${CFLAGS} -I. -DUSE_BUILT_IN_CORE $^ -o $@
 
 # "unit" contains the unit tests against the C API
-unit.test: unit
-	./$< ${COLOR}
+unit.test: ${TARGET}
+	./$< -u
 
 # A side effect of failing the tests in "unit.fth" is the fact that saving to
 # "forth.core" will fail, making this test fail.
@@ -84,11 +90,13 @@ dist: ${TARGET} ${TARGET}.1 lib${TARGET}.[a3] lib${TARGET}.htm ${DOCS} forth.cor
 %.htm: %.md
 	markdown $< > $@
 
-libforth.md: libforth.c libforth.h
-	./util/./convert    libforth.c >  $@
-	echo "## Appendix "            >> $@
-	echo "### libforth header"     >> $@
-	./util/./convert -H libforth.h >> $@
+libforth.md: main.c libforth.c libforth.h
+	./util/./convert    libforth.c    >  $@
+	echo "## Appendix "               >> $@
+	echo "### libforth header"        >> $@
+	./util/./convert -H libforth.h    >> $@
+	echo "### main.c example program" >> $@
+	./util/./convert main.c           >> $@
 
 %.pdf: %.md
 	pandoc --toc $< -o $@

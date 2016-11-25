@@ -26,6 +26,11 @@ Forth cells, not bytes.
 #define MINIMUM_CORE_SIZE (2048)
 
 /**
+@brief Default VM size which should be large enough for any Forth application.
+**/
+#define DEFAULT_CORE_SIZE   (32 * 1024) 
+
+/**
 @brief When designing a binary format, which this interpreter uses and
 saves to disk, it is imperative that certain information is saved to
 disk - one of those pieces of information is the version of the
@@ -42,6 +47,20 @@ typedef uintptr_t forth_cell_t; /**< FORTH cell large enough for a pointer*/
 
 #define PRIdCell PRIdPTR /**< Decimal format specifier for a Forth cell */
 #define PRIxCell PRIxPTR /**< Hex format specifier for a Forth word */
+
+/**
+@brief The **IS_BIG_ENDIAN** macro looks complicated, however all it does is
+determine the endianess of the machine using trickery.
+
+See:
+
+* <https://stackoverflow.com/questions/2100331>
+* <https://en.wikipedia.org/wiki/Endianness>
+
+For more information and alternatives.
+
+**/
+#define IS_BIG_ENDIAN (!(union { uint16_t u16; uint8_t c; }){ .u16 = 1 }.c)
 
 typedef int (*forth_function_t)(forth_t *o);
 
@@ -368,15 +387,16 @@ an error message.
 **/
 FILE *forth_fopen_or_die(const char *name, char *mode);
 
+/**
+@brief This is a simple wrapper around strerror, if the errno is
+zero it returns "unknown error", or if strerror returns NULL. This function
+inherits the problems of strerror (it is not threadsafe).
+@return error string.
+**/
+const char *forth_strerror(void);
+
 /** 
-@brief  This implements a FORTH REPL whose behavior is documented in
-the man pages for this library. You pass in the same format as
-is expected to main(). The only option possible to pass to argv
-is "-d" which automatically performs a forth_coredump() after
-it has read all the files passed in argv. All other strings
-are treated as file names to open and read input from, apart
-from "-", which sets the interpreter to read from stdin. Consult
-the man pages.
+@brief  This implements a limited FORTH REPL.
 
 Currently there is no mechanism for passing a struct forth_functions
 to this call, this is deliberate. A saved Forth file will not make
@@ -393,3 +413,4 @@ int main_forth(int argc, char **argv);
 }
 #endif
 #endif
+

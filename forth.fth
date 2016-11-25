@@ -1,3 +1,4 @@
+#!./forth 
 ( 
 Welcome to libforth, A dialect of Forth. Like all versions of Forth this
 version is  a little idiosyncratic, but how the interpreter works is
