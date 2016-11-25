@@ -4,11 +4,6 @@
 @author   Richard Howe
 @license  MIT (see https://opensource.org/licenses/MIT)
 @email    howe.r.j.89@gmail.com 
-@note     This file could be built into the main program, so that a series
-of built in tests can always be run. This would not create a circular 
-dependency if placed in the "main.c" file, however argument parsing would
-have to be moved out of "libforth.c" "main_forth" function. The "main_forth"
-function would the be simplified, and used only for demonstration purposes.
 **/  
 
 /*** module to test ***/
@@ -169,6 +164,7 @@ static void _must(test_t *t, const int result, const char *expr, const unsigned 
 static int unit_test_start(test_t *t, const char *unit_name, FILE *output) 
 {
 	assert(t && unit_name && output);
+	memset(t, 0, sizeof(*t));
 	time(&t->rawtime);
 	t->output = output;
 	if(signal(SIGABRT, sig_abrt_handler) == SIG_ERR) {
@@ -209,51 +205,16 @@ static int forth_function_2(forth_t *f)
 	return 0;
 }
 
-static char usage[] = "\
-libforth unit test framework\n\
-\n\
-	usage: %s [-h] [-c] [-k] [-s] [-]\n\
-\n\
-	-h	print this help message and exit (unsuccessfully so tests do not pass)\n\
-	-c	turn colorized output on (forced on)\n\
-	-k	keep any temporary file\n\
-	-s	silent mode\n\
-	-       stop processing command line arguments\n\
-\n\
-This program executes are series of tests to exercise the libforth library. It\n\
-will return zero on success and non zero on failure. The tests and results will\n\
-be printed out as executed.\n\
-\n";
+int libforth_unit_tests(int keep_files, int colorize, int silent)
+{
+	tb.is_silent = silent;
+	tb.color_on  = colorize;
 
-static int keep_files = 0;
-int main(int argc, char **argv) {
-	int i;
-	for(i = 1; i < argc && argv[i][0] == '-'; i++)
-		switch(argv[i][1]) {
-			case '\0':
-				goto done;
-			case 's':
-				tb.is_silent = 1;
-				break;
-			case 'h': 
-				fprintf(stderr, usage, argv[0]);
-				return -1;
-			case 'c': 
-				tb.color_on = 1;
-				break;
-			case 'k': 
-				keep_files = 1; 
-				break;
-			default:
-				fprintf(stderr, "invalid argument '%s'\n", argv[i]);
-				fprintf(stderr, usage, argv[0]);
-				return -1;
-		}
-done:
 	unit_test_start(&tb, "libforth", stdout);
 	{
 		/**@note The following functions will not be tested:
 		 * 	- void forth_set_file_output(forth_t *o, FILE *out);
+		 * @todo Finish the testing of functions presented in the API
 		 * 	- void forth_set_args(forth_t *o, int argc, char **argv);
 		 *	- int main_forth(int argc, char **argv); **/
 		FILE *core;

@@ -1,5 +1,5 @@
 CFLAGS= -Wall -Wextra -std=c99 -g
-TARGETS= errors.fth mini core2c core pl0
+TARGETS= errors.fth core2c pl0
 .PHONY: ../forth.core ../libforth.a
 all: ${TARGETS}
 
@@ -17,12 +17,6 @@ core2c: core2c.c ../libforth.a
 
 ../libforth.a:
 	make -C .. libforth.a
-
-core.gen.c: core2c ../forth.core
-	./core2c < ../forth.core > $@
-
-core: core.c core.gen.c ../libforth.a
-	${CC} ${CFLAGS} -I.. -L.. $^ -lforth -o $@
 
 clean:
 	rm -f ${TARGETS}
