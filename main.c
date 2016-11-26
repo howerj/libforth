@@ -1,6 +1,5 @@
 /**
 @todo cleanup comments / explain two stage compilation
-@todo add back in line editor option
 @todo add signal handling here
 **/
 #include "libforth.h"
@@ -21,6 +20,60 @@
 extern unsigned char forth_core_data[];
 extern forth_cell_t forth_core_size;
 #endif
+
+#ifdef USE_LINE_EDITOR
+#include "libline.h"
+#define LINE_EDITOR_AVAILABLE (1)
+
+/**
+The Forth history file will be stored in this file, if the 
+**USE\_LINE\_EDITOR** option is set.
+**/
+static const char *history_file = ".forth";
+
+/**
+The line editor, if used, will print a prompt for each line:
+**/
+static const char *prompt = "> ";
+
+/**
+@brief The following function implements a line-editor loop, quiting
+when there is no more input to be read.
+@param  o   a fully initialized for environment
+@return int <0 on failure of the Forth execution or the line editor
+**/
+static int forth_line_editor(forth_t *o)
+{
+	int rval = 0;
+	char *line = NULL;
+	assert(o);
+	errno = 0;
+	if(line_history_load(history_file) < 0) /* loading can fail, which is fine */
+		warning("failed to load history file %s, %s", history_file, forth_strerror());
+	while((line = line_editor(prompt))) {
+		forth_set_string_input(o, line);
+		if((rval = forth_run(o)) < 0)
+			goto end;
+		if(line_history_add(line) < 0) {
+			rval = -1;
+			goto end;
+		}
+		if(line_history_save(history_file) < 0) {
+			rval = -1;
+			goto end;
+		}
+		free(line);
+		line = NULL;
+	}
+end:
+	free(line);
+	return rval;
+}
+#else
+#define LINE_EDITOR_AVAILABLE (0)
+#endif /* USE_LINE_EDITOR */
+
+
 
 /** 
 This program can be used as a filter in a Unix pipe chain, or as a standalone
@@ -49,7 +102,7 @@ static void usage(const char *name)
 {
 	fprintf(stderr, 
 		"usage: %s "
-		"[-(s|l) file] [-e expr] [-m size] [-Vthv] [-] files\n", 
+		"[-(s|l|f) file] [-e expr] [-m size] [-LVthv] [-] files\n", 
 		name);
 }
 
@@ -70,6 +123,8 @@ static void help(void)
 "\t-e string evaluate a string\n"
 "\t-s file   save state of forth interpreter to file\n"
 "\t-d        save state to 'forth.core'\n"
+"\t-L        use the line editor, if available, when reading from stdin\n"
+"\t-f file   immediately read from and execute a file\n"
 "\t-l file   load previously saved state from file\n"
 "\t-m size   specify forth memory size in KiB (cannot be used with '-l')\n"
 "\t-t        process stdin after processing forth files\n"
@@ -80,16 +135,12 @@ static void help(void)
 "The following words are built into the interpreter:\n\n";
 
 	fputs(help_text, stderr);
-
-	/*for(unsigned i = 0; i < LAST_INSTRUCTION; i++)
-		fprintf(stderr, "%s\t\t%s\n", 
-				instruction_names[i],
-				instruction_help_strings[i]);*/
 }
 
 static int eval_file(forth_t *o, const char *file, enum forth_debug_level verbose) {
 	FILE *in = NULL;
 	int c = 0, rval = 0;
+	assert(file);
 	if(verbose >= FORTH_DEBUG_NOTE)
 		note("reading from file '%s'", file);
 	forth_set_file_input(o, in = forth_fopen_or_die(file, "rb"));
@@ -113,11 +164,9 @@ static void version(void)
 		"\tversion:     %d\n"
 		"\tsize:        %u\n"
 		"\tendianess:   %u\n"
-		/*"initial forth program:\n%s\n"*/,
 		FORTH_CORE_VERSION, 
 		(unsigned)sizeof(forth_cell_t) * CHAR_BIT, 
-		(unsigned)IS_BIG_ENDIAN
-		/*,initial_forth_program*/);
+		(unsigned)IS_BIG_ENDIAN);
 }
 
 static forth_t *forth_initial_enviroment(forth_t **o, forth_cell_t size, 
@@ -125,7 +174,7 @@ static forth_t *forth_initial_enviroment(forth_t **o, forth_cell_t size,
 		int argc, char **argv)
 {
 	errno = 0;
-	assert(input && output);
+	assert(input && output && argv);
 	if(*o)
 		goto finished;
 
@@ -164,6 +213,7 @@ int main(int argc, char **argv)
        	int save = 0,            /* attempt to save core if true */
 	    eval = 0,            /* have we evaluated anything? */
 	    readterm = 0,        /* read from standard in */
+	    use_line_editor = 0, /* use a line editor, *if* one exists */
 	    mset = 0;            /* memory size specified */
 	enum forth_debug_level verbose = FORTH_DEBUG_OFF; /* verbosity level */
 	static const size_t kbpc = 1024 / sizeof(forth_cell_t); /*kilobytes per cell*/
@@ -201,7 +251,11 @@ sacrifice portability.
 		case 'h':  usage(argv[0]); 
 			   help(); 
 			   return -1;
+		case 'L':  use_line_editor = 1;
+			   /* XXX fall through */
 		case 't':  readterm = 1; 
+			   if(verbose >= FORTH_DEBUG_NOTE)
+				   note("stdin on. line editor %s", use_line_editor ? "on" : "off");
 			   break;
 		case 'u':
 			   return libforth_unit_tests(0, 0, 0);
@@ -287,9 +341,18 @@ done:
 	if(readterm) { /* if '-t' or no files given, read from stdin */
 		if(verbose >= FORTH_DEBUG_NOTE)
 			note("reading from stdin (%p)", stdin);
+
+#ifdef USE_LINE_EDITOR
+		if(use_line_editor) {
+			rval = forth_line_editor(o);
+			goto end;
+		}
+#endif
+
 		forth_set_file_input(o, stdin);
 		rval = forth_run(o);
 	}
+
 end:	
 	fclose_input(&in);
 

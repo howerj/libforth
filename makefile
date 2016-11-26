@@ -9,6 +9,7 @@ TARGET	= forth
 RM      = rm -rf
 CTAGS  ?= ctags
 CP      = cp
+INCLUDE = libline
 
 MDS     := ${wildcard *.md}
 DOCS    := ${MDS:%.md=%.htm}
@@ -68,7 +69,8 @@ core.gen.c: forth.core util/core2c
 	./util/core2c $< $@
 
 lib${TARGET}: main.c unit.o core.gen.c lib${TARGET}.a
-	${CC} ${CFLAGS} -I. -DUSE_BUILT_IN_CORE $^ -o $@
+	@echo "cc $^ -o $@"
+	@${CC} ${CFLAGS} -I. -DUSE_BUILT_IN_CORE $^ ${LDFLAGS} -o $@
 
 # "unit" contains the unit tests against the C API
 unit.test: ${TARGET}
@@ -132,6 +134,17 @@ fast: ${TARGET}
 
 static: CC=musl-gcc
 static: ${TARGET}
+
+libline/makefile:
+	git submodule update
+
+libline/libline.a:
+	make -C libline libline.a
+
+# This option requires a clean build
+line: LDFLAGS += -lline
+line: CFLAGS += -L${INCLUDE} -I${INCLUDE} -DUSE_LINE_EDITOR
+line: libline/libline.a ${TARGET} libforth
 
 # CFLAGS: Add "-save-temps" to keep temporary files around
 # objdump: Add "-M intel" for a more sensible assembly output
