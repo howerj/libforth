@@ -163,7 +163,7 @@ static void version(void)
 		"libforth:\n" 
 		"\tversion:     %d\n"
 		"\tsize:        %u\n"
-		"\tendianess:   %u\n"
+		"\tendianess:   %u\n",
 		FORTH_CORE_VERSION, 
 		(unsigned)sizeof(forth_cell_t) * CHAR_BIT, 
 		(unsigned)IS_BIG_ENDIAN);
