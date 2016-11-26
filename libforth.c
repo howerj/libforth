@@ -8,6 +8,8 @@
 
 @brief      A FORTH library, written in a literate style.
 
+@todo Bias errnos so they are outside of the range reserved by Forth
+
 ## License
 
 The MIT License (MIT)

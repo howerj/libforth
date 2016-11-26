@@ -72,6 +72,11 @@ this as files to be executed, if there are any.
 
 Print version and interpreter information and exit successfully.
 
+* -f file
+
+Process a file immediately. This allows options and file arguments to be
+intermingled. 
+
 * -L
 
 If the line editing library is compiled into the executable, which is a compile

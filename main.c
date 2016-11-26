@@ -1,8 +1,7 @@
 /**
 @todo cleanup comments / explain two stage compilation
-@todo add -f argument for executing files immediately 
-@todo process multiple options like "-vv" 
 @todo add back in line editor option
+@todo add signal handling here
 **/
 #include "libforth.h"
 #include "unit.h"
@@ -11,6 +10,7 @@
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #ifdef _WIN32
 #include <io.h>
@@ -87,6 +87,25 @@ static void help(void)
 				instruction_help_strings[i]);*/
 }
 
+static int eval_file(forth_t *o, const char *file, enum forth_debug_level verbose) {
+	FILE *in = NULL;
+	int c = 0, rval = 0;
+	if(verbose >= FORTH_DEBUG_NOTE)
+		note("reading from file '%s'", file);
+	forth_set_file_input(o, in = forth_fopen_or_die(file, "rb"));
+	/* shebang line '#!', core files could also be detected */
+	if((c = fgetc(in)) == '#') 
+		while(((c = fgetc(in)) > 0) && (c != '\n'));
+	else if(c == EOF)
+		goto close;
+	else
+		ungetc(c, in);
+	rval = forth_run(o);
+close:	
+	fclose_input(&in);
+	return rval;
+}
+
 static void version(void)
 {
 	fprintf(stdout, 
@@ -101,18 +120,32 @@ static void version(void)
 		/*,initial_forth_program*/);
 }
 
-static forth_t *forth_initial_enviroment(forth_cell_t size, FILE *input, FILE *output)
+static forth_t *forth_initial_enviroment(forth_t **o, forth_cell_t size, 
+		FILE *input, FILE *output, enum forth_debug_level verbose, 
+		int argc, char **argv)
 {
+	errno = 0;
+	assert(input && output);
+	if(*o)
+		goto finished;
+
 #ifdef USE_BUILT_IN_CORE
-	forth_t *o = NULL;
 	(void)size;
-	o = forth_load_core_memory((char*)forth_core_data, forth_core_size);
-	forth_set_file_input(o, input);
-	forth_set_file_input(o, output);
-	return o;
+	*o = forth_load_core_memory((char*)forth_core_data, forth_core_size);
+	forth_set_file_input(*o, input);
+	forth_set_file_input(*o, output);
 #else
-	return forth_init(size, input, output, NULL);
+	*o = forth_init(size, input, output, NULL);
 #endif
+	if(!(*o)) {
+		fatal("forth initialization failed, %s", forth_strerror());
+		exit(EXIT_FAILURE);
+	}
+
+finished:
+	forth_set_debug_level(*o, verbose);
+	forth_set_args(*o, argc, argv);
+	return *o;
 }
 
 /**
@@ -127,7 +160,7 @@ that arguments are parsed in this manner.
 int main(int argc, char **argv)
 {
 	FILE *in = NULL, *dump = NULL;
-	int rval = 0, c = 0, i = 1;
+	int rval = 0, i = 1;
        	int save = 0,            /* attempt to save core if true */
 	    eval = 0,            /* have we evaluated anything? */
 	    readterm = 0,        /* read from standard in */
@@ -138,6 +171,8 @@ int main(int argc, char **argv)
 	char *optarg = NULL;
 	forth_cell_t core_size = DEFAULT_CORE_SIZE;
 	forth_t *o = NULL;
+	int orig_argc = argc;
+	char **orig_argv = argv;
 
 #ifdef _WIN32
 	/* unmess up Windows file descriptors: there is a warning about an
@@ -156,7 +191,11 @@ ways of doing it (such as "getopt" and "getopts"), but by using them we
 sacrifice portability.
 **/
 
-	for(i = 1; i < argc && argv[i][0] == '-'; i++)
+	for(i = 1; i < argc && argv[i][0] == '-'; i++) {
+		if(strlen(argv[i]) > 2) {
+			fatal("Only one option allowed at a time (got %s)", argv[i]);
+			goto fail;
+		}
 		switch(argv[i][1]) {
 		case '\0': goto done; /* stop processing options */
 		case 'h':  usage(argv[0]); 
@@ -169,12 +208,7 @@ sacrifice portability.
 		case 'e':
 			if(i >= (argc - 1))
 				goto fail;
-			errno = 0;
-			if(!(o = o ? o : forth_initial_enviroment(core_size, stdin, stdout))) {
-				fatal("initialization failed, %s", forth_strerror());
-				return -1;
-			}
-			forth_set_debug_level(o, verbose);
+			forth_initial_enviroment(&o, core_size, stdin, stdout, verbose, orig_argc, orig_argv);
 			optarg = argv[++i];
 			if(verbose >= FORTH_DEBUG_NOTE)
 				note("evaluating '%s'", optarg);
@@ -182,10 +216,21 @@ sacrifice portability.
 				goto end;
 			eval = 1;
 			break;
+		case 'f':
+			if(i >= (argc - 1))
+				goto fail;
+			forth_initial_enviroment(&o, core_size, stdin, stdout, verbose, orig_argc, orig_argv);
+			optarg = argv[++i];
+			if(verbose >= FORTH_DEBUG_NOTE)
+				note("reading from file '%s'", optarg);
+			if(eval_file(o, optarg, verbose) < 0)
+				goto end;
+			break;
 		case 's':
 			if(i >= (argc - 1))
 				goto fail;
 			dump_name = argv[++i];
+			/* XXX fall through */
 		case 'd':  /*use default name */
 			if(verbose >= FORTH_DEBUG_NOTE)
 				note("saving core file to '%s' (on exit)", dump_name);
@@ -228,34 +273,17 @@ sacrifice portability.
 			usage(argv[0]);
 			return -1;
 		}
+	}
+
 done:
 	/* if no files are given, read stdin */
 	readterm = (!eval && i == argc) || readterm;
-	if(!o) {
-		errno = 0;
-		if(!(o = forth_initial_enviroment(core_size, stdin, stdout))) {
-			fatal("forth initialization failed, %s", forth_strerror());
-			return -1;
-		}
-		forth_set_debug_level(o, verbose);
-	}
-	forth_set_args(o, argc, argv);
-	for(; i < argc; i++) { /* process all files on command line */
-		if(verbose >= FORTH_DEBUG_NOTE)
-			note("reading from file '%s'", argv[i]);
-		forth_set_file_input(o, in = forth_fopen_or_die(argv[i], "rb"));
-		/* shebang line '#!', core files could also be detected */
-		if((c = fgetc(in)) == '#') 
-			while(((c = fgetc(in)) > 0) && (c != '\n'));
-		else if(c == EOF)
-			goto close;
-		else
-			ungetc(c, in);
-		if((rval = forth_run(o)) < 0)
+	forth_initial_enviroment(&o, core_size, stdin, stdout, verbose, orig_argc, orig_argv);
+
+	for(; i < argc; i++) /* process all files on command line */
+		if(eval_file(o, argv[i], verbose) < 0)
 			goto end;
-close:	
-		fclose_input(&in);
-	}
+
 	if(readterm) { /* if '-t' or no files given, read from stdin */
 		if(verbose >= FORTH_DEBUG_NOTE)
 			note("reading from stdin (%p)", stdin);
@@ -264,12 +292,14 @@ close:
 	}
 end:	
 	fclose_input(&in);
+
 /**
 If the save option has been given we only want to save valid core files,
 we might want to make an option to force saving of core files for debugging
 purposes, but in general we do not want to over write valid previously saved
 state with invalid data.
 **/
+
 	if(save) { /* save core file */
 		if(rval || forth_is_invalid(o)) {
 			fatal("refusing to save invalid core, %u/%d", rval, forth_is_invalid(o));
@@ -283,6 +313,7 @@ state with invalid data.
 		}
 		fclose(dump);
 	}
+
 /** 
 Whilst the following **forth_free** is not strictly necessary, there
 is often a debate that comes up making short lived programs or programs whose
@@ -293,6 +324,7 @@ no reason.  However not freeing the memory after use does not play nice with
 programs that detect memory leaks, like Valgrind. Either way, we free the
 memory used here, but only if no other errors have occurred before hand. 
 **/
+
 	forth_free(o);
 	return rval;
 }

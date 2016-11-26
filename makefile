@@ -150,5 +150,6 @@ clean:
 	${RM} *.i *.s *.gcov *.gcda *.gcno *.out
 	${RM} html latex Doxyfile *.db *.bak
 	${RM} libforth.md
+	${RM} libforth core.gen.c
 	make -C util/ clean
 
