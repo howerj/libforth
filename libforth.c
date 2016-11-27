@@ -511,13 +511,14 @@ static const char *initial_forth_program =
 ": -rot rot rot ; \n"
 ": tuck swap over ; \n"
 ": nip swap drop ; \n"
-": allot here + h ! ; \n"
 ": 2drop drop drop ; \n"
+": allot here + h ! ; \n"
 ": bl 32 ; \n"
 ": emit _emit drop ; \n" 
 ": space bl emit ; \n"
 ": evaluate 0 evaluator ; \n"
-": . pnum drop space ; \n";
+": . pnum drop space ; \n"
+": ? @ . ;\n" ;
 
 /**
 @brief This is a string used in number to string conversion in

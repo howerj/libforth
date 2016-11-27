@@ -1,5 +1,5 @@
 CFLAGS= -Wall -Wextra -std=c99 -g
-TARGETS= errors.fth core2c pl0
+TARGETS= errors.fth core2c pl0 lzss rle
 .PHONY: ../forth.core ../libforth.a
 all: ${TARGETS}
 

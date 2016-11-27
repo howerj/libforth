@@ -10,3 +10,5 @@ forthcore.o
 vgcore.*
 core
 pl0
+lzss
+rle

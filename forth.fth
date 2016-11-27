@@ -391,11 +391,8 @@ extract the document string for a given work.
 : ) ( -- : do nothing, this allows easy commenting out of code )
 	immediate ;
 
-: ? ( a-addr -- : view value at address ) 
-	@ . ;
-
 : bell ( -- : emit an ASCII BEL character ) 
-	7  emit ;
+	7 emit ;
 
 : b/buf  ( -- u : bytes per buffer ) 
 	1024 ;
@@ -1465,8 +1462,8 @@ size 8 = [if]
 	not if cr . " :" space else drop then
 	counter 1+! ;
 
-: as-chars ( x -- : print a cell out as characters )
-	size 0 ( from zero to the size of a cell )
+: as-chars ( x n -- : print a cell out as characters, upto n chars )
+	0 ( from zero to the size of a cell )
 	do
 		dup                     ( copy variable to print out )
 		size i 1+ - select-byte ( select correct byte )
@@ -1480,7 +1477,7 @@ size 8 = [if]
 : lister ( addr u addr -- )
 	0 counter ! 1- swap 
 	do 
-		dup counted-column 1+ i ? i @ as-chars 
+		dup counted-column 1+ i ? i @ size as-chars 
 	loop ;
 
 ( @todo this function should make use of 'defer' and 'is', then different
@@ -1488,14 +1485,14 @@ version of dump could be made that swapped out 'lister' )
 : dump  ( addr u -- : dump out 'u' cells of memory starting from 'addr' )
 	base @ >r hex 1+ over + under lister drop r> base ! cr ;
 
-hide{ counted-column counter lister as-chars }hide
+hide{ counted-column counter as-chars }hide
 
 : forgetter ( pwd-token -- : forget a found word and everything after it )
 	dup @ pwd ! h ! ;
 
 ( @bug will not work for immediate defined words 
 @note Fig Forth had a word FENCE, if anything before this word was
-attempted to be forgotten then  )
+attempted to be forgotten then an exception is throw )
 : forget ( WORD -- : forget word and every word defined after it )
 	find dup 0= if -15 throw then 1- forgetter ;
 
@@ -2689,6 +2686,7 @@ will allow easier interaction with the world outside the virtual machine
 * common words and actions should be factored out to simplify
 definitions of other words, their standards compliant version found
 if any
+* allow the processing of argc and argv
 * here documents, string literals
 * Add more words to the initial start program, like "words".
 * add rewind function
