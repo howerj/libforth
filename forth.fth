@@ -2461,7 +2461,7 @@ enum header-magic3
 enum header-cell-size
 enum header-version
 enum header-endianess
-enum header-magic4 
+enum header-log2size
 
 : cleanup ( -- : cleanup before abort )
 	core-file @ ?dup 0<> if close-file drop then ;
@@ -2479,7 +2479,7 @@ enum header-magic4
 
 : check-version-compatibility ( char -- : checks the version compatibility of the core file ) 
 	core-version !
-	core-version @ 3 = if " version: 3" cr exit then
+	core-version @ 3 = if " version:        3" cr exit then
 	cleanup core-version @ . abort" : unknown version number" ;
 
 : save-endianess ( char -- : save the endianess, checking if it is valid )
@@ -2504,13 +2504,10 @@ enum header-magic4
 	cheader header-cell-size + c@ save-core-cell-size
 	cheader header-version   + c@ check-version-compatibility
 	cheader header-endianess + c@ save-endianess
-	cheader header-magic4    + c@      255 invalid-header
 	" valid header" cr ;
 
 : size? ( -- : print out core file size )
-	csize-field size-field-size core-file @ read-or-abort
-	( @todo improve method for printing out size )
-	" size: " size-field size-field-size chars dump ;
+	" size:           " cheader header-log2size + c@ 1 swap lshift . cr ;
 
 : core ( c-addr u -- : analyze a Forth core file from disk given its file name )
 	2dup " core file:" tab type cr
@@ -2524,7 +2521,7 @@ enum header-magic4
 hide{ 
 header-size header? 
 header-magic0 header-magic1 header-magic2 header-magic3
-header-version header-cell-size header-endianess header-magic4
+header-version header-cell-size header-endianess header-log2size
 header 
 core-file save-core-cell-size check-version-compatibility
 core-cell-size cheader
@@ -2625,23 +2622,13 @@ hide{ literals repeated more out run-length command }hide
 	size       emit ( cell size in bytes )
 	3          emit ( core version )
 	endian not emit ( endianess )
-	0xff       emit ; ( magic 7 )
-
-8 string size-field
-( @todo fix this for little endian )
-size 8 = [if] max-core size-field drop chars     ! [then]
-size 4 = [if] max-core size-field drop chars 4 + ! [then]
-size 2 = [if] max-core size-field drop chars 6 + ! [then]
-
-: do-size
-	size-field `fout @ write-file throw drop ;
+	max-core log2 emit ; ( magic 7 )
 
 : core-file
 	0 max-core chars> `fout @ write-file throw drop ;
 
 : encore
 	header
-	do-size
 	core-file ;
 
 : save-core ( c-addr u -- throw ) 
@@ -2650,7 +2637,7 @@ size 2 = [if] max-core size-field drop chars 6 + ! [then]
 		' encore catch swap close-file drop
 	restore ;
 
-hide{ redirect restore core-file encore size-field header }hide
+hide{ redirect restore core-file encore header }hide
 
 ( ==================== Hex dump ============================== )
 

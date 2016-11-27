@@ -263,6 +263,7 @@ more memory.
 #include <ctype.h>
 #include <errno.h>
 #include <limits.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <string.h>
 #include <setjmp.h>
@@ -596,7 +597,8 @@ enum header { /**< Forth header description enum */
 	CELL_SIZE,  /**< Size of a Forth cell, or virtual machine word */
 	VERSION,    /**< Version of the image */
 	ENDIAN,     /**< Endianess of the interpreter */
-	MAGIC7      /**< Final magic number */
+	LOG2_SIZE,  /**< Log-2 of the size */
+	MAX_HEADER_FIELD
 };
 
 /** 
@@ -604,7 +606,7 @@ The header itself, this will be copied into the **forth_t** structure on
 initialization, the **ENDIAN** field is filled in then as it seems impossible
 to determine the endianess of the target at compile time. 
 **/
-static const uint8_t header[MAGIC7+1] = {
+static const uint8_t header[MAX_HEADER_FIELD] = {
 	[MAGIC0]    = 0xFF,
 	[MAGIC1]    = '4',
 	[MAGIC2]    = 'T',
@@ -612,7 +614,7 @@ static const uint8_t header[MAGIC7+1] = {
 	[CELL_SIZE] = sizeof(forth_cell_t),
 	[VERSION]   = FORTH_CORE_VERSION,
 	[ENDIAN]    = -1,
-	[MAGIC7]    = 0xFF /**@todo store size here as 1 << This field */
+	[LOG2_SIZE]  = -1 
 };
 
 /**
@@ -875,6 +877,7 @@ up for debugging purposes (like **pnum**).
  X(FFLUSH,    "flush-file",      "file-id -- ior : flush a file")\
  X(FRENAME,   "rename-file",     "c-addr1 u1 c-addr2 u2 -- ior : rename file")\
  X(TMPFILE,   "temporary-file",  "-- file-id ior : open a temporary file")\
+ X(RAISE,     "raise",           "signal -- bool : raise a signal")\
  X(LAST_INSTRUCTION, NULL, "")
 
 /**
@@ -1449,11 +1452,28 @@ static void forth_make_default(forth_t *o, size_t size, FILE *in, FILE *out)
 array, filling in the endianess which can only be determined at run time.
 @param dst a byte array at least "sizeof header" large 
 **/
-static void make_header(uint8_t *dst)
+static void make_header(uint8_t *dst, uint8_t log2size)
 {
 	memcpy(dst, header, sizeof header);
 	/*fill in endianess, needs to be done at run time */
 	dst[ENDIAN] = !IS_BIG_ENDIAN;
+	dst[LOG2_SIZE] = log2size;
+}
+
+static forth_cell_t blog2(forth_cell_t x)
+{
+	forth_cell_t b = 0;
+	while(x >>= 1)
+		b++;
+	return b;
+}
+
+static forth_cell_t round_up(forth_cell_t r)
+{
+	forth_cell_t up = 1;
+	while(up < r)
+		up <<= 1;
+	return up;
 }
 
 /**
@@ -1467,9 +1487,11 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out,
 		const struct forth_functions *calls)
 {
 	assert(in && out);
-	forth_cell_t *m, i, w, t;
+	forth_cell_t *m, i, w, t, pow;
 	forth_t *o;
 	assert(sizeof(forth_cell_t) >= sizeof(uintptr_t));
+	size = round_up(size);
+	pow  = blog2(size);
 /**
 There is a minimum requirement on the **m** field in the **forth_t** structure
 which is not apparent in its definition (and cannot be made apparent given
@@ -1505,7 +1527,7 @@ Default the registers, and input and output streams:
 **o->header** needs setting up, but has no effect on the run time behavior of
 the interpreter:
 **/
-	make_header(o->header);
+	make_header(o->header, pow);
 
 	o->calls = calls; /* pass over functions for CALL */
 	m = o->m;         /* a local variable only for convenience */
@@ -1640,13 +1662,12 @@ save environment. Only the three previously mentioned fields are serialized;
 int forth_save_core_file(forth_t *o, FILE *dump)
 {
 	assert(o && dump);
-	uint64_t r1, r2, r3, core_size = o->core_size;
+	uint64_t r1, r2, core_size = o->core_size;
 	if(forth_is_invalid(o))
 		return -1;
 	r1 = fwrite(o->header,  1, sizeof(o->header), dump);
-	r2 = fwrite(&core_size, sizeof(core_size), 1, dump);
-	r3 = fwrite(o->m,       1, sizeof(forth_cell_t) * core_size, dump);
-	if(r1+r2+r3 != (sizeof(o->header) + 1 + sizeof(forth_cell_t)*core_size))
+	r2 = fwrite(o->m,       1, sizeof(forth_cell_t) * core_size, dump);
+	if(r1+r2 != (sizeof(o->header) + sizeof(forth_cell_t) * core_size))
 		return -1;
 	return 0;
 }
@@ -1669,16 +1690,15 @@ forth_t *forth_load_core_file(FILE *dump)
 	forth_t *o = NULL;
 	uint64_t w = 0, core_size = 0;
 	assert(dump);
-	make_header(expected);
+	make_header(expected, 0);
 	if(sizeof(actual) != fread(actual, 1, sizeof(actual), dump)) {
 		goto fail; /* no header */
 	}
-	if(memcmp(expected, actual, sizeof(header))) {
+	if(memcmp(expected, actual, sizeof(header)-1)) {
 		goto fail; /* invalid or incompatible header */
 	}
-	if(1 != fread(&core_size, sizeof(core_size), 1, dump)) {
-		goto fail; /* no header */
-	}
+	core_size = 1 << actual[LOG2_SIZE];
+
 	if(core_size < MINIMUM_CORE_SIZE) {
 		error("core size of %"PRIdCell" is too small", core_size);
 		goto fail; 
@@ -1710,16 +1730,15 @@ forth_t *forth_load_core_memory(char *m, forth_cell_t size)
 {
 	assert(m && (size / sizeof(forth_cell_t)) >= MINIMUM_CORE_SIZE);
 	forth_t *o;
-	size_t offset = sizeof(o->header) + sizeof(uint64_t);
+	size_t offset = sizeof(o->header);
 	size -= offset;
 	errno = 0;
-	/**@todo check header */
 	o = calloc(sizeof(*o) + size, 1);
 	if(!o) {
 		error("allocation of size %zu failed, %s", sizeof(*o) + size, forth_strerror());
 		return NULL;
 	}
-	make_header(o->header);
+	make_header(o->header, blog2(size));
 	memcpy(o->m, m + offset, size);
 	forth_make_default(o, size / sizeof(forth_cell_t), stdin, stdout);
 	return o;
@@ -1736,16 +1755,15 @@ char *forth_save_core_memory(forth_t *o, forth_cell_t *size)
 	*size = 0;
 	errno = 0;
 	uint64_t w = o->core_size;
-	m = malloc(w * sizeof(forth_cell_t) + sizeof(o->header) + sizeof(w));
+	m = malloc(w * sizeof(forth_cell_t) + sizeof(o->header));
 	if(!m) {
 		error("allocation of size %zu failed, %s", 
 				o->core_size * sizeof(forth_cell_t), forth_strerror());
 		return NULL;
 	}
 	memcpy(m, o->header, sizeof(o->header)); /* copy header */
-	memcpy(m + sizeof(o->header), &w, sizeof(w)); /* core size */
-	memcpy(m + sizeof(o->header) + sizeof(w), o->m, w); /* core */
-	*size = o->core_size * sizeof(forth_cell_t) + sizeof(o->header) + sizeof(w);
+	memcpy(m + sizeof(o->header), o->m, w); /* core */
+	*size = o->core_size * sizeof(forth_cell_t) + sizeof(o->header);
 	return m;
 }
 
@@ -2499,6 +2517,9 @@ instruction, and would be a useful abstraction.
 				*++S = (forth_cell_t)tmpfile();
 				f = errno ? errno : 0;
 			}
+			break;
+		case RAISE:
+			f = raise(f);
 			break;
 /**
 This should never happen, and if it does it is an indication that virtual
