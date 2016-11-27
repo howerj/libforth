@@ -212,6 +212,23 @@ int libforth_unit_tests(int keep_files, int colorize, int silent)
 
 	unit_test_start(&tb, "libforth", stdout);
 	{
+		test(&tb, 0 == forth_blog2(0));
+		test(&tb, 0 == forth_blog2(1));
+		test(&tb, 1 == forth_blog2(2));
+		test(&tb, 2 == forth_blog2(4));
+		test(&tb, 3 == forth_blog2(8));
+		test(&tb, 3 == forth_blog2(10));
+		test(&tb, 4 == forth_blog2(16));
+		test(&tb, 4 == forth_blog2(17));
+	
+		test(&tb, 1  == forth_round_up_pow2(0));
+		test(&tb, 1  == forth_round_up_pow2(1));
+		test(&tb, 2  == forth_round_up_pow2(2));
+		test(&tb, 4  == forth_round_up_pow2(3));
+		test(&tb, 16 == forth_round_up_pow2(9));
+		test(&tb, 64 == forth_round_up_pow2(37));
+	}
+	{
 		/**@note The following functions will not be tested:
 		 * 	- void forth_set_file_output(forth_t *o, FILE *out);
 		 * @todo Finish the testing of functions presented in the API

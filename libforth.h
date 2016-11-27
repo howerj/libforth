@@ -9,7 +9,6 @@
 @copyright  Copyright 2015,2016 Richard James Howe.
 @license    MIT 
 @email      howe.r.j.89@gmail.com 
-@todo       change forth_load_core_memory to use size_t
 **/
 #ifndef FORTH_H
 #define FORTH_H
@@ -72,11 +71,6 @@ to the forth interpreter which can be used from within the Forth interpreter.
 This structure can be used to extend the forth interpreter with functions
 defined elsewhere, which is particularly useful for allowing the interpreter
 to use non-portable functions.
-
-@todo rewrite structure so static allocation of functions can be done,
-thus removing the need for **forth_new_function_list** and 
-**forth_delete_function_list**.
-
 **/
 struct forth_functions
 {
@@ -84,7 +78,7 @@ struct forth_functions
 	struct forth_function {
 		unsigned depth; /**< depth expected on stack before call */
 		forth_function_t function; /**< function to execute */
-	} functions[]; /**< list of possible functions for CALL */
+	} *functions; /**< list of possible functions for CALL */
 };
 
 /**
@@ -127,6 +121,20 @@ enum forth_debug_level
 	FORTH_DEBUG_CHECKS,      /**< bounds checks are printed out */
 	FORTH_DEBUG_ALL,         /**< trace everything that can be traced */
 };
+
+/**
+@brief Compute the binary logarithm of an integer value
+@param  x number to act on
+@return log2 of x
+**/
+forth_cell_t forth_blog2(forth_cell_t x);
+
+/**
+@brief Round up a number to the nearest power of 2
+@param  r number to round up
+@return rounded up number
+**/
+forth_cell_t forth_round_up_pow2(forth_cell_t r);
 
 /**
 @brief   Given an input and an output this will initialize forth,
@@ -319,7 +327,7 @@ is asserted.
 @param size size of core file in memory in bytes
 @return forth_t a reinitialized forth object, or NULL on failure
 **/
-forth_t *forth_load_core_memory(char *m, forth_cell_t size);
+forth_t *forth_load_core_memory(char *m, size_t size);
 
 /**
 @brief Save a Forth object to memory, this function will allocate
@@ -329,7 +337,7 @@ enough memory to store the core file.
 @param[out] size of returned object, in bytes
 @return pointer to saved memory on success.
 **/
-char *forth_save_core_memory(forth_t *o, forth_cell_t *size);
+char *forth_save_core_memory(forth_t *o, size_t *size);
 
 /** 
 @brief   Define a new constant in an Forth environment.

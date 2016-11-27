@@ -829,6 +829,9 @@ hider tail
 : factorial ( x -- x : compute the factorial of a number )
 	dup 2 < if drop 1 exit then dup 1- recurse * ;
 
+: myself ( -- : myself is a synonym for recurse ) 
+	immediate postpone recurse ;
+
 : gcd ( x1 x2 -- x : greatest common divisor )
 	dup if tuck mod tail then drop ;
 
@@ -1066,8 +1069,6 @@ testing and debugging:
 	1 do * loop ;
 
 ( ========================== DO...LOOP ======================================= )
-: myself ( -- : myself is a synonym for recurse ) 
-	immediate postpone recurse ;
 
 0 variable column-counter
 4 variable column-width
@@ -1141,16 +1142,13 @@ testing and debugging:
 			leave
 		then
 	loop
-	begin ( read until delimiter )
-		key delim @ =
-	until  ;
+	-11 throw ; ( read in too many chars )
 hider delim
 
 : skip
 	key drop >r 0 begin drop key dup rdup r> <> until rdrop ;
 
 : word ( c -- c-addr : parse until 'c' is encountered, push transient counted string  )
-	( @todo skip leading delimiters )
 	dup skip chere 1+ c!
 	>r
 	chere 2+
@@ -1543,9 +1541,11 @@ hide{ a b m }hide
 
 0 variable hld
 
-( @todo throw if too many characters held )
+: overflow ( -- : )
+ 	here chars> pad chars> hld @ - u> if -17 throw then ;
+
 : hold ( char -- : add a character to the numeric output string )
-	pad chars> hld @ - c! hld 1+! ;
+	overflow pad chars> hld @ - c! hld 1+! ;
 
 : holds ( addr u -- )
   begin dup while 1- 2dup + c@ hold repeat 2drop ;
@@ -1577,7 +1577,7 @@ hide{ a b m }hide
 : u. ( u -- : display number in base 10 )
 	base @ >r decimal <# #s #> type drop r> base ! ;
 
-hide{ nbase }hide
+hide{ nbase overflow }hide
 
 ( ==================== Pictured Numeric Output ================ )
 
@@ -2430,13 +2430,8 @@ OTHER DEALINGS IN THE SOFTWARE.
 ;
 
 ( ==================== Core utilities ======================== )
-
-( @todo Implement an equivalent to "core.c" here )
-( @todo Process a Forth core file and spit out a C structure
-  containing information that describes the core file )
-( @todo Implement a series of words for manipulating cell sizes
-  that are larger or smaller, and possibly of a different endianess
-  to the currently running virtual machine )
+( Read the header of a core file and process it, printing the
+results out )
 
 8 constant header-size   ( size of Forth core file header )
 8 constant size-field-size ( the size in bytes of the size field in the core file )
@@ -2454,14 +2449,14 @@ create size-field size-field-size chars allot
 	size-field chars> ;
 
 0
-enum header-magic0
-enum header-magic1
-enum header-magic2
-enum header-magic3
-enum header-cell-size
-enum header-version
-enum header-endianess
-enum header-log2size
+enum header-magic0     ( magic number 0 : FF ) 
+enum header-magic1     ( magic number 1 : '4' )
+enum header-magic2     ( magic number 2 : 'T' )
+enum header-magic3     ( magic number 3 : 'H' )
+enum header-cell-size  ( size of a forth cell, either 2, 4 or 8 bytes )
+enum header-version    ( version of the forth core )
+enum header-endianess  ( endianess of the core )
+enum header-log2size   ( binary logarithm of the core size )
 
 : cleanup ( -- : cleanup before abort )
 	core-file @ ?dup 0<> if close-file drop then ;
@@ -2612,16 +2607,16 @@ hide{ literals repeated more out run-length command }hide
 
 ( ==================== RLE =================================== )
 
-( ==================== Save/Load Core file =================== )
+( ==================== Save Core file ======================== )
 
 : header 
-	0xff       emit ( magic 0 )
-	[char] 4   emit ( magic 1 )
-	[char] T   emit ( magic 2 )
-	[char] H   emit ( magic 3 )
-	size       emit ( cell size in bytes )
-	3          emit ( core version )
-	endian not emit ( endianess )
+	0xff          emit ( magic 0 )
+	[char] 4      emit ( magic 1 )
+	[char] T      emit ( magic 2 )
+	[char] H      emit ( magic 3 )
+	size          emit ( cell size in bytes )
+	3             emit ( core version )
+	endian not    emit ( endianess )
 	max-core log2 emit ; ( magic 7 )
 
 : core-file
@@ -2631,7 +2626,7 @@ hide{ literals repeated more out run-length command }hide
 	header
 	core-file ;
 
-: save-core ( c-addr u -- throw ) 
+: save-core ( c-addr u -- : save core file or throw error ) 
 	w/o open-file throw dup
 	redirect 
 		' encore catch swap close-file drop

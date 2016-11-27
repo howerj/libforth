@@ -661,16 +661,14 @@ size. The structures within the dictionary will be described later on.
 
 In the following structure, **struct forth**, values marked with a '~~'
 are serialized, the serialization takes place in order. Values are written
-out as they are with the exception of **core_size** which is converted
-to a **uint64_t** before serialization (it being a fixed width makes reading
-it back in from a file easier).
-
-@note It might be better to store the size in a single byte, 
+out as they are. The size of the Forth memory core gets stored in the header,
+the size must be a power of two, so its binary logarithm can be stored
+in a single byte.
 
 **/
 struct forth { /**< FORTH environment */
 	uint8_t header[sizeof(header)]; /**< ~~ header for core file */
-	forth_cell_t core_size;  /**< ~~ size of VM */
+	forth_cell_t core_size;  /**< size of VM */
 	uint8_t *s;          /**< convenience pointer for string input buffer */
 	char hex_fmt[16];    /**< calculated hex format */
 	char word_fmt[16];   /**< calculated word format */
@@ -910,11 +908,6 @@ static const char *instruction_names[] = { /**< instructions with names */
 ## Helping Functions For The Compiler
 **/
 
-/**
-@brief  **forth_strerror** returns a possible reason for a failure in a library function,
-in the form of a string
-@return an error message string
-**/
 const char *forth_strerror(void)
 {
 	static const char *unknown = "unknown reason";
@@ -1460,7 +1453,11 @@ static void make_header(uint8_t *dst, uint8_t log2size)
 	dst[LOG2_SIZE] = log2size;
 }
 
-static forth_cell_t blog2(forth_cell_t x)
+/**
+Calculates the binary logarithm of a forth cell, rounder up towards infinity.
+This used for storing the size field in the header.
+**/
+forth_cell_t forth_blog2(forth_cell_t x)
 {
 	forth_cell_t b = 0;
 	while(x >>= 1)
@@ -1468,7 +1465,10 @@ static forth_cell_t blog2(forth_cell_t x)
 	return b;
 }
 
-static forth_cell_t round_up(forth_cell_t r)
+/**
+This rounds up an integer to the nearest power of two larger than that integer.
+**/
+forth_cell_t forth_round_up_pow2(forth_cell_t r)
 {
 	forth_cell_t up = 1;
 	while(up < r)
@@ -1490,8 +1490,8 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out,
 	forth_cell_t *m, i, w, t, pow;
 	forth_t *o;
 	assert(sizeof(forth_cell_t) >= sizeof(uintptr_t));
-	size = round_up(size);
-	pow  = blog2(size);
+	size = forth_round_up_pow2(size);
+	pow  = forth_blog2(size);
 /**
 There is a minimum requirement on the **m** field in the **forth_t** structure
 which is not apparent in its definition (and cannot be made apparent given
@@ -1726,7 +1726,7 @@ fail:
 /**
 The following function allows us to load a core file from memory:
 **/
-forth_t *forth_load_core_memory(char *m, forth_cell_t size)
+forth_t *forth_load_core_memory(char *m, size_t size)
 {
 	assert(m && (size / sizeof(forth_cell_t)) >= MINIMUM_CORE_SIZE);
 	forth_t *o;
@@ -1738,7 +1738,7 @@ forth_t *forth_load_core_memory(char *m, forth_cell_t size)
 		error("allocation of size %zu failed, %s", sizeof(*o) + size, forth_strerror());
 		return NULL;
 	}
-	make_header(o->header, blog2(size));
+	make_header(o->header, forth_blog2(size));
 	memcpy(o->m, m + offset, size);
 	forth_make_default(o, size / sizeof(forth_cell_t), stdin, stdout);
 	return o;
@@ -1748,7 +1748,7 @@ forth_t *forth_load_core_memory(char *m, forth_cell_t size)
 And likewise we will want to be able to save to memory as well, the
 load and save functions for memory expect headers *not* to be present.
 **/
-char *forth_save_core_memory(forth_t *o, forth_cell_t *size)
+char *forth_save_core_memory(forth_t *o, size_t *size)
 {
 	assert(o && size);
 	char *m;
@@ -1788,8 +1788,9 @@ struct forth_functions *forth_new_function_list(forth_cell_t count)
 {
 	struct forth_functions *ff = NULL;
 	errno = 0;
-	ff = calloc(sizeof(*ff) + sizeof(ff->functions[0]) * count + 1, 1);
-	if(!ff) 
+	ff = calloc(sizeof(*ff), 1);
+	ff->functions = calloc(sizeof(ff->functions[0]) * count, 1);
+	if(!ff || !ff->functions) 
 		warning("calloc failed: %s", forth_strerror());
 	else
 		ff->count = count;
@@ -1798,6 +1799,8 @@ struct forth_functions *forth_new_function_list(forth_cell_t count)
 
 void forth_delete_function_list(struct forth_functions *calls)
 {
+	assert(calls);
+	free(calls->functions);
 	free(calls);
 }
 
