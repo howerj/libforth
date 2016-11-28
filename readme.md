@@ -1141,6 +1141,22 @@ cell addressing and conversion to/from character addresses. Real address
 could also be used, but this would make core files non-portable.
 * The unit tests in [unit.c][] could be integrated with the main program.
 
+### Submodules
+
+The [main.c][] file depends, optionally, on various submodules. These
+submodules need improving.
+
+#### libline 
+
+* libline needs porting to Windows
+* The API needs improving so there is more control on whether or not raw mode
+  is turned on or off, whether a terminal is being read from or not, ...
+
+#### libcompress
+
+* libcompress needs developing before it can be used.
+* It will be used for making smaller forth.core files.
+
 ## Notes
 
 * The compilation should result in a small executable, and when statically

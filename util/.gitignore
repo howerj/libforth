@@ -12,3 +12,5 @@ core
 pl0
 lzss
 rle
+*.e
+*.rle

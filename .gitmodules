@@ -1,3 +1,6 @@
 [submodule "libline"]
 	path = libline
 	url = https://github.com/howerj/libline
+[submodule "libcompress"]
+	path = libcompress
+	url = https://github.com/howerj/libcompress

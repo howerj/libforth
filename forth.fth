@@ -2426,6 +2426,12 @@ OTHER DEALINGS IN THE SOFTWARE.
 " 
 ;
 
+( ==================== Version information =================== )
+
+3 constant version
+
+( ==================== Version information =================== )
+
 ( ==================== Core utilities ======================== )
 ( Read the header of a core file and process it, printing the
 results out )
@@ -2471,7 +2477,7 @@ enum header-log2size   ( binary logarithm of the core size )
 
 : check-version-compatibility ( char -- : checks the version compatibility of the core file ) 
 	core-version !
-	core-version @ 3 = if " version:        3" cr exit then
+	core-version @ version = if " version:        " version . cr exit then
 	cleanup core-version @ . abort" : unknown version number" ;
 
 : save-endianess ( char -- : save the endianess, checking if it is valid )
@@ -2612,7 +2618,7 @@ hide{ literals repeated more out run-length command }hide
 	[char] T      emit ( magic 2 )
 	[char] H      emit ( magic 3 )
 	size          emit ( cell size in bytes )
-	3             emit ( core version )
+	version       emit ( core version )
 	endian not    emit ( endianess )
 	max-core log2 emit ; ( magic 7 )
 
