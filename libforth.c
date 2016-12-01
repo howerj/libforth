@@ -877,6 +877,7 @@ up for debugging purposes (like **pnum**).
  X(FRENAME,   "rename-file",     "c-addr1 u1 c-addr2 u2 -- ior : rename file")\
  X(TMPFILE,   "temporary-file",  "-- file-id ior : open a temporary file")\
  X(RAISE,     "raise",           "signal -- bool : raise a signal")\
+ X(DATE,      "date",           "-- date : push the time")\
  X(LAST_INSTRUCTION, NULL, "")
 
 /**
@@ -2102,6 +2103,7 @@ The created header looks like this:
 				      |
 				    Dictionary Pointer 
 **/
+
 			m[STATE] = 1; /* compile mode */
 			if(forth_get_word(o, o->s) < 0)
 				goto end;
@@ -2525,6 +2527,25 @@ instruction, and would be a useful abstraction.
 		case RAISE:
 			f = raise(f);
 			break;
+		
+		case DATE:
+		{
+			time_t raw;
+			struct tm *gmt;
+			time(&raw);
+			gmt = gmtime(&raw);
+			*++S = f;
+			*++S = gmt->tm_sec;
+			*++S = gmt->tm_min;
+			*++S = gmt->tm_hour;
+			*++S = gmt->tm_mday;
+			*++S = gmt->tm_mon;
+			*++S = gmt->tm_year + 1900;
+			*++S = gmt->tm_wday;
+			*++S = gmt->tm_yday;
+			f    = gmt->tm_isdst;
+		}
+		break;
 /**
 This should never happen, and if it does it is an indication that virtual
 machine memory has been corrupted somehow.

@@ -743,10 +743,11 @@ extract the document string for a given work.
 		( when catch began execution )
 	then ; 
 
-: interpret begin 
+: interpret 
+	begin 
 	' read catch 
 	?dup-if [char] ! emit tab . cr then ( exception handler of last resort )
-	0 until ;
+	again ;
 
 : [interpret] 
 	immediate interpret ;
@@ -1886,11 +1887,10 @@ hider hide-words
 	" tracing on:              " `debug   @ TrueFalse cr
 	" starting word:           " `instruction ? cr
 	" real start address:      " `start-address ? cr
-	" error handling:          " `error-handler ? cr
-(
- `sin `sidx `slen `fout
+	" error handling:          " `error-handler ? cr ;
+( `sin `sidx `slen `fout
  `stdout `stderr `argc `argv )
-;
+
 
 : y/n? ( -- bool : ask a yes or no question )
 	key drop
@@ -2312,16 +2312,16 @@ have to be NUL terminated
 \ 	}
 \ }
 
-: *pat ( regex -- regex char ) 
+: *pat ( regex -- regex char : grab next character of pattern ) 
 	dup c@ ;
 
-: *str ( string regex -- string regex char )
+: *str ( string regex -- string regex char : grab next character string to match )
 	over c@ ;
 
-: pass ( c-addr1 c-addr2 -- : bool ) 
+: pass ( c-addr1 c-addr2 -- bool : pass condition, characters matched ) 
 	2drop 1 ;
 
-: reject ( c-addr1 c-addr2 -- : bool ) 
+: reject ( c-addr1 c-addr2 -- bool : fail condition, character not matched ) 
 	2drop 0 ;
 
 : *pat==*str ( c-addr1 c-addr2 -- c-addr1 c-addr2 bool )
@@ -2612,7 +2612,7 @@ hide{ literals repeated more out run-length command }hide
 
 ( ==================== Save Core file ======================== )
 
-: header 
+: header  ( -- : write the header out )
 	0xff          emit ( magic 0 )
 	[char] 4      emit ( magic 1 )
 	[char] T      emit ( magic 2 )
@@ -2622,20 +2622,20 @@ hide{ literals repeated more out run-length command }hide
 	endian not    emit ( endianess )
 	max-core log2 emit ; ( magic 7 )
 
-: core-file
+: data ( -- : write the data out )
 	0 max-core chars> `fout @ write-file throw drop ;
 
-: encore
+: encore ( -- : write the core file out )
 	header
-	core-file ;
+	data ;
 
 : save-core ( c-addr u -- : save core file or throw error ) 
 	w/o open-file throw dup
 	redirect 
-		' encore catch swap close-file drop
+		' encore catch swap close-file throw 
 	restore ;
 
-hide{ redirect restore core-file encore header }hide
+hide{ redirect restore data encore header }hide
 
 ( ==================== Hex dump ============================== )
 
@@ -2655,6 +2655,73 @@ print out the correct address
 hide{ more cpad clean cdump input }hide
 
 ( ==================== Hex dump ============================== )
+
+( ==================== Date ================================== )
+
+( Rather annoyingly months are start from 1 but weekdays from 0 )
+
+: >month ( month -- )
+	case
+		 1 of " Jan " endof
+		 2 of " Feb " endof
+		 3 of " Mar " endof
+		 4 of " Apr " endof
+		 5 of " May " endof
+		 6 of " Jun " endof
+		 7 of " Jul " endof
+		 8 of " Aug " endof
+		 9 of " Sep " endof
+		10 of " Oct " endof
+		11 of " Nov " endof
+		12 of " Dec " endof
+	endcase drop ;
+
+: .day
+	10 mod
+	case
+		1 of " st " drop exit endof
+		2 of " nd " drop exit endof
+		3 of " rd " drop exit endof
+		" th " 
+	endcase drop ;
+
+: >day
+	dup u.
+	dup  1 10 within if .day       exit then
+	dup 10 20 within if " th" drop exit then
+	.day ;
+
+: >weekday ( weekday -- )
+	case
+		0 of " Sun " endof
+		1 of " Mon " endof
+		2 of " Tue " endof
+		3 of " Wed " endof
+		4 of " Thu " endof
+		5 of " Fri " endof
+		6 of " Sat " endof
+	endcase drop ;
+
+: padded
+	0 do [char] 0 emit loop ;
+
+: 0u. 
+	dup 10 u< if 1 padded then u. space ;
+
+: .date ( date -- )
+	if " DST " else " NRM " then 
+	drop ( no need for days of year)
+	>weekday
+	. ( year ) 
+	>month 
+	>day 
+	0u. ( hour )
+	0u. ( minute )
+	0u. ( second ) cr ;
+
+hide{ 0u. >weekday .day >day >month padded }hide
+
+( ==================== Date ================================== )
 
 ( Looking at most Forths dictionary with "words" command they tend
 to have a lot of words that do not mean anything but to the implementers
