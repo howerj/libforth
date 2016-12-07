@@ -531,7 +531,40 @@ this:
 
 Where 'word' is the word being described, the contents between the parenthesis
 describe the stack effects, this word expects one number to be one the stack,
-'y', and returns a number to the stack 'z'.
+'y', and returns a number to the stack 'z'. 
+
+Some of the descriptions of the variables in the stack effect comment 
+have a meaning:
+
+	.---------.-------------------------------------------------.
+	|  Name   |                   Meaning                       |
+	.---------.-------------------------------------------------.
+	| addr    | An address in cells                             |
+	| c-addr  | Character address                               |
+	| r-addr  | A raw address                                   |
+	| file-id | A file id, used as a handle for file operations |
+	| ior     | A error status returned by file operations      |
+	| char    | Single byte / character                         |
+	| u       | An unsigned value                               |
+	| x       | A signed value                                  |
+	| c" xxx" | The word parses a word (not a stack effect)     |
+	.---------.-------------------------------------------------.
+	
+The addressing modes complicate certain operations of Forth words. A normal
+Forth address, as passed to words like '!', '@', 'c@' and 'c!' are relative to
+the beginning of the start of the Forth cores memory, or at register zero. '!'
+and '@' take their addresses in cells (*addr*), whereas 'c@' and 'c!' take 
+their addresses in character address (*c-addr*).
+
+Raw addresses are however normal addresses, as understood by [C][] programs 
+and the computer. Operations on raw addresses can possibly result in undefined
+behavior, and all objects they may operate on that exists outside of the Forth
+core cannot be guaranteed to exists after a core file has been reloaded (that
+is pointers to objects outside of Forth core should not be saved for further
+use). Raw-addresses are also in character, not cell, units.
+
+In future revisions of Forth this memory addressing might be simplified, if a
+simple way of doing this can be achieved.
 
 ### Internal words
 
@@ -542,7 +575,7 @@ There are three types of words.
 These invisible words have no name but are used to implement the Forth. They
 are all *immediate* words.
 
-* push ( -- x)
+* push ( -- x )
 
 Push the next value in the instruction stream onto the variable stack, advancing
 the instruction stream.
@@ -560,7 +593,7 @@ the pointer instruction stream pointer to point to value after *run*.
 
 These words are named and are *immediate* words.
 
-* ':'           ( -- )
+* ':'           ( c" xxx" -- )
 
 Read in a new word from the input stream and compile it into the dictionary.
 
@@ -578,13 +611,13 @@ Instead of:
 
         : word ... ; immediate
 
-* '\\'           ( -- )
+* '\\'           ( c" \n" -- )
 
 A comment, ignore everything until the end of the line.
 
 #### Compiling words
 
-* 'read'        ( -- )
+* 'read'        ( c" xxx" -- )
 
 *read* is a complex word that implements most of the input interpreter,
 it reads in a [Forth][] *word* (up to 31 characters), if this *word* is in
@@ -782,6 +815,52 @@ and then takes either a forth string, or a **file-id**.
 
 Execute a command with the systems command interpreter.
 
+* 'raise'      ( u -- ??? )
+
+Raises a signal, what happens after the signal is raised is undefined.
+
+* 'date'       ( -- date )
+
+Push the date onto the stack, the order of the arguments are:
+
+	Is day light savings time? 
+	Days since start of year
+	Week day
+	Year
+	Month
+	Day of month
+	Hour
+	Minutes
+	Seconds (note, this can include lead seconds!)
+	
+The time is in UTC time.
+
+* 'memory-copy' ( r-addr1 r-addr2 u -- )
+
+Operates on two raw addresses. Copy 'u' characters from r-addr2 to r-addr1.
+
+* 'memory-locate' ( r-addr char u -- r-addr | 0 )
+
+Locate a character in a block of memory 'u' characters wide, returning a pointer to
+that character or zero if that address cannot be found.
+
+* 'memory-set'     ( r-addr char u -- )
+
+Set 'u' character of memory starting at 'r-addr' to 'char'.
+
+* 'memory-compare'  ( r-addr1 r-addr2 u -- x )
+
+Compare two blocks of memory 'u' units wide.
+
+* 'allocate' ( u -- r-addr status )
+
+Allocate a block of memory.
+
+* 'free' ( r-addr -- status )
+
+Free a block of memory.
+
+
 ##### File Access Words
 
 The following compiling words are part of the File Access Word set, a few of
@@ -822,14 +901,18 @@ identifier.
 Reposition a files offset relative to the beginning of the file given a file
 identifier.
 
-* flush-file ( file-id -- ior )
+* 'flush-file' ( file-id -- ior )
 
 Attempt to flush any buffered information written to a file.
 
-* rename-file ( c-addr1 u1 c-addr2 u2 -- ior )
+* 'rename-file' ( c-addr1 u1 c-addr2 u2 -- ior )
 
 Rename a file on the file system named by the first string ('c-addr1' and 'u1')
 to the second string ('c-addr2' and 'u2').
+
+* 'temporary-file' ( -- file-id ior )
+
+Open up a new temporary file for writing and reading.
 
 ### Defined words
 
@@ -971,6 +1054,10 @@ on the variable stack, in the opposite direction of "rot".
 * 'emit'        ( x -- )
 
 Write a single character out to the output stream.
+
+* '?'             ( addr -- )
+
+Print the contents of addr to the screen.
 
 ## Library of Forth words
 

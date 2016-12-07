@@ -2676,7 +2676,7 @@ hide{ more cpad clean cdump input }hide
 		12 of " Dec " endof
 	endcase drop ;
 
-: .day
+: .day ( day -- : add ordinal to day )
 	10 mod
 	case
 		1 of " st " drop exit endof
@@ -2685,13 +2685,13 @@ hide{ more cpad clean cdump input }hide
 		" th " 
 	endcase drop ;
 
-: >day
+: >day ( day -- : add ordinal to day of month )
 	dup u.
 	dup  1 10 within if .day       exit then
 	dup 10 20 within if " th" drop exit then
 	.day ;
 
-: >weekday ( weekday -- )
+: >weekday ( weekday -- : print the weekday )
 	case
 		0 of " Sun " endof
 		1 of " Mon " endof
@@ -2702,14 +2702,14 @@ hide{ more cpad clean cdump input }hide
 		6 of " Sat " endof
 	endcase drop ;
 
-: padded
+: padded ( u -- : print out a run of zero characters )
 	0 do [char] 0 emit loop ;
 
-: 0u. 
+: 0u. ( u -- : print a zero padded number )
 	dup 10 u< if 1 padded then u. space ;
 
-: .date ( date -- )
-	if " DST " else " NRM " then 
+: .date ( date -- : print the date )
+	if " DST " else " UTC " then 
 	drop ( no need for days of year)
 	>weekday
 	. ( year ) 
@@ -2816,4 +2816,15 @@ verbose [if]
 : dump \ addr n --
 	over + swap 1- begin 1+ 2dup dup ?? 2+ u< until ; )
 
+( Example program: 
+
+: hello-world immediate
+	" Hello, World!" cr bye ;
+
+find hello-world cfa start!
+
+s" forth.core" save-core )
+
+( : strlen \ raw-c-addr -- u 
+	dup >r 0 -1 memory-locate r> - ; )
 

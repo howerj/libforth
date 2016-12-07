@@ -823,7 +823,7 @@ up for debugging purposes (like **pnum**).
  X(RUN,       "run",        " -- : run a Forth word")\
  X(DEFINE,    "define",     " -- : make new Forth word, set compile mode")\
  X(IMMEDIATE, "immediate",  " -- : make a Forth word immediate")\
- X(READ,      "read",       " -- : read in a Forth word and execute it")\
+ X(READ,      "read",       " c\" xxx\" -- : read in a Forth word and execute it")\
  X(LOAD,      "@",          "addr -- x : load a value")\
  X(STORE,     "!",          "x addr -- : store a value")\
  X(CLOAD,     "c@",         "c-addr -- x : load character value")\
@@ -877,12 +877,18 @@ up for debugging purposes (like **pnum**).
  X(FRENAME,   "rename-file",     "c-addr1 u1 c-addr2 u2 -- ior : rename file")\
  X(TMPFILE,   "temporary-file",  "-- file-id ior : open a temporary file")\
  X(RAISE,     "raise",           "signal -- bool : raise a signal")\
- X(DATE,      "date",           "-- date : push the time")\
+ X(DATE,      "date",          " -- date : push the time")\
+ X(MEMMOVE,   "memory-copy",   " r-addr1 r-addr2 u -- : move a block of memory")\
+ X(MEMCHR,    "memory-locate", " r-addr char u -- r-addr | 0 : locate a character memory")\
+ X(MEMSET,    "memory-set",    " r-addr char u -- : set a block of memory")\
+ X(MEMCMP,    "memory-compare", " r-addr1 r-addr2 u -- x : compare two blocks of memory")\
+ X(ALLOCATE,  "allocate",       " u -- r-addr ior : allocate a block of memory")\
+ X(FREE,      "free",           " r-addr1 -- ior : free a block of memory")\
  X(LAST_INSTRUCTION, NULL, "")
 
 /**
 @todo Add the following instructions:
- * peek, poke, cpeek, cpoke
+ * memory-compare memory-copy
  * resize-core 
 **/
 
@@ -2546,6 +2552,34 @@ instruction, and would be a useful abstraction.
 			f    = gmt->tm_isdst;
 		}
 		break;
+		case MEMMOVE:
+			w = *S--;
+			memmove((char*)(*S--), (char*)w, f);
+			f = *S--;
+			break;
+		case MEMCHR:
+			w = *S--;
+			f = (forth_cell_t)memchr((char*)(*S--), w, f);
+			break;
+		case MEMSET:
+			w = *S--;
+			memset((char*)(*S--), w, f);
+			f = *S--;
+			break;
+		case MEMCMP:
+			w = *S--;
+			f = memcmp((char*)(*S--), (char*)w, f);
+			break;
+		case ALLOCATE:
+			errno = 0;
+			*++S = (forth_cell_t)calloc(f, 1);
+			f = errno;
+			break;
+		case FREE:
+			free((char*)f);
+			f = 0;
+			break;
+
 /**
 This should never happen, and if it does it is an indication that virtual
 machine memory has been corrupted somehow.
