@@ -1211,8 +1211,9 @@ are two error handlers. These mechanisms need unifying.
   pointer to the forth object, a pointer to the stack and the stack depth.
 * A few environment variables could be used to specify start up files for the
   interpreter and user specific startup files.
-* Add save-core, number, parse, load-core, more-core to the
+* Add number, parse, load-core, more-core to the
   virtual machine.
+* Add getenv mechanism to virtual machine
 * Signal handling should be added, so the Forth program can handle them.
 * Add loading in a Forth image from a memory structure, this will need
   to be in a portable Format.
@@ -1227,6 +1228,10 @@ sizes or endianess, which needs addressing.
 cell addressing and conversion to/from character addresses. Real address 
 could also be used, but this would make core files non-portable.
 * The unit tests in [unit.c][] could be integrated with the main program.
+* Use either liballocs or libffi for adding foreign function interfaces
+to programs, see:
+  - <https://github.com/stephenrkell/liballocs>
+  - <https://sourceware.org/libffi/>
 
 ### Submodules
 

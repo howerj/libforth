@@ -132,6 +132,9 @@ extract the document string for a given work.
 : literal ( x -- : immediately write a literal into the dictionary )
 	immediate [literal] ;
 
+: sliteral immediate ( I: c-addr u --, Run: -- c-addr u )
+	swap [literal] [literal] ;
+
 ( space saving measure )
 -1 : -1 literal ;
  0 : 0 literal ;
@@ -492,6 +495,9 @@ extract the document string for a given work.
 : under ( x1 x2 -- x1 x1 x2 )
 	>r dup r> ;
 
+: 3drop ( x1 x2 x3 -- )
+	2drop drop ;
+
 : 2nip   ( n1 n2 n3 n4 -- n3 n4 ) 
 	>r >r 2drop r> r> ;
 
@@ -591,7 +597,7 @@ extract the document string for a given work.
 : trip ( x -- x x x : triplicate a number ) 
 	dup dup ;
 
-: roll  ( xu xu-1 ... x0 u -- xu-1 ... x0 xu : u+1 items on the top of the stack by u )
+: roll  ( xu xu-1 ... x0 u -- xu-1 ... x0 xu : move u+1 items on the top of the stack by u )
 	dup 0 >
 	if
 		swap >r 1- roll r> swap
@@ -1053,7 +1059,6 @@ should use a value to return to which it pushes to the return stack )
 testing and debugging:
  : mm 5 1 do i . cr 4 1 do j . tab i . cr loop loop ; )
 
-
 : range ( nX nY -- nX nX+1 ... nY )  
 	swap 1+ swap do i loop ;
 
@@ -1065,6 +1070,9 @@ testing and debugging:
 
 : mul ( n0 ... nX X -- mul<0..X> ) 
 	1 do * loop ;
+
+: reverse ( x1 ... xn n -- xn ... x1 : reverse n items on the stack )
+	0 do i roll loop ;
 
 ( ========================== DO...LOOP ======================================= )
 
@@ -1155,6 +1163,8 @@ hider delim
 	chere c!
 	chere ;
 
+hider skip
+
 : accept ( c-addr +n1 -- +n2 : see accepter definition ) 
 	'\n' accepter ;
 
@@ -1207,6 +1217,11 @@ hider delim
 : /string ( c-addr1 u1 n -- c-addr2 u2 : advance a string by n characters )
 	over min rot over + -rot - ;
 
+: compare ( c-addr1 u1 c-addr2 u2 -- n : compare two strings, not quite compliant yet )
+	>r swap r> min >r
+	start-address + swap start-address + r>
+	memory-compare ;
+
 128 string sbuf
 : s" ( "ccc<quote>" --, Run Time -- c-addr u )
 	key drop sbuf 0 fill sbuf [char] " accepter sbuf drop swap ;
@@ -1252,17 +1267,26 @@ prints it out, it also does not checking of the returned values from write-file 
 : empty-stack ( x-n ... x-0 -- : empty the variable stack )
 	begin depth while drop repeat ;
 
-: quit
+: (quit) ( -- : do the work of quit, without the restart )
 	0 `source-id !  ( set source to read from file )
 	`stdin @ `fin ! ( read from stdin )
 	postpone [      ( back into command mode )
-	-1 restart      ( restart the interpreter ) ;    
+	' interpret start! ; ( set interpreter starting word )
+
+: quit ( -- : Empty return stack, go back to command mode, read from stdin, interpret input )
+	(quit)
+	-1 restart  ;   ( restart the interpreter )
 
 : abort
-	empty-stack quit ;
+	-1 throw ;
 
-: abort" immediate postpone "
-	' cr , ' abort , ;
+: (abort") ( do the work of abort )
+	(quit)
+	-2 throw ;
+
+: abort" immediate 
+	postpone "
+	' cr , ' (abort") , ;
 
 ( ==================== CASE statements ======================== )
 
@@ -1290,6 +1314,8 @@ prints it out, it also does not checking of the returned values from write-file 
 
 ( ==================== CASE statements ======================== )
 
+( ==================== Hiding Words =========================== )
+
 : }hide ( should only be matched with 'hide{' )
 	immediate -22 throw ;
 
@@ -1302,6 +1328,8 @@ prints it out, it also does not checking of the returned values from write-file 
 		dup 0= if -15 throw then
 		hide drop
 	again ;
+
+( ==================== Hiding Words =========================== )
 
 : spaces ( n -- : print n spaces ) 
 	0 do space loop ;
@@ -1813,14 +1841,14 @@ and prints prime numbers. )
 	"  There are " counter @ . " primes."
 	cr ;
 
-hider counter
+hide{ counter }hide
 ( ==================== Prime Numbers ========================== )
 
 ( ==================== Debugging info ========================= )
 
 ( string handling should really be done with PARSE, and CMOVE )
 
-hider .s
+hide{ .s }hide
 : .s    ( -- : print out the stack for debugging )
 	" <" depth u. " >" space
 	depth if
@@ -2190,8 +2218,6 @@ For resources on Forth:
   @todo read-line and write-line need their flag and ior setting correctly
 
 	FILE-SIZE    [ use file-positions ]
-	INCLUDE-FILE 
-	FILE-STATUS
 
   Also of note:	
   * Source ID needs extending. )
@@ -2201,6 +2227,9 @@ For resources on Forth:
 
 : write-char ( c-addr fileid -- ior : write a char )
 	1 swap write-file 0<> swap 1 <> or ;
+
+: rewind-file ( file-id -- : rewind a file to the beginning )
+	0 reposition-file throw ;
 
 : read-line ( c-addr u1 fileid -- u2 flag ior : read in a line of text )
 	-rot bounds
@@ -2224,22 +2253,19 @@ For resources on Forth:
 	>r 2dup w/o open-file throw close-file throw
 	r> open-file ;
 
-: include-file
-	0 1 evaluator throw ;
+: include-file ( file-id -- : evaluate a file ) 
+	dup >r 0 1 evaluator r> close-file throw throw ;
 
-: included ( c-addr u )
+: included ( c-addr u -- : attempt to open up a name file and evaluate it )
 	r/o open-file throw 
 	include-file ;
 
-: include ( c" ccc" -- : attempt to evaluate a file )
-	( @bug does not remove leading spaces from name, should use parse-name )
-	source accept 1+ tib swap included ;
+: include ( c" ccc" -- : attempt to evaluate a named file )
+	( @bug requires trailing space, should use parse-name )
+	bl word count included ;
 
 : bin ( fam1 -- fam2 : modify a file access method to be binary not line oriented ) 
-	( Do nothing, all file access methods are binary, although of note
-	the already opened files stdin, stdout and stderr are opened in text
-	mode on Windows platforms, but they are not file access methods, they
-	are fileids  )
+	( Do nothing, all file access methods are binary )
 	;
 
 ( ==================== Files ================================== )
@@ -2612,6 +2638,14 @@ hide{ literals repeated more out run-length command }hide
 
 ( ==================== Save Core file ======================== )
 
+( The following functionality allows the user to save the core file
+from within the running interpreter. The Forth core files have a very simple
+format which means the words for doing this do not have to be too long, a header
+has to emitted with a few calculated values and then the contents of the
+Forths memory after this )
+
+( This write the header out to the current output device, this
+will be redirected to a file )
 : header  ( -- : write the header out )
 	0xff          emit ( magic 0 )
 	[char] 4      emit ( magic 1 )
@@ -2620,7 +2654,7 @@ hide{ literals repeated more out run-length command }hide
 	size          emit ( cell size in bytes )
 	version       emit ( core version )
 	endian not    emit ( endianess )
-	max-core log2 emit ; ( magic 7 )
+	max-core log2 emit ; ( size field )
 
 : data ( -- : write the data out )
 	0 max-core chars> `fout @ write-file throw drop ;
@@ -2635,7 +2669,31 @@ hide{ literals repeated more out run-length command }hide
 		' encore catch swap close-file throw 
 	restore ;
 
+( The following code illustrates an example of setting up a
+Forth core file to execute a word when the core file is loaded.
+In the example the word "hello-world" will be executed, which will
+also quit the interpreter:
+
+	\ Only works for immediate words for now, we define
+	\ the word we wish to be executed when the forth core
+	\ is loaded
+	: hello-world immediate
+		" Hello, World!" cr bye ;
+
+	\ The following sets the starting word to our newly
+	\ defined word:
+	find hello-world cfa start!
+
+	\ Now we can save the core file out:
+	s" forth.core" save-core 
+
+This can be used, in conjunction with aspects of the build system,
+to produce a standalone executable that will run only a single Forth
+word. )
+
 hide{ redirect restore data encore header }hide
+
+( ==================== Save Core file ======================== )
 
 ( ==================== Hex dump ============================== )
 
@@ -2709,7 +2767,7 @@ hide{ more cpad clean cdump input }hide
 	dup 10 u< if 1 padded then u. space ;
 
 : .date ( date -- : print the date )
-	if " DST " else " UTC " then 
+	if " DST " else " GMT " then 
 	drop ( no need for days of year)
 	>weekday
 	. ( year ) 
@@ -2718,6 +2776,10 @@ hide{ more cpad clean cdump input }hide
 	0u. ( hour )
 	0u. ( minute )
 	0u. ( second ) cr ;
+
+: time&date ( -- second minute hour day month year )
+	date
+	3drop ;
 
 hide{ 0u. >weekday .day >day >month padded }hide
 
@@ -2760,9 +2822,14 @@ will allow easier interaction with the world outside the virtual machine
 definitions of other words, their standards compliant version found
 if any
 * allow the processing of argc and argv
+* The built in version of ".s" prints its arguments in the wrong order,
+this should be changed.
+* A built in version of "dump" and "words" should be added to the Forth
+starting vocabulary, simplified versions that can be hidden.
 * here documents, string literals
-* Add more words to the initial start program, like "words".
-* add rewind function
+* document the words in this file and built in words better, also turn this
+document into a literate Forth file.
+* Sort out "'", "[']", "find", "compile," 
 * proper booleans should be used throughout
 * Implement as many things from http://lars.nocrew.org/forth2012/implement.html
 as is sensible. )
@@ -2770,17 +2837,7 @@ as is sensible. )
 ( 
 The following will not work as we might actually be reading from a string [`sin]
 not `fin. 
-: key 32 chars> 1 `fin @ read-file drop 0 = if 0 else 32 chars> c@ then ;
-
-\ needs fixing
-: compare \ c-addr1 u1 c-addr2 u2 -- n : compare two strings, assumes strings are NUL terminated
-	rot min
-	0 do 
-		2dup
-		i + c@ swap i + c@
-		<=> ?dup-if leave then
-	loop
-	2drop 0 ; )
+: key 32 chars> 1 `fin @ read-file drop 0 = if 0 else 32 chars> c@ then ; )
 
 verbose [if] 
 	.( FORTH: libforth successfully loaded.) cr
@@ -2811,20 +2868,11 @@ verbose [if]
 [then]
 
 ( \ integrate simple 'dump' and 'words' into initial forth program 
+: nl dup 3 and not ;
 : ?? \ addr1 
-	dup . ? cr ;
+  nl if dup cr . [char] : emit space then ? ;
 : dump \ addr n --
-	over + swap 1- begin 1+ 2dup dup ?? 2+ u< until ; )
+	base @ >r hex over + swap 1- begin 1+ 2dup dup ?? 2+ u< until r> base ! ; )
 
-( Example program: 
 
-: hello-world immediate
-	" Hello, World!" cr bye ;
-
-find hello-world cfa start!
-
-s" forth.core" save-core )
-
-( : strlen \ raw-c-addr -- u 
-	dup >r 0 -1 memory-locate r> - ; )
 

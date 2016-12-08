@@ -884,6 +884,7 @@ up for debugging purposes (like **pnum**).
  X(MEMCMP,    "memory-compare", " r-addr1 r-addr2 u -- x : compare two blocks of memory")\
  X(ALLOCATE,  "allocate",       " u -- r-addr ior : allocate a block of memory")\
  X(FREE,      "free",           " r-addr1 -- ior : free a block of memory")\
+ X(RESIZE,    "resize",         " r-addr u -- r-addr ior : free a block of memory")\
  X(LAST_INSTRUCTION, NULL, "")
 
 /**
@@ -1305,12 +1306,12 @@ static void print_stack(forth_t *o, FILE *out, forth_cell_t *S, forth_cell_t f)
 	fprintf(out, "%"PRIdCell": ", depth);
 	if(!depth)
 		return;
-	print_cell(o, out, f);
-	fputc(' ', out);
-	while(o->vstart + 1 < S) {
-		print_cell(o, out, *(S--));
+	for(forth_cell_t i = S - o->vstart - 1, j = 1; i; i--, j++) {
+		print_cell(o, out, *(o->S + j + 1));
 		fputc(' ', out);
 	}
+	print_cell(o, out, f);
+	fputc(' ', out);
 }
 
 /**
@@ -2465,9 +2466,8 @@ instruction, and would be a useful abstraction.
 			{
 				cd(2); 
 				errno = 0;
-				int r = fseek((FILE*)f, *S--, SEEK_SET);
-				*++S = r;
-				f = r == -1 ? errno : 0;
+				int r = fseek((FILE*)(*S--), f, SEEK_SET);
+				f = r == -1 ? errno || -1 : 0;
 				break;
 			}
 		case FPOS:    
@@ -2476,7 +2476,7 @@ instruction, and would be a useful abstraction.
 				errno = 0;
 				int r = ftell((FILE*)f);
 				*++S = r;
-				f = r == -1 ? errno : 0;
+				f = r == -1 ? errno || -1 : 0;
 				break;
 			}
 		case FOPEN: 
@@ -2533,25 +2533,29 @@ instruction, and would be a useful abstraction.
 		case RAISE:
 			f = raise(f);
 			break;
-		
 		case DATE:
-		{
-			time_t raw;
-			struct tm *gmt;
-			time(&raw);
-			gmt = gmtime(&raw);
-			*++S = f;
-			*++S = gmt->tm_sec;
-			*++S = gmt->tm_min;
-			*++S = gmt->tm_hour;
-			*++S = gmt->tm_mday;
-			*++S = gmt->tm_mon;
-			*++S = gmt->tm_year + 1900;
-			*++S = gmt->tm_wday;
-			*++S = gmt->tm_yday;
-			f    = gmt->tm_isdst;
-		}
-		break;
+			{
+				time_t raw;
+				struct tm *gmt;
+				time(&raw);
+				gmt = gmtime(&raw);
+				*++S = f;
+				*++S = gmt->tm_sec;
+				*++S = gmt->tm_min;
+				*++S = gmt->tm_hour;
+				*++S = gmt->tm_mday;
+				*++S = gmt->tm_mon;
+				*++S = gmt->tm_year + 1900;
+				*++S = gmt->tm_wday;
+				*++S = gmt->tm_yday;
+				f    = gmt->tm_isdst;
+				break;
+			}
+/**
+The following memory functions can be used by the Forth interpreter
+for faster memory operations, but more importantly they can be used
+to interact with memory outside of the Forth core.
+**/
 		case MEMMOVE:
 			w = *S--;
 			memmove((char*)(*S--), (char*)w, f);
@@ -2576,8 +2580,21 @@ instruction, and would be a useful abstraction.
 			f = errno;
 			break;
 		case FREE:
+/**
+It is not likely that the C library will set the errno if it detects a
+problem, it will most likely either abort the program or silently
+corrupt the heap if something goes wrong, however the Forth standard
+requires that an error status is returned.
+**/
+			errno = 0;
 			free((char*)f);
-			f = 0;
+			f = errno;
+			break;
+		case RESIZE:
+			errno = 0;
+			w = (forth_cell_t)realloc((char*)(*S--), f);
+			*++S = w;
+			f = errno;
 			break;
 
 /**
