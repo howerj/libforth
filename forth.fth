@@ -510,6 +510,10 @@ extract the document string for a given work.
 : 2tuck ( n1 n2 n3 n4 – n3 n4 n1 n2 n3 n4 )
 	2swap 2over ;
 
+: nos1+ ( x1 x2 -- x1+1 x2 : increment the next variable on that stack )
+	swap 1+ swap ;
+	
+
 : ?dup-if immediate ( x -- x | - : ?dup and if rolled into one! )
 	' ?dup , postpone if ;
 
@@ -628,7 +632,7 @@ extract the document string for a given work.
 	here #pad + ;
 
 : count ( c-addr1 -- c-addr2 u : get a string whose first char is its length )
-	dup c@ swap 1+ swap ;
+	dup c@ nos1+ ;
 
 : bounds ( x y -- y+x x : make an upper and lower bound )
 	over + swap ;
@@ -770,7 +774,7 @@ find [interpret] cfa start! ( the word executed on restart is now our new word )
 	zero however returns itself instead of reporting an error )
 	0 swap
 	begin
-		swap 1+ swap 2/ dup 0=
+		nos1+ 2/ dup 0=
 	until
 	drop 1- ;
 
@@ -1060,7 +1064,7 @@ testing and debugging:
  : mm 5 1 do i . cr 4 1 do j . tab i . cr loop loop ; )
 
 : range ( nX nY -- nX nX+1 ... nY )  
-	swap 1+ swap do i loop ;
+	nos1+ do i loop ;
 
 : repeater ( n0 X -- n0 ... nX )        
 	1 do dup loop ;
@@ -2225,8 +2229,18 @@ For resources on Forth:
 : read-char ( c-addr fileid -- ior : read a char )
 	1 swap read-file 0<> swap 1 <> or ;
 
+0 variable x
+
+: getchar ( fileid -- char ior )
+	x chars> swap read-char x chars> c@ swap ;
+
 : write-char ( c-addr fileid -- ior : write a char )
 	1 swap write-file 0<> swap 1 <> or ;
+
+: putchar ( char fileid -- ior )
+	swap x chars> c! x chars> swap write-char ;
+
+hide{ x }hide
 
 : rewind-file ( file-id -- : rewind a file to the beginning )
 	0 reposition-file throw ;
@@ -2636,6 +2650,53 @@ hide{ literals repeated more out run-length command }hide
 
 ( ==================== RLE =================================== )
 
+( ==================== Generate C Core file ================== )
+( The word core2c reads in a core file and turns it into a C file which 
+can then be compiled into the forth interpreter in a bootstrapping like
+process.
+
+Usage:
+ c" forth.core" c" core.gen.c" core2c )
+
+0 variable count
+
+: wbyte ( u char -- : write a byte )
+	pnum drop
+	[char] , emit
+	16 mod 0= if cr then ;
+
+: advance ( char -- : advance counter and print byte )
+	count 1+! count @ swap wbyte ;
+
+: hexify ( fileid -- fileid : turn core file into C numbers in array )
+	0 count !
+	begin dup getchar 0= while advance repeat drop ;
+
+: quote ( -- : emit a quote character )
+	[char] " emit ;
+
+: core2c ( c-addr u c-addr u -- ior : generate a C file from a core file )
+	w/o open-file throw >r
+	r/o open-file ?dup-if r> close-file throw throw then
+	r> redirect
+	" #include " quote " libforth.h" quote cr
+	" unsigned char forth_core_data[] = {" cr
+	hexify 
+	" };" cr
+	" forth_cell_t forth_core_size = " count @ . " ;" cr cr
+	close-file
+	`fout @ close-file 
+	restore or ;
+
+hide{ wbyte hexify count quote advance }hide
+ 
+( ==================== Generate C Core file ================== )
+
+: wc ( c-addr u -- u : count the bytes in a file )
+	r/o open-file throw
+	0 swap
+	begin dup getchar nip 0= while nos1+ repeat close-file throw ;
+
 ( ==================== Save Core file ======================== )
 
 ( The following functionality allows the user to save the core file
@@ -2831,6 +2892,8 @@ starting vocabulary, simplified versions that can be hidden.
 document into a literate Forth file.
 * Sort out "'", "[']", "find", "compile," 
 * proper booleans should be used throughout
+* file operation primitives that close the file stream [and possibly restore
+I/O to stdin/stdout] if an error occurs, and then re-throws, should be made.
 * Implement as many things from http://lars.nocrew.org/forth2012/implement.html
 as is sensible. )
 

@@ -9,6 +9,9 @@
 @copyright  Copyright 2015,2016 Richard James Howe.
 @license    MIT 
 @email      howe.r.j.89@gmail.com 
+
+@todo Some arguments accept their size in bytes, others in forth cells, this 
+needs to be changed so it is consistent
 **/
 #ifndef FORTH_H
 #define FORTH_H
@@ -26,9 +29,12 @@ Forth cells, not bytes.
 #define MINIMUM_CORE_SIZE (2048)
 
 /**
-@brief Default VM size which should be large enough for any Forth application.
+@brief Default VM size which should be large enough for any Forth application,
+in Forth cells, not bytes.
 **/
+#ifndef DEFAULT_CORE_SIZE
 #define DEFAULT_CORE_SIZE   (32 * 1024) 
+#endif
 
 /**
 @brief When designing a binary format, which this interpreter uses and

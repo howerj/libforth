@@ -8,7 +8,7 @@ forth - a forth interpreter
 
 # SYNOPSIS
 
-**forth** \[**-s** file\] \[**-e** string\] \[**-l** file\] \[**-m** size\] \[**-VthvL**\] \[**-**\] \[**files**\]
+**forth** \[**-s** file\] \[**-e** string\] \[**-l** file\] \[**-m** size\] \[**-VthvLSn**\] \[**-**\] \[**files**\]
 
 # DESCRIPTION
 
@@ -63,6 +63,17 @@ previous run. This core file is not portable and must be generated on the same
 platform as it was generated. It can only be specified once per run of the
 interpreter.
 
+* -L
+
+The same as "-l", however the default core file name is used, "forth.core", so
+an argument does not have to be provided.
+
+* -S
+
+The same as "-s", however the default core file name is used, "forth.core", so
+an argument does not have to be provided.
+
+
 * '-'
 
 Stop processing any more command line options and treat all arguments after
@@ -77,7 +88,7 @@ Print version and interpreter information and exit successfully.
 Process a file immediately. This allows options and file arguments to be
 intermingled. 
 
-* -L
+* -n
 
 If the line editing library is compiled into the executable, which is a compile
 time option, then when reading from [stdin][] this will use a [line editor][]
@@ -1227,7 +1238,6 @@ sizes or endianess, which needs addressing.
 * Character addressing should be used throughout the interpreter, instead of
 cell addressing and conversion to/from character addresses. Real address 
 could also be used, but this would make core files non-portable.
-* The unit tests in [unit.c][] could be integrated with the main program.
 * Use either liballocs or libffi for adding foreign function interfaces
 to programs, see:
   - <https://github.com/stephenrkell/liballocs>
@@ -1248,6 +1258,42 @@ submodules need improving.
 
 * libcompress needs developing before it can be used.
 * It will be used for making smaller forth.core files.
+
+### Experimental single binary
+
+The build system can be used to build a single binary which contains the
+contents of "forth.fth", with the command "make libforth". This is a 
+multistage build process that is experimental, so should not be relied upon. It
+involves a bootstrapping process using the first forth executable to build a
+second.
+
+The process works like this:
+
+1) The executable "forth" is made.
+
+	make forth
+
+or:
+
+	gcc -std=c99 main.c unit.c libforth.c -o forth
+
+2) The executable is used to generate a code file containing the contents of
+"forth.fth" is made.
+
+	./forth -s forth.core
+
+4) A forth word, *core2c* is used to generate a C file called "core.gen.c":
+
+	./forth -l forth.core -e 'c" forth.core" c" core.gen.c" core2c'
+
+5) The forth program is recompiled with an extra define, which means that
+initialization of a minimal forth environment is replaced with the core file we
+just made:
+
+	gcc -DUSE_BUILT_IN_CORE -std=c99 main.c unit.c libforth.c core.gen.c -o libforth
+
+The new executable, *libforth*, behaves the same as *forth* but with a built in
+core file.
 
 ## Notes
 

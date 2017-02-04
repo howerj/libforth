@@ -988,6 +988,8 @@ This function reads in a space delimited word, limited to
 due to the simple nature of Forth this is as complex as parsing and 
 lexing gets. It can either read from a file handle or a string, 
 like forth_get_char() 
+
+@note MAXIMUM_WORD_LENGTH cells are allocated in the core instead of MAXIMUM_WORD_LENGTH/sizeof(forth_cell_t)
 **/
 static int forth_get_word(forth_t *o, uint8_t *p)
 {
@@ -2596,7 +2598,6 @@ requires that an error status is returned.
 			*++S = w;
 			f = errno;
 			break;
-
 /**
 This should never happen, and if it does it is an indication that virtual
 machine memory has been corrupted somehow.

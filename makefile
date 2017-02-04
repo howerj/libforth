@@ -2,7 +2,7 @@
 ECHO	= echo
 AR	= ar
 CC	= gcc
-CFLAGS	= -Wall -Wextra -g -pedantic -std=c99 -O2 
+CFLAGS	= -Wall -Wextra -g -pedantic -std=c99 -O2 -DUSE_ABORT_HANDLER
 LDFLAGS = 
 INCLUDE = libline
 TARGET	= forth
@@ -62,11 +62,8 @@ forth.dump: forth.core ${TARGET}
 run: ${TARGET} ${FORTH_FILE}
 	./$< -t ${FORTH_FILE}
 
-util/core2c:
-	make -C util/ core2c
-
-core.gen.c: forth.core util/core2c
-	./util/core2c $< $@
+core.gen.c: forth.core 
+	./forth -l $< -e 'c" forth.core" c" core.gen.c" core2c'
 
 lib${TARGET}: main.c unit.o core.gen.c lib${TARGET}.a
 	@echo "cc $^ -o $@"
@@ -94,12 +91,12 @@ dist: ${TARGET} ${TARGET}.1 lib${TARGET}.[a3] lib${TARGET}.htm ${DOCS} forth.cor
 	markdown $< > $@
 
 libforth.md: main.c libforth.c libforth.h
-	./util/./convert    libforth.c    >  $@
+	./convert    libforth.c    >  $@
 	echo "## Appendix "               >> $@
 	echo "### libforth header"        >> $@
-	./util/./convert -H libforth.h    >> $@
+	./convert -H libforth.h    >> $@
 	echo "### main.c example program" >> $@
-	./util/./convert main.c           >> $@
+	./convert main.c           >> $@
 
 %.pdf: %.md
 	pandoc --toc $< -o $@
@@ -107,14 +104,14 @@ libforth.md: main.c libforth.c libforth.h
 %.1: %.md
 	pandoc -s -t man $< -o $@
 
-%.md: %.c util/convert
-	util/./convert $< > $@
+%.md: %.c convert
+	./convert $< > $@
 
-%.md: %.h util/convert
-	util/./convert -H $< -o $@
+%.md: %.h convert
+	./convert -H $< -o $@
 
 %.3: %.h
-	util/./convert -H $< | pandoc -f markdown -s -t man -o $@
+	./convert -H $< | pandoc -f markdown -s -t man -o $@
 
 ${TARGET}.1: readme.1
 	${CP} $^ $@
@@ -164,5 +161,4 @@ clean:
 	${RM} html latex Doxyfile *.db *.bak
 	${RM} libforth.md
 	${RM} libforth core.gen.c
-	make -C util/ clean
 

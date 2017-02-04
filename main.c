@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
 
 #ifdef _WIN32
 #include <io.h>
@@ -19,6 +20,41 @@
 #ifdef USE_BUILT_IN_CORE
 extern unsigned char forth_core_data[];
 extern forth_cell_t forth_core_size;
+#endif
+
+#ifdef USE_ABORT_HANDLER
+#ifdef __unix__
+
+#include <execinfo.h>
+#define TRACE_SIZE      (64u)
+
+/** 
+@warning This hander calls functions (backtrace, printf) that are not 
+safe to call from a signal handler, however this is only going to
+be called in the event of an internal consistency failure,
+and only as a courtesy to the programmer.
+@todo make a windows version using information from:
+https://msdn.microsoft.com/en-us/library/windows/desktop/bb204633%28v=vs.85%29.aspx and
+https://stackoverflow.com/questions/5693192/win32-backtrace-from-c-code
+**/
+static void sig_abrt_handler(int sig) 
+{
+        void *trace[TRACE_SIZE];
+        char **messages = NULL;
+        int i, trace_size;
+	signal(sig, SIG_DFL);
+        trace_size = backtrace(trace, TRACE_SIZE);
+        messages = backtrace_symbols(trace, trace_size);
+        if(trace_size < 0)
+                goto fail;
+        fprintf(stderr, "SIGABRT was raised.\nStack trace:\n");
+        for(i = 0; i < trace_size; i++)
+                fprintf(stderr, "\t%s\n", messages[i]);
+        fflush(stderr);
+fail:   
+        abort();
+}
+#endif
 #endif
 
 #ifdef USE_LINE_EDITOR
@@ -73,8 +109,6 @@ end:
 #define LINE_EDITOR_AVAILABLE (0)
 #endif /* USE_LINE_EDITOR */
 
-
-
 /** 
 This program can be used as a filter in a Unix pipe chain, or as a standalone
 interpreter for Forth. It tries to follow the Unix philosophy and way of
@@ -102,7 +136,7 @@ static void usage(const char *name)
 {
 	fprintf(stderr, 
 		"usage: %s "
-		"[-(s|l|f) file] [-e expr] [-m size] [-LVthv] [-] files\n", 
+		"[-(s|l|f) file] [-e expr] [-m size] [-LSVthvn] [-] files\n", 
 		name);
 }
 
@@ -179,6 +213,8 @@ static forth_t *forth_initial_enviroment(forth_t **o, forth_cell_t size,
 		goto finished;
 
 #ifdef USE_BUILT_IN_CORE
+	/* USE_BUILT_IN_CORE is an experimental feature, it should not be
+	 * relied upon to work correctly */
 	(void)size;
 	*o = forth_load_core_memory((char*)forth_core_data, forth_core_size);
 	forth_set_file_input(*o, input);
@@ -224,6 +260,13 @@ int main(int argc, char **argv)
 	int orig_argc = argc;
 	char **orig_argv = argv;
 
+#ifdef USE_ABORT_HANDLER
+#ifdef __unix__
+	if(signal(SIGABRT, sig_abrt_handler) == SIG_ERR)
+		warning("could not install SIGABRT handler: %s", forth_strerror());
+#endif
+#endif
+
 #ifdef _WIN32
 	/* unmess up Windows file descriptors: there is a warning about an
 	 * implicit declaration of _fileno when compiling under Windows in C99
@@ -251,7 +294,7 @@ sacrifice portability.
 		case 'h':  usage(argv[0]); 
 			   help(); 
 			   return -1;
-		case 'L':  use_line_editor = 1;
+		case 'n':  use_line_editor = 1;
 			   /* XXX fall through */
 		case 't':  readterm = 1; 
 			   if(verbose >= FORTH_DEBUG_NOTE)
@@ -285,7 +328,7 @@ sacrifice portability.
 				goto fail;
 			dump_name = argv[++i];
 			/* XXX fall through */
-		case 'd':  /*use default name */
+		case 'S':  /*use default name */
 			if(verbose >= FORTH_DEBUG_NOTE)
 				note("saving core file to '%s' (on exit)", dump_name);
 			save = 1;
@@ -304,11 +347,12 @@ sacrifice portability.
 		case 'l':
 			if(o || mset || (i >= argc - 1))
 				goto fail;
-			optarg = argv[++i];
+			dump_name = argv[++i];
+		case 'L':
 			if(verbose >= FORTH_DEBUG_NOTE)
-				note("loading core file '%s'", optarg);
-			if(!(o = forth_load_core_file(dump = forth_fopen_or_die(optarg, "rb")))) {
-				fatal("%s, core load failed", optarg);
+				note("loading core file '%s'", dump_name);
+			if(!(o = forth_load_core_file(dump = forth_fopen_or_die(dump_name, "rb")))) {
+				fatal("%s, core load failed", dump_name);
 				return -1;
 			}
 			forth_set_debug_level(o, verbose);
@@ -387,7 +431,6 @@ no reason.  However not freeing the memory after use does not play nice with
 programs that detect memory leaks, like Valgrind. Either way, we free the
 memory used here, but only if no other errors have occurred before hand. 
 **/
-
 	forth_free(o);
 	return rval;
 }
