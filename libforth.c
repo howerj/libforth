@@ -344,8 +344,7 @@ defined later, the offset is a multiple of cells and not chars.
 
 /**
 @brief This defines the maximum length of a Forth words name, that is the
-string that represents a Forth word, this number is in cells (or machine
-words). 
+string that represents a Forth word.
 **/
 #define MAXIMUM_WORD_LENGTH (32u)
 
@@ -364,7 +363,7 @@ code in *forth.fth* will not work.
 to save space, in the area between the end of the dictionary and the
 beginning of the pad area.
 **/
-#define DICTIONARY_START (STRING_OFFSET+MAXIMUM_WORD_LENGTH) 
+#define DICTIONARY_START (STRING_OFFSET+MAXIMUM_WORD_LENGTH/sizeof(forth_cell_t)) 
 
 /**
 Later we will encounter a field called **MISC**, a field in every Word

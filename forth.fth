@@ -753,7 +753,8 @@ after "interpret" - something is ever so subtly going wrong. The code fails
 in "T{" when "evaluate" is called - which does lots of magic in the virtual
 machine. This is the kind of bug that is difficult to find and reproduce, I
 have not given up on it yet, however I am going to apply the "fix" for now,
-which is to change the definitions of 3drop to "drop drop drop"... )
+which is to change the definitions of 3drop to "drop drop drop"... for future
+reference the bug is present in git commit ccd802f9b6151da4c213465a72dacb1f7c22b0ac )
 
 :  3drop ( x1 x2 x3 -- )
 	drop drop drop ;
