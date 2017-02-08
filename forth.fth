@@ -438,7 +438,6 @@ extract the document string for a given work.
 
 : u<=  ( x y -- bool : unsigned less than or equal to )
 	u>= not ;
-
 : rdrop ( R: x -- : drop a value from the return stack )
 	r>           ( get caller's return address )
 	r>           ( get value to drop )
@@ -489,14 +488,10 @@ extract the document string for a given work.
 		stdin? if 0 else `fin @ then
 	else
 		-1
-	then
-	;
+	then ;
 
 : under ( x1 x2 -- x1 x1 x2 )
 	>r dup r> ;
-
-: 3drop ( x1 x2 x3 -- )
-	2drop drop ;
 
 : 2nip   ( n1 n2 n3 n4 -- n3 n4 ) 
 	>r >r 2drop r> r> ;
@@ -512,7 +507,6 @@ extract the document string for a given work.
 
 : nos1+ ( x1 x2 -- x1+1 x2 : increment the next variable on that stack )
 	swap 1+ swap ;
-	
 
 : ?dup-if immediate ( x -- x | - : ?dup and if rolled into one! )
 	' ?dup , postpone if ;
@@ -753,6 +747,17 @@ extract the document string for a given work.
 		( when catch began execution )
 	then ; 
 
+( @bug replacing "drop drop" with "2drop" causes a stack underflow in
+"T{" on a 32-bit platform, "2drop" can be used, but only if 3drop is defined
+after "interpret" - something is ever so subtly going wrong. The code fails
+in "T{" when "evaluate" is called - which does lots of magic in the virtual
+machine. This is the kind of bug that is difficult to find and reproduce, I
+have not given up on it yet, however I am going to apply the "fix" for now,
+which is to change the definitions of 3drop to "drop drop drop"... )
+
+:  3drop ( x1 x2 x3 -- )
+	drop drop drop ;
+
 : interpret 
 	begin 
 	' read catch 
@@ -761,6 +766,7 @@ extract the document string for a given work.
 
 : [interpret] 
 	immediate interpret ;
+
 
 interpret ( use the new interpret word, which can catch exceptions )
 find [interpret] cfa start! ( the word executed on restart is now our new word )
@@ -1533,7 +1539,6 @@ attempted to be forgotten then an exception is throw )
 	:: latest [literal] ' forgetter , postpone ; ;
 hider forgetter
 
-
 : ** ( b e -- x : exponent, raise 'b' to the power of 'e')
 	?dup-if
 		over swap
@@ -1610,8 +1615,6 @@ hide{ a b m }hide
 hide{ nbase overflow }hide
 
 ( ==================== Pictured Numeric Output ================ )
-
-
 
 ( ==================== ANSI Escape Codes ====================== )
 ( Terminal colorization module, via ANSI Escape Codes
@@ -1746,6 +1749,7 @@ hide{ CSI }hide
 	previous @ pwd ! 
 	dictionary @ h ! ;
 
+
 : T{  ( -- : perform a unit test )
 	depth start !  ( save start of stack depth )
 	0 result !     ( reset result variable )
@@ -1755,7 +1759,7 @@ hide{ CSI }hide
 	key drop       ( drop next character, which is a space )
 	estring [char] } accepter #estring ! ( read in string to test )
 	test display   ( print which string we are testing )
-	test evaluate  ( perform test )
+	test evaluate ( perform test )
 	evaluate?      ( evaluate successfully? )
 	depth?         ( correct depth )
 	equal?         ( results equal to expected values? )

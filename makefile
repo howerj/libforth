@@ -2,7 +2,7 @@
 ECHO	= echo
 AR	= ar
 CC	= gcc
-CFLAGS	= -Wall -Wextra -g -pedantic -std=c99 -O2 -DUSE_ABORT_HANDLER
+CFLAGS	= -Wall -Wextra -g -pedantic -std=c99 -O2 
 LDFLAGS = 
 INCLUDE = libline
 TARGET	= forth
@@ -122,9 +122,8 @@ doxygen: *.c *.h *.md
 	doxygen -g
 	doxygen 2> doxygen_warnings.log
 
-small: CFLAGS = -m32 -DNDEBUG -std=c99 -Os 
+small: CFLAGS = -m32 -g -std=c99 -Os
 small: ${TARGET}
-	strip ${TARGET}
 
 fast: CFLAGS = -DNDEBUG -O3 -std=c99
 fast: ${TARGET}

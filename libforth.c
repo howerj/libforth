@@ -1233,7 +1233,7 @@ static void check_depth(forth_t *o, jmp_buf *on_error,
 	if(o->m[DEBUG] >= FORTH_DEBUG_CHECKS)
 		debug("0x%"PRIxCell " %u", (forth_cell_t)(S - o->vstart), line);
 	if((uintptr_t)(S - o->vstart) < expected) {
-		error("stack underflow %p -> %u", S, line);
+		error("stack underflow %p -> %u", S - o->vstart, line);
 		longjmp(*on_error, RECOVERABLE);
 	} else if(S > o->vend) {
 		error("stack overflow %p -> %u", S - o->vend, line);
@@ -2348,6 +2348,8 @@ the virtual machine. It saves and restores state which we do
 not usually need to do when the interpreter is not running (the usual case
 for **forth_eval** when called from C). It can read either from a string
 or from a file.
+
+@todo EVALUATOR needs to setjmp after forth_eval has been called.
 **/
 		case EVALUATOR:
 		{ 
@@ -2469,7 +2471,7 @@ instruction, and would be a useful abstraction.
 				cd(2); 
 				errno = 0;
 				int r = fseek((FILE*)(*S--), f, SEEK_SET);
-				f = r == -1 ? errno || -1 : 0;
+				f = r == -1 ? errno ? errno : -1 : 0;
 				break;
 			}
 		case FPOS:    
@@ -2478,7 +2480,7 @@ instruction, and would be a useful abstraction.
 				errno = 0;
 				int r = ftell((FILE*)f);
 				*++S = r;
-				f = r == -1 ? errno || -1 : 0;
+				f = r == -1 ? errno ? errno : -1 : 0;
 				break;
 			}
 		case FOPEN: 
@@ -2614,7 +2616,8 @@ interpreter so the C functions like "forth_pop" work correctly. If the
 we do not have to jump to *end* as functions like **forth_pop** should not
 be called on the invalidated object any longer.
 **/
-end:	o->S = S;
+end:	
+	o->S = S;
 	o->m[TOP] = f;
 	return 0;
 }
