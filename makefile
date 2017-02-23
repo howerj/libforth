@@ -1,4 +1,8 @@
 # @todo clean up make file
+# @todo The standalone executable "libforth" needs a better name, but then so
+# does the normal executable "forth".
+# @note The makefile is not very Windows friendly, but it will work under
+# Cygwin
 ECHO	= echo
 AR	= ar
 CC	= gcc
@@ -9,7 +13,6 @@ TARGET	= forth
 RM      = rm -rf
 CTAGS  ?= ctags
 CP      = cp
-INCLUDE = libline
 
 MDS     := ${wildcard *.md}
 DOCS    := ${MDS:%.md=%.htm}
@@ -62,6 +65,8 @@ forth.dump: forth.core ${TARGET}
 run: ${TARGET} ${FORTH_FILE}
 	./$< -t ${FORTH_FILE}
 
+# Use the previously built executable to help generate a new one with
+# a built in core.
 core.gen.c: forth.core 
 	./forth -l $< -e 'c" forth.core" c" core.gen.c" core2c'
 
@@ -128,7 +133,7 @@ small: ${TARGET}
 fast: CFLAGS = -DNDEBUG -O3 -std=c99
 fast: ${TARGET}
 
-static: CC=musl-gcc
+static: CC=musl-gcc -std=c99
 static: ${TARGET}
 
 libline/makefile:

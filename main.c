@@ -219,7 +219,7 @@ static forth_t *forth_initial_enviroment(forth_t **o, forth_cell_t size,
 	(void)size;
 	*o = forth_load_core_memory((char*)forth_core_data, forth_core_size);
 	forth_set_file_input(*o, input);
-	forth_set_file_input(*o, output);
+	forth_set_file_output(*o, output);
 #else
 	*o = forth_init(size, input, output, NULL);
 #endif

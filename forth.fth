@@ -2888,8 +2888,6 @@ will allow easier interaction with the world outside the virtual machine
 definitions of other words, their standards compliant version found
 if any
 * allow the processing of argc and argv
-* The built in version of ".s" prints its arguments in the wrong order,
-this should be changed.
 * A built in version of "dump" and "words" should be added to the Forth
 starting vocabulary, simplified versions that can be hidden.
 * here documents, string literals
@@ -2900,7 +2898,11 @@ document into a literate Forth file.
 * file operation primitives that close the file stream [and possibly restore
 I/O to stdin/stdout] if an error occurs, and then re-throws, should be made.
 * Implement as many things from http://lars.nocrew.org/forth2012/implement.html
-as is sensible. )
+as is sensible. 
+* CASE Statements http://dxforth.netbay.com.au/miser.html
+* The current words that implement I/O redirection need to be improved, and documented,
+I think this is quite a useful and powerful mechanism to use within Forth that simplifies
+programs. )
 
 ( 
 The following will not work as we might actually be reading from a string [`sin]

@@ -1222,26 +1222,55 @@ are two error handlers. These mechanisms need unifying.
   pointer to the forth object, a pointer to the stack and the stack depth.
 * A few environment variables could be used to specify start up files for the
   interpreter and user specific startup files.
-* Add number, parse, load-core, more-core to the
-  virtual machine.
 * Add getenv mechanism to virtual machine
 * Signal handling should be added, so the Forth program can handle them.
-* Add loading in a Forth image from a memory structure, this will need
-  to be in a portable Format.
 * Error handling could be improved - the latest word definition should be
-  erased if an error occurs before the terminating ';'
+erased if an error occurs before the terminating ';'. And trap handling
+should be done in pure forth, instead of as a hybrid which is currently is.
 * For a Forth only related "To-Do" list see the end of the file [forth.fth][].
 * A compiler for the virtual machine itself should be made, as a separate
 program. This could be used to make a more advanced read-evaluate loop.
 * Core files are currently not portable across machines of different words
 sizes or endianess, which needs addressing.
-* Character addressing should be used throughout the interpreter, instead of
-cell addressing and conversion to/from character addresses. Real address 
-could also be used, but this would make core files non-portable.
 * Use either liballocs or libffi for adding foreign function interfaces
 to programs, see:
   - <https://github.com/stephenrkell/liballocs>
   - <https://sourceware.org/libffi/>
+* Asserts should be split up, eg. 
+
+	assert(x && y);
+
+Becomes:
+
+	assert(x);
+	assert(y);
+
+* '[errno][]'s should be biased to be outside of the range reserved by the 
+[ANS Forth][] standard.
+* The Forth could be made to be more standards compliant (especially where it
+comes to I/O and addressing (but also things like CASE statements).
+
+### Virtual Machine To-Do points
+
+The virtual machine needs changing, in someways drastically, to accommodate the
+following behaviors:
+
+1) Error handling should be purely Forth based.
+
+Currently error handling and recovery is a weird mishmash between [C][] and
+[Forth][], more of the error handling should be moved to the [Forth][]
+environment using the normal THROW/CATCH mechanisms (which should be turned
+into virtual machine instructions and C functions, which can then be called to
+make a throw occur.
+
+2) The virtual machine should use character based addressing. Currently it uses
+cell based addressing, which causes all kinds of confusion.
+
+3) Whether a Word is a Compiling or an Immediate word is selected by virtual
+machine instruction layout instead of a bit in the header. This needs to be
+changed.
+
+4) Words currently not defined need to be hidden, until the terminating ';'.
 
 ### Submodules
 
@@ -1253,11 +1282,6 @@ submodules need improving.
 * libline needs porting to Windows
 * The API needs improving so there is more control on whether or not raw mode
   is turned on or off, whether a terminal is being read from or not, ...
-
-#### libcompress
-
-* libcompress needs developing before it can be used.
-* It will be used for making smaller forth.core files.
 
 ### Experimental single binary
 
@@ -1338,5 +1362,6 @@ you should use a different language, or implementation.
 [markdown script]: https://daringfireball.net/projects/markdown/
 [C99]: https://en.wikipedia.org/wiki/C99
 [Linux Kernel Module]: http://tldp.org/LDP/lkmpg/2.6/html/
+[errno]: https://en.wikipedia.org/wiki/Errno.h
 
 <style type="text/css">body{margin:40px auto;max-width:850px;line-height:1.6;font-size:16px;color:#444;padding:0 10px}h1,h2,h3{line-height:1.2}</style>

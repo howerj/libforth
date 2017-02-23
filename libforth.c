@@ -930,7 +930,9 @@ int forth_logger(const char *prefix, const char *func,
 {
 	int r;
 	va_list ap;
-	assert(prefix && func && fmt);
+	assert(prefix);
+       	assert(func);
+       	assert(fmt);
 	fprintf(stderr, "[%s %u] %s: ", func, line, prefix);
 	va_start(ap, fmt);
 	r = vfprintf(stderr, fmt, ap);
@@ -1341,20 +1343,23 @@ static void trace(forth_t *o, forth_cell_t instruction,
 
 void forth_set_file_input(forth_t *o, FILE *in)
 {
-	assert(o && in);
+	assert(o); 
+	assert(in);
 	o->m[SOURCE_ID] = FILE_IN;
 	o->m[FIN]       = (forth_cell_t)in;
 }
 
 void forth_set_file_output(forth_t *o, FILE *out)
 {
-	assert(o && out);
+	assert(o);
+       	assert(out);
 	o->m[FOUT] = (forth_cell_t)out;
 }
 
 void forth_set_string_input(forth_t *o, const char *s)
 {
-	assert(o && s);
+	assert(o);
+	assert(s);
 	o->m[SIDX] = 0;              /* m[SIDX] == current character in string */
 	o->m[SLEN] = strlen(s) + 1;  /* m[SLEN] == string len */
 	o->m[SOURCE_ID] = STRING_IN; /* read from string, not a file handle */
@@ -1363,7 +1368,8 @@ void forth_set_string_input(forth_t *o, const char *s)
 
 int forth_eval(forth_t *o, const char *s)
 {
-	assert(o && s);
+	assert(o);
+	assert(s);
 	forth_set_string_input(o, s);
 	return forth_run(o);
 }
@@ -1371,7 +1377,8 @@ int forth_eval(forth_t *o, const char *s)
 int forth_define_constant(forth_t *o, const char *name, forth_cell_t c)
 {
 	char e[MAXIMUM_WORD_LENGTH+32] = {0};
-	assert(o && strlen(name) < MAXIMUM_WORD_LENGTH);
+	assert(o);
+       	assert(strlen(name) < MAXIMUM_WORD_LENGTH);
 	sprintf(e, ": %31s %" PRIdCell " ; \n", name, c);
 	return forth_eval(o, e);
 }
@@ -1397,13 +1404,17 @@ void forth_invalidate(forth_t *o)
 
 void forth_set_debug_level(forth_t *o, enum forth_debug_level level)
 {
+	assert(o);
 	o->m[DEBUG] = level;
 }
 
 FILE *forth_fopen_or_die(const char *name, char *mode)
 {
+	FILE *file;
+	assert(name);
+	assert(mode);
 	errno = 0;
-	FILE *file = fopen(name, mode);
+	file = fopen(name, mode);
 	if(!file) {
 		fatal("opening file \"%s\" => %s", name, forth_strerror());
 		exit(EXIT_FAILURE);
@@ -1496,9 +1507,10 @@ task of getting the object into a runnable state so we can pass it to
 forth_t *forth_init(size_t size, FILE *in, FILE *out, 
 		const struct forth_functions *calls)
 {
-	assert(in && out);
 	forth_cell_t *m, i, w, t, pow;
 	forth_t *o;
+	assert(in);
+	assert(out);
 	assert(sizeof(forth_cell_t) >= sizeof(uintptr_t));
 	size = forth_round_up_pow2(size);
 	pow  = forth_blog2(size);
