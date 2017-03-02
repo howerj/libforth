@@ -1204,6 +1204,31 @@ reasons, firstly because of limitations in the implementation, and secondly
 there is no reason for cluttering up the output window with this. The
 implementation should be silent by default.
 
+## forth.core magic 
+
+The [Forth][] interpreters core files can be detected by the [file][] utility
+by creating a [magic][] file. 
+
+Save the following file on [Unix][] systems to */etc/magic*:
+
+	# libforth core files start with 0xFF '4' 'T' 'H'
+	0  string \xFF\x34\x54\x48 libforth core file
+	>4 byte   2                16-bit
+	>4 byte   4                32-bit
+	>4 byte   8                64-bit
+	## File version, version 3 is current as of 2017/02/24
+	>5 byte   x                version=[%d]
+	>5 byte   <3               ancient 
+	>5 byte   3                current
+	>5 byte   >3               futuristic
+	## Endianess test
+	>6 byte   0                big-endian
+	>6 byte   1                little-endian
+	>6 byte   >1               INVALID-ENDIANESS
+	## Size is stored as the base-2 logarithm of the size
+	>7 byte   x                size=[2^%d]
+	## Extra tests could be added, such as whether the core file is still valid
+
 ## Bugs
 
 As mentioned in the standards compliance section, this Forth does things in a
@@ -1227,6 +1252,7 @@ are two error handlers. These mechanisms need unifying.
 * Error handling could be improved - the latest word definition should be
 erased if an error occurs before the terminating ';'. And trap handling
 should be done in pure forth, instead of as a hybrid which is currently is.
+* Make a debian package for the Forth interpreter.
 * For a Forth only related "To-Do" list see the end of the file [forth.fth][].
 * A compiler for the virtual machine itself should be made, as a separate
 program. This could be used to make a more advanced read-evaluate loop.
@@ -1363,5 +1389,8 @@ you should use a different language, or implementation.
 [C99]: https://en.wikipedia.org/wiki/C99
 [Linux Kernel Module]: http://tldp.org/LDP/lkmpg/2.6/html/
 [errno]: https://en.wikipedia.org/wiki/Errno.h
+[file]: https://linux.die.net/man/1/file
+[magic]: https://linux.die.net/man/5/magic
+[Unix]: www.opengroup.org/unix
 
 <style type="text/css">body{margin:40px auto;max-width:850px;line-height:1.6;font-size:16px;color:#444;padding:0 10px}h1,h2,h3{line-height:1.2}</style>

@@ -133,7 +133,7 @@ small: ${TARGET}
 fast: CFLAGS = -DNDEBUG -O3 -std=c99
 fast: ${TARGET}
 
-static: CC=musl-gcc -std=c99
+static: CC=musl-gcc -std=c99 -static
 static: ${TARGET}
 
 libline/makefile:

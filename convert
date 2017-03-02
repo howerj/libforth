@@ -1,4 +1,4 @@
-#!/usr/bin/awk -f
+#!/usr/bin/gawk -f
 
 # This converts a specially formatted C program into markdown, the syntax is
 # simple, any line beginning with "/**" puts the converting into a pass through
@@ -30,6 +30,8 @@
 #   |	    return -1; /**@todo fix */|
 #   |    }                            |
 #   .---------------------------------.
+#
+# @todo remove gawk dependent features, so it works with mawk
 #
 
 BEGIN {
