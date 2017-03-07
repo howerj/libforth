@@ -89,7 +89,7 @@ test: unit.test forth.test
 tags: lib${TARGET}.c lib${TARGET}.h unit.c main.c
 	${CTAGS} $^
 
-dist: ${TARGET} ${TARGET}.1 lib${TARGET}.[a3] lib${TARGET}.htm ${DOCS} forth.core
+dist: ${TARGET} ${TARGET}.1 lib${TARGET}.a lib${TARGET}.htm ${DOCS} forth.core
 	tar zvcf ${TARGET}.tgz $^
 
 %.htm: %.md
