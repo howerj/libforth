@@ -652,10 +652,41 @@ extract the document string for a given work.
 	[ size 1- ] literal + 
 	[ size 1- ] literal invert and ;
 
-: cfa ( previous-word-address -- cfa )
+
+( ================================== DUMP ================================== )
+: newline ( x -- x+1 : print a new line every fourth value )
+	dup 3 and 0= if cr then 1+ ;
+
+: address ( num count -- count : print current address we are dumping every fourth value )
+	dup >r
+	1- 3 and 0= if . [char] : emit space else drop then
+	r> ;
+
+: dump ( start count -- : print the contents of a section of memory )
+	base @ >r ( save current base )
+	hex       ( switch to hex mode )
+	1 >r      ( save counter on return stack )
+	over + swap ( calculate limits: start start+count )
+	begin 
+		2dup u> ( stop if gone past limits )
+	while 
+		dup r> address >r
+		dup @ . 1+ 
+		r> newline >r
+	repeat 
+	r> drop
+	r> base !
+	2drop ;
+
+hider newline
+hider address 
+( ================================== DUMP ================================== )
+
+: cfa immediate ( find-address -- cfa )
 	( Given the address of the PWD field of a word this
 	function will return an execution token for the word )
-	    ( MISC field ) ;
+	( @todo if < dictionary start PWD is invalid )
+	 ;
 
 : >body ( xt -- a-addr : a-addr is data field of a CREATEd word )
 	cfa 5 + ;
@@ -667,8 +698,8 @@ extract the document string for a given work.
 	( create a word that pushes the address of a hole to write to
 	a literal takes up two words, '!' takes up one, that's right,
 	some self modifying code! )
-	1- ( execution token expects pointer to PWD field, it does not
-		care about that field however, and increments past it )
+	\ 1- ( execution token expects pointer to PWD field, it does not
+	\ 	care about that field however, and increments past it )
 	cfa
 	[ here 3+ literal ] ( calculate place to write to )
 	!                   ( write an execution token to a hole )
@@ -771,7 +802,6 @@ reference the bug is present in git commit ccd802f9b6151da4c213465a72dacb1f7c22b
 :  3drop ( x1 x2 x3 -- )
 	drop drop drop ;
 
-
 : interpret 
 	begin 
 	' read catch 
@@ -789,39 +819,14 @@ reference the bug is present in git commit ccd802f9b6151da4c213465a72dacb1f7c22b
 ( WORKS UP TO HERE )
 ( NB. It does not crash that is, previously defined words might be incorrect )
 ( ============================================================================= )
-here . cr
 
-: newline ( x -- x+1 : print a new line every fourth value )
-	dup 3 and 0= if cr then 1+ ;
 
-: address ( num count -- count : print current address we are dumping every fourth value )
-	dup >r
-	1- 3 and 0= if . [char] : emit space else drop then
-	r> ;
+\ interpret ( use the new interpret word, which can catch exceptions )
 
-: dump ( start count -- : print the contents of a section of memory )
-	base @ >r ( save current base )
-	hex       ( switch to hex mode )
-	1 >r      ( save counter on return stack )
-	over + swap ( calculate limits: start start+count )
-	begin 
-		2dup u> ( stop if gone past limits )
-	while 
-		dup r> address >r
-		dup @ . 1+ 
-		r> newline >r
-	repeat 
-	r> drop
-	r> base !
-	2drop ;
 
-hider newline
-hider address 
 
-exit ( 'bye' does not work :C )
-interpret ( use the new interpret word, which can catch exceptions )
+\ find [interpret] cfa start! ( the word executed on restart is now our new word )
 
-find [interpret] cfa start! ( the word executed on restart is now our new word )
 
 ( ========================== Basic Word Set ================================== )
 
@@ -856,7 +861,7 @@ find [interpret] cfa start! ( the word executed on restart is now our new word )
 : is ( location " ccc" -- : make a deferred word execute a word ) 
 	find cfa swap ! ;
 
-here . cr
+
 hider (do-defer)
 
 ( The "tail" function implements tail calls, which is just a jump
@@ -879,9 +884,9 @@ Would overflow the return stack. )
 hider tail
 : tail ( -- : perform tail recursion in current word definition )
 	immediate
-	latest cfa
+	latest cell+
 	' branch ,
-	here - 1+ , ;
+	here - cell+ , ;
 
 : recurse immediate
 	( This function implements recursion, although this interpreter
@@ -890,7 +895,7 @@ hider tail
 
 	We can test "recurse" with this factorial function:
 	  : factorial  dup 2 < if drop 1 exit then dup 1- recurse * ; )
-	latest cfa , ;
+	latest cell+ , ;
 
 : factorial ( x -- x : compute the factorial of a number )
 	dup 2 < if drop 1 exit then dup 1- recurse * ;
@@ -981,6 +986,7 @@ and constants, as we mentioned before. )
 
 : array ( u c" xxx" -- : create a named array of length u )   
 	create allot does> + ;
+
 
 : variable ( x c" xxx" -- : create a variable will initial value of x )
 	create ,     does>   ;
@@ -1136,8 +1142,8 @@ testing and debugging:
 : reverse ( x1 ... xn n -- xn ... x1 : reverse n items on the stack )
 	0 do i roll loop ;
 
-( ========================== DO...LOOP ======================================= )
 
+( ========================== DO...LOOP ======================================= )
 0 variable column-counter
 4 variable column-width
 
@@ -1154,7 +1160,7 @@ testing and debugging:
 	[ 1 size log2 lshift 1- literal ] and ;
 
 : name ( PWD -- c-addr : given a pointer to the PWD field of a word get a pointer to the name of the word )
-	dup 1+ @ 256/ lsb - chars> ;
+	dup 1+ @ 256/ 127 and lsb - chars> ;
 
 0 variable x
 : x! ( x -- ) 
@@ -1991,7 +1997,8 @@ hider hide-words
 		" y/n? "
 	again ;
 
-: >instruction ( extract instruction from instruction field ) 0x7f and ;
+: >instruction ( MISC -- Instruction : extract instruction from instruction field ) 
+	0x7f and ;
 
 : step
 	( step through a word: this word could be augmented
@@ -2134,7 +2141,7 @@ hide{
 : print-name         " name:          " name print cr ;
 : print-start        " word start:    " name chars . cr ;
 : print-previous     " previous word: " @ . cr ;
-: print-immediate    " immediate:     " 1+ @ >instruction compile-instruction <> TrueFalse cr ;
+: print-immediate    " immediate:     " cell+ @ >instruction compile-instruction <> TrueFalse cr ;
 : print-instruction  " instruction:   " xt-instruction . cr ;
 : print-defined      " defined:       " defined-word? TrueFalse cr ;
 
@@ -2153,7 +2160,7 @@ hide{
 	dup print-header
 	dup defined-word?
 	if ( decompile if a compiled word )
-		cfa 1+ ( move to code field )
+		cfa cell+ ( move to code field )
 		" code field:" cr
 		decompile
 	else ( the instruction describes the word if it is not a compiled word )
