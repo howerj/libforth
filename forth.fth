@@ -655,7 +655,7 @@ extract the document string for a given work.
 : cfa ( previous-word-address -- cfa )
 	( Given the address of the PWD field of a word this
 	function will return an execution token for the word )
-	1+    ( MISC field ) ;
+	    ( MISC field ) ;
 
 : >body ( xt -- a-addr : a-addr is data field of a CREATEd word )
 	cfa 5 + ;
@@ -790,8 +790,35 @@ reference the bug is present in git commit ccd802f9b6151da4c213465a72dacb1f7c22b
 ( NB. It does not crash that is, previously defined words might be incorrect )
 ( ============================================================================= )
 here . cr
-exit ( 'bye' does not work :C )
 
+: newline ( x -- x+1 : print a new line every fourth value )
+	dup 3 and 0= if cr then 1+ ;
+
+: address ( num count -- count : print current address we are dumping every fourth value )
+	dup >r
+	1- 3 and 0= if . [char] : emit space else drop then
+	r> ;
+
+: dump ( start count -- : print the contents of a section of memory )
+	base @ >r ( save current base )
+	hex       ( switch to hex mode )
+	1 >r      ( save counter on return stack )
+	over + swap ( calculate limits: start start+count )
+	begin 
+		2dup u> ( stop if gone past limits )
+	while 
+		dup r> address >r
+		dup @ . 1+ 
+		r> newline >r
+	repeat 
+	r> drop
+	r> base !
+	2drop ;
+
+hider newline
+hider address 
+
+exit ( 'bye' does not work :C )
 interpret ( use the new interpret word, which can catch exceptions )
 
 find [interpret] cfa start! ( the word executed on restart is now our new word )
@@ -829,8 +856,8 @@ find [interpret] cfa start! ( the word executed on restart is now our new word )
 : is ( location " ccc" -- : make a deferred word execute a word ) 
 	find cfa swap ! ;
 
+here . cr
 hider (do-defer)
-
 
 ( The "tail" function implements tail calls, which is just a jump
 to the beginning of the words definition, for example this

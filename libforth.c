@@ -1342,8 +1342,8 @@ static void print_stack(forth_t *o, FILE *out, forth_cell_t *S, forth_cell_t f)
 	fprintf(out, "%"PRIdCell": ", depth);
 	if(!depth)
 		return;
-	for(forth_cell_t i = S - o->vstart - 1, j = 1; i; i--, j++) {
-		print_cell(o, out, *(o->S + j + 1));
+	for(forth_cell_t j = (S - o->vstart), i = 1; i < j; i++) {
+		print_cell(o, out, *(o->S + i));
 		fputc(' ', out);
 	}
 	print_cell(o, out, f);
@@ -2297,7 +2297,9 @@ or from a file.
 				return -1;
 		}
 		break;
-		case PSTK:    print_stack(o, (FILE*)(o->m[STDOUT]), S, f);   break;
+		case PSTK:    print_stack(o, (FILE*)(o->m[STDOUT]), S, f);
+			      fputc('\n', (FILE*)(o->m[STDOUT]));
+			      break;
 		case RESTART: cd(1); longjmp(on_error, f);                   break;
 
 /**
