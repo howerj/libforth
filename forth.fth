@@ -1,4 +1,21 @@
 #!./forth 
+( ==================================================================== )
+( ==================================================================== )
+( ==================================================================== )
+( 
+	THIS CODE IS CURRENTLY NON FUNCTIONAL
+	THIS CODE IS CURRENTLY NON FUNCTIONAL
+	THIS CODE IS CURRENTLY NON FUNCTIONAL
+	THIS CODE IS CURRENTLY NON FUNCTIONAL
+	THIS CODE IS CURRENTLY NON FUNCTIONAL
+
+	This is due to a large change in the interpreter, it will
+	take time to fix this, however it will be an improvement.
+)
+( ==================================================================== )
+( ==================================================================== )
+( ==================================================================== )
+( ==================================================================== )
 ( 
 Welcome to libforth, A dialect of Forth. Like all versions of Forth this
 version is  a little idiosyncratic, but how the interpreter works is
@@ -638,12 +655,7 @@ extract the document string for a given work.
 : cfa ( previous-word-address -- cfa )
 	( Given the address of the PWD field of a word this
 	function will return an execution token for the word )
-	1+    ( MISC field )
-	dup
-	@     ( Contents of MISC field )
-	instruction-mask and  ( Mask off the instruction )
-	( If the word is not an immediate word, execution token pointer )
-	compile-instruction = + ;
+	1+    ( MISC field ) ;
 
 : >body ( xt -- a-addr : a-addr is data field of a CREATEd word )
 	cfa 5 + ;
@@ -759,6 +771,7 @@ reference the bug is present in git commit ccd802f9b6151da4c213465a72dacb1f7c22b
 :  3drop ( x1 x2 x3 -- )
 	drop drop drop ;
 
+
 : interpret 
 	begin 
 	' read catch 
@@ -768,8 +781,19 @@ reference the bug is present in git commit ccd802f9b6151da4c213465a72dacb1f7c22b
 : [interpret] 
 	immediate interpret ;
 
+( ============================================================================= )
+( WORKS UP TO HERE )
+( WORKS UP TO HERE )
+( WORKS UP TO HERE )
+( WORKS UP TO HERE )
+( WORKS UP TO HERE )
+( NB. It does not crash that is, previously defined words might be incorrect )
+( ============================================================================= )
+here . cr
+exit ( 'bye' does not work :C )
 
 interpret ( use the new interpret word, which can catch exceptions )
+
 find [interpret] cfa start! ( the word executed on restart is now our new word )
 
 ( ========================== Basic Word Set ================================== )
@@ -2877,7 +2901,6 @@ hide{
 The following is a To-Do list for the Forth code itself, along with any
 other ideas.
 
-* Rewrite starting word using "restart-word!"
 * FORTH, VOCABULARY
 * "Value", "To", "Is"
 * Double cell words and floating point library
@@ -2887,22 +2910,28 @@ will allow easier interaction with the world outside the virtual machine
 * common words and actions should be factored out to simplify
 definitions of other words, their standards compliant version found
 if any
-* allow the processing of argc and argv
+* Allow the processing of argc and argv, the mechanism by which that
+this can be achieved needs to be worked out. However all processing that
+is currently done in "main.c" should be done within the Forth interpreter
+instead.
 * A built in version of "dump" and "words" should be added to the Forth
 starting vocabulary, simplified versions that can be hidden.
-* here documents, string literals
-* document the words in this file and built in words better, also turn this
+* Here documents, string literals. Examples of these can be found online
+at Rosetta Code, although the Forth versions online will need adapting.
+* Document the words in this file and built in words better, also turn this
 document into a literate Forth file.
 * Sort out "'", "[']", "find", "compile," 
-* proper booleans should be used throughout
-* file operation primitives that close the file stream [and possibly restore
+* Proper booleans should be used throughout, that is -1 is true, and 0 is
+false.
+* File operation primitives that close the file stream [and possibly restore
 I/O to stdin/stdout] if an error occurs, and then re-throws, should be made.
 * Implement as many things from http://lars.nocrew.org/forth2012/implement.html
 as is sensible. 
 * CASE Statements http://dxforth.netbay.com.au/miser.html
 * The current words that implement I/O redirection need to be improved, and documented,
 I think this is quite a useful and powerful mechanism to use within Forth that simplifies
-programs. )
+programs. This is a must and will make writing utilities in Forth a *lot* easier 
+)
 
 ( 
 The following will not work as we might actually be reading from a string [`sin]

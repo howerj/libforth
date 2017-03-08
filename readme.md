@@ -332,17 +332,16 @@ Briefly:
  *  Word Header:
  *  field <0 = Word Name (the name is stored before the main header)
  *  field 0  = Previous Word
- *  field 1  = Code Word (bits 0 - 7) | Hidden Flag (bit 8) | Word Name Offset (bit 9 - 15) 
- *  field 3  = Code Word or First Data field Entry
- *  field 4+ = Data Field
+ *  field 1  = Code Word (bits 0 - 7) | Hidden Flag (bit 8) | Word Name Offset (bit 9 - 14) | Compiling bit (bit 15) 
+ *  field 2+ = Data field (if it exists).
 
 And in more detail:
 
-        .------------------------------------------------.----------------.
-        |                   Word Header                  |   Word Body    |
-        .---------------.-----.------.-------------------.----------------.
-        | NAME ...      | PWD | MISC | CODE WORD or DATA | DATA ...       |
-        .---------------.-----.------.-------------------.----------------.
+        .----------------------------------------.----------------.
+        |                   Word Header          |   Word Body    |
+        .---------------.-----.------.-----------.----------------.
+        | NAME ...      | PWD | MISC | CODE WORD | DATA ...       |
+        .---------------.-----.------.-----------.----------------.
 
         ____
         NAME        = The name, or the textual representation, of a Forth
@@ -356,7 +355,7 @@ And in more detail:
         ____
         MISC        = A complex field that can contains a CODE WORD, a
                       "hide" bit and the offset from the PWD field to the
-                      beginning of NAME
+                      beginning of NAME, as well as the compiling bit.
         _________    ____
         CODE WORD or DATA = This will be RUN if the following DATA is a pointer
                       to the CODE WORDs of previously defined words. But it
@@ -375,7 +374,7 @@ The MISC field is laid out as so:
         .-------------------------------------------------------------------------------.
         |  0 |  1 |  2 |  3 |  4 |  5 |  6 |  7 |  8 |  9 | 10 | 11 | 12 | 13 | 14 | 15 |
         .-------------------------------------------------------------------------------.
-        |            CODE WORD             | HD |          NAME OFFSET                  |
+        |            CODE WORD             | HD |          NAME OFFSET             | CB |
         .-------------------------------------------------------------------------------.
         _________
         CODE WORD    = Bits 0-6 are a code word, this code word is always run
@@ -393,6 +392,9 @@ The MISC field is laid out as so:
                        to the virtual machine words boundaries and not character, or byte, 
                        aligned. The length of this field, and the size of the input buffer, 
                        limit the maximum size of a word.
+	__
+	CB           = Compiling bit, if set this is a compiling word, if
+	               cleared it is an immediate word. 
 
 Depending on the virtual machine word size, or cell size, there may be more
 bits above bit '15', the most significant bit, in the MISC field. These bits
@@ -1294,7 +1296,7 @@ cell based addressing, which causes all kinds of confusion.
 
 3) Whether a Word is a Compiling or an Immediate word is selected by virtual
 machine instruction layout instead of a bit in the header. This needs to be
-changed.
+changed. **FIX IN PROGRESS**
 
 4) Words currently not defined need to be hidden, until the terminating ';'.
 

@@ -9,6 +9,11 @@
 @brief      A FORTH library, written in a literate style.
 
 @todo Bias errnos so they are outside of the range reserved by Forth
+@todo Due to the new "immediate-bit" the documentation will need
+rewriting.
+@todo Add more assertions! Assertions can be added relating to word
+sizes, what codes are compiled, etcetera.
+@todo Remove the COMPILE instruction and all references to it.
 
 ## License
 
@@ -259,6 +264,7 @@ machine image is initialized, after this the VM does not allocate any
 more memory.
 **/
 #include <assert.h>
+#include <stdbool.h>
 #include <stdarg.h>
 #include <ctype.h>
 #include <errno.h>
@@ -379,11 +385,28 @@ the **MISC** field.
 #define WORD_LENGTH_OFFSET  (8)  
 
 /**
+@brief The bit offset for the bit that determines whether a word is a
+compiling, or an immediate word. 
+**/
+#define COMPILING_BIT_OFFSET (15)
+
+/**
+@brief This is the bit that determines whether a word is a compiling word 
+(the bit is set) or an immediate word (the bit is cleared).
+**/
+#define COMPILING_BIT (1u << COMPILING_BIT_OFFSET)
+
+/**
+@brief The lower 5-bits of the upper word are used for the word length
+**/
+#define WORD_MASK           (0x1f)
+
+/**
 @brief **WORD_LENGTH** extracts the length of a Forth words name so we know
 where it is relative to the **PWD** field of a word.
 @param MISC This should be the **MISC** field of a word 
 **/
-#define WORD_LENGTH(MISC) (((MISC) >> WORD_LENGTH_OFFSET) & 0xff)
+#define WORD_LENGTH(MISC) (((MISC) >> WORD_LENGTH_OFFSET) & WORD_MASK)
 
 /**
 @brief Test if a word is a **hidden** word, one that is not in the search
@@ -1050,23 +1073,28 @@ appending new ones with the same name only), the terminator
 
 Our word header looks like this:
 
-	.-----------.-----.------.--------.------------.
-	| Word Name | PWD | MISC | CODE-2 | Data Field |
-	.-----------.-----.------.--------.------------.
+	.-----------.-----.------.------------.
+	| Word Name | PWD | MISC | Data Field |
+	.-----------.-----.------.------------.
 
-* **CODE-2** and the **Data Field** are optional and the **Data Field** is of
-variable length.
+* The **Data Field** is optional and is of variable length.
 * **Word Name** is a variable length field whose size is recorded in the
 MISC field.
 
-And the **MISC** field is a composite to save space containing a virtual
-machine instruction, the hidden bit and the length of the Word Name string
-as an offset in cells from **PWD** field. The field looks like this:
+@todo This really should be cleared up, the hidden bit and the immediate
+bit can be moved to the top half of the word.
 
-	----.-------------------.------------.-------------.
-	... | 16 ........... 8  |    9       | 7 ....... 0 |
-	... |  Word Name Size   | Hidden Bit | Instruction |
-	-----.-------------------.------------.-------------.
+And the **MISC** field is a composite field, to save space, containing a virtual
+machine instruction, the hidden bit, the compiling bit, and the length of 
+the Word  Name string as an offset in cells from **PWD** field. 
+
+The field looks like this:
+
+
+	.---------------.-------------------.------------.-------------.
+	|      15       | 14 ........... 8  |    9       | 7 ....... 0 |
+	| Compiling Bit |  Word Name Size   | Hidden Bit | Instruction |
+	.--------------.-------------------.------------.-------------.
 
 The maximum value for the Word Name field is determined by the width of
 the Word Name Size field.
@@ -1076,11 +1104,15 @@ elsewhere (in **forth_find**) to hide a word definition from the word
 search. The hidden bit is not set within this program at all, however it
 can be set by a running Forth virtual machine (and it is, if desired).
 
-The **Instruction** tells the interpreter what to do with the Word
-definition when it is found and how to interpret **CODE-2** and the
-**Data Field** if they exist. 
+The compiling bit tells the text interpreter/compiler what to do with the
+word when it is read in from the input, if set it will be compiled into
+the dictionary if in compile mode and in command mode it will be executed,
+if it is cleared the word will always be executed. 
+
+The instruction is the virtual machine instruction that is to be executed
+by the interpreter.
 **/
-static void compile(forth_t *o, forth_cell_t code, const char *str)
+static void compile(forth_t *o, forth_cell_t code, const char *str, forth_cell_t compiling)
 { 
 	assert(o && code < LAST_INSTRUCTION);
 	forth_cell_t *m = o->m, header = m[DIC], l = 0;
@@ -1096,7 +1128,8 @@ static void compile(forth_t *o, forth_cell_t code, const char *str)
 	m[m[DIC]++] = m[PWD]; /*0 + STRLEN: Pointer to previous words header */
 	m[PWD] = m[DIC] - 1;  /*Update the PWD register to new word */
 	/*size of words name and code field*/
-	m[m[DIC]++] = (l << WORD_LENGTH_OFFSET) | code; 
+	assert(l < WORD_MASK);
+	m[m[DIC]++] = ((!!compiling) << COMPILING_BIT_OFFSET) | (l << WORD_LENGTH_OFFSET) | code; 
 }
 
 /**
@@ -1590,37 +1623,31 @@ restore when we enter **forth_run**.
 **DEFINE** and **IMMEDIATE** are two immediate words, the only two immediate
 words that are also virtual machine instructions, we can make them
 immediate by passing in their code word to **compile**. The created
-word looks like this
+word looks like this:
 
 	.------.-----.------.
 	| NAME | PWD | MISC |
 	.------.-----.------.
 
 The **MISC** field here contains either **DEFINE** or **IMMEDIATE**, as well as
-the hidden bit field and an offset to the beginning of name. 
+the hidden bit field and an offset to the beginning of name. The compiling bit
+is cleared for these words.
 **/
-	compile(o, DEFINE,    ":");
-	compile(o, IMMEDIATE, "immediate");
+	compile(o, DEFINE,    ":", false);
+	compile(o, IMMEDIATE, "immediate", false);
 
 /**
 All of the other built in words that use a virtual machine instruction to
 do work are instead compiling words, and because there are lots of them we
-can initialize them in a loop
+can initialize them in a loop, the created words look the same as the immediate
+words, except the compiling bit is set in the MISC field.
 
-The created word looks like this:
-
-	.------.-----.------.----------------.
-	| NAME | PWD | MISC | VM-INSTRUCTION |
-	.------.-----.------.----------------.
-
-The MISC field here contains the **COMPILE** instructions, which will compile a
-pointer to the **VM-INSTRUCTION**, as well as the other fields it usually 
-contains.
+The MISC field here also contains the VM instructions, the READ word will 
+compile pointers to this MISC field into the dictionary.
 **/
-	for(i = READ, w = READ; instruction_names[i]; i++) {
-		compile(o, COMPILE, instruction_names[i]);
-		m[m[DIC]++] = w++; /*This adds the actual VM instruction */
-	}
+	for(i = READ, w = READ; instruction_names[i]; i++)
+		compile(o, w++, instruction_names[i], true);
+
 /**
 The next eval is the absolute minimum needed for a sane environment, it
 defines two words **state** and **;**
@@ -1666,7 +1693,7 @@ to they point to the file **in**
 /**
 This is a crude method that should only be used for debugging purposes, it
 simply dumps the forth structure to disk, including any padding which the
-compiler might have inserted. This dump cannot be reloaded 
+compiler might have inserted. This dump cannot be reloaded!
 **/
 int forth_dump_core(forth_t *o, FILE *dump)
 {
@@ -1965,132 +1992,8 @@ structure of a word and how words are compiled into the dictionary.
 
 Above we saw that a words layout looked like this:
 
-	.-----------.-----.------.--------.------------.
-	| Word Name | PWD | MISC | CODE-2 | Data Field |
-	.-----------.-----.------.--------.------------.
+@todo Explain all of this, it has recently changed.
 
-During execution we do not care about the **Word Name** field and **PWD**
-field. Also during execution we do not care about the top bits of the **MISC**
-field, only what instruction it contains.
-
-Immediate words looks like this:
-
-	.-------------.---------------------.
-	| Instruction | Optional Data Field |
-	.-------------.---------------------.
-
-And compiling words look like this:
-
-	.---------.-------------.---------------------.
-	| COMPILE | Instruction | Optional Data Field |
-	.---------.-------------.---------------------.
-
-If the data field exists, the **Instruction** field will contain **RUN**. 
-For words that only implement a single virtual machine instruction the 
-**Instruction** field will contain only that single instruction 
-(such as ADD, or SUB).
-
-Let us define a series of words and see how the resulting word definitions
-are laid out, discounting the **Word Name**, **PWD** and the top bits of the
-**MISC** field.
-
-We will define two words **square** (which takes a number off the stack,
-multiplies it by itself and pushes the result onto the stack) and
-**sum-of-products** (which takes two numbers off the stack, squares each one,
-adds the two results together and pushes the result onto the stack):
-
-	: square           dup * ;
-	: sum-of-products  square swap square + ;
-
-Executing these:
-
-	9 square .            => prints '81 '
-	3 4 sum-of-products . => prints '25 '
-
-1) **square** refers to two built in words **dup** and **\***,
-2) **sum-of-products** to the word we just defined and two built in words
-3) **swap** and **+**. We have also used the immediate word **:** and **;**.
-
-Definition of **dup**, a compiling word:
-
-	.---------.------.
-	| COMPILE | DUP  |
-	.---------.------.
-
-Definition of **+**, a compiling word:
-
-	.---------.------.
-	| COMPILE | +    |
-	.---------.------.
-
-Definition of **swap**, a compiling word:
-
-	.---------.------.
-	| COMPILE | SWAP |
-	.---------.------.
-
-Definition of **exit**, a compiling word:
-
-	.---------.------.
-	| COMPILE | EXIT |
-	.---------.------.
-
-Definition of **:**, an immediate word:
-
-	.---.
-	| : |
-	.---.
-
-Definition of **;**, a defined immediate word:
-
-	.-----.----.-------.----.-----------.--------.-------.
-	| RUN | $' | $exit | $, | literal 0 | $state | $exit |
-	.-----.----.-------.----.-----------.--------.-------.
-
-Definition of **square**, a defined compiling word:
-
-	.---------.-----.------.----.-------.
-	| COMPILE | RUN | $dup | $* | $exit |
-	.---------.-----.------.----.-------.
-
-Definition of **sum-of-products**, a defined compiling word:
-
-	.---------.-----.---------.-------.---------.----.-------.
-	| COMPILE | RUN | $square | $swap | $square | $+ | $exit |
-	.---------.-----.---------.-------.---------.----.-------.
-
-All of these words are defined in the dictionary, which is a
-separate data structure from the variable stack. In the above
-definitions we use **$square** or **$\*** to mean a pointer to the words
-run time behavior, this is never the **COMPILE** field. **literal 0**
-means that at run time the number 0 is pushed to the variable stack,
-also the definition of **state** is not shown, as that would
-complicate things.
-
-Imagine we have just typed in "sum-of-products" with "3 4" on the
-variable stack. Our **pc** register is now pointing the **RUN** field of
-sum of products, the virtual machine will next execute the **RUN**
-instruction, saving the instruction pointer to the return stack for
-when we finally exit **sum-of-products** back to the interpreter.
-**square** will now be called, it's **RUN** field encountered, then **dup**.
-**dup** does not have a **RUN** field, it is a built in primitive, so the
-instruction pointer will not be touched nor the return stack, but the
-**DUP** instruction will now be executed. 
-
-After this has run the instruction pointer will now be moved to executed
-**\***, another primitive, then **exit** - which pops a value off the return
-stack and sets the instruction pointer to that value. The value points to
-the **$swap** field in **sum-of-products**, which will in turn be executed
-until the final **$exit** field is encountered. This exits back into our
-special read-and-loop word defined in the initialization code.
-
-The **READ** routine must make sure the correct field is executed when
-a word is read in which depends on the state of the interpreter (held
-in **STATE** register). 
-
-It should be noted that for compatibility with future versions of the
-virtual machine that instructions can be added to the end (after the last 
-defined instruction) but not removed.
 **/
 	for(;(pc = m[ck(I++)]);) { 
 	INNER:  
@@ -2116,19 +2019,20 @@ instead of being executed.
 
 The created header looks like this:
 
-	 .------.-----.------.-----.----
-	 | NAME | PWD | MISC | RUN |    ...
-	 .------.-----.------.-----.----
-				      ^
-				      |
-				    Dictionary Pointer 
+	 .------.-----.------.----
+	 | NAME | PWD | MISC |    ...
+	 .------.-----.------.----
+	                        ^
+	                        |
+	                   Dictionary Pointer 
+
+The MISC field contains the RUN instruction.
 **/
 
 			m[STATE] = 1; /* compile mode */
 			if(forth_get_word(o, o->s) < 0)
 				goto end;
-			compile(o, COMPILE, (char*)o->s);
-			m[dic(m[DIC]++)] = RUN;
+			compile(o, RUN, (char*)o->s, true);
 			break;
 		case IMMEDIATE:
 /**
@@ -2146,31 +2050,13 @@ versus, as is expected:
 
 	: name ... ; immediate
 
-The way this word works is when **DEFINE** (or **:**) runs it creates a word 
-header that looks like this:
+This word simply clears the compiling bit, which makes the word immediate,
 
-	.------.-----.------.-----.----
-	| NAME | PWD | MISC | RUN |    ...
-	.------.-----.------.-----.----
-				     ^
-				     |
-				   Dictionary Pointer
+@todo Change this to make it compliant with existing Forths.
 
-
-Where the **MISC** field contains **COMPILE**, we want it to look like this:
-
-	.------.-----.------.----
-	| NAME | PWD | MISC |    ...
-	.------.-----.------.----
-			       ^
-			       |
-			       Dictionary Pointer
-
-With the **MISC** field containing **RUN**. 
 **/
-			m[DIC] -= 2; /* move to first code field */
-			m[m[DIC]] &= ~INSTRUCTION_MASK; /* zero instruction */
-			m[m[DIC]] |= RUN; /* set instruction to RUN */
+			m[DIC] -= 1; /* move to first code field */
+			m[m[DIC]] &= ~COMPILING_BIT; /* set instruction to immediate */
 			dic(m[DIC]++); /* compilation start here */ 
 			break;
 		case READ:
@@ -2207,17 +2093,21 @@ recursively).
 				goto end;
 			if ((w = forth_find(o, (char*)o->s)) > 1) {
 				pc = w;
-				if (!m[STATE] && instruction(m[ck(pc)]) == COMPILE)
-					pc++; /* in command mode, execute word */
-				goto INNER;
+				if(m[STATE] && (m[ck(pc)] & COMPILING_BIT)) {
+					m[dic(m[DIC]++)] = pc; /* compile word */
+					break;
+				}
+				goto INNER; /* execute word */
 			} else if(forth_string_to_cell(o->m[BASE], &w, (char*)o->s)) {
 				error("'%s' is not a word", o->s);
 				longjmp(on_error, RECOVERABLE);
 				break;
 			}
+
 			if (m[STATE]) { /* must be a number then */
 				m[dic(m[DIC]++)] = 2; /*fake word push at m[2] */
 				m[dic(m[DIC]++)] = w;
+				break;
 			} else { /* push word */
 				*++S = f;
 				f = w;
