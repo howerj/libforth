@@ -1218,11 +1218,11 @@ Save the following file on [Unix][] systems to */etc/magic*:
 	>4 byte   2                16-bit
 	>4 byte   4                32-bit
 	>4 byte   8                64-bit
-	## File version, version 3 is current as of 2017/02/24
+	## File version, version 4 is current as of 2017/03/08
 	>5 byte   x                version=[%d]
-	>5 byte   <3               ancient 
-	>5 byte   3                current
-	>5 byte   >3               futuristic
+	>5 byte   <4               ancient 
+	>5 byte   4                current
+	>5 byte   >4               futuristic
 	## Endianess test
 	>6 byte   0                big-endian
 	>6 byte   1                little-endian

@@ -2497,7 +2497,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 
 ( ==================== Version information =================== )
 
-3 constant version
+4 constant version
 
 ( ==================== Version information =================== )
 

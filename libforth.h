@@ -45,7 +45,7 @@ is incompatible with previous or later versions, which is a deficiency of the
 program. A way to migrate core files would be useful, but the task is
 too difficult.
 **/
-#define FORTH_CORE_VERSION  (0x03u)
+#define FORTH_CORE_VERSION  (0x04u)
 
 struct forth; /**< An opaque object that holds a running FORTH environment**/
 typedef struct forth forth_t;
