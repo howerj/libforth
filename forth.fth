@@ -520,6 +520,9 @@ extract the document string for a given work.
 : 2tuck ( n1 n2 n3 n4 – n3 n4 n1 n2 n3 n4 )
 	2swap 2over ;
 
+:  3drop ( x1 x2 x3 -- )
+	2drop ;
+
 : nos1+ ( x1 x2 -- x1+1 x2 : increment the next variable on that stack )
 	swap 1+ swap ;
 
@@ -788,18 +791,6 @@ hider address
 		( when catch began execution )
 	then ; 
 
-( @bug replacing "drop drop" with "2drop" causes a stack underflow in
-"T{" on a 32-bit platform, "2drop" can be used, but only if 3drop is defined
-after "interpret" - something is ever so subtly going wrong. The code fails
-in "T{" when "evaluate" is called - which does lots of magic in the virtual
-machine. This is the kind of bug that is difficult to find and reproduce, I
-have not given up on it yet, however I am going to apply the "fix" for now,
-which is to change the definitions of 3drop to "drop drop drop"... for future
-reference the bug is present in git commit ccd802f9b6151da4c213465a72dacb1f7c22b0ac )
-
-:  3drop ( x1 x2 x3 -- )
-	drop drop drop ;
-
 : interpret 
 	begin 
 	' read catch 
@@ -809,21 +800,10 @@ reference the bug is present in git commit ccd802f9b6151da4c213465a72dacb1f7c22b
 : [interpret] 
 	immediate interpret ;
 
-( ============================================================================= )
-( WORKS UP TO HERE )
-( WORKS UP TO HERE )
-( WORKS UP TO HERE )
-( WORKS UP TO HERE )
-( WORKS UP TO HERE )
-( NB. It does not crash that is, previously defined words might be incorrect )
-( ============================================================================= )
 
+interpret ( use the new interpret word, which can catch exceptions )
 
-\ interpret ( use the new interpret word, which can catch exceptions )
-
-
-
-\ find [interpret] cfa start! ( the word executed on restart is now our new word )
+find [interpret] cell+ start! ( the word executed on restart is now our new word )
 
 
 ( ========================== Basic Word Set ================================== )
