@@ -126,16 +126,13 @@ extract the document string for a given work.
 	0x80  ;
 
 : instruction-mask ( -- x : pushes mask for the first code word in a words MISC field )
-	0x1f  ;
+	0x7f  ;
 
 : hidden? ( PWD -- PWD bool : is a word hidden, given the words PWD field ) 
 	dup 1+ @ hidden-mask and logical ;
 
-: compile-instruction ( -- instruction : compile code word, threaded code interpreter instruction )
-	1 ; 
-
 : dolist ( -- x : run code word, threaded code interpreter instruction )
-	2 ;      
+	1 ;      
 
 : dolit ( -- x : location of special "push" word )
 	2 ;
@@ -455,6 +452,7 @@ extract the document string for a given work.
 
 : u<=  ( x y -- bool : unsigned less than or equal to )
 	u>= not ;
+
 : rdrop ( R: x -- : drop a value from the return stack )
 	r>           ( get caller's return address )
 	r>           ( get value to drop )
@@ -545,12 +543,13 @@ extract the document string for a given work.
 : original-exit 
 	[ find exit ] literal ;
 
-: exit
-	( this will define a second version of exit, ';' will
+: exit ( -- : this will define a second version of exit, ';' will
 	use the original version, whilst everything else will
 	use this version, allowing us to distinguish between
 	the end of a word definition and an early exit by other
-	means in "see" )
+	means in "see" 
+	@todo Get rid of this, this is going to slow the interpreter
+	down *a lot*, for very little gain! )
 	[ find exit hide ] rdrop exit [ reveal ] ;
 
 : ?exit ( x -- : exit current definition if not zero ) 
@@ -692,7 +691,7 @@ hider address
 	cfa 5 + ;
 
 ( @todo non-compliant, fix )
-: ['] immediate find cfa [literal] ;
+: ['] immediate find [literal] ;
 
 : execute ( xt -- : given an execution token, execute the word )
 	( create a word that pushes the address of a hole to write to
@@ -700,7 +699,6 @@ hider address
 	some self modifying code! )
 	\ 1- ( execution token expects pointer to PWD field, it does not
 	\ 	care about that field however, and increments past it )
-	cfa
 	[ here 3+ literal ] ( calculate place to write to )
 	!                   ( write an execution token to a hole )
 	[ 0 , ] ;           ( this is the hole we write )
@@ -935,7 +933,7 @@ and thus allows us to extend the language easily.
 	['] ' , ;   
 
 : write-exit ( -- : A word that write exit into the dictionary )
-	['] exit , ; 
+	original-exit , ;
 
 : write-compile, ( -- : A word that writes , into the dictionary ) 
 	' , , ;
@@ -974,7 +972,7 @@ hider state!
 
 : does> ( hole-to-patch -- )
 	immediate
-	write-exit   ( we don't want the defining to exit, but the *defined* word to )
+	write-exit   ( we don't want the defining word to exit, but the *defined* word to )
 	here swap !  ( patch in the code fields to point to )
 	dolist , ;   ( write a run in )
 
@@ -986,7 +984,6 @@ and constants, as we mentioned before. )
 
 : array ( u c" xxx" -- : create a named array of length u )   
 	create allot does> + ;
-
 
 : variable ( x c" xxx" -- : create a variable will initial value of x )
 	create ,     does>   ;
@@ -1998,7 +1995,7 @@ hider hide-words
 	again ;
 
 : >instruction ( MISC -- Instruction : extract instruction from instruction field ) 
-	0x7f and ;
+	instruction-mask and ;
 
 : step
 	( step through a word: this word could be augmented
@@ -2025,6 +2022,7 @@ hider hide-words
 	." debug> " ;
 
 : debug ( a work in progress, debugging support, needs parse-word )
+	\ " Entered Debug Prompt. Type 'h' <return> for help. " cr 
 	key drop
 	cr
 	begin
@@ -2036,6 +2034,7 @@ hider hide-words
 			[char] r of registers  endof
 			[char] s of >r .s r>   endof
 			[char] c of drop exit  endof
+			( @todo add throw here )
 		endcase drop
 	again ;
 hider debug-prompt
@@ -2060,17 +2059,17 @@ hider debug-prompt
 	NOTE: given a pointer to somewhere in a word it is possible
 	to work out the PWD by looping through the dictionary to
 	find the PWD below it )
-	1- dup @ -1 =               if " [ noname" end-print exit then
-	   dup  " [ " code>pwd ?dup-if name print else drop " data" then
+	dup 1- @ -1 = if " [ noname" end-print exit then
+	dup  " [ " code>pwd ?dup-if name print else drop " data" then
 	        end-print ;
-hider end-print
-hider code>pwd
+
+hide{ end-print code>pwd }hide
 
 ( these words push the execution tokens for various special cases for decompilation )
-: get-branch  [ find branch  cfa ] literal ;
-: get-?branch [ find ?branch cfa ] literal ;
-: get-original-exit [ original-exit cfa ] literal ;
-: get-quote   [ find ' cfa ] literal ;
+: get-branch  [ find branch  ] literal ;
+: get-?branch [ find ?branch ] literal ;
+: get-original-exit [ original-exit ] literal ;
+: get-quote   [ find ' ] literal ;
 
 : branch-increment ( addr branch -- increment : calculate decompile increment for "branch" )
 	1+ dup negative? if drop 2 else 2dup dump then ;
@@ -2134,14 +2133,14 @@ hide{
 }hide
 
 : xt-instruction ( extract instruction from execution token )
-	cfa @ >instruction ;
+	cell+ @ >instruction ;
 
 ( these words expect a pointer to the PWD field of a word )
 : defined-word?      xt-instruction dolist = ;
 : print-name         " name:          " name print cr ;
 : print-start        " word start:    " name chars . cr ;
 : print-previous     " previous word: " @ . cr ;
-: print-immediate    " immediate:     " cell+ @ >instruction compile-instruction <> TrueFalse cr ;
+: print-immediate    " immediate:     " cell+ @ 0x8000 and 0= TrueFalse cr ;
 : print-instruction  " instruction:   " xt-instruction . cr ;
 : print-defined      " defined:       " defined-word? TrueFalse cr ;
 
@@ -2153,19 +2152,37 @@ hide{
 	dup print-instruction ( @todo look up instruction name )
 	print-defined ;
 
-: see ( -- : decompile the next word in the input stream )
+( @todo This does not work for all words, so needs fixing. 
+ Specifically: 
+	2variable
+	2constant
+	table
+	constant
+	variable
+	array 
+Which are all complex CREATE words
+
+A good way to test decompilation is with the following Unix pipe: 
+
+	./forth -f forth.fth -e words 
+		| sed 's/ / see /g' 
+		| ./forth -t forth.fth &> decompiled.log
+)
+
+
+: see ( c" xxx" -- : decompile the next word in the input stream )
 	find
 	dup 0= if -32 throw then
 	1- ( move to PWD field )
 	dup print-header
 	dup defined-word?
 	if ( decompile if a compiled word )
-		cfa cell+ ( move to code field )
+		2 cells + ( move to code field )
 		" code field:" cr
 		decompile
 	else ( the instruction describes the word if it is not a compiled word )
 		drop
-	then ;
+	then cr ;
 
 ( These help messages could be moved to blocks, the blocks could then
 be loaded from disk and printed instead of defining the help here,
@@ -2915,7 +2932,7 @@ of that specific Forth, here we clean up as many non standard words as
 possible. )
 hide{ 
  do-string ')' alignment-bits 
- compile-instruction dictionary-start hidden? hidden-mask instruction-mask
+ dictionary-start hidden? hidden-mask instruction-mask
  max-core dolist x x! x@ write-exit
  max-string-length 
  original-exit
@@ -2965,6 +2982,15 @@ as is sensible.
 * The current words that implement I/O redirection need to be improved, and documented,
 I think this is quite a useful and powerful mechanism to use within Forth that simplifies
 programs. This is a must and will make writing utilities in Forth a *lot* easier 
+
+Implement:
+
+http://rosettacode.org/wiki/CRC-32#Forth
+http://rosettacode.org/wiki/Monte_Carlo_methods#Forth 
+
+And various other things from Rosetta Code.
+
+
 )
 
 ( 
@@ -3006,6 +3032,5 @@ verbose [if]
   nl if dup cr . [char] : emit space then ? ;
 : dump \ addr n --
 	base @ >r hex over + swap 1- begin 1+ 2dup dup ?? 2+ u< until r> base ! ; )
-
 
 

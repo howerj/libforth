@@ -12,6 +12,8 @@ core
 *.core
 *.d
 *.db
+*.deb
+*.diff
 Doxyfile
 doxygen
 doxygen/*

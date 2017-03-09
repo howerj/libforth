@@ -337,11 +337,11 @@ Briefly:
 
 And in more detail:
 
-        .----------------------------------------.----------------.
-        |                   Word Header          |   Word Body    |
-        .---------------.-----.------.-----------.----------------.
-        | NAME ...      | PWD | MISC | CODE WORD | DATA ...       |
-        .---------------.-----.------.-----------.----------------.
+        .----------------------------------------.
+        |       Word Header          | Word Body |
+        .---------------.-----.------.-----------.
+        | NAME ...      | PWD | MISC | DATA ...  |
+        .---------------.-----.------.-----------.
 
         ____
         NAME        = The name, or the textual representation, of a Forth
@@ -356,10 +356,6 @@ And in more detail:
         MISC        = A complex field that can contains a CODE WORD, a
                       "hide" bit and the offset from the PWD field to the
                       beginning of NAME, as well as the compiling bit.
-        _________    ____
-        CODE WORD or DATA = This will be RUN if the following DATA is a pointer
-                      to the CODE WORDs of previously defined words. But it
-                      could be any CODE WORD.
         ____
         DATA        = This could be anything, but it is most likely to be
                       a list of pointers to CODE WORDs of previously defined
@@ -592,10 +588,6 @@ are all *immediate* words.
 
 Push the next value in the instruction stream onto the variable stack, advancing
 the instruction stream.
-
-* compile ( -- )
-
-Compile a pointer to the next instruction stream value into the dictionary.
 
 * run ( -- )
 
@@ -872,7 +864,6 @@ Allocate a block of memory.
 * 'free' ( r-addr -- status )
 
 Free a block of memory.
-
 
 ##### File Access Words
 
@@ -1176,21 +1167,6 @@ standards are made.
 
 Some important deviations are:
 
-* immediate
-
-In most Forths the "immediate" word goes after a words definition instead of
-inside it like this:
-
-        : word ... ; immediate
-
-Instead this interpreter does it:
-
-        : word immediate ... ;
-
-This behavior will not be changed for the foreseeable future, although it is
-the biggest difference. This is due to how the internals of the interpreter
-work.
-
 * recursion and definition hiding
 
 A word can be called immediately before the terminating semi-colon has been
@@ -1245,11 +1221,8 @@ are two error handlers. These mechanisms need unifying.
 
 ## To-Do
 
-* Port this to a micro controller, and a Linux kernel module device
-  pointer to the forth object, a pointer to the stack and the stack depth.
 * A few environment variables could be used to specify start up files for the
   interpreter and user specific startup files.
-* Add getenv mechanism to virtual machine
 * Signal handling should be added, so the Forth program can handle them.
 * Error handling could be improved - the latest word definition should be
 erased if an error occurs before the terminating ';'. And trap handling
@@ -1264,17 +1237,6 @@ sizes or endianess, which needs addressing.
 to programs, see:
   - <https://github.com/stephenrkell/liballocs>
   - <https://sourceware.org/libffi/>
-* Asserts should be split up, eg. 
-
-	assert(x && y);
-
-Becomes:
-
-	assert(x);
-	assert(y);
-
-* '[errno][]'s should be biased to be outside of the range reserved by the 
-[ANS Forth][] standard.
 * The Forth could be made to be more standards compliant (especially where it
 comes to I/O and addressing (but also things like CASE statements).
 

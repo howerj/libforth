@@ -9,11 +9,6 @@
 @brief      A FORTH library, written in a literate style.
 
 @todo Bias errnos so they are outside of the range reserved by Forth
-@todo Due to the new "immediate-bit" the documentation will need
-rewriting.
-@todo Add more assertions! Assertions can be added relating to word
-sizes, what codes are compiled, etcetera.
-@todo Remove the COMPILE instruction and all references to it.
 
 ## License
 
@@ -521,7 +516,7 @@ static const char *initial_forth_program =
 ": [ immediate 0 state ! ; \n"
 ": ] 1 state ! ; \n"
 ": >mark here 0 , ; \n"
-": :noname immediate -1 , here 2 , ] ; \n"
+": :noname immediate -1 , here 1 , ] ; \n"
 ": if immediate ' ?branch , >mark ; \n"
 ": else immediate ' branch , >mark swap dup here swap - swap ! ; \n"
 ": then immediate dup here swap - swap ! ; \n"
@@ -841,7 +836,6 @@ up for debugging purposes (like **pnum**).
 
 #define XMACRO_INSTRUCTIONS\
  X(PUSH,      "push",       " -- x : push a literal")\
- X(COMPILE,   "compile",    " -- : compile a pointer to a Forth word")\
  X(RUN,       "run",        " -- : run a Forth word")\
  X(DEFINE,    "define",     " -- : make new Forth word, set compile mode")\
  X(IMMEDIATE, "immediate",  " -- : make a Forth word immediate")\
@@ -907,13 +901,8 @@ up for debugging purposes (like **pnum**).
  X(ALLOCATE,  "allocate",       " u -- r-addr ior : allocate a block of memory")\
  X(FREE,      "free",           " r-addr1 -- ior : free a block of memory")\
  X(RESIZE,    "resize",         " r-addr u -- r-addr ior : free a block of memory")\
+ X(GETENV,    "getenv",         " c-addr u -- r-addr u : return an environment variable")\
  X(LAST_INSTRUCTION, NULL, "")
-
-/**
-@todo Add the following instructions:
- * memory-compare memory-copy
- * resize-core 
-**/
 
 enum instructions { /**< instruction enumerations */
 #define X(ENUM, STRING, HELP) ENUM,
@@ -1617,7 +1606,7 @@ restore when we enter **forth_run**.
 	o->m[INSTRUCTION] = m[DIC]; /* stream points to the special word */
 	m[m[DIC]++] = w;    /* call to READ word */
 	m[m[DIC]++] = t;    /* call to TAIL */
-	m[m[DIC]++] = o->m[INSTRUCTION] - 1; /* recurse*/
+	m[m[DIC]++] = o->m[INSTRUCTION] - 1; /* recurse */
 
 /**
 **DEFINE** and **IMMEDIATE** are two immediate words, the only two immediate
@@ -1697,7 +1686,8 @@ compiler might have inserted. This dump cannot be reloaded!
 **/
 int forth_dump_core(forth_t *o, FILE *dump)
 {
-	assert(o && dump);
+	assert(o);
+       	assert(dump);
 	size_t w = sizeof(*o) + sizeof(forth_cell_t) * o->core_size;
 	return w != fwrite(o, 1, w, dump) ? -1: 0;
 }
@@ -1777,7 +1767,8 @@ The following function allows us to load a core file from memory:
 **/
 forth_t *forth_load_core_memory(char *m, size_t size)
 {
-	assert(m && (size / sizeof(forth_cell_t)) >= MINIMUM_CORE_SIZE);
+	assert(m); 
+	assert((size / sizeof(forth_cell_t)) >= MINIMUM_CORE_SIZE);
 	forth_t *o;
 	size_t offset = sizeof(o->header);
 	size -= offset;
@@ -1871,14 +1862,16 @@ variable stack.
 
 void forth_push(forth_t *o, forth_cell_t f)
 {
-	assert(o && o->S < o->m + o->core_size);
+	assert(o);
+       	assert(o->S < o->m + o->core_size);
 	*++(o->S) = o->m[TOP];
 	o->m[TOP] = f;
 }
 
 forth_cell_t forth_pop(forth_t *o)
 {
-	assert(o && o->S > o->m);
+	assert(o);
+	assert(o->S > o->m);
 	forth_cell_t f = o->m[TOP];
 	o->m[TOP] = *(o->S)--;
 	return f;
@@ -2008,7 +2001,6 @@ instructions enumeration will not be used (such as **ADD** or
 **/
 
 		case PUSH:    *++S = f;     f = m[ck(I++)];          break;
-		case COMPILE: m[dic(m[DIC]++)] = pc;                 break; 
 		case RUN:     m[ck(++m[RSTK])] = I; I = pc;          break;
 		case DEFINE:
 /**
@@ -2037,27 +2029,17 @@ The MISC field contains the RUN instruction.
 		case IMMEDIATE:
 /**
 **IMMEDIATE** makes the current word definition execute regardless of whether we
-are in compile or command mode. Unlike most Forths this needs to go right after
-the word to be defined name instead of after the word definition itself. I
-prefer this behavior, however the reason for this is due to implementation
-reasons and not because of this preference.
+are in compile or command mode. This word simply clears the compiling bit of the
+most recently defined Forth word, which makes the word immediate. This Forth allows
+the following for making a word immediate ('immediate' is itself immediate):
 
-So our interpreter defines immediate words:
+	: xxx ... ; immediate ( Traditional way )
 
-	: name immediate ... ;
-
-versus, as is expected:
-
-	: name ... ; immediate
-
-This word simply clears the compiling bit, which makes the word immediate,
-
-@todo Change this to make it compliant with existing Forths.
+	: xxx immediate ... ; ( New way )
 
 **/
-			m[DIC] -= 1; /* move to first code field */
-			m[m[DIC]] &= ~COMPILING_BIT; /* set instruction to immediate */
-			dic(m[DIC]++); /* compilation start here */ 
+			w = m[PWD] + 1;
+			m[w] &= ~COMPILING_BIT;
 			break;
 		case READ:
 /**
@@ -2107,7 +2089,6 @@ recursively).
 			if (m[STATE]) { /* must be a number then */
 				m[dic(m[DIC]++)] = 2; /*fake word push at m[2] */
 				m[dic(m[DIC]++)] = w;
-				break;
 			} else { /* push word */
 				*++S = f;
 				f = w;
@@ -2438,6 +2419,7 @@ instruction, and would be a useful abstraction.
 			}
 			break;
 		case RAISE:
+			cd(1);
 			f = raise(f);
 			break;
 		case DATE:
@@ -2464,24 +2446,29 @@ for faster memory operations, but more importantly they can be used
 to interact with memory outside of the Forth core.
 **/
 		case MEMMOVE:
+			cd(3);
 			w = *S--;
 			memmove((char*)(*S--), (char*)w, f);
 			f = *S--;
 			break;
 		case MEMCHR:
+			cd(3);
 			w = *S--;
 			f = (forth_cell_t)memchr((char*)(*S--), w, f);
 			break;
 		case MEMSET:
+			cd(3);
 			w = *S--;
 			memset((char*)(*S--), w, f);
 			f = *S--;
 			break;
 		case MEMCMP:
+			cd(3);
 			w = *S--;
 			f = memcmp((char*)(*S--), (char*)w, f);
 			break;
 		case ALLOCATE:
+			cd(1);
 			errno = 0;
 			*++S = (forth_cell_t)calloc(f, 1);
 			f = errno;
@@ -2493,6 +2480,7 @@ problem, it will most likely either abort the program or silently
 corrupt the heap if something goes wrong, however the Forth standard
 requires that an error status is returned.
 **/
+			cd(1);
 			errno = 0;
 			free((char*)f);
 			f = errno;
@@ -2503,6 +2491,14 @@ requires that an error status is returned.
 			*++S = w;
 			f = errno;
 			break;
+		case GETENV:
+		{
+			cd(2);
+			char *s = getenv(forth_get_string(o, &on_error, &S, f));
+			f = s ? strlen(s) : 0;
+			*++S = (forth_cell_t)s;
+			break;
+		}
 /**
 This should never happen, and if it does it is an indication that virtual
 machine memory has been corrupted somehow.
