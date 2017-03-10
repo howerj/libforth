@@ -865,6 +865,11 @@ Allocate a block of memory.
 
 Free a block of memory.
 
+* 'getenv' ( c-addr u -- r-addr u )
+
+Get an [environment variable][] given a string, it returns '0 0' if the
+variable was not found.
+
 ##### File Access Words
 
 The following compiling words are part of the File Access Word set, a few of
@@ -1356,5 +1361,6 @@ you should use a different language, or implementation.
 [file]: https://linux.die.net/man/1/file
 [magic]: https://linux.die.net/man/5/magic
 [Unix]: www.opengroup.org/unix
+[environment variable]: https://en.wikipedia.org/wiki/Environment_variable
 
 <style type="text/css">body{margin:40px auto;max-width:850px;line-height:1.6;font-size:16px;color:#444;padding:0 10px}h1,h2,h3{line-height:1.2}</style>

@@ -1,23 +1,5 @@
 #!./forth 
-( ==================================================================== )
-( ==================================================================== )
-( ==================================================================== )
-( 
-	THIS CODE IS CURRENTLY NON FUNCTIONAL
-	THIS CODE IS CURRENTLY NON FUNCTIONAL
-	THIS CODE IS CURRENTLY NON FUNCTIONAL
-	THIS CODE IS CURRENTLY NON FUNCTIONAL
-	THIS CODE IS CURRENTLY NON FUNCTIONAL
-
-	This is due to a large change in the interpreter, it will
-	take time to fix this, however it will be an improvement.
-)
-( ==================================================================== )
-( ==================================================================== )
-( ==================================================================== )
-( ==================================================================== )
-( 
-Welcome to libforth, A dialect of Forth. Like all versions of Forth this
+( Welcome to libforth, A dialect of Forth. Like all versions of Forth this
 version is  a little idiosyncratic, but how the interpreter works is
 documented here and in various other files.
 
@@ -46,26 +28,7 @@ code. It is important to understand the execution model of Forth, especially
 the differences between command and compile mode, and how immediate and compiling
 words work.
 
-The structure of this file is as follows:
-
- * Basic Word Set
- * Extended Word Set
- * CREATE DOES>
- * DO...LOOP
- * CASE statements
- * Conditional Compilation
- * Endian Words
- * Misc words
- * Random Numbers
- * ANSI Escape Codes
- * Prime Numbers
- * Debugging info
- * Files
- * Blocks
- * Matcher
- * Cons Cells
- * Miscellaneous
- * Core utilities
+@todo Restructure and describe structure of this file.
 
 Each of these sections is clearly labeled and they are generally in dependency order.
 
@@ -1883,7 +1846,7 @@ and prints prime numbers. )
 : prime? ( u -- u | 0 : return number if it is prime, zero otherwise )
 	dup 1 = if 1- exit then
 	dup 2 = if    exit then
-	dup 2 / 2     ( loop from 2 to n/2 )
+	dup 2/ 2     ( loop from 2 to n/2 )
 	do
 		dup   ( value to check if prime )
 		i mod ( mod by divisor )
@@ -1950,12 +1913,16 @@ address by the word size in bytes. )
 : print-defined ( bool -- : emit or mark a word being printed as being a built in word )
 	not if bright green background color then ;
 
+: print-hidden ( bool -- : emit or mark a word being printed as being a hidden word )
+	if dark magenta foreground color then ;
+
 : words ( -- : print out all defined an visible words )
 	latest
 	begin
 		dup
 		hidden? hide-words @ and
 		not if
+			hidden? print-hidden
 			compiling? print-immediate
 			dup defined-word? print-defined
 			name
@@ -1968,9 +1935,8 @@ address by the word size in bytes. )
 		dup dictionary-start u< ( stop if pwd no longer points to a word )
 	until
 	drop cr ;
-hide{ hide-words
-print-immediate
-print-defined }hide
+
+hide{ print-immediate print-defined print-hidden }hide
 
 : TrueFalse ( -- : print true or false )
 	if " true" else " false" then ;
@@ -2029,6 +1995,7 @@ print-defined }hide
 	q - exit containing word
 	r - print registers
 	s - print stack
+	R - print return stack
 	c - continue on with execution
 " ;
 
@@ -2046,7 +2013,8 @@ print-defined }hide
 			[char] h of debug-help endof
 			[char] q of bye        endof
 			[char] r of registers  endof
-			[char] s of >r .s r>   endof
+			[char] s of >r .s  r>  endof
+			[char] R of r> r.s >r  endof
 			[char] c of drop exit  endof
 			( @todo add throw here )
 		endcase drop
@@ -2094,10 +2062,13 @@ decompilers code stream pointer by )
 
 : decompile-literal ( code -- increment )
 	" [ literal	=> " 1+ ? " ]" 2 ;
+
 : decompile-branch  ( code -- increment )
 	" [ branch	=> " 1+ ? " ]" dup 1+ @ branch-increment ;
+
 : decompile-quote   ( code -- increment )
 	" [ '	=> " 1+ @ word-printer "  ]" 2 ;
+
 : decompile-?branch ( code -- increment )
 	" [ ?branch	=> " 1+ ? " ]" 2 ;
 
@@ -2533,7 +2504,7 @@ cleanup
 " 
 The MIT License (MIT)
 
-Copyright (c) 2016 Richard James Howe
+Copyright (c) 2016, 2017 Richard James Howe
 
 Permission is hereby granted, free of charge, to any person obtaining a
 copy of this software and associated documentation files (the 'Software'),
@@ -2936,6 +2907,42 @@ hide{ 0u. >weekday .day >day >month padded }hide
 
 ( ==================== Date ================================== )
 
+( ==================== History Variables ===================== )
+( From https://rosettacode.org/wiki/History_variables#Forth,
+history variables remember all changes to them [if used correctly],
+which can then be recalled.  
+ 
+Example use: 
+	history z  
+	23 z h!  
+	z h@ . 
+	34 z h!  
+	z h@ . 
+	45 z h!  
+	z h@ . 
+	z .history 
+	z dup h-- h@ . 
+	z dup h-- h@ .
+	z dup h-- h@ .
+	z dup h-- h@ . )
+
+: history ( c" ccc" -- : create a new history variable )
+	postpone create here cell+ , 0 , -1 , ;
+
+: h@ ( h-var -- u : get the contents of a history variable )
+	@ @ ;
+
+: h! ( u h-var -- : store a value in a history variable )
+	swap here >r , dup @ , r> swap ! ;
+
+: .history ( h-var -- : print the history of a variable )
+	@ begin dup cell+ @ -1 <> while dup ? cell+ @ repeat drop ;
+
+: h-- ( h-var -- : undo one level of history )
+	dup @ cell+ @ dup -1 = if abort ( abort" End of history" ) then swap ! ;
+
+( ==================== History Variables ===================== )
+
 ( Looking at most Forths dictionary with "words" command they tend
 to have a lot of words that do not mean anything but to the implementers
 of that specific Forth, here we clean up as many non standard words as
@@ -2971,6 +2978,10 @@ will allow easier interaction with the world outside the virtual machine
 * common words and actions should be factored out to simplify
 definitions of other words, their standards compliant version found
 if any
+* A soft floating point library would be useful which could be used
+to optionally implement floats [which is not something I really want
+to add to the virtual machine]. If floats were to be added, only the
+minimal set of functions should be added [f+,f-,f/,f*,f<,f>,>float,...]
 * Allow the processing of argc and argv, the mechanism by which that
 this can be achieved needs to be worked out. However all processing that
 is currently done in "main.c" should be done within the Forth interpreter
@@ -3003,38 +3014,17 @@ And various other things from Rosetta Code.
 
 )
 
-( 
-The following will not work as we might actually be reading from a string [`sin]
-not `fin. 
-: key 32 chars> 1 `fin @ read-file drop 0 = if 0 else 32 chars> c@ then ; )
-
 verbose [if] 
 	.( FORTH: libforth successfully loaded.) cr
 	.( Type 'help' and press return for a basic introduction.) cr
 	.( Core: ) here . " / " here unused + . cr
-	 
-	.( The MIT License ) cr
-	.( ) cr
-	.( Copyright 2016 Richard James Howe) cr
-	.( ) cr
-	.( Permission is hereby granted, free of charge, to any person obtaining a) cr
-	.( copy of this software and associated documentation files [the "Software"],) cr
-	.( to deal in the Software without restriction, including without limitation) cr
-	.( the rights to use, copy, modify, merge, publish, distribute, sublicense,) cr
-	.( and/or sell copies of the Software, and to permit persons to whom the) cr
-	.( Software is furnished to do so, subject to the following conditions:) cr
-	.( ) cr
-	.( The above copyright notice and this permission notice shall be included) cr
-	.( in all copies or substantial portions of the Software.) cr
-	.( ) cr
-	.( THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR) cr
-	.( IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,) cr
-	.( FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL) cr
-	.( THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR) cr
-	.( OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,) cr
-	.( ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR) cr
-	.( OTHER DEALINGS IN THE SOFTWARE. ) cr
+	 license
 [then]
+
+( 
+The following will not work as we might actually be reading from a string [`sin]
+not `fin. 
+: key 32 chars> 1 `fin @ read-file drop 0 = if 0 else 32 chars> c@ then ; )
 
 ( \ integrate simple 'dump' and 'words' into initial forth program 
 : nl dup 3 and not ;
