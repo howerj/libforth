@@ -128,8 +128,17 @@ extract the document string for a given work.
 : instruction-mask ( -- x : pushes mask for the first code word in a words MISC field )
 	0x7f  ;
 
+: >instruction ( MISC -- Instruction : extract instruction from instruction field ) 
+	instruction-mask and ;
+
+: immediate-mask ( -- x : pushes the mask for the compile bit in a words MISC field )
+	0x8000 ;
+
 : hidden? ( PWD -- PWD bool : is a word hidden, given the words PWD field ) 
 	dup 1+ @ hidden-mask and logical ;
+
+: compiling? ( PWD -- PWD bool : is a word immediate, given the words PWD field )
+	dup 1+ @ immediate-mask and logical ;
 
 : dolist ( -- x : run code word, threaded code interpreter instruction )
 	1 ;      
@@ -283,6 +292,12 @@ extract the document string for a given work.
 
 : select-byte ( u i -- c ) 
 	8* rshift 0xff and ;
+
+: xt-instruction ( extract instruction from execution token )
+	cell+ @ >instruction ;
+
+: defined-word? ( MISC -- bool : is a word a defined or a built in words )
+	xt-instruction dolist = ;
 
 : char+ ( c-addr -- c-addr : increment a character address by the size of one character ) 
 	1+ ;
@@ -654,6 +669,19 @@ extract the document string for a given work.
 	[ size 1- ] literal + 
 	[ size 1- ] literal invert and ;
 
+: rdepth
+	max-core `stack-size @ - r @ swap - ;
+
+
+: r.s ( -- : print the contents of the return stack )
+	r>         
+	[char] < emit rdepth . [char] > emit
+	space
+	rdepth dup 0> if dup
+	begin dup while r> -rot 1- repeat drop dup
+	begin dup while rot dup . >r 1- repeat drop
+	then  drop cr 
+	>r ;
 
 ( ================================== DUMP ================================== )
 : newline ( x -- x+1 : print a new line every fourth value )
@@ -823,9 +851,6 @@ find [interpret] cell+ start! ( the word executed on restart is now our new word
 	clock >r
 	find execute
 	clock r> - ;
-
-: rdepth
-	max-core `stack-size @ - r @ swap - ;
 
 ( defer...is is probably not standards compliant, it is still neat! Also, there
   is no error handling if "find" fails... )
@@ -1893,13 +1918,14 @@ hide{ counter }hide
 
 hide{ .s }hide
 : .s    ( -- : print out the stack for debugging )
-	" <" depth u. " >" space
+	[char] < emit depth u. [char] > emit space
 	depth if
 		depth 0 do i column tab depth i 1+ - pick u. loop
 	then
 	cr ;
 
 1 variable hide-words ( do we want to hide hidden words or not )
+
 ( This function prints out all of the defined words, excluding hidden words.
 An understanding of the layout of a Forth word helps here. The dictionary
 contains a linked list of words, each forth word has a pointer to the previous
@@ -1908,15 +1934,21 @@ word until the first word. The layout of a Forth word looks like this:
 NAME:  Forth Word - A variable length ASCII NUL terminated string
 PWD:   Previous Word Pointer, points to the previous word
 MISC:  Flags, code word and offset from previous word pointer to start of Forth word string
-CODE/DATA: The body of the forth word definition, not interested in this.
+DATA:  The body of the forth word definition, not interested in this.
 
 There is a register which stores the latest defined word which can be
 accessed with the code "pwd @". In order to print out a word we need to
 access a words MISC field, the offset to the NAME is stored here in bits
-8 to 15 and the offset is calculated from the PWD field.
+8 to 14 and the offset is calculated from the PWD field.
 
 "print" expects a character address, so we need to multiply any calculated
 address by the word size in bytes. )
+
+: print-immediate ( bool -- : emit or mark a word being printed as being immediate )
+	not if dark red foreground color then ;
+
+: print-defined ( bool -- : emit or mark a word being printed as being a built in word )
+	not if bright green background color then ;
 
 : words ( -- : print out all defined an visible words )
 	latest
@@ -1924,8 +1956,11 @@ address by the word size in bytes. )
 		dup
 		hidden? hide-words @ and
 		not if
+			compiling? print-immediate
+			dup defined-word? print-defined
 			name
 			print space
+			reset-color
 		else
 			drop
 		then
@@ -1933,7 +1968,9 @@ address by the word size in bytes. )
 		dup dictionary-start u< ( stop if pwd no longer points to a word )
 	until
 	drop cr ;
-hider hide-words
+hide{ hide-words
+print-immediate
+print-defined }hide
 
 : TrueFalse ( -- : print true or false )
 	if " true" else " false" then ;
@@ -1973,9 +2010,6 @@ hider hide-words
 		[char] n = if false exit then
 		" y/n? "
 	again ;
-
-: >instruction ( MISC -- Instruction : extract instruction from instruction field ) 
-	instruction-mask and ;
 
 : step
 	( step through a word: this word could be augmented
@@ -2112,15 +2146,11 @@ hide{
 	decompile-branch decompile-?branch decompile-quote
 }hide
 
-: xt-instruction ( extract instruction from execution token )
-	cell+ @ >instruction ;
-
 ( these words expect a pointer to the PWD field of a word )
-: defined-word?      xt-instruction dolist = ;
 : print-name         " name:          " name print cr ;
 : print-start        " word start:    " name chars . cr ;
 : print-previous     " previous word: " @ . cr ;
-: print-immediate    " immediate:     " cell+ @ 0x8000 and 0= TrueFalse cr ;
+: print-immediate    " immediate:     " compiling? swap drop not TrueFalse cr ;
 : print-instruction  " instruction:   " xt-instruction . cr ;
 : print-defined      " defined:       " defined-word? TrueFalse cr ;
 
@@ -2149,7 +2179,7 @@ A good way to test decompilation is with the following Unix pipe:
 		| ./forth -t forth.fth &> decompiled.log
 )
 
-
+( @todo refactor into word that takes a PWD pointer and one that attempts to parse/find name )
 : see ( c" xxx" -- : decompile the next word in the input stream )
 	find
 	dup 0= if -32 throw then
@@ -2912,7 +2942,7 @@ of that specific Forth, here we clean up as many non standard words as
 possible. )
 hide{ 
  do-string ')' alignment-bits 
- dictionary-start hidden? hidden-mask instruction-mask
+ dictionary-start hidden? hidden-mask instruction-mask immediate-mask compiling?
  max-core dolist x x! x@ write-exit
  max-string-length 
  original-exit

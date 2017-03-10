@@ -280,25 +280,25 @@ end-class
   digest sicken die ;
  
 : look ( -- )  0
-  boredom @ 2 > if 1+ cr ." tama looks bored" then
-  hygiene @ 5 < if 1+ cr ." tama could use a wash" then
-  hunger @  0 > if 1+ cr ." tama's stomach is grumbling" then
-  age @    20 > if 1+ cr ." tama is getting long in the tooth" then
-  pooped @      if 1+ cr ." tama is disgusted by its own waste" then
-  0= if cr ." tama looks fine" then ;
+  boredom @ 2 > if 1+ cr ." tama looks bored" then \ ( ◡‿◡ ) 
+  hygiene @ 5 < if 1+ cr ." tama could use a wash" then \ (◕_◕)
+  hunger @  0 > if 1+ cr ." tama's stomach is grumbling" then \ (⌣̀_⌣́)
+  age @    20 > if 1+ cr ." tama is getting long in the tooth" then \ (-_-)
+  pooped @      if 1+ cr ." tama is disgusted by its own waste" then \ (*μ_μ)
+  0= if cr ." tama looks fine" then ; \ (⌒‿⌒)
  
 : feed ( -- )
-  hunger @ 0= if cr ." tama bats the offered food away" exit then
-  cr ." tama happily devours the offered food"
+  hunger @ 0= if cr ." tama bats the offered food away" exit then \ (╮°-°)╮┳━━┳ ( ╯°□°)╯ ┻━━┻
+  cr ." tama happily devours the offered food" \  ( o˘◡˘o) ┌iii┐
   hunger off  5 digestion ! ;
  
 : clean ( -- )
-  pooped @ 0= if cr ." tama is clean enough already." exit then
-  cr ." you dispose of the mess."  pooped off  5 hygiene ! ;
+  pooped @ 0= if cr ." tama is clean enough already." exit then \ ( ͠° ͟ʖ ͡°)
+  cr ." you dispose of the mess."  pooped off  5 hygiene ! ; \  ╰( ͡° ͜ʖ͡° )つ──☆*:・ﾟ
  
 : play ( -- )
-  boredom @ 0= if cr ." tama ignores you." exit then
-  cr ." tama plays with you for a while."  boredom off ;
+  boredom @ 0= if cr ." tama ignores you." exit then \ (－_－) zzZ
+  cr ." tama plays with you for a while."  boredom off ; \ ヽ(^o^)ρ┳┻┳°σ(^o^)ノ
  
 ( game mode )
 \ this just permanently sets the current object

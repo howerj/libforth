@@ -284,15 +284,24 @@ int libforth_unit_tests(int keep_files, int colorize, int silent)
 		state(&tb, forth_free(f));
 	}
 	{
+		/**@note Previously 'tmpfile()' was used instead of writing to
+		 * 'coredump.log', however this causes problems under Windows 
+		 * as it creates the temporary file in the root directory, 
+		 * which needs administrator permissions.
+		 *
+		 * https://stackoverflow.com/questions/6247148/tmpfile-on-windows-7-x64 */
 		FILE *core_dump;
 		forth_t *f = NULL;
-		state(&tb, core_dump = tmpfile());
+		static const char *name = "coredump.log";
+		state(&tb, core_dump = fopen(name, "wb"));
 		must(&tb, core_dump);
 		state(&tb, f = forth_init(MINIMUM_CORE_SIZE, stdin, stdout, NULL));
 		must(&tb, f);
 		test(&tb, forth_dump_core(f, core_dump) >= 0);
 		state(&tb, fclose(core_dump));
 		state(&tb, forth_free(f));
+		if(!keep_files)
+			state(&tb, remove(name));
 	}
 	{
 		/* Test the persistence of word definitions across core loads*/
