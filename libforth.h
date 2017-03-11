@@ -1,12 +1,12 @@
 /** 
 % LIBFORTH(3)
 % Richard Howe
-% November 2016
+% November 2017
 
 @file       libforth.h
 @brief      A FORTH library
 @author     Richard James Howe.
-@copyright  Copyright 2015,2016 Richard James Howe.
+@copyright  Copyright 2015,2016,2017 Richard James Howe.
 @license    MIT 
 @email      howe.r.j.89@gmail.com 
 
@@ -226,6 +226,17 @@ forth_cell_t forth_pop(forth_t *o);
 @return stack position, number of items on the stack 
 **/
 forth_cell_t forth_stack_position(forth_t *o);
+
+/**
+@brief Alert a Forth environment to a signal, this function should be
+called from a signal handler to let the Forth environment know a signal
+has been caught. It will then set a register that can (but not necessarily 
+will be) checked when the Forth environment runs again.
+
+@param  o   initialized forth environment
+@param  sig caught signal value
+**/
+void forth_signal(forth_t *o, int sig);
 
 /**
 @brief  Check whether a forth environment is still valid, that

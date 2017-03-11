@@ -233,6 +233,7 @@ int libforth_unit_tests(int keep_files, int colorize, int silent)
 		 * 	- void forth_set_file_output(forth_t *o, FILE *out);
 		 * @todo Finish the testing of functions presented in the API
 		 * 	- void forth_set_args(forth_t *o, int argc, char **argv);
+		 * 	- void forth_signal(forth_t *o, int signal);
 		 *	- int main_forth(int argc, char **argv); **/
 		FILE *core;
 		forth_cell_t here;

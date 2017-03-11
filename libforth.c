@@ -2,13 +2,14 @@
 # libforth.c.md
 @file       libforth.c
 @author     Richard James Howe.
-@copyright  Copyright 2015,2016 Richard James Howe.
+@copyright  Copyright 2015,2016,2017 Richard James Howe.
 @license    MIT
 @email      howe.r.j.89@gmail.com
 
 @brief      A FORTH library, written in a literate style.
 
 @todo Bias errnos so they are outside of the range reserved by Forth
+@todo Move the hidden bit into the top half of the MISC field.
 
 ## License
 
@@ -763,8 +764,8 @@ More information about X-Macros can be found here:
  X("`stack-size",     STACK_SIZE,     27,  "size of the stacks")\
  X("`error-handler",  ERROR_HANDLER,  28,  "actions to take on error")\
  X("`handler",        THROW,          29,  "exception handler is stored here")\
- X("`x",              SCRATCH_X,      30,  "scratch variable x")\
- X("`y",              SCRATCH_Y,      31,  "scratch variable y")
+ X("`signal",         SIGNAL_HANDLER, 30,  "signal handler")\
+ X("`x",              SCRATCH_X,      31,  "scratch variable x")
 
 enum registers {  /**< virtual machine registers */
 #define X(NAME, ENUM, VALUE, HELP) ENUM = VALUE,
@@ -900,7 +901,7 @@ up for debugging purposes (like **pnum**).
  X(MEMCMP,    "memory-compare", " r-addr1 r-addr2 u -- x : compare two blocks of memory")\
  X(ALLOCATE,  "allocate",       " u -- r-addr ior : allocate a block of memory")\
  X(FREE,      "free",           " r-addr1 -- ior : free a block of memory")\
- X(RESIZE,    "resize",         " r-addr u -- r-addr ior : free a block of memory")\
+ X(RESIZE,    "resize",         " r-addr u -- r-addr ior : resize a block of memory")\
  X(GETENV,    "getenv",         " c-addr u -- r-addr u : return an environment variable")\
  X(LAST_INSTRUCTION, NULL, "")
 
@@ -978,6 +979,10 @@ other might not, this makes manipulating these values hazardous. The input
 functions **forth_get_char** and **forth_ge\t_word** both take their input
 streams implicitly via the registers contained within the Forth execution
 environment passed in to those functions.
+
+@note If the Forth interpreter is blocking, waiting for input, and
+a signal occurs an EOF might be returned. This should be translated
+into a 'throw', but it is not handled yet.
 **/
 static int forth_get_char(forth_t *o)
 {
@@ -1058,7 +1063,8 @@ taken when we have found the word we are looking for in our Read-Evaluate-Loop.
 
 The **PWD** registers points to the latest defined word, a search starts from
 here and works it way backwards (allowing us replace old definitions by
-appending new ones with the same name only), the terminator
+appending new ones with the same name), the terminator 'value' is actually any
+value that points before the beginning of the dictionary.
 
 Our word header looks like this:
 
@@ -1070,9 +1076,6 @@ Our word header looks like this:
 * **Word Name** is a variable length field whose size is recorded in the
 MISC field.
 
-@todo This really should be cleared up, the hidden bit and the immediate
-bit can be moved to the top half of the word.
-
 And the **MISC** field is a composite field, to save space, containing a virtual
 machine instruction, the hidden bit, the compiling bit, and the length of 
 the Word  Name string as an offset in cells from **PWD** field. 
@@ -1080,10 +1083,10 @@ the Word  Name string as an offset in cells from **PWD** field.
 The field looks like this:
 
 
-	.---------------.-------------------.------------.-------------.
-	|      15       | 14 ........... 8  |    9       | 7 ....... 0 |
-	| Compiling Bit |  Word Name Size   | Hidden Bit | Instruction |
-	.--------------.-------------------.------------.-------------.
+	.---------------.------------------.------------.-------------.
+	|      15       | 14 ........... 8 |    9       | 7 ....... 0 |
+	| Compiling Bit |  Word Name Size  | Hidden Bit | Instruction |
+	.---------------.------------------.------------.-------------.
 
 The maximum value for the Word Name field is determined by the width of
 the Word Name Size field.
@@ -1883,6 +1886,12 @@ forth_cell_t forth_stack_position(forth_t *o)
 	return o->S - o->vstart;
 }
 
+void forth_signal(forth_t *o, int sig)
+{
+	assert(o);
+	o->m[SIGNAL_HANDLER] = (forth_cell_t)sig;
+}
+
 /**
 ## The Forth Virtual Machine
 **/
@@ -1985,7 +1994,61 @@ structure of a word and how words are compiled into the dictionary.
 
 Above we saw that a words layout looked like this:
 
-@todo Explain all of this, it has recently changed.
+	.-----------.-----.------.----------------.
+	| Word Name | PWD | MISC | Data Field ... |
+	.-----------.-----.------.----------------.
+
+And we can define words like this:
+
+	: square dup * ;
+
+Which, on a 32 bit machine, produces code that looks like this:
+
+	Address        Contents 
+	         ._____._____._____._____.
+	  X      | 's' | 'q' | 'u' | 'a' |
+	         ._____._____._____._____.
+	  X+1    | 'r' | 'e' |  0  |  0  |
+	         ._____._____._____._____.
+	  X+2    | previous word pointer |
+	         ._______________________.
+	  X+3    |       MISC Field      |
+	         ._______________________.
+	  X+4    | Pointer to 'dup'      |
+	         ._______________________.
+	  X+5    | Pointer to '*'        |
+	         ._______________________.
+	  X+6    | Pointer to 'exit'     |
+	         ._______________________.
+
+The ':' word creates the header (everything up to and including the MISC
+field), and enters compile mode, where instead of words being executed they
+are compiled into the dictionary. When 'dup' is encountered a pointer is
+compiled into the next available slot at 'X+4', likewise for '*'. The word
+';' is an immediate word that gets executed regardless of mode, which switches
+back into compile mode and compiles a pointer to 'exit'.
+
+This MISC field at 'X+3' contains the following:
+
+	         .---------------.------------------.------------.-------------.
+	Bit      |      15       | 14 ........... 8 |    9       | 7 ....... 0 |
+	Field    | Compiling Bit |  Word Name Size  | Hidden Bit | Instruction |
+	Contents |      1        |        2         |    0       |   RUN (1)   |
+	         .---------------.------------------.------------.-------------.
+
+The definition of words mostly consists of pointers to other words. The 
+compiling bit, Word Name Size field and Hidden bit have no effect when
+the word is execution, only in finding the word and determining whether to
+execute it when typing the word in. The instruction tells the virtual machine
+what to do with this word, in this case the instruction is 'RUN', which means
+that the words contains a list of pointers to be executed. The virtual machine
+then pushes the value of the next address to execute onto the return stack
+and then jumps to that words MISC field, executing the instruction it finds
+for that word.
+
+Words like 'dup' and '*' are built in words, they are slightly differently
+in that their 'MISC' field contains contains a virtual machine instruction other
+than 'RUN', they contain the instructions 'DUP' and 'MUL' respectively.
 
 **/
 	for(;(pc = m[ck(I++)]);) { 

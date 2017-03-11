@@ -13,6 +13,7 @@ TARGET	= forth
 RM      = rm -rf
 CTAGS  ?= ctags
 CP      = cp
+VIEWER  = mupdf
 
 MDS     := ${wildcard *.md}
 DOCS    := ${MDS:%.md=%.htm}
@@ -104,7 +105,7 @@ libforth.md: main.c libforth.c libforth.h
 	./convert main.c           >> $@
 
 %.pdf: %.md
-	pandoc --toc $< -o $@
+	pandoc -V geometry:margin=0.5in --toc $< -o $@
 
 %.1: %.md
 	pandoc -s -t man $< -o $@
@@ -141,6 +142,9 @@ libline/makefile:
 
 libline/libline.a:
 	make -C libline libline.a
+
+show: lib${TARGET}.pdf
+	${VIEWER} $<
 
 # This option requires a clean build
 line: LDFLAGS += -lline

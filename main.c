@@ -1,6 +1,9 @@
 /**
-@todo cleanup comments / explain two stage compilation
-@todo add signal handling here
+@file       main.c
+@author     Richard James Howe.
+@copyright  Copyright 2015,2016,2017 Richard James Howe.
+@license    MIT
+@email      howe.r.j.89@gmail.com
 **/
 #include "libforth.h"
 #include "unit.h"
@@ -108,6 +111,30 @@ end:
 #else
 #define LINE_EDITOR_AVAILABLE (0)
 #endif /* USE_LINE_EDITOR */
+
+/**
+Although multiple instances of a libforth environment can be active in a single
+C application, this test program only has one active. This is stored in a 
+global variable so signal handlers can access it.
+**/
+static forth_t *global_forth_environment; 
+
+typedef void (*signal_handler)(int sig);
+
+static void register_signal_handler(int sig, signal_handler handler)
+{
+	errno = 0; 
+	if(signal(SIGINT, handler) == SIG_ERR) {
+		error("could not install %d handler: %s", sig, forth_strerror());
+		exit(EXIT_FAILURE);
+	}
+}
+
+static void sig_generic_handler(int sig)
+{
+	forth_signal(global_forth_environment, sig);
+	register_signal_handler(sig, sig_generic_handler);
+}
 
 /** 
 This program can be used as a filter in a Unix pipe chain, or as a standalone
@@ -231,6 +258,7 @@ static forth_t *forth_initial_enviroment(forth_t **o, forth_cell_t size,
 finished:
 	forth_set_debug_level(*o, verbose);
 	forth_set_args(*o, argc, argv);
+	global_forth_environment = *o;
 	return *o;
 }
 
@@ -261,10 +289,11 @@ int main(int argc, char **argv)
 	int orig_argc = argc;
 	char **orig_argv = argv;
 
+	register_signal_handler(SIGINT, sig_generic_handler);
+
 #ifdef USE_ABORT_HANDLER
 #ifdef __unix__
-	if(signal(SIGABRT, sig_abrt_handler) == SIG_ERR)
-		warning("could not install SIGABRT handler: %s", forth_strerror());
+	register_signal_handler(SIGABRT, sig_abrt_handler);
 #endif
 #endif
 

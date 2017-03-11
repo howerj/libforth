@@ -18,18 +18,6 @@
 
 \ : overflow 2dup <> >r over - u>= r> and ;
 
-: r13 ( c -- o : convert a character to ROT-13 form )
-  >lower trip
-	lowercase?
-	if
-		[char] m > if -13 else 13 then +
-	else 
-		drop 
-	then ;
-
-: r13-type ( c-addr u : print string in ROT-13 encoded form )
-	bounds do i c@ r13 emit loop ;
-
 ( From http://rosettacode.org/wiki/Forth_common_practice )
 : c+! ( n caddr -- ) dup >r c@ + r> c! ;
 : append ( src len dest -- ) 2dup 2>r  count + swap move  2r> c+! ;

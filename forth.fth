@@ -1593,6 +1593,20 @@ hide{ a b m }hide
 : ndrop ( drop n items )
 	?dup-if 0 do drop loop then ;
 
+: r13 ( c -- o : convert a character to ROT-13 form )
+  >lower trip
+	lowercase?
+	if
+		[char] m > if -13 else 13 then +
+	else 
+		drop 
+	then ;
+
+: r13-type ( c-addr u : print string in ROT-13 encoded form )
+	bounds do i c@ r13 emit loop ;
+
+
+
 ( ==================== Misc words ============================= )
 
 ( ==================== Pictured Numeric Output ================ )
@@ -1878,6 +1892,9 @@ hide{ counter }hide
 ( ==================== Debugging info ========================= )
 
 ( string handling should really be done with PARSE, and CMOVE )
+
+: sh ( c'\n' -- ior : execute a line as a system command )
+	'\n' word count system ;
 
 hide{ .s }hide
 : .s    ( -- : print out the stack for debugging )
@@ -2907,6 +2924,24 @@ hide{ 0u. >weekday .day >day >month padded }hide
 
 ( ==================== Date ================================== )
 
+( ==================== Signal Handling ======================= )
+( Signal handling at the moment is quite primitive. When a signal
+occurs it has to be explicitly tested for by the programmer, this
+could be improved on quite a bit. One way of doing this would be
+to check for signals in the virtual machine and cause a THROW
+from within it. )
+
+( signals are biased to fall outside the range of the error numbers
+defined in the ANS Forth standard. )
+-512 constant signal-bias 
+
+: signal ( -- signal/0 : push the results of the signal register ) 
+	`signal @
+	dup if negate signal-bias + then
+ 	0 `signal ! ;
+
+( ==================== Signal Handling ======================= )
+
 ( ==================== History Variables ===================== )
 ( From https://rosettacode.org/wiki/History_variables#Forth,
 history variables remember all changes to them [if used correctly],
@@ -2960,7 +2995,7 @@ hide{
  `state
  `source-id `sin `sidx `slen `start-address `fin `fout `stdin
  `stdout `stderr `argc `argv `debug `invalid `top `instruction
- `stack-size `error-handler `x `y `handler _emit
+ `stack-size `error-handler `x `handler _emit `signal
 }hide
 
 ( 
@@ -3004,6 +3039,17 @@ as is sensible.
 I think this is quite a useful and powerful mechanism to use within Forth that simplifies
 programs. This is a must and will make writing utilities in Forth a *lot* easier 
 
+One problem is that Forth memory and memory visible to the rest of the program
+has to be accessed differently [that is words like '@' and '!' are relative to
+the start of Forth memory and all memory access is checked]. 
+
+A possible solution is to load the core into a specific address,
+however this would mean only one Forth interpreter could be active
+at any given time: 
+
+http://stackoverflow.com/questions/20234148/how-to-load-a-program-in-memory-at-a-different-address-than-it-is-intended-for 
+
+
 Implement:
 
 http://rosettacode.org/wiki/CRC-32#Forth
@@ -3021,16 +3067,8 @@ verbose [if]
 	 license
 [then]
 
-( 
-The following will not work as we might actually be reading from a string [`sin]
+( The following will not work as we might actually be reading from a string [`sin]
 not `fin. 
 : key 32 chars> 1 `fin @ read-file drop 0 = if 0 else 32 chars> c@ then ; )
-
-( \ integrate simple 'dump' and 'words' into initial forth program 
-: nl dup 3 and not ;
-: ?? \ addr1 
-  nl if dup cr . [char] : emit space then ? ;
-: dump \ addr n --
-	base @ >r hex over + swap 1- begin 1+ 2dup dup ?? 2+ u< until r> base ! ; )
 
 
