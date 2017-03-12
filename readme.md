@@ -724,10 +724,71 @@ stack, the comparison will be unsigned.
 Pop two values, compare them (y > x) and push the result onto the stack. The
 comparison will be unsigned.
 
-* 'exit'        ( -- )
+* '\_exit'        ( -- )
 
 Pop the return stack and set the instruction stream pointer to that
 value.
+
+* 'exit'        ( -- )
+
+This does the same as **\_exit**, the reason there are two exits instead
+of one is so that the word 'see', defined in **forth.fth** can differentiate 
+between an exit that occurs in the definition of a word, and one that occurs
+at the end of a words definition. ('see' is a decompiler for Forth).
+
+
+For example:
+
+	: test 0 begin dup 10 > if exit then dup . cr 1+  again ;
+
+Gets Compiled to:
+
+	Address        Contents 
+	         ._____._____._____._____. <- Start of Word
+	  X      | 't' | 'e' | 's' | 't' | 
+	         ._____._____._____._____.
+	  X+1    |  0  |  0  |  0  |  0  | NUL terminates 'test' string
+	         ._____._____._____._____.
+	  X+2    | Previous Word Pointer | AKA 'PWD' field
+	         ._______________________.
+	  X+3    |       MISC Field      | <- Execution Starts here
+	         ._______________________.
+	  X+4    | Literal               | Literals a compiled as a pointer to
+	         ._______________________. a 'literal' word and the literal in
+	  X+5    | 0                     | the next field.
+	         ._______________________.
+	  X+6    | Pointer to 'dup'      |
+	         ._______________________.
+	  X+7    | literal               |
+	         ._______________________.
+	  X+8    | 10                    |
+	         ._______________________.
+	  X+9    | Pointer to '>'        |
+	         ._______________________.
+	  X+10   | Pointer to 'branch?'  | 'if' gets compiled to 'branch?'
+	         ._______________________. and '2' so it jumps over 'exit'
+	  X+11   | 2                     | if the previous test fails. This
+	         ._______________________. is encoded as the jump destination
+	  X+12   | Pointer to 'exit'     | less one as an increment happens
+	         ._______________________. after the word is executed.
+	  X+13   | Pointer to 'dup'      |
+	         ._______________________.
+	  X+14   | Pointer to '.'        |
+	         ._______________________.
+	  X+15   | Pointer to 'cr'       |
+	         ._______________________.
+	  X+16   | Pointer to '1+'       |
+	         ._______________________.
+	  X+17   | Pointer to 'branch'   |
+	         ._______________________.
+	  X+18   | -12                   |
+	         ._______________________.
+	  X+19   | Pointer to '_exit'    |
+	         ._______________________. <- End of Word
+
+The decompiler knows that the end of a word is demarcated by a pointer to
+**\_exit**, and that pointers to **exit** can occur within the body of the
+definition.
 
 * 'key'         ( -- char )
 

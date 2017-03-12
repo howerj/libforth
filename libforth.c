@@ -9,7 +9,8 @@
 @brief      A FORTH library, written in a literate style.
 
 @todo Bias errnos so they are outside of the range reserved by Forth
-@todo Move the hidden bit into the top half of the MISC field.
+@todo Move the hidden bit into the top half of the CODE field.
+@todo Fix Doxygen warnings
 
 ## License
 
@@ -318,8 +319,8 @@ the stack area.
 /**
 @brief This macro wraps up the tracing function, which we may want to remove.
 @param ENV forth environment
+@param INSTRUCTION instruction being executed
 @param STK stack pointer
-@param EXPECTED expected stack value
 @param TOP current top of stack to print out
 **/
 #define TRACE(ENV,INSTRUCTION,STK,TOP) trace(ENV,INSTRUCTION,STK,TOP)
@@ -368,11 +369,11 @@ beginning of the pad area.
 #define DICTIONARY_START (STRING_OFFSET+MAXIMUM_WORD_LENGTH/sizeof(forth_cell_t)) 
 
 /**
-Later we will encounter a field called **MISC**, a field in every Word
+Later we will encounter a field called **CODE**, a field in every Word
 definition and is always present in the Words header. This field contains
 multiple values at different bit offsets, only the lower 16 bits of this
 cell are ever used. The next macros are helper to extract information from
-the **MISC** field. 
+the **CODE** field. 
 **/
 
 /**
@@ -400,19 +401,19 @@ compiling, or an immediate word.
 /**
 @brief **WORD_LENGTH** extracts the length of a Forth words name so we know
 where it is relative to the **PWD** field of a word.
-@param MISC This should be the **MISC** field of a word 
+@param CODE This should be the **CODE** field of a word 
 **/
-#define WORD_LENGTH(MISC) (((MISC) >> WORD_LENGTH_OFFSET) & WORD_MASK)
+#define WORD_LENGTH(CODE) (((CODE) >> WORD_LENGTH_OFFSET) & WORD_MASK)
 
 /**
 @brief Test if a word is a **hidden** word, one that is not in the search
 order for the dictionary.
 @param **PWD** field to test
 **/
-#define WORD_HIDDEN(MISC) ((MISC) & 0x80)
+#define WORD_HIDDEN(CODE) ((CODE) & 0x80)
 
 /**
-@brief The lower 7 bits of the MISC field are used for the VM instruction,
+@brief The lower 7 bits of the CODE field are used for the VM instruction,
 limiting the number of instructions the virtual machine can have in it, the
 higher bits are used for other purposes.
 **/
@@ -420,7 +421,7 @@ higher bits are used for other purposes.
 
 /**
 @brief A mask that the VM uses to extract the instruction.
-@param k This **MISC**, or a **CODE** Field of a Forth word 
+@param k This **CODE**, or a **CODE** Field of a Forth word 
 **/
 #define instruction(k)      ((k) & INSTRUCTION_MASK)
 
@@ -430,6 +431,18 @@ regardless of whether **NDEBUG** is defined.
 @param X expression to verify
 **/
 #define VERIFY(X)           do { if(!(X)) { abort(); } } while(0)
+
+/**
+@brief Errno are biased to fall in the range of -256...-511 when
+the get to the Forth interpreter.
+**/
+#define BIAS_ERRNO          (-256)
+
+/**
+@brief Signals numbers are biased to fall in the range of -512...-1024
+when they get to the Forth interpreter.
+**/
+#define BIAS_SIGNAL         (-512)
 
 /** 
 ## Enumerations and Constants
@@ -857,7 +870,7 @@ up for debugging purposes (like **pnum**).
  X(DIV,       "/",          "x1 x2 -- x3 : divide x1 by x2 yielding x3")\
  X(ULESS,     "u<",         "x x -- bool : unsigned less than")\
  X(UMORE,     "u>",         "x x -- bool : unsigned greater than")\
- X(EXIT,      "exit",       " -- : return from a word defition")\
+ X(EXIT,      "_exit",      " -- : return from a word definition")\
  X(KEY,       "key",        " -- char : get one character of input")\
  X(EMIT,      "_emit",      " char -- status : get one character of input")\
  X(FROMR,     "r>",         " -- x, R: x -- : move from return stack")\
@@ -924,6 +937,36 @@ static const char *instruction_names[] = { /**< instructions with names */
 	XMACRO_INSTRUCTIONS
 #undef X
 };
+
+/**
+This X-Macro contains a list of constants that will be available to the
+Forth interpreter.
+**/
+#define X_MACRO_CONSTANTS\
+ X("dictionary-start",  DICTIONARY_START, "start of dictionary")\
+ X("r/o",     FAM_RO, "read only file access method")\
+ X("r/w",     FAM_RW, "read/write file access method")\
+ X("w/o",     FAM_WO, "write only file access method")\
+ X("size",    sizeof(forth_cell_t), "size of forth cell in bytes")\
+ X("#tib",    MAXIMUM_WORD_LENGTH * sizeof(forth_cell_t), "")\
+ X("tib",     STRING_OFFSET * sizeof(forth_cell_t), "")\
+ X("SIGABRT", -SIGABRT+BIAS_SIGNAL, "SIGABRT value")\
+ X("SIGFPE",  -SIGFPE +BIAS_SIGNAL, "SIGFPE value")\
+ X("SIGILL",  -SIGILL +BIAS_SIGNAL, "SIGILL value")\
+ X("SIGINT",  -SIGINT +BIAS_SIGNAL, "SIGINT value")\
+ X("SIGSEGV", -SIGSEGV+BIAS_SIGNAL, "SIGSEGV value")\
+ X("SIGTERM", -SIGTERM+BIAS_SIGNAL, "SIGTERM value")
+
+static struct constants {
+	const char *name;
+	forth_cell_t value;
+} constants[] = {
+#define X(NAME, VALUE, DESCRIPTION) { NAME, (VALUE) },
+	X_MACRO_CONSTANTS
+#undef X
+	{ NULL, 0 }
+};
+
 
 /**
 ## Helping Functions For The Compiler
@@ -1069,14 +1112,14 @@ value that points before the beginning of the dictionary.
 Our word header looks like this:
 
 	.-----------.-----.------.------------.
-	| Word Name | PWD | MISC | Data Field |
+	| Word Name | PWD | CODE | Data Field |
 	.-----------.-----.------.------------.
 
 * The **Data Field** is optional and is of variable length.
 * **Word Name** is a variable length field whose size is recorded in the
-MISC field.
+CODE field.
 
-And the **MISC** field is a composite field, to save space, containing a virtual
+And the **CODE** field is a composite field, to save space, containing a virtual
 machine instruction, the hidden bit, the compiling bit, and the length of 
 the Word  Name string as an offset in cells from **PWD** field. 
 
@@ -1177,7 +1220,7 @@ static int match(forth_cell_t *m, forth_cell_t pwd, const char *s)
 **forth_find** finds a word in the dictionary and if it exists it returns a
 pointer to its **PWD** field. If it is not found it will return zero, also of
 notes is the fact that it will skip words that are hidden, that is the
-hidden bit in the **MISC** field of a word is set. The structure of the
+hidden bit in the **CODE** field of a word is set. The structure of the
 dictionary has already been explained, so there should be no surprises in
 this word. Any improvements to the speed of this word would speed up the
 text interpreter a lot, but not the virtual machine in general.
@@ -1618,10 +1661,10 @@ immediate by passing in their code word to **compile**. The created
 word looks like this:
 
 	.------.-----.------.
-	| NAME | PWD | MISC |
+	| NAME | PWD | CODE |
 	.------.-----.------.
 
-The **MISC** field here contains either **DEFINE** or **IMMEDIATE**, as well as
+The **CODE** field here contains either **DEFINE** or **IMMEDIATE**, as well as
 the hidden bit field and an offset to the beginning of name. The compiling bit
 is cleared for these words.
 **/
@@ -1632,23 +1675,24 @@ is cleared for these words.
 All of the other built in words that use a virtual machine instruction to
 do work are instead compiling words, and because there are lots of them we
 can initialize them in a loop, the created words look the same as the immediate
-words, except the compiling bit is set in the MISC field.
+words, except the compiling bit is set in the CODE field.
 
-The MISC field here also contains the VM instructions, the READ word will 
-compile pointers to this MISC field into the dictionary.
+The CODE field here also contains the VM instructions, the READ word will 
+compile pointers to this CODE field into the dictionary.
 **/
 	for(i = READ, w = READ; instruction_names[i]; i++)
 		compile(o, w++, instruction_names[i], true);
+	compile(o, EXIT, "exit", true); /* needed for 'see', trust me */
 
 /**
 The next eval is the absolute minimum needed for a sane environment, it
 defines two words **state** and **;**
 **/
-	VERIFY(forth_eval(o, ": state 8 exit : ; immediate ' exit , 0 state ! ;") >= 0);
+	VERIFY(forth_eval(o, ": state 8 _exit : ; immediate ' _exit , 0 state ! ;") >= 0);
 
 /**
 We now name all the registers so we can refer to them by name instead of by
-number, this is not strictly necessary but is good practice.
+number.
 **/
 	for(i = 0; register_names[i]; i++)
 		VERIFY(forth_define_constant(o, register_names[i], i+DIC) >= 0);
@@ -1656,15 +1700,11 @@ number, this is not strictly necessary but is good practice.
 /**
 More constants are now defined:
 **/
-	VERIFY(forth_define_constant(o, "size", sizeof(forth_cell_t)) >= 0);
 	VERIFY(forth_define_constant(o, "stack-start", size - (2 * o->m[STACK_SIZE])) >= 0);
 	VERIFY(forth_define_constant(o, "max-core", size) >= 0);
-	VERIFY(forth_define_constant(o, "r/o",      FAM_RO) >= 0);
-	VERIFY(forth_define_constant(o, "w/o",      FAM_WO) >= 0);
-	VERIFY(forth_define_constant(o, "r/w",      FAM_RW) >= 0);
-	VERIFY(forth_define_constant(o, "dictionary-start",  DICTIONARY_START) >= 0);
-	VERIFY(forth_define_constant(o, "tib",  STRING_OFFSET * sizeof(forth_cell_t)) >= 0);
-	VERIFY(forth_define_constant(o, "#tib", MAXIMUM_WORD_LENGTH * sizeof(forth_cell_t)) >= 0);
+
+	for(i = 0; constants[i].name; i++)
+		VERIFY(forth_define_constant(o, constants[i].name, constants[i].value) >= 0);
 
 /**
 Now we finally are in a state to load the slightly inaccurately
@@ -1889,7 +1929,7 @@ forth_cell_t forth_stack_position(forth_t *o)
 void forth_signal(forth_t *o, int sig)
 {
 	assert(o);
-	o->m[SIGNAL_HANDLER] = (forth_cell_t)sig;
+	o->m[SIGNAL_HANDLER] = (forth_cell_t)((sig * -1) + BIAS_SIGNAL);
 }
 
 /**
@@ -1995,7 +2035,7 @@ structure of a word and how words are compiled into the dictionary.
 Above we saw that a words layout looked like this:
 
 	.-----------.-----.------.----------------.
-	| Word Name | PWD | MISC | Data Field ... |
+	| Word Name | PWD | CODE | Data Field ... |
 	.-----------.-----.------.----------------.
 
 And we can define words like this:
@@ -2012,7 +2052,7 @@ Which, on a 32 bit machine, produces code that looks like this:
 	         ._____._____._____._____.
 	  X+2    | previous word pointer |
 	         ._______________________.
-	  X+3    |       MISC Field      |
+	  X+3    |       CODE Field      |
 	         ._______________________.
 	  X+4    | Pointer to 'dup'      |
 	         ._______________________.
@@ -2021,14 +2061,14 @@ Which, on a 32 bit machine, produces code that looks like this:
 	  X+6    | Pointer to 'exit'     |
 	         ._______________________.
 
-The ':' word creates the header (everything up to and including the MISC
+The **:** word creates the header (everything up to and including the CODE
 field), and enters compile mode, where instead of words being executed they
-are compiled into the dictionary. When 'dup' is encountered a pointer is
-compiled into the next available slot at 'X+4', likewise for '*'. The word
-';' is an immediate word that gets executed regardless of mode, which switches
-back into compile mode and compiles a pointer to 'exit'.
+are compiled into the dictionary. When **dup** is encountered a pointer is
+compiled into the next available slot at **X+4**, likewise for *****. The word
+**;** is an immediate word that gets executed regardless of mode, which switches
+back into compile mode and compiles a pointer to **exit**.
 
-This MISC field at 'X+3' contains the following:
+This **CODE** field at **X+3** contains the following:
 
 	         .---------------.------------------.------------.-------------.
 	Bit      |      15       | 14 ........... 8 |    9       | 7 ....... 0 |
@@ -2040,15 +2080,15 @@ The definition of words mostly consists of pointers to other words. The
 compiling bit, Word Name Size field and Hidden bit have no effect when
 the word is execution, only in finding the word and determining whether to
 execute it when typing the word in. The instruction tells the virtual machine
-what to do with this word, in this case the instruction is 'RUN', which means
+what to do with this word, in this case the instruction is **RUN**, which means
 that the words contains a list of pointers to be executed. The virtual machine
 then pushes the value of the next address to execute onto the return stack
-and then jumps to that words MISC field, executing the instruction it finds
+and then jumps to that words CODE field, executing the instruction it finds
 for that word.
 
-Words like 'dup' and '*' are built in words, they are slightly differently
-in that their 'MISC' field contains contains a virtual machine instruction other
-than 'RUN', they contain the instructions 'DUP' and 'MUL' respectively.
+Words like **dup** and ***** are built in words, they are slightly differently
+in that their **CODE** field contains contains a virtual machine instruction other
+than **RUN**, they contain the instructions **DUP** and **MUL** respectively.
 
 **/
 	for(;(pc = m[ck(I++)]);) { 
@@ -2075,13 +2115,13 @@ instead of being executed.
 The created header looks like this:
 
 	 .------.-----.------.----
-	 | NAME | PWD | MISC |    ...
+	 | NAME | PWD | CODE |    ...
 	 .------.-----.------.----
 	                        ^
 	                        |
 	                   Dictionary Pointer 
 
-The MISC field contains the RUN instruction.
+The CODE field contains the RUN instruction.
 **/
 
 			m[STATE] = 1; /* compile mode */
@@ -2483,7 +2523,7 @@ instruction, and would be a useful abstraction.
 			break;
 		case RAISE:
 			cd(1);
-			f = raise(f);
+			f = raise((f*-1) - BIAS_SIGNAL);
 			break;
 		case DATE:
 			{

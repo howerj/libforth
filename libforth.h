@@ -91,7 +91,6 @@ struct forth_functions
 @brief The logging function is used to print error messages,
 warnings and notes within this program.
 @param prefix prefix to add to any logged messages
-@param file   file in which logging function is called
 @param func   function in which logging function is called
 @param line   line number logging function was called at
 @param fmt    logging format string
@@ -157,7 +156,7 @@ or equal to MINIMUM_CORE_SIZE
 can call Can be NULL, caller frees if allocated.
 @return  forth A fully initialized forth environment or NULL. 
 **/
-forth_t *forth_init(size_t size, FILE *input, FILE *output, 
+forth_t *forth_init(size_t size, FILE *in, FILE *out, 
 		const struct forth_functions *calls); 
 
 /**

@@ -85,16 +85,16 @@ extract the document string for a given work.
 : cr  ( -- : emit a newline character )
 	'\n' emit ;
 
-: hidden-mask ( -- x : pushes mask for the hide bit in a words MISC field )
+: hidden-mask ( -- x : pushes mask for the hide bit in a words CODE field )
 	0x80  ;
 
-: instruction-mask ( -- x : pushes mask for the first code word in a words MISC field )
+: instruction-mask ( -- x : pushes mask for the first code word in a words CODE field )
 	0x7f  ;
 
-: >instruction ( MISC -- Instruction : extract instruction from instruction field ) 
+: >instruction ( CODE -- Instruction : extract instruction from instruction field ) 
 	instruction-mask and ;
 
-: immediate-mask ( -- x : pushes the mask for the compile bit in a words MISC field )
+: immediate-mask ( -- x : pushes the mask for the compile bit in a words CODE field )
 	0x8000 ;
 
 : hidden? ( PWD -- PWD bool : is a word hidden, given the words PWD field ) 
@@ -259,7 +259,7 @@ extract the document string for a given work.
 : xt-instruction ( extract instruction from execution token )
 	cell+ @ >instruction ;
 
-: defined-word? ( MISC -- bool : is a word a defined or a built in words )
+: defined-word? ( CODE -- bool : is a word a defined or a built in words )
 	xt-instruction dolist = ;
 
 : char+ ( c-addr -- c-addr : increment a character address by the size of one character ) 
@@ -521,18 +521,6 @@ extract the document string for a given work.
 : reveal ( hide-token -- : reveal a hidden word ) 
 	dup @ hidden-mask invert and swap ! ;
 
-: original-exit 
-	[ find exit ] literal ;
-
-: exit ( -- : this will define a second version of exit, ';' will
-	use the original version, whilst everything else will
-	use this version, allowing us to distinguish between
-	the end of a word definition and an early exit by other
-	means in "see" 
-	@todo Get rid of this, this is going to slow the interpreter
-	down *a lot*, for very little gain! )
-	[ find exit hide ] rdrop exit [ reveal ] ;
-
 : ?exit ( x -- : exit current definition if not zero ) 
 	if rdrop exit then ;
 
@@ -698,6 +686,8 @@ hider address
 	[ 0 , ] ;           ( this is the hole we write )
 
 ( See: http://lars.nocrew.org/dpans/dpans9.htm
+@todo turn this into a lookup table of strings
+
        Code     Reserved for
        ----     ------------
         -1      ABORT
@@ -901,7 +891,7 @@ and thus allows us to extend the language easily.
 	['] ' , ;   
 
 : write-exit ( -- : A word that write exit into the dictionary )
-	original-exit , ;
+	['] _exit , ;
 
 : write-compile, ( -- : A word that writes , into the dictionary ) 
 	' , , ;
@@ -1549,14 +1539,18 @@ version of dump could be made that swapped out 'lister' )
 
 hide{ counted-column counter as-chars }hide
 
+( Fence can be used to prevent any word defined before it from being forgotten 
+Usage:
+	here fence ! )
+0 variable fence
+
 : forgetter ( pwd-token -- : forget a found word and everything after it )
+	dup 0= if -15 throw then         ( word not found! )
+	dup fence @ u< if -15 throw then ( forgetting a word before fence! )
 	dup @ pwd ! h ! ;
 
-( @bug will not work for immediate defined words 
-@note Fig Forth had a word FENCE, if anything before this word was
-attempted to be forgotten then an exception is throw )
 : forget ( WORD -- : forget word and every word defined after it )
-	find dup 0= if -15 throw then 1- forgetter ;
+	find 1- forgetter ;
 
 : marker ( WORD -- : make word the forgets itself and words after it)
 	:: latest [literal] ' forgetter , postpone ; ;
@@ -1604,8 +1598,6 @@ hide{ a b m }hide
 
 : r13-type ( c-addr u : print string in ROT-13 encoded form )
 	bounds do i c@ r13 emit loop ;
-
-
 
 ( ==================== Misc words ============================= )
 
@@ -1900,7 +1892,7 @@ hide{ .s }hide
 : .s    ( -- : print out the stack for debugging )
 	[char] < emit depth u. [char] > emit space
 	depth if
-		depth 0 do i column tab depth i 1+ - pick u. loop
+		depth 0 do i column tab depth i 1+ - pick . loop
 	then
 	cr ;
 
@@ -1913,12 +1905,12 @@ word until the first word. The layout of a Forth word looks like this:
 
 NAME:  Forth Word - A variable length ASCII NUL terminated string
 PWD:   Previous Word Pointer, points to the previous word
-MISC:  Flags, code word and offset from previous word pointer to start of Forth word string
+CODE:  Flags, code word and offset from previous word pointer to start of Forth word string
 DATA:  The body of the forth word definition, not interested in this.
 
 There is a register which stores the latest defined word which can be
 accessed with the code "pwd @". In order to print out a word we need to
-access a words MISC field, the offset to the NAME is stored here in bits
+access a words CODE field, the offset to the NAME is stored here in bits
 8 to 14 and the offset is calculated from the PWD field.
 
 "print" expects a character address, so we need to multiply any calculated
@@ -2067,7 +2059,7 @@ hide{ end-print code>pwd }hide
 ( these words push the execution tokens for various special cases for decompilation )
 : get-branch  [ find branch  ] literal ;
 : get-?branch [ find ?branch ] literal ;
-: get-original-exit [ original-exit ] literal ;
+: get-original-exit [ find _exit ] literal ;
 : get-quote   [ find ' ] literal ;
 
 : branch-increment ( addr branch -- increment : calculate decompile increment for "branch" )
@@ -2937,7 +2929,6 @@ defined in the ANS Forth standard. )
 
 : signal ( -- signal/0 : push the results of the signal register ) 
 	`signal @
-	dup if negate signal-bias + then
  	0 `signal ! ;
 
 ( ==================== Signal Handling ======================= )
@@ -2987,7 +2978,7 @@ hide{
  dictionary-start hidden? hidden-mask instruction-mask immediate-mask compiling?
  max-core dolist x x! x@ write-exit
  max-string-length 
- original-exit
+ _exit
  pnum evaluator 
  TrueFalse >instruction print-header
  print-name print-start print-previous print-immediate

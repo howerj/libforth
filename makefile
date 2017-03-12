@@ -143,6 +143,7 @@ libline/makefile:
 libline/libline.a:
 	make -C libline libline.a
 
+# just a handy helper when making documentation
 show: lib${TARGET}.pdf
 	${VIEWER} $<
 
@@ -159,6 +160,13 @@ profile: clean ${TARGET}
 	gprof ${TARGET} gmon.out > profile.log
 	gcov lib${TARGET}.c
 	objdump -d -S lib${TARGET}.o > libforth.s
+
+# attempt decompilation of all visible words
+decompile: ${TARGET} forth.fth
+	rm -vf decompiled.log words.log words.see.log
+	./${TARGET} -f forth.fth -e words > words.log
+	sed 's/ / see /g' < words.log > words.see.log
+	./${TARGET} -t forth.fth < words.see.log > decompiled.log
 
 clean:
 	${RM} ${TARGET} unit *.a *.so *.o
