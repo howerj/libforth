@@ -20,21 +20,27 @@
 
 /*** very minimal test framework ***/
 
+/**
+@brief This contains the information needed to complete a series of unit
+tests, along with various options.
+**/
 typedef struct {
-	unsigned passed, failed; /** number of tests passed and failed */
-	double timer;
-	clock_t start_time, end_time;
-	time_t rawtime;
-	int color_on;      /**< Is colorized output on?*/
-	int jmpbuf_active; /**< Have we setup the longjmp buffer or not? */
-	int is_silent;     /**< Silent mode on? The programs return code is used to determine success*/
+	unsigned passed, /**< number of unit tests passed */
+		 failed; /**< number of unit tests failed */
+	clock_t start_time; /**< when the unit tests began */
+	int color_on;      /**< is colorized output on?*/
+	int jmpbuf_active; /**< have we setup the longjmp buffer or not? */
+	int is_silent;     /**< silent mode on? The programs return code is used to determine success*/
 	jmp_buf current_test; /**< current unit tests jump buffer */
 	unsigned current_line; /**< current line number of unit test being executed */
 	int current_result;    /**< result of latest test execution */
 	const char *current_expr;  /**< string representation of expression being executed */
-	FILE *output;
-	int caught_signal; /**@warning signal catching is supported, but not thread safe */
-} test_t;
+	FILE *output; /**< output file for report generation */
+	/**@warning signal catching is supported, but not thread safe. Signal
+	 * handling really should be made optional, but there is no need for
+	 * such a small test suite. */
+	int caught_signal; /**< The value of any caught signals when running tests*/
+} test_t /**< structure used to hold test information */;
 
 static test_t tb;
 
@@ -122,6 +128,7 @@ static void print_note(test_t *t, const char *name)
 /**@brief Advance the test suite by testing and executing an expression. This
  *        framework can catch assertions that have failed within the expression
  *        being tested.
+ * @param TESTBENCH The test bence to execute under
  * @param EXPR The expression should yield non zero on success **/
 #define test(TESTBENCH, EXPR) _test((TESTBENCH), (EXPR) != 0, #EXPR, __LINE__)
 
@@ -145,6 +152,7 @@ static void _test(test_t *t, const int result, const char *expr, const unsigned 
 
 /**@brief This advances the test suite like the test macro, however this test
  * must be executed otherwise the test suite will not continue
+ * @param TESTBENCH The test bence to execute under
  * @param EXPR The expression should yield non zero on success */
 #define must(TESTBENCH, EXPR) _must((TESTBENCH), (EXPR) != 0, #EXPR, __LINE__)
 
@@ -158,6 +166,7 @@ static void _must(test_t *t, const int result, const char *expr, const unsigned 
 }
 
 /**@brief print out and execute a statement that is needed to further a test
+ * @param TESTBENCH The test bence to execute under
  * @param STMT A statement to print out (stringify first) and then execute**/
 #define state(TESTBENCH, STMT) do{ print_statement((TESTBENCH), #STMT ); STMT; } while(0);
 
@@ -165,7 +174,8 @@ static int unit_test_start(test_t *t, const char *unit_name, FILE *output)
 {
 	assert(t && unit_name && output);
 	memset(t, 0, sizeof(*t));
-	time(&t->rawtime);
+	time_t rawtime;
+	time(&rawtime);
 	t->output = output;
 	if(signal(SIGABRT, sig_abrt_handler) == SIG_ERR) {
 		fprintf(stderr, "signal handler installation failed");
@@ -174,18 +184,18 @@ static int unit_test_start(test_t *t, const char *unit_name, FILE *output)
 	t->start_time = clock();
 	if(!(t->is_silent))
 		fprintf(t->output, "%s unit tests\n%sbegin:\n\n", 
-				unit_name, asctime(localtime(&(t->rawtime))));
+				unit_name, asctime(localtime(&rawtime)));
 	return 0;
 }
 
 static unsigned unit_test_end(test_t *t, const char *unit_name) 
 {
 	assert(t && unit_name);
-	t->end_time = clock();
-	t->timer = ((double) (t->end_time - t->start_time)) / CLOCKS_PER_SEC;
+	clock_t end_time = clock();
+	double total = ((double) (end_time - t->start_time)) / CLOCKS_PER_SEC;
 	if(!(t->is_silent))
 		fprintf(t->output, "\n\n%s unit tests\npassed  %u/%u\ntime    %fs\n", 
-				unit_name, t->passed, t->passed+t->failed, t->timer);
+				unit_name, t->passed, t->passed+t->failed, total);
 	return t->failed;
 }
 

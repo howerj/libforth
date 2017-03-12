@@ -48,7 +48,7 @@ too difficult.
 #define FORTH_CORE_VERSION  (0x04u)
 
 struct forth; /**< An opaque object that holds a running FORTH environment**/
-typedef struct forth forth_t;
+typedef struct forth forth_t; /**< Typedef of opaque object for general use */
 typedef uintptr_t forth_cell_t; /**< FORTH cell large enough for a pointer*/
 
 #define PRIdCell PRIdPTR /**< Decimal format specifier for a Forth cell */
@@ -68,6 +68,9 @@ For more information and alternatives.
 **/
 #define IS_BIG_ENDIAN (!(union { uint16_t u16; uint8_t c; }){ .u16 = 1 }.c)
 
+/**
+@brief Functions matching this typedef can be called via the CALL instruction.
+**/
 typedef int (*forth_function_t)(forth_t *o);
 
 /**
@@ -81,6 +84,9 @@ to use non-portable functions.
 struct forth_functions
 {
 	forth_cell_t count; /**< number of functions */
+	/**@brief The only information needed to perform a CALL is the function
+	 * that needs calling and the depth expected on the call stack. This
+	 * interface is minimal, but works. */
 	struct forth_function {
 		unsigned depth; /**< depth expected on stack before call */
 		forth_function_t function; /**< function to execute */
@@ -106,12 +112,45 @@ be prepended with '##' in case zero extra arguments are passed into the
 variadic macro, to swallow the extra comma, but it is not *standard* C, even
 if most compilers support the extension.
 **/
-#define fatal(FMT,...)   forth_logger("fatal",  __func__, __LINE__, FMT, __VA_ARGS__)
-#define error(FMT,...)   forth_logger("error",  __func__, __LINE__, FMT, __VA_ARGS__)
-#define warning(FMT,...) forth_logger("warning",__func__, __LINE__, FMT, __VA_ARGS__)
-#define note(FMT,...)    forth_logger("note",   __func__, __LINE__, FMT, __VA_ARGS__)
-#define debug(FMT,...)   forth_logger("debug",  __func__, __LINE__, FMT, __VA_ARGS__)
 
+/**
+@brief Variadic macro for handling fatal error printing information
+@note This function does not terminate the process, it is up to the user to
+this after fatal() is called. 
+@param FMT printf style format string 
+**/
+#define fatal(FMT,...)   forth_logger("fatal",  __func__, __LINE__, FMT, __VA_ARGS__)
+
+/**
+@brief Variadic macro for handling error printing information
+@note Use this for recoverable errors
+@param FMT printf style format string 
+**/
+#define error(FMT,...)   forth_logger("error",  __func__, __LINE__, FMT, __VA_ARGS__)
+
+/**
+@brief Variadic macro for handling warnings
+@note Use this for minor problems, for example, some optional component failed.
+@param FMT printf style format string 
+**/
+#define warning(FMT,...) forth_logger("warning",__func__, __LINE__, FMT, __VA_ARGS__)
+
+/**
+@brief Variadic macro for notes
+@note Use this printing high-level information about the interpreter, for example
+opening up a new file. It should be used sparingly.
+@param FMT printf style format string 
+**/
+#define note(FMT,...)    forth_logger("note",   __func__, __LINE__, FMT, __VA_ARGS__)
+
+/**
+@brief Variadic macro for debugging information.
+@note Use this for debugging, debug messages can be subject to change and may be
+present or removed arbitrarily between releases. This macro can be used liberally.
+@warning May produce copious amounts of output.
+@param FMT printf style format string 
+**/
+#define debug(FMT,...)   forth_logger("debug",  __func__, __LINE__, FMT, __VA_ARGS__)
 
 /**
 @brief These are the possible options for the debug registers. Higher levels
@@ -150,8 +189,8 @@ NULL on failure.
 
 @param   size    Size of interpreter environment, must be greater 
 or equal to MINIMUM_CORE_SIZE
-@param   input   Read from this input file. Caller closes.
-@param   output  Output to this file. Caller closes.
+@param   in      Read from this input file. Caller closes.
+@param   out     Output to this file. Caller closes.
 @param   calls   Used to specify arbitrary functions that the interpreter 
 can call Can be NULL, caller frees if allocated.
 @return  forth A fully initialized forth environment or NULL. 

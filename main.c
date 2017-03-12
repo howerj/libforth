@@ -62,7 +62,7 @@ fail:
 
 #ifdef USE_LINE_EDITOR
 #include "libline.h"
-#define LINE_EDITOR_AVAILABLE (1)
+#define LINE_EDITOR_AVAILABLE (1) /**< line editor is available */
 
 /**
 The Forth history file will be stored in this file, if the 
@@ -109,7 +109,7 @@ end:
 	return rval;
 }
 #else
-#define LINE_EDITOR_AVAILABLE (0)
+#define LINE_EDITOR_AVAILABLE (0) /**< line editor is not available */
 #endif /* USE_LINE_EDITOR */
 
 /**
@@ -119,7 +119,7 @@ global variable so signal handlers can access it.
 **/
 static forth_t *global_forth_environment; 
 
-typedef void (*signal_handler)(int sig);
+typedef void (*signal_handler)(int sig); /**< functions for handling signals*/
 
 static void register_signal_handler(int sig, signal_handler handler)
 {

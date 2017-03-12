@@ -8,9 +8,8 @@
 
 @brief      A FORTH library, written in a literate style.
 
-@todo Bias errnos so they are outside of the range reserved by Forth
 @todo Move the hidden bit into the top half of the CODE field.
-@todo Fix Doxygen warnings
+@todo Fix the special 'literal' word, moving it outside register area
 
 ## License
 
@@ -408,7 +407,7 @@ where it is relative to the **PWD** field of a word.
 /**
 @brief Test if a word is a **hidden** word, one that is not in the search
 order for the dictionary.
-@param **PWD** field to test
+@param CODE field to test
 **/
 #define WORD_HIDDEN(CODE) ((CODE) & 0x80)
 
@@ -780,7 +779,10 @@ More information about X-Macros can be found here:
  X("`signal",         SIGNAL_HANDLER, 30,  "signal handler")\
  X("`x",              SCRATCH_X,      31,  "scratch variable x")
 
-enum registers {  /**< virtual machine registers */
+/**
+@brief The virtual machine registers used by the Forth virtual machine.
+**/
+enum registers {
 #define X(NAME, ENUM, VALUE, HELP) ENUM = VALUE,
 	XMACRO_REGISTERS
 #undef X
@@ -918,7 +920,10 @@ up for debugging purposes (like **pnum**).
  X(GETENV,    "getenv",         " c-addr u -- r-addr u : return an environment variable")\
  X(LAST_INSTRUCTION, NULL, "")
 
-enum instructions { /**< instruction enumerations */
+/**
+@brief All of the instructions that can be used by the Forth virtual machine.
+**/
+enum instructions { 
 #define X(ENUM, STRING, HELP) ENUM,
 	XMACRO_INSTRUCTIONS
 #undef X
@@ -955,11 +960,17 @@ Forth interpreter.
  X("SIGILL",  -SIGILL +BIAS_SIGNAL, "SIGILL value")\
  X("SIGINT",  -SIGINT +BIAS_SIGNAL, "SIGINT value")\
  X("SIGSEGV", -SIGSEGV+BIAS_SIGNAL, "SIGSEGV value")\
- X("SIGTERM", -SIGTERM+BIAS_SIGNAL, "SIGTERM value")
+ X("SIGTERM", -SIGTERM+BIAS_SIGNAL, "SIGTERM value")\
+ X("bias-signal", BIAS_SIGNAL,      "bias added to signals")\
+ X("bias-errno", BIAS_ERRNO,        "bias added to errnos")
 
+/**
+@brief A structure that contains a constant to be added to the
+Forth environment by **forth_init**.
+**/
 static struct constants {
-	const char *name;
-	forth_cell_t value;
+	const char *name; /**< name of constants, should be shorter than MAXIMUM_WORD_LENGTH */
+	forth_cell_t value; /**< value of the named constant */
 } constants[] = {
 #define X(NAME, VALUE, DESCRIPTION) { NAME, (VALUE) },
 	X_MACRO_CONSTANTS
@@ -967,10 +978,14 @@ static struct constants {
 	{ NULL, 0 }
 };
 
-
 /**
 ## Helping Functions For The Compiler
 **/
+
+static int ferrno(void)
+{ /**@note The VM should only see biased error numbers */
+	return (-errno) + BIAS_ERRNO;
+}
 
 const char *forth_strerror(void)
 {
@@ -2443,22 +2458,22 @@ instruction, and would be a useful abstraction.
 		case SYSTEM:  cd(2); f = system(forth_get_string(o, &on_error, &S, f)); break;
 		case FCLOSE:  cd(1); 
 			      errno = 0;
-			      f = fclose((FILE*)f) ? errno : 0;       
+			      f = fclose((FILE*)f) ? ferrno() : 0;       
 			      break;
 		case FDELETE: cd(2); 
 			      errno = 0;
-			      f = remove(forth_get_string(o, &on_error, &S, f)) ? errno : 0; 
+			      f = remove(forth_get_string(o, &on_error, &S, f)) ? ferrno() : 0; 
 			      break;
 		case FFLUSH:  cd(1); 
 			      errno = 0; 
-			      f = fflush((FILE*)f) ? errno : 0;       
+			      f = fflush((FILE*)f) ? ferrno() : 0;       
 			      break;
 		case FSEEK:   
 			{
 				cd(2); 
 				errno = 0;
 				int r = fseek((FILE*)(*S--), f, SEEK_SET);
-				f = r == -1 ? errno ? errno : -1 : 0;
+				f = r == -1 ? errno ? ferrno() : -1 : 0;
 				break;
 			}
 		case FPOS:    
@@ -2467,7 +2482,7 @@ instruction, and would be a useful abstraction.
 				errno = 0;
 				int r = ftell((FILE*)f);
 				*++S = r;
-				f = r == -1 ? errno ? errno : -1 : 0;
+				f = r == -1 ? errno ? ferrno() : -1 : 0;
 				break;
 			}
 		case FOPEN: 
@@ -2478,7 +2493,7 @@ instruction, and would be a useful abstraction.
 				char *file = forth_get_string(o, &on_error, &S, f);
 				errno = 0;
 				*++S = (forth_cell_t)fopen(file, fam);
-				f = errno;
+				f = ferrno();
 			}
 			break;
 		case FREAD:
@@ -2510,7 +2525,7 @@ instruction, and would be a useful abstraction.
 				f = *S--;
 				char *f2 = forth_get_string(o, &on_error, &S, f);
 				errno = 0;
-				f = rename(f2, f1) ? errno : 0;
+				f = rename(f2, f1) ? ferrno() : 0;
 			}
 			break;
 		case TMPFILE:
@@ -2518,7 +2533,7 @@ instruction, and would be a useful abstraction.
 				*++S = f;
 				errno = 0;
 				*++S = (forth_cell_t)tmpfile();
-				f = errno ? errno : 0;
+				f = errno ? ferrno() : 0;
 			}
 			break;
 		case RAISE:
@@ -2574,7 +2589,7 @@ to interact with memory outside of the Forth core.
 			cd(1);
 			errno = 0;
 			*++S = (forth_cell_t)calloc(f, 1);
-			f = errno;
+			f = ferrno();
 			break;
 		case FREE:
 /**
@@ -2586,13 +2601,13 @@ requires that an error status is returned.
 			cd(1);
 			errno = 0;
 			free((char*)f);
-			f = errno;
+			f = ferrno();
 			break;
 		case RESIZE:
 			errno = 0;
 			w = (forth_cell_t)realloc((char*)(*S--), f);
 			*++S = w;
-			f = errno;
+			f = ferrno();
 			break;
 		case GETENV:
 		{

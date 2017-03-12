@@ -1311,13 +1311,21 @@ should be done in pure forth, instead of as a hybrid which is currently is.
 * A compiler for the virtual machine itself should be made, as a separate
 program. This could be used to make a more advanced read-evaluate loop.
 * Core files are currently not portable across machines of different words
-sizes or endianess, which needs addressing.
+sizes or endianess, which needs addressing, or ignoring conclusively.
 * Use either liballocs or libffi for adding foreign function interfaces
 to programs, see:
   - <https://github.com/stephenrkell/liballocs>
   - <https://sourceware.org/libffi/>
 * The Forth could be made to be more standards compliant (especially where it
 comes to I/O and addressing (but also things like CASE statements).
+* A document (part of this document) for the coding standards used in this 
+document needs to be created and added here. Things that will need 
+documenting are:
+ - How comments should look like (literate and doxygen comments)
+ - Tabs vs Spaces (use tabs)
+ - Levels of indentation
+ - Exceptions to the formatting rules (like the case statement in libforth.c)
+ - And much more.
 
 ### Virtual Machine To-Do points
 
