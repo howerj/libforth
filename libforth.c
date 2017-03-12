@@ -984,7 +984,7 @@ static struct constants {
 
 static int ferrno(void)
 { /**@note The VM should only see biased error numbers */
-	return (-errno) + BIAS_ERRNO;
+	return errno ? (-errno) + BIAS_ERRNO : 0;
 }
 
 const char *forth_strerror(void)
