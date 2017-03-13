@@ -1326,6 +1326,22 @@ documenting are:
  - Levels of indentation
  - Exceptions to the formatting rules (like the case statement in libforth.c)
  - And much more.
+* Improve error handling by adding 'throw' and 'catch' to the virtual
+machine as both C functions callable within the confines of 'libforth.c' and
+as virtual machine instructions.
+* To fix the problem with a mismatching between C addresses and Forth
+addresses which currently exists all modes of addressing should be made to
+be relative, or fixed up by the **forth\_init**. Currently access to memory
+outside of the Forth address space can only be done by copying memory to and
+from the C and the Forth addresses spaces with words that accept real addresses
+(like **memory-copy**).
+ - Branches use relative addressing at the moment.
+ - Register values are either fixed up at initialization (as in the case
+of **stdin**, **stdout** and a few other pointers) or need fixing (like the
+variable stack pointer, return stack pointer the HERE pointer and more).
+ - How the constants are defined will need to be changed (this will be the
+most difficult thing to fix).
+
 
 ### Virtual Machine To-Do points
 

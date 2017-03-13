@@ -85,24 +85,6 @@ extract the document string for a given work.
 : cr  ( -- : emit a newline character )
 	'\n' emit ;
 
-: hidden-mask ( -- x : pushes mask for the hide bit in a words CODE field )
-	0x80  ;
-
-: instruction-mask ( -- x : pushes mask for the first code word in a words CODE field )
-	0x7f  ;
-
-: >instruction ( CODE -- Instruction : extract instruction from instruction field ) 
-	instruction-mask and ;
-
-: immediate-mask ( -- x : pushes the mask for the compile bit in a words CODE field )
-	0x8000 ;
-
-: hidden? ( PWD -- PWD bool : is a word hidden, given the words PWD field ) 
-	dup 1+ @ hidden-mask and logical ;
-
-: compiling? ( PWD -- PWD bool : is a word immediate, given the words PWD field )
-	dup 1+ @ immediate-mask and logical ;
-
 : dolist ( -- x : run code word, threaded code interpreter instruction )
 	1 ;      
 
@@ -120,6 +102,21 @@ extract the document string for a given work.
 
 : sliteral immediate ( I: c-addr u --, Run: -- c-addr u )
 	swap [literal] [literal] ;
+
+: hidden-mask ( -- x : pushes mask for the hide bit in a words CODE field )
+	[ 1 hidden-bit lshift ] literal  ;
+
+: >instruction ( CODE -- Instruction : extract instruction from instruction field ) 
+	instruction-mask and ;
+
+: immediate-mask ( -- x : pushes the mask for the compile bit in a words CODE field )
+	[ 1 compile-bit lshift ] literal ;
+
+: hidden? ( PWD -- PWD bool : is a word hidden, given the words PWD field ) 
+	dup 1+ @ hidden-mask and logical ;
+
+: compiling? ( PWD -- PWD bool : is a word immediate, given the words PWD field )
+	dup 1+ @ immediate-mask and logical ;
 
 ( space saving measure )
 -1 : -1 literal ;
@@ -306,6 +303,9 @@ extract the document string for a given work.
 
 : 1-! ( addr -- : decrement a value at an address ) 
 	-1 swap +! ;
+
+: c+! ( x c-addr -- : add x to a value stored at c-addr )
+	tuck c@ + swap c! ;
 
 : toggle ( addr u -- : complement the value at address with the bit pattern u ) 
 	over @ xor swap ! ;
@@ -1115,7 +1115,7 @@ testing and debugging:
 	[ 1 size log2 lshift 1- literal ] and ;
 
 : name ( PWD -- c-addr : given a pointer to the PWD field of a word get a pointer to the name of the word )
-	dup 1+ @ 256/ 127 and lsb - chars> ;
+	dup 1+ @ 256/ word-mask and lsb - chars> ;
 
 0 variable x
 : x! ( x -- ) 
@@ -2933,42 +2933,6 @@ defined in the ANS Forth standard. )
 
 ( ==================== Signal Handling ======================= )
 
-( ==================== History Variables ===================== )
-( From https://rosettacode.org/wiki/History_variables#Forth,
-history variables remember all changes to them [if used correctly],
-which can then be recalled.  
- 
-Example use: 
-	history z  
-	23 z h!  
-	z h@ . 
-	34 z h!  
-	z h@ . 
-	45 z h!  
-	z h@ . 
-	z .history 
-	z dup h-- h@ . 
-	z dup h-- h@ .
-	z dup h-- h@ .
-	z dup h-- h@ . )
-
-: history ( c" ccc" -- : create a new history variable )
-	postpone create here cell+ , 0 , -1 , ;
-
-: h@ ( h-var -- u : get the contents of a history variable )
-	@ @ ;
-
-: h! ( u h-var -- : store a value in a history variable )
-	swap here >r , dup @ , r> swap ! ;
-
-: .history ( h-var -- : print the history of a variable )
-	@ begin dup cell+ @ -1 <> while dup ? cell+ @ repeat drop ;
-
-: h-- ( h-var -- : undo one level of history )
-	dup @ cell+ @ dup -1 = if abort ( abort" End of history" ) then swap ! ;
-
-( ==================== History Variables ===================== )
-
 ( Looking at most Forths dictionary with "words" command they tend
 to have a lot of words that do not mean anything but to the implementers
 of that specific Forth, here we clean up as many non standard words as
@@ -2976,6 +2940,7 @@ possible. )
 hide{ 
  do-string ')' alignment-bits 
  dictionary-start hidden? hidden-mask instruction-mask immediate-mask compiling?
+ hidden-bit compile-bit
  max-core dolist x x! x@ write-exit
  max-string-length 
  _exit
@@ -3015,7 +2980,6 @@ instead.
 * A built in version of "dump" and "words" should be added to the Forth
 starting vocabulary, simplified versions that can be hidden.
 * Here documents, string literals. Examples of these can be found online
-at Rosetta Code, although the Forth versions online will need adapting.
 * Document the words in this file and built in words better, also turn this
 document into a literate Forth file.
 * Sort out "'", "[']", "find", "compile," 
@@ -3028,28 +2992,7 @@ as is sensible.
 * CASE Statements http://dxforth.netbay.com.au/miser.html
 * The current words that implement I/O redirection need to be improved, and documented,
 I think this is quite a useful and powerful mechanism to use within Forth that simplifies
-programs. This is a must and will make writing utilities in Forth a *lot* easier 
-
-One problem is that Forth memory and memory visible to the rest of the program
-has to be accessed differently [that is words like '@' and '!' are relative to
-the start of Forth memory and all memory access is checked]. 
-
-A possible solution is to load the core into a specific address,
-however this would mean only one Forth interpreter could be active
-at any given time: 
-
-http://stackoverflow.com/questions/20234148/how-to-load-a-program-in-memory-at-a-different-address-than-it-is-intended-for 
-
-
-Implement:
-
-http://rosettacode.org/wiki/CRC-32#Forth
-http://rosettacode.org/wiki/Monte_Carlo_methods#Forth 
-
-And various other things from Rosetta Code.
-
-
-)
+programs. This is a must and will make writing utilities in Forth a *lot* easier )
 
 verbose [if] 
 	.( FORTH: libforth successfully loaded.) cr

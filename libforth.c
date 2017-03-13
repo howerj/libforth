@@ -10,6 +10,7 @@
 
 @todo Move the hidden bit into the top half of the CODE field.
 @todo Fix the special 'literal' word, moving it outside register area
+@todo Add 'parse', removing scanf/fscanf
 
 ## License
 
@@ -403,6 +404,11 @@ where it is relative to the **PWD** field of a word.
 @param CODE This should be the **CODE** field of a word 
 **/
 #define WORD_LENGTH(CODE) (((CODE) >> WORD_LENGTH_OFFSET) & WORD_MASK)
+
+/**
+@brief Offset for the word hidden bit
+**/
+#define WORD_HIDDEN_BIT_OFFSET (7)
 
 /**
 @brief Test if a word is a **hidden** word, one that is not in the search
@@ -961,8 +967,12 @@ Forth interpreter.
  X("SIGINT",  -SIGINT +BIAS_SIGNAL, "SIGINT value")\
  X("SIGSEGV", -SIGSEGV+BIAS_SIGNAL, "SIGSEGV value")\
  X("SIGTERM", -SIGTERM+BIAS_SIGNAL, "SIGTERM value")\
- X("bias-signal", BIAS_SIGNAL,      "bias added to signals")\
- X("bias-errno", BIAS_ERRNO,        "bias added to errnos")
+ X("bias-signal", BIAS_SIGNAL,  "bias added to signals")\
+ X("bias-errno",  BIAS_ERRNO,   "bias added to errnos")\
+ X("instruction-mask", INSTRUCTION_MASK, "instruction mask for CODE field")\
+ X("word-mask",   WORD_MASK,    "word length mask for CODE field")\
+ X("hidden-bit",  WORD_HIDDEN_BIT_OFFSET, "hide bit in CODE field")\
+ X("compile-bit", COMPILING_BIT_OFFSET, "compile/immediate bit in CODE field")
 
 /**
 @brief A structure that contains a constant to be added to the
