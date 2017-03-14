@@ -137,6 +137,21 @@ extract the document string for a given work.
 : > ( x1 x2 -- bool : signed greater than comparison )
 	- dup if max-signed-integer u< else logical then ;
 
+( @todo this can be improved a lot, currently it uses more
+space than it has to, 4 cells instead of three.
+
+It does:
+
+	push value
+	push value
+
+Instead of:
+
+	magic-2literal-word
+	value
+	value
+
+)
 : 2literal immediate ( x x -- : immediate write two literals into the dictionary )
 	swap [literal] [literal] ;
 
@@ -1970,7 +1985,10 @@ hide{ print-immediate print-defined print-hidden }hide
 	" tracing on:              " `debug   @ TrueFalse cr
 	" starting word:           " `instruction ? cr
 	" real start address:      " `start-address ? cr
-	" error handling:          " `error-handler ? cr ;
+	" error handling:          " `error-handler ? cr 
+	" throw handler:           " `handler ? cr
+	" signal recieved:         " `signal ? cr ;
+	
 ( `sin `sidx `slen `fout
  `stdout `stderr `argc `argv )
 
@@ -2103,6 +2121,10 @@ Of special difficult is processing 'if' 'else' 'then' statements,
 this will require keeping track of '?branch'.
 
 Also of note, a number greater than "here" must be data )
+
+( @todo separate this out into a decompiler that can print out the
+contents of the address and a decompiler that acts on an entire 
+word )
 
 : decompile ( code-field-ptr -- : decompile a word )
 	begin
@@ -2992,7 +3014,16 @@ as is sensible.
 * CASE Statements http://dxforth.netbay.com.au/miser.html
 * The current words that implement I/O redirection need to be improved, and documented,
 I think this is quite a useful and powerful mechanism to use within Forth that simplifies
-programs. This is a must and will make writing utilities in Forth a *lot* easier )
+programs. This is a must and will make writing utilities in Forth a *lot* easier 
+* Simple debugger could be made that can set breakpoints by swapping out code with
+pointers, only a limited number of breakpoints could be set [say 32], and what they are
+swapped out by would have to identify what part of the breakpoint table to proper code
+is stored in. Using this debugger could not be used on any words that are in use by
+the debugger however [a fence like mechanism could be introduced]. It is an interesting 
+concept. Alternatively a monitor could be built into 'libforth.c'. Either way poses
+problems.
+* Words for manipulating words should be added, for navigating to different
+fields within them, to the end of the word, etcetera. )
 
 verbose [if] 
 	.( FORTH: libforth successfully loaded.) cr

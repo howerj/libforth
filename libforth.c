@@ -8,7 +8,6 @@
 
 @brief      A FORTH library, written in a literate style.
 
-@todo Move the hidden bit into the top half of the CODE field.
 @todo Fix the special 'literal' word, moving it outside register area
 @todo Add 'parse', removing scanf/fscanf
 

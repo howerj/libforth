@@ -1302,7 +1302,7 @@ are two error handlers. These mechanisms need unifying.
 
 * A few environment variables could be used to specify start up files for the
   interpreter and user specific startup files.
-* Signal handling should be added, so the Forth program can handle them.
+* Signal handling should be improved.
 * Error handling could be improved - the latest word definition should be
 erased if an error occurs before the terminating ';'. And trap handling
 should be done in pure forth, instead of as a hybrid which is currently is.
@@ -1341,7 +1341,8 @@ of **stdin**, **stdout** and a few other pointers) or need fixing (like the
 variable stack pointer, return stack pointer the HERE pointer and more).
  - How the constants are defined will need to be changed (this will be the
 most difficult thing to fix).
-
+ - See: <https://en.wikipedia.org/wiki/Position-independent_code>
+ - And: <https://en.wikipedia.org/wiki/Relocation_%28computing%29>
 
 ### Virtual Machine To-Do points
 
@@ -1359,11 +1360,7 @@ make a throw occur.
 2) The virtual machine should use character based addressing. Currently it uses
 cell based addressing, which causes all kinds of confusion.
 
-3) Whether a Word is a Compiling or an Immediate word is selected by virtual
-machine instruction layout instead of a bit in the header. This needs to be
-changed. **FIX IN PROGRESS**
-
-4) Words currently not defined need to be hidden, until the terminating ';'.
+3) Words currently not defined need to be hidden, until the terminating ';'.
 
 ### Submodules
 
