@@ -49,6 +49,29 @@ them will still be included so external tools can process and automatically
 extract the document string for a given work.
 )
 
+: postpone ( -- : postpone execution of the following immediate word )
+	immediate find , ;
+
+: :: ( -- : compiling version of ':' )
+	[ find : , ] ;
+
+( @todo fix the definitions of created variables so they are more space
+efficient, they should be more like the following definition of constant )
+: constant 
+	:: ( compile word header )
+	here 1 - h ! ( decrement dictionary pointer )
+	here @ instruction-mask invert and 1 or here ! ( change instruction to CONST )
+	here 1 + h ! ( increment dictionary pointer )
+	, ( write in value )
+	postpone [ ; ( back into command mode )
+
+( space saving measure )
+-1 constant -1
+ 0 constant  0 
+ 1 constant  1
+ 2 constant  2
+ 3 constant  3
+
 : 1+ ( x -- x : increment a number ) 
 	1 + ;
 
@@ -75,15 +98,6 @@ extract the document string for a given work.
 
 : logical ( x -- bool : turn a value into a boolean ) 
 	not not ;
-
-: :: ( -- : compiling version of ':' )
-	[ find : , ] ;
-
-: '\n' ( -- n : push the newline character )
-	10  ;
-
-: cr  ( -- : emit a newline character )
-	'\n' emit ;
 
 : dolit ( -- x : location of special "push" word )
 	2 ;
@@ -115,18 +129,13 @@ extract the document string for a given work.
 : compiling? ( PWD -- PWD bool : is a word immediate, given the words PWD field )
 	dup 1+ @ immediate-mask and logical ;
 
-( space saving measure )
--1 : -1 literal ;
- 0 : 0 literal ;
- 1 : 1 literal ;
- 2 : 2 literal ;
- 3 : 3 literal ;
+10 constant '\n'
 
-: min-signed-integer ( -- x : push the minimum signed integer value )
-	[ -1 -1 1 rshift invert and ] literal ;
+: cr  ( -- : emit a newline character )
+	'\n' emit ;
 
-: max-signed-integer ( -- x : push the maximum signed integer value )
-	[ min-signed-integer invert ] literal ;
+-1 -1 1 rshift invert and constant min-signed-integer
+min-signed-integer constant max-signed-integer
 
 : < ( x1 x2 -- bool : signed less than comparison )
 	- dup if max-signed-integer u> else logical then ;
@@ -227,9 +236,6 @@ Instead of:
 
 : [char] ( -- x : immediately read in a character from the input stream )
 	immediate char [literal] ;
-
-: postpone ( -- : postpone execution of the following immediate word )
-	immediate find , ;
 
 : compose ( xt1 xt2 -- xt3 : create a new function from two xt-tokens )
 	>r >r            ( save execution tokens )
@@ -967,15 +973,6 @@ and constants, as we mentioned before. )
 : variable ( x c" xxx" -- : create a variable will initial value of x )
 	create ,     does>   ;
 
-( @todo fix the definitions of created variables so they are more space
-efficient, they should be more like the following definition of constant )
-: constant 
-	::
-	here 1- h !
-	here @ instruction-mask invert and 1 or here !
-	here 1+ h !
-	,
-	postpone [ ;
 
 \ : constant ( x c" xxx" -- : create a constant with value of x ) 
 \	create ,     does> @ ;
@@ -3067,37 +3064,7 @@ the debugger however [a fence like mechanism could be introduced]. It is an inte
 concept. Alternatively a monitor could be built into 'libforth.c'. Either way poses
 problems.
 * Words for manipulating words should be added, for navigating to different
-fields within them, to the end of the word, etcetera. 
-* Constants can be made to be much more space efficient [and save a few instructions],
-Instead of:
-
-	._______________.
-	| name...       |
-	._______________.
-	| previous word |
-	._______________.
-	| CODE [RUN]    |
-	._______________.
-	| literal       |
-	._______________.
-	| value         |
-	._______________.
-	| exit          |
-	._______________.
-
-It should be:
-
-	._______________.
-	| name...       |
-	._______________.
-	| previous word |
-	._______________.
-	| CODE [PUSH]   |
-	._______________.
-	| value         |
-	._______________.
-
-)
+fields within them, to the end of the word, etcetera. )
 
 verbose [if] 
 	.( FORTH: libforth successfully loaded.) cr

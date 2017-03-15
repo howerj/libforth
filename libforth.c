@@ -553,7 +553,6 @@ static const char *initial_forth_program =
 ": nip swap drop ; \n"
 ": 2drop drop drop ; \n"
 ": allot here + h ! ; \n"
-": bl 32 ; \n"
 ": emit _emit drop ; \n" 
 ": space bl emit ; \n"
 ": evaluate 0 evaluator ; \n"
@@ -978,7 +977,8 @@ Forth interpreter.
  X("word-mask",   WORD_MASK,    "word length mask for CODE field")\
  X("hidden-bit",  WORD_HIDDEN_BIT_OFFSET, "hide bit in CODE field")\
  X("compile-bit", COMPILING_BIT_OFFSET, "compile/immediate bit in CODE field")\
- X("dolist",      RUN,          "instruction for executing a words body")
+ X("dolist",      RUN,          "instruction for executing a words body")\
+ X("bl",          ' ',          "space")
 
 /**
 @brief A structure that contains a constant to be added to the
