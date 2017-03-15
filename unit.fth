@@ -42,12 +42,20 @@ T{ -3 abs -> 3 }T
 T{  3 abs -> 3 }T
 T{  0 abs -> 0 }T
 
+T{ 2 3 drup -> 2 2 }T
+
 T{ char a -> 97 }T ( assumes ASCII is used )
 T{ bl -> 32 }T ( assumes ASCII is used )
 T{ -1 negative? -> 1 }T
 T{ -40494 negative? -> 1 }T
 T{ 46960 negative? -> 0 }T
 T{ 0 negative? -> 0 }T
+
+T{ -5 4 +- negative? -> 1 }T
+T{  6 6 +- negative? -> 0 }T
+T{  7 -1023 +- negative? 0 }T
+T{  0 0 +- negative? -> 0 }T
+T{ -1 -99 +- negative? -> 1 }T
 
 T{ char / number? -> 0 }T
 T{ char : number? -> 0 }T

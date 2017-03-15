@@ -649,6 +649,15 @@ Instead of:
 	then  drop cr 
 	>r ;
 
+: sign-bit
+	[ -1 -1 1 rshift and invert ] literal ;
+
+: +- ( x1 x2 -- x3 : copy the sign of x1 to x2 giving x3 )
+	[ sign-bit 1- ] literal and
+	swap
+	sign-bit and or
+	;
+
 ( ================================== DUMP ================================== )
 : newline ( x -- x+1 : print a new line every fourth value )
 	dup 3 and 0= if cr then 1+ ;
@@ -2074,14 +2083,22 @@ hider debug-prompt
 
 hide{ end-print code>pwd }hide
 
+: .h ( x -- : print out a number in hexadecimal format )
+	base @ >r hex . r> base ! ;
+
+: d.h ( x -- x : print out a number in hexadecimal format, preserving the number )
+	dup .h ;
+
 ( these words push the execution tokens for various special cases for decompilation )
 : get-branch  [ find branch  ] literal ;
 : get-?branch [ find ?branch ] literal ;
 : get-original-exit [ find _exit ] literal ;
 : get-quote   [ find ' ] literal ;
 
+( @todo replace 2- nos1+ nos1+ with appropriate word, like the string word 
+that increments a string by an amount, but that operates on CELLS )
 : branch-increment ( addr branch -- increment : calculate decompile increment for "branch" )
-	1+ dup negative? if drop 2 else 2dup dump then ;
+	1+ dup negative? if drop 2 else 2dup 2- nos1+ nos1+ dump then ;
 
 ( these words take a code field to a primitive they implement, decompile it
 and any data belonging to that operation, and push a number to increment the
@@ -2099,6 +2116,9 @@ decompilers code stream pointer by )
 : decompile-?branch ( code -- increment )
 	" [ ?branch	=> " 1+ ? " ]" 2 ;
 
+: decompile-exit ( code -- 0 )
+	" [ exit ]" cr " End of word:   " .  0 ;
+
 ( The decompile word expects a pointer to the code field of a word, it
 decompiles a words code field, it needs a lot of work however.
 There are several complications to implementing this decompile
@@ -2106,7 +2126,7 @@ function.
 
 	'        The next cell should be pushed
 	:noname  This has a marker before its code field of -1 which
-		 cannot occur normally, this is handles in word-printer
+		 cannot occur normally, this is handled in word-printer
 	branch   branches are used to skip over data, but also for
 		 some branch constructs, any data in between can only
 		 be printed out generally speaking
@@ -2122,30 +2142,38 @@ this will require keeping track of '?branch'.
 
 Also of note, a number greater than "here" must be data )
 
-( @todo separate this out into a decompiler that can print out the
-contents of the address and a decompiler that acts on an entire 
-word )
+( @todo Improve the format of the decompilation
+	- remove '[' and ']'
+	- print hex/decimal [remove .h, print only in hex? ]
+	- print ADDRESS : VALUE WORD )
 
-: decompile ( code-field-ptr -- : decompile a word )
-	begin
-		tab
-		dup @
-		case
-			dolit             of drup decompile-literal endof
-			get-branch        of drup decompile-branch  endof
-			get-quote         of drup decompile-quote   endof
-			get-?branch       of drup decompile-?branch endof
-			get-original-exit of 2drop " [ exit ]" cr exit  endof
-			word-printer 1
-		endcase
-		+
-		cr
+: decompile ( code-pointer -- code-pointer increment|0 : )
+	d.h [char] : emit space dup @
+	case
+		dolit             of drup decompile-literal cr endof
+		get-branch        of drup decompile-branch     endof
+		get-quote         of drup decompile-quote   cr endof
+		get-?branch       of drup decompile-?branch cr endof
+		get-original-exit of drup decompile-exit       endof
+		word-printer 1 cr
+	endcase ;
+
+: decompiler ( code-field-ptr -- : decompile a word in its entirety )
+	begin 
+		decompile 
+		?dup-if 
+			+ 
+		else 
+			drop exit 
+		then 
 	again ;
 
 hide{
+	d.h
 	word-printer get-branch get-?branch get-original-exit 
 	get-quote branch-increment decompile-literal 
 	decompile-branch decompile-?branch decompile-quote
+	decompile-exit
 }hide
 
 ( these words expect a pointer to the PWD field of a word )
@@ -2191,7 +2219,7 @@ A good way to test decompilation is with the following Unix pipe:
 	if ( decompile if a compiled word )
 		2 cells + ( move to code field )
 		" code field:" cr
-		decompile
+		decompiler
 	else ( the instruction describes the word if it is not a compiled word )
 		drop
 	then cr ;
@@ -3023,7 +3051,37 @@ the debugger however [a fence like mechanism could be introduced]. It is an inte
 concept. Alternatively a monitor could be built into 'libforth.c'. Either way poses
 problems.
 * Words for manipulating words should be added, for navigating to different
-fields within them, to the end of the word, etcetera. )
+fields within them, to the end of the word, etcetera. 
+* Constants can be made to be much more space efficient [and save a few instructions],
+Instead of:
+
+	._______________.
+	| name...       |
+	._______________.
+	| previous word |
+	._______________.
+	| CODE [RUN]    |
+	._______________.
+	| literal       |
+	._______________.
+	| value         |
+	._______________.
+	| exit          |
+	._______________.
+
+It should be:
+
+	._______________.
+	| name...       |
+	._______________.
+	| previous word |
+	._______________.
+	| CODE [PUSH]   |
+	._______________.
+	| value         |
+	._______________.
+
+)
 
 verbose [if] 
 	.( FORTH: libforth successfully loaded.) cr
