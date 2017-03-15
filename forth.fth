@@ -85,9 +85,6 @@ extract the document string for a given work.
 : cr  ( -- : emit a newline character )
 	'\n' emit ;
 
-: dolist ( -- x : run code word, threaded code interpreter instruction )
-	1 ;      
-
 : dolit ( -- x : location of special "push" word )
 	2 ;
 
@@ -659,32 +656,32 @@ Instead of:
 	;
 
 ( ================================== DUMP ================================== )
-: newline ( x -- x+1 : print a new line every fourth value )
-	dup 3 and 0= if cr then 1+ ;
-
-: address ( num count -- count : print current address we are dumping every fourth value )
-	dup >r
-	1- 3 and 0= if . [char] : emit space else drop then
-	r> ;
-
-: dump ( start count -- : print the contents of a section of memory )
-	base @ >r ( save current base )
-	hex       ( switch to hex mode )
-	1 >r      ( save counter on return stack )
-	over + swap ( calculate limits: start start+count )
-	begin 
-		2dup u> ( stop if gone past limits )
-	while 
-		dup r> address >r
-		dup @ . 1+ 
-		r> newline >r
-	repeat 
-	r> drop
-	r> base !
-	2drop ;
-
-hider newline
-hider address 
+\ : newline ( x -- x+1 : print a new line every fourth value )
+\ 	dup 3 and 0= if cr then 1+ ;
+\ 
+\ : address ( num count -- count : print current address we are dumping every fourth value )
+\ 	dup >r
+\ 	1- 3 and 0= if . [char] : emit space else drop then
+\ 	r> ;
+\ 
+\ : dump ( start count -- : print the contents of a section of memory )
+\ \	base @ >r ( save current base )
+\ \	hex       ( switch to hex mode )
+\ 	1 >r      ( save counter on return stack )
+\ 	over + swap ( calculate limits: start start+count )
+\ 	begin 
+\ 		2dup u> ( stop if gone past limits )
+\ 	while 
+\ 		dup r> address >r
+\ 		dup @ . 1+ 
+\ 		r> newline >r
+\ 	repeat 
+\ 	r> drop
+\ \	r> base !
+\ 	2drop ;
+\ 
+\ hider newline
+\ hider address 
 ( ================================== DUMP ================================== )
 
 : cfa immediate ( find-address -- cfa )
@@ -970,8 +967,18 @@ and constants, as we mentioned before. )
 : variable ( x c" xxx" -- : create a variable will initial value of x )
 	create ,     does>   ;
 
-: constant ( x c" xxx" -- : create a constant with value of x ) 
-	create ,     does> @ ;
+( @todo fix the definitions of created variables so they are more space
+efficient, they should be more like the following definition of constant )
+: constant 
+	::
+	here 1- h !
+	here @ instruction-mask invert and 1 or here !
+	here 1+ h !
+	,
+	postpone [ ;
+
+\ : constant ( x c" xxx" -- : create a constant with value of x ) 
+\	create ,     does> @ ;
 
 : table  ( u c" xxx" --, Run Time: -- addr u : create a named table )
 	create dup , allot does> dup @ ;
@@ -1452,6 +1459,12 @@ if true )
 find [if] [if]-word !
 find [else] [else]-word !
 
+: ?( if postpone ( then ; \ conditionally read until ')'
+: ?\ if postpone \ then ;
+: 16bit\ size 2 = if postpone \ then ;
+: 32bit\ size 4 = if postpone \ then ;
+: 64bit\ size 8 = if postpone \ then ;
+
 hide{ 
 [if]-word [else]-word nest reset-nest unnest? match-[else]? end-nest? nest? }hide
 
@@ -1559,7 +1572,10 @@ size 8 = [if]
 ( @todo this function should make use of 'defer' and 'is', then different
 version of dump could be made that swapped out 'lister' )
 : dump  ( addr u -- : dump out 'u' cells of memory starting from 'addr' )
-	base @ >r hex 1+ over + under lister drop r> base ! cr ;
+\	base @ >r hex 
+	1+ over + under lister drop 
+\	r> base ! 
+	cr ;
 
 hide{ counted-column counter as-chars }hide
 
@@ -1611,6 +1627,7 @@ hide{ a b m }hide
 : ndrop ( drop n items )
 	?dup-if 0 do drop loop then ;
 
+( @todo refactor this to use a more generic Caesar cipher )
 : r13 ( c -- o : convert a character to ROT-13 form )
   >lower trip
 	lowercase?
@@ -1629,7 +1646,7 @@ hide{ a b m }hide
 
 0 variable hld
 
-: overflow ( -- : )
+: overflow ( -- : check if we overflow the hold area )
  	here chars> pad chars> hld @ - u> if -17 throw then ;
 
 : hold ( char -- : add a character to the numeric output string )
@@ -2068,26 +2085,17 @@ hider debug-prompt
 		dup @ swap
 	again ;
 
-: end-print ( x -- )
-	"		=> " . " ]" ;
-
 : word-printer
 	( attempt to print out a word given a words code field
 	WARNING: This is a dirty hack at the moment
 	NOTE: given a pointer to somewhere in a word it is possible
 	to work out the PWD by looping through the dictionary to
 	find the PWD below it )
-	dup 1- @ -1 = if " [ noname" end-print exit then
-	dup  " [ " code>pwd ?dup-if name print else drop " data" then
-	        end-print ;
+	dup 1- @ -1 = if . " noname" exit then
+	dup code>pwd ?dup-if .d name print else drop " data" then
+	        drop ;
 
-hide{ end-print code>pwd }hide
-
-: .h ( x -- : print out a number in hexadecimal format )
-	base @ >r hex . r> base ! ;
-
-: d.h ( x -- x : print out a number in hexadecimal format, preserving the number )
-	dup .h ;
+hide{ code>pwd }hide
 
 ( these words push the execution tokens for various special cases for decompilation )
 : get-branch  [ find branch  ] literal ;
@@ -2105,19 +2113,22 @@ and any data belonging to that operation, and push a number to increment the
 decompilers code stream pointer by )
 
 : decompile-literal ( code -- increment )
-	" [ literal	=> " 1+ ? " ]" 2 ;
+	1+ ? " literal" 2 ;
 
 : decompile-branch  ( code -- increment )
-	" [ branch	=> " 1+ ? " ]" dup 1+ @ branch-increment ;
+	dark red foreground color
+	1+ ? " branch" dup 1+ @ branch-increment ;
 
 : decompile-quote   ( code -- increment )
-	" [ '	=> " 1+ @ word-printer "  ]" 2 ;
+	dark green foreground color
+	dup
+	[char] ' emit 1+ @ word-printer 2 reset-color ;
 
 : decompile-?branch ( code -- increment )
-	" [ ?branch	=> " 1+ ? " ]" 2 ;
+	1+ ? " ?branch" 2 ;
 
 : decompile-exit ( code -- 0 )
-	" [ exit ]" cr " End of word:   " .  0 ;
+	" _exit" cr " End of word:   " .  0 ;
 
 ( The decompile word expects a pointer to the code field of a word, it
 decompiles a words code field, it needs a lot of work however.
@@ -2143,12 +2154,13 @@ this will require keeping track of '?branch'.
 Also of note, a number greater than "here" must be data )
 
 ( @todo Improve the format of the decompilation
-	- remove '[' and ']'
 	- print hex/decimal [remove .h, print only in hex? ]
+	- option to print in decimal or hexadecimal
+	- Add decompilation of new CONST instructions and constants
 	- print ADDRESS : VALUE WORD )
 
 : decompile ( code-pointer -- code-pointer increment|0 : )
-	d.h [char] : emit space dup @
+	.d [char] : emit space dup @
 	case
 		dolit             of drup decompile-literal cr endof
 		get-branch        of drup decompile-branch     endof
@@ -2160,7 +2172,7 @@ Also of note, a number greater than "here" must be data )
 
 : decompiler ( code-field-ptr -- : decompile a word in its entirety )
 	begin 
-		decompile 
+		decompile reset-color
 		?dup-if 
 			+ 
 		else 
@@ -2169,7 +2181,6 @@ Also of note, a number greater than "here" must be data )
 	again ;
 
 hide{
-	d.h
 	word-printer get-branch get-?branch get-original-exit 
 	get-quote branch-increment decompile-literal 
 	decompile-branch decompile-?branch decompile-quote
@@ -2334,6 +2345,8 @@ For resources on Forth:
  -- end --
 " cr
 ;
+
+( ==================== Debugging info ========================= )
 
 ( ==================== Files ================================== )
 
@@ -3035,6 +3048,9 @@ document into a literate Forth file.
 * Sort out "'", "[']", "find", "compile," 
 * Proper booleans should be used throughout, that is -1 is true, and 0 is
 false.
+* Attempt to add crypto primitives, not for serious use, like TEA, XTEA,
+XXTEA, RC4, MD5, ...
+* Add hash functions: CRC-32, CRC-16, ...
 * File operation primitives that close the file stream [and possibly restore
 I/O to stdin/stdout] if an error occurs, and then re-throws, should be made.
 * Implement as many things from http://lars.nocrew.org/forth2012/implement.html
@@ -3093,5 +3109,4 @@ verbose [if]
 ( The following will not work as we might actually be reading from a string [`sin]
 not `fin. 
 : key 32 chars> 1 `fin @ read-file drop 0 = if 0 else 32 chars> c@ then ; )
-
 

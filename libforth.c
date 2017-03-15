@@ -71,6 +71,11 @@ Jones Forth, a literate Forth written in x86 assembly:
 * <https://rwmj.wordpress.com/2010/08/07/jonesforth-git-repository/>
 * <https://github.com/AlexandreAbreu/jonesforth> (backup)
 
+Another portable Forth interpreter of written in C:
+
+* http://www.softsynth.com/pforth/
+* https://github.com/philburk/pforth
+
 A Forth processor:
 
 * <http://www.excamera.com/sphinx/fpga-j1.html>
@@ -534,7 +539,7 @@ static const char *initial_forth_program =
 ": [ immediate 0 state ! ; \n"
 ": ] 1 state ! ; \n"
 ": >mark here 0 , ; \n"
-": :noname immediate -1 , here 1 , ] ; \n"
+": :noname immediate -1 , here dolist , ] ; \n"
 ": if immediate ' ?branch , >mark ; \n"
 ": else immediate ' branch , >mark swap dup here swap - swap ! ; \n"
 ": then immediate dup here swap - swap ! ; \n"
@@ -857,6 +862,7 @@ up for debugging purposes (like **pnum**).
 
 #define XMACRO_INSTRUCTIONS\
  X(PUSH,      "push",       " -- x : push a literal")\
+ X(CONST,     "const",      " -- x : push a literal")\
  X(RUN,       "run",        " -- : run a Forth word")\
  X(DEFINE,    "define",     " -- : make new Forth word, set compile mode")\
  X(IMMEDIATE, "immediate",  " -- : make a Forth word immediate")\
@@ -971,7 +977,8 @@ Forth interpreter.
  X("instruction-mask", INSTRUCTION_MASK, "instruction mask for CODE field")\
  X("word-mask",   WORD_MASK,    "word length mask for CODE field")\
  X("hidden-bit",  WORD_HIDDEN_BIT_OFFSET, "hide bit in CODE field")\
- X("compile-bit", COMPILING_BIT_OFFSET, "compile/immediate bit in CODE field")
+ X("compile-bit", COMPILING_BIT_OFFSET, "compile/immediate bit in CODE field")\
+ X("dolist",      RUN,          "instruction for executing a words body")
 
 /**
 @brief A structure that contains a constant to be added to the
@@ -1468,11 +1475,15 @@ int forth_eval(forth_t *o, const char *s)
 
 int forth_define_constant(forth_t *o, const char *name, forth_cell_t c)
 {
-	char e[MAXIMUM_WORD_LENGTH+32] = {0};
 	assert(o);
-       	assert(strlen(name) < MAXIMUM_WORD_LENGTH);
-	sprintf(e, ": %31s %" PRIdCell " ; \n", name, c);
-	return forth_eval(o, e);
+	assert(name);
+	compile(o, CONST, name, true);
+	if(strlen(name) >= MAXIMUM_WORD_LENGTH)
+		return -1;
+	if(o->m[DIC] + 1 >= o->core_size)
+		return -1;
+	o->m[o->m[DIC]++] = c; 
+	return 0;
 }
 
 void forth_set_args(forth_t *o, int argc, char **argv)
@@ -2128,6 +2139,7 @@ instructions enumeration will not be used (such as **ADD** or
 **/
 
 		case PUSH:    *++S = f;     f = m[ck(I++)];          break;
+		case CONST:   *++S = f;     f = m[ck(pc)];           break;
 		case RUN:     m[ck(++m[RSTK])] = I; I = pc;          break;
 		case DEFINE:
 /**

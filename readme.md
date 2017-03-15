@@ -602,6 +602,11 @@ are all *immediate* words.
 Push the next value in the instruction stream onto the variable stack, advancing
 the instruction stream.
 
+* const ( -- x )
+
+Push the next location after this instruction, not the instruction stream, onto
+the variable stack. 
+
 * run ( -- )
 
 Save the current instruction stream pointer onto the return stack and set
