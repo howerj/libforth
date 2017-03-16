@@ -72,6 +72,9 @@ efficient, they should be more like the following definition of constant )
  2 constant  2
  3 constant  3
 
+( @todo test by how much, if at all, making words like 1+, 1-, <>, and other
+simple words, part of the interpreter would speed things up )
+
 : 1+ ( x -- x : increment a number ) 
 	1 + ;
 
@@ -99,8 +102,11 @@ efficient, they should be more like the following definition of constant )
 : logical ( x -- bool : turn a value into a boolean ) 
 	not not ;
 
+( @todo ": dolit ' ' ;" works but does not interact well with 
+'decompile', if this was fixed the special work could be removed,
+with some extra effort in libforth.c as well )
 : dolit ( -- x : location of special "push" word )
-	2 ;
+	2 ; 
 
 : 2, ( x x -- : write two values into the dictionary )
 	, , ;

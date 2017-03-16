@@ -2135,6 +2135,10 @@ than **RUN**, they contain the instructions **DUP** and **MUL** respectively.
 	INNER:  
 		w = instruction(m[ck(pc++)]);
 		TRACE(o, w, S, f);
+		/**@todo move depth check to here, using the
+		 * XMACRO_INSTRUCTIONS to record the depth function have before
+		 * it executes. The number off items it pushes could also be
+		 * checked against */
 		switch (w) { 
 
 /**
