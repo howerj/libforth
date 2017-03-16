@@ -60,9 +60,9 @@ efficient, they should be more like the following definition of constant )
 : constant 
 	:: ( compile word header )
 	here 1 - h ! ( decrement dictionary pointer )
-	here @ instruction-mask invert and 1 or here ! ( change instruction to CONST )
+	here @ instruction-mask invert and doconst or here ! ( change instruction to CONST )
 	here 1 + h ! ( increment dictionary pointer )
-	, ( write in value )
+	,            ( write in value )
 	postpone [ ; ( back into command mode )
 
 ( space saving measure )
@@ -113,6 +113,10 @@ efficient, they should be more like the following definition of constant )
 
 : sliteral immediate ( I: c-addr u --, Run: -- c-addr u )
 	swap [literal] [literal] ;
+
+( @todo throw if not found )
+: ['] ( I: c" xxx", Run: -- xt  )
+	immediate find [literal] ;
 
 : hidden-mask ( -- x : pushes mask for the hide bit in a words CODE field )
 	[ 1 hidden-bit lshift ] literal  ;
@@ -523,10 +527,10 @@ Instead of:
 	swap 1+ swap ;
 
 : ?dup-if immediate ( x -- x | - : ?dup and if rolled into one! )
-	' ?dup , postpone if ;
+	['] ?dup , postpone if ;
 
 : ?if ( -- : non destructive if ) 
-	immediate ' dup , postpone if ;
+	immediate ['] dup , postpone if ;
 
 : hide  ( token -- hide-token : this hides a word from being found by the interpreter )
 	?dup-if
@@ -535,6 +539,7 @@ Instead of:
 
 : hider ( WORD -- : hide with drop ) 
 	find dup if hide then drop ;
+
 
 : reveal ( hide-token -- : reveal a hidden word ) 
 	dup @ hidden-mask invert and swap ! ;
@@ -696,19 +701,15 @@ Instead of:
 	( @todo if < dictionary start PWD is invalid )
 	 ;
 
-: >body ( xt -- a-addr : a-addr is data field of a CREATEd word )
-	cfa 5 + ;
+\ : >body ( xt -- a-addr : a-addr is data field of a CREATEd word )
+\	cfa 5 + ;
 
-( @todo non-compliant, fix )
-: ['] immediate find [literal] ;
 
 : execute ( xt -- : given an execution token, execute the word )
-	( create a word that pushes the address of a hole to write to
-	a literal takes up two words, '!' takes up one, that's right,
+	( create a word that pushes the address of a hole to write to.
+	A literal takes up two words, '!' takes up one, that's right,
 	some self modifying code! )
-	\ 1- ( execution token expects pointer to PWD field, it does not
-	\ 	care about that field however, and increments past it )
-	[ here 3+ literal ] ( calculate place to write to )
+	[ here 3 cells + literal ] ( calculate place to write to )
 	!                   ( write an execution token to a hole )
 	[ 0 , ] ;           ( this is the hole we write )
 
@@ -905,7 +906,7 @@ amongst other things.
 
 A simple version of create is as follows
 
-	: create :: 2 , here 2 + , ' exit , 0 state ! ;
+	: create :: dolist , here 2 cells + , ' exit , 0 state ! ;
 
 But this version is much more limited.
 
@@ -932,7 +933,7 @@ and thus allows us to extend the language easily.
 : command-mode-create   ( create a new work that pushes its data field )
 	::              ( compile a word )
 	dolit ,         ( write push into new word )
-	here 2+ ,       ( push a pointer to data field )
+	here 2 cells + ,       ( push a pointer to data field )
 	postpone ; ;    ( write exit and switch to command mode )
 
 : <build immediate
@@ -980,7 +981,7 @@ and constants, as we mentioned before. )
 : table  ( u c" xxx" --, Run Time: -- addr u : create a named table )
 	create dup , allot does> dup @ ;
 
-: string ( u c" xxx" --, Run Time: -- addr u : create a named table )
+: string ( u c" xxx" --, Run Time: -- c-addr u : create a named string )
 	create dup , chars allot does> dup @ swap 1+ chars> swap ;
 
 \ : +field  \ n <"name"> -- ; exec: addr -- 'addr
@@ -1125,8 +1126,8 @@ testing and debugging:
 : reverse ( x1 ... xn n -- xn ... x1 : reverse n items on the stack )
 	0 do i roll loop ;
 
-
 ( ========================== DO...LOOP ======================================= )
+
 0 variable column-counter
 4 variable column-width
 
@@ -1199,7 +1200,7 @@ testing and debugging:
 			leave
 		then
 	loop
-	-11 throw ; ( read in too many chars )
+	-18 throw ; ( read in too many chars )
 hider delim
 
 : skip
@@ -1458,12 +1459,15 @@ find [else] [else]-word !
 
 : ?( if postpone ( then ; \ conditionally read until ')'
 : ?\ if postpone \ then ;
-: 16bit\ size 2 = if postpone \ then ;
-: 32bit\ size 4 = if postpone \ then ;
-: 64bit\ size 8 = if postpone \ then ;
+: 16bit\ size 2 <> if postpone \ then ;
+: 32bit\ size 4 <> if postpone \ then ;
+: 64bit\ size 8 <> if postpone \ then ;
 
 hide{ 
-[if]-word [else]-word nest reset-nest unnest? match-[else]? end-nest? nest? }hide
+	[if]-word [else]-word nest 
+	reset-nest unnest? match-[else]? 
+	end-nest? nest? 
+}hide
 
 ( ==================== Conditional Compilation ================ )
 
@@ -1954,13 +1958,13 @@ access a words CODE field, the offset to the NAME is stored here in bits
 "print" expects a character address, so we need to multiply any calculated
 address by the word size in bytes. )
 
-: print-immediate ( bool -- : emit or mark a word being printed as being immediate )
+: words.immediate ( bool -- : emit or mark a word being printed as being immediate )
 	not if dark red foreground color then ;
 
-: print-defined ( bool -- : emit or mark a word being printed as being a built in word )
+: words.defined ( bool -- : emit or mark a word being printed as being a built in word )
 	not if bright green background color then ;
 
-: print-hidden ( bool -- : emit or mark a word being printed as being a hidden word )
+: words.hidden ( bool -- : emit or mark a word being printed as being a hidden word )
 	if dark magenta foreground color then ;
 
 : words ( -- : print out all defined an visible words )
@@ -1969,9 +1973,9 @@ address by the word size in bytes. )
 		dup
 		hidden? hide-words @ and
 		not if
-			hidden? print-hidden
-			compiling? print-immediate
-			dup defined-word? print-defined
+			hidden? words.hidden
+			compiling? words.immediate
+			dup defined-word? words.defined
 			name
 			print space
 			reset-color
@@ -1983,7 +1987,14 @@ address by the word size in bytes. )
 	until
 	drop cr ;
 
-hide{ print-immediate print-defined print-hidden }hide
+( Simpler version of words
+: words
+	pwd @ 
+	begin
+		dup name print space @ dup dictionary-start u<
+	until drop cr ; )
+
+hide{ words.immediate words.defined words.hidden hidden? hidden-bit }hide
 
 : TrueFalse ( -- : print true or false )
 	if " true" else " false" then ;
@@ -2103,7 +2114,12 @@ hide{ code>pwd }hide
 ( @todo replace 2- nos1+ nos1+ with appropriate word, like the string word 
 that increments a string by an amount, but that operates on CELLS )
 : branch-increment ( addr branch -- increment : calculate decompile increment for "branch" )
-	1+ dup negative? if drop 2 else 2dup 2- nos1+ nos1+ dump then ;
+	1+ dup negative? 
+	if 
+		over cr . [char] : emit space . cr 2 
+	else 
+		2dup 2- nos1+ nos1+ dump 
+	then ;
 
 ( these words take a code field to a primitive they implement, decompile it
 and any data belonging to that operation, and push a number to increment the
@@ -2114,7 +2130,7 @@ decompilers code stream pointer by )
 
 : decompile-branch  ( code -- increment )
 	dark red foreground color
-	1+ ? " branch" dup 1+ @ branch-increment ;
+	1+ ? " branch " dup 1+ @ branch-increment ;
 
 : decompile-quote   ( code -- increment )
 	dark green foreground color
@@ -2150,12 +2166,6 @@ this will require keeping track of '?branch'.
 
 Also of note, a number greater than "here" must be data )
 
-( @todo Improve the format of the decompilation
-	- print hex/decimal [remove .h, print only in hex? ]
-	- option to print in decimal or hexadecimal
-	- Add decompilation of new CONST instructions and constants
-	- print ADDRESS : VALUE WORD )
-
 : decompile ( code-pointer -- code-pointer increment|0 : )
 	.d [char] : emit space dup @
 	case
@@ -2165,17 +2175,10 @@ Also of note, a number greater than "here" must be data )
 		get-?branch       of drup decompile-?branch cr endof
 		get-original-exit of drup decompile-exit       endof
 		word-printer 1 cr
-	endcase ;
+	endcase reset-color ;
 
 : decompiler ( code-field-ptr -- : decompile a word in its entirety )
-	begin 
-		decompile reset-color
-		?dup-if 
-			+ 
-		else 
-			drop exit 
-		then 
-	again ;
+	begin decompile over + tuck = until drop ;
 
 hide{
 	word-printer get-branch get-?branch get-original-exit 
@@ -2185,20 +2188,20 @@ hide{
 }hide
 
 ( these words expect a pointer to the PWD field of a word )
-: print-name         " name:          " name print cr ;
-: print-start        " word start:    " name chars . cr ;
-: print-previous     " previous word: " @ . cr ;
-: print-immediate    " immediate:     " compiling? swap drop not TrueFalse cr ;
-: print-instruction  " instruction:   " xt-instruction . cr ;
-: print-defined      " defined:       " defined-word? TrueFalse cr ;
+: see.name         " name:          " name print cr ;
+: see.start        " word start:    " name chars . cr ;
+: see.previous     " previous word: " @ . cr ;
+: see.immediate    " immediate:     " compiling? swap drop not TrueFalse cr ;
+: see.instruction  " instruction:   " xt-instruction . cr ;
+: see.defined      " defined:       " defined-word? TrueFalse cr ;
 
-: print-header ( PWD -- is-immediate-word? )
-	dup print-name
-	dup print-start
-	dup print-previous
-	dup print-immediate
-	dup print-instruction ( @todo look up instruction name )
-	print-defined ;
+: see.header ( PWD -- is-immediate-word? )
+	dup see.name
+	dup see.start
+	dup see.previous
+	dup see.immediate
+	dup see.instruction ( @todo look up instruction name )
+	see.defined ;
 
 ( @todo This does not work for all words, so needs fixing. 
  Specifically: 
@@ -2221,16 +2224,25 @@ A good way to test decompilation is with the following Unix pipe:
 : see ( c" xxx" -- : decompile the next word in the input stream )
 	find
 	dup 0= if -32 throw then
-	1- ( move to PWD field )
-	dup print-header
+	-1 cells + ( move to PWD field )
+	dup see.header
 	dup defined-word?
 	if ( decompile if a compiled word )
 		2 cells + ( move to code field )
 		" code field:" cr
 		decompiler
 	else ( the instruction describes the word if it is not a compiled word )
-		drop
+		dup 1 cells + @ instruction-mask and doconst = if ( special case for constants )
+			" constant:      " 2 cells + @ .
+		else
+			drop
+		then
 	then cr ;
+
+hide{ 
+	see.header see.name see.start see.previous see.immediate 
+	see.instruction defined-word? see.defined
+}hide
 
 ( These help messages could be moved to blocks, the blocks could then
 be loaded from disk and printed instead of defining the help here,
@@ -2249,7 +2261,7 @@ marked with (2) define new words. Words marked with (3) have both command
 and compile functionality.
 
 "
-more " The built in words that accessible are:
+more " Some of the built in words that accessible are:
 
 (1,2)	:                 define a new word, switching to compile mode
 	immediate         make latest defined word immediate
@@ -2999,15 +3011,14 @@ of that specific Forth, here we clean up as many non standard words as
 possible. )
 hide{ 
  do-string ')' alignment-bits 
- dictionary-start hidden? hidden-mask instruction-mask immediate-mask compiling?
- hidden-bit compile-bit
- max-core dolist x x! x@ write-exit
+ dictionary-start hidden-mask instruction-mask immediate-mask compiling?
+ compile-bit
+ max-core dolist doconst x x! x@ write-exit
  max-string-length 
  _exit
  pnum evaluator 
- TrueFalse >instruction print-header
- print-name print-start print-previous print-immediate
- print-instruction xt-instruction defined-word? print-defined
+ TrueFalse >instruction 
+ xt-instruction
  `state
  `source-id `sin `sidx `slen `start-address `fin `fout `stdin
  `stdout `stderr `argc `argv `debug `invalid `top `instruction
@@ -3076,4 +3087,6 @@ verbose [if]
 ( The following will not work as we might actually be reading from a string [`sin]
 not `fin. 
 : key 32 chars> 1 `fin @ read-file drop 0 = if 0 else 32 chars> c@ then ; )
+
+\ : ' immediate state @ if postpone ['] else find then ;
 

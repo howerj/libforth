@@ -166,7 +166,7 @@ decompile: ${TARGET} forth.fth
 	rm -vf decompiled.log words.log words.see.log
 	./${TARGET} -f forth.fth -e words > words.log
 	sed 's/ / see /g' < words.log > words.see.log
-	./${TARGET} -t forth.fth < words.see.log > decompiled.log
+	./${TARGET} -t -f forth.fth -e hex < words.see.log > decompiled.log
 
 clean:
 	${RM} ${TARGET} unit *.a *.so *.o

@@ -10,6 +10,10 @@
 
 @todo Fix the special 'literal' word, moving it outside register area
 @todo Add 'parse', removing scanf/fscanf
+@todo The special case of base = 0 causes problems, this should be
+removed.
+@todo Add THROW/CATCH as virtual machine instructions, remove
+RESTART and current error handling scheme.
 
 ## License
 
@@ -545,7 +549,6 @@ static const char *initial_forth_program =
 ": then immediate dup here swap - swap ! ; \n"
 ": begin immediate here ; \n"
 ": until immediate ' ?branch , here - , ; \n"
-": ')' 41 ; \n"
 ": ( immediate begin key ')' = until ; \n"
 ": rot >r swap r> swap ; \n"
 ": -rot rot rot ; \n"
@@ -890,7 +893,6 @@ up for debugging purposes (like **pnum**).
  X(BRANCH,    "branch",     " -- : unconditional branch")\
  X(QBRANCH,   "?branch",    "x -- : branch if x is zero")\
  X(PNUM,      "pnum",       "x -- : print a number")\
- X(QUOTE,     "'",          " -- addr : push address of word")\
  X(COMMA,     ",",          "x -- : write a value into the dictionary")\
  X(EQUAL,     "=",          "x x -- bool : compare two values for equality")\
  X(SWAP,      "swap",       "x1 x2 -- x2 x1 : swap two values")\
@@ -978,7 +980,9 @@ Forth interpreter.
  X("hidden-bit",  WORD_HIDDEN_BIT_OFFSET, "hide bit in CODE field")\
  X("compile-bit", COMPILING_BIT_OFFSET, "compile/immediate bit in CODE field")\
  X("dolist",      RUN,          "instruction for executing a words body")\
- X("bl",          ' ',          "space")
+ X("doconst",     CONST,        "instruction for pushing a constant")\
+ X("bl",          ' ',          "space character")\
+ X("')'",         ')',          "')' character")
 
 /**
 @brief A structure that contains a constant to be added to the
@@ -1427,7 +1431,7 @@ static void trace(forth_t *o, forth_cell_t instruction,
 {
 	if(o->m[DEBUG] < FORTH_DEBUG_INSTRUCTION)
 		return;
-	if(instruction > LAST_INSTRUCTION) {
+	if(instruction >= LAST_INSTRUCTION) {
 		error("traced invalid instruction %"PRIdCell, instruction);
 		return;
 	}
@@ -1718,6 +1722,7 @@ compile pointers to this CODE field into the dictionary.
 	for(i = READ, w = READ; instruction_names[i]; i++)
 		compile(o, w++, instruction_names[i], true);
 	compile(o, EXIT, "exit", true); /* needed for 'see', trust me */
+	compile(o, PUSH, "'", true);
 
 /**
 The next eval is the absolute minimum needed for a sane environment, it
@@ -2276,7 +2281,6 @@ require some explaining, but ADD, SUB and DIV will not.
 		case QBRANCH: cd(1); I += f == 0 ? m[I] : 1; f = *S--;   break;
 		case PNUM:    cd(1); 
 			      f = print_cell(o, (FILE*)(o->m[FOUT]), f); break;
-		case QUOTE:   *++S = f;     f = m[ck(I++)];              break;
 		case COMMA:   cd(1); m[dic(m[DIC]++)] = f; f = *S--;     break;
 		case EQUAL:   cd(2); f = *S-- == f;                      break;
 		case SWAP:    cd(2); w = f;  f = *S--;   *++S = w;       break;
