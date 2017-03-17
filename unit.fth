@@ -233,7 +233,26 @@ T{ c" hello" drop c" he.lo" drop match -> 1 }T
 T{ c" hello" drop c" h*"    drop match -> 1 }T
 T{ c" hello" drop c" h*l."  drop match -> 1 }T
 
+.( crc ) cr
+T{ c" xxx" crc16-ccitt -> 0xC35A }T
+T{ c" hello" crc16-ccitt -> 0xD26E }T
+
 cleanup
+
+.( rationals ) cr
+T{ 1 2 2 4 =rat -> 1 }T
+T{ 3 4 5 7 =rat -> 0 }T
+
+T{ 1 3 1 2 >rat -> 0 }T
+T{ 6 20 1 5 >rat -> 1 }T
+
+T{ 1 2 1 2 *rat -> 1 4 }T
+T{ 8 20 100 200 *rat -> 1 5 }T
+
+T{ 8 1 4 2 /rat -> 4 1 }T
+T{ 1 2 2 4 /rat -> 1 1 }T
+T{ 5 6 3 7 /rat -> 35 18 }T 
+T{ 1 2 3 4 /rat -> 2 3 }T
 
 ( ==================== Unit tests ============================ )
 

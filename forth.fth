@@ -55,8 +55,6 @@ extract the document string for a given work.
 : :: ( -- : compiling version of ':' )
 	[ find : , ] ;
 
-( @todo fix the definitions of created variables so they are more space
-efficient, they should be more like the following definition of constant )
 : constant 
 	:: ( compile word header )
 	here 1 - h ! ( decrement dictionary pointer )
@@ -970,6 +968,7 @@ hider state!
 
 hider write-quote
 hider write-compile,
+hider write-exit
 
 ( Now that we have create...does> we can use it to create arrays, variables
 and constants, as we mentioned before. )
@@ -1260,8 +1259,44 @@ hider skip
 : asciiz ( c-addr u -- : trim a string until NUL terminator )
 	2dup length nip ;
 
+( This foreach mechanism needs thinking about, what is the best information to
+present to the word to be executed? At the moment only the contents of the
+cell that it should be processing is.
+
+At the moment foreach uses a do...loop construct, which means that the
+following cannot be used to exit from the foreach loop:
+
+	: return [ : exit early from a foreach loop ]
+		r> rdrop >r ;
+
+Although this can be remedied, we know that it puts a loop onto the return
+stack.
+
+It also uses a variable 'xt', which means that foreach loops cannot be
+nested. This word really needs thinking about.
+
+It might be more useful to present the word with only the address of the
+cell it will act on.
+
+This seems to be a useful, general, mechanism that is missing from
+most Forths. More words like this should be made, they are powerful
+like the word 'compose', but they need to be created correctly.
+
+@todo improve this by using by using change the '@' word using defer/is like mechanism )
+0 variable xt
+: foreach ( addr u xt -- : execute xt for each cell in addr-u )
+	xt !
+	over + swap do i @ xt @ execute loop ;
+
+: foreach-char ( c-addr u xt -- : execute xt for each cell in c-addr u )
+	xt !
+	over + swap do i c@ xt @ execute loop ;
+
+hider xt
+
 : type ( c-addr u -- : print out 'u' characters at c-addr )
-	0 do dup c@ emit 1+ loop drop ;
+	\ 0 do dup c@ emit 1+ loop drop ;
+	['] emit foreach-char ;
 
 : do-string ( char -- : write a string into the dictionary reading it until char is encountered )
 	(.") 
@@ -2994,6 +3029,108 @@ hide{ 0u. >weekday .day >day >month padded }hide
 
 ( ==================== Date ================================== )
 
+
+( ==================== CRC =================================== )
+
+( @todo implement all common CRC algorithms, but only if
+the word size allows it [ie. 32 bit CRCs on a 32 or 64 bit
+machine, 64 bit CRCs on a 64 bit machine] )
+
+( Make a word to limit arithmetic to a 16-bit value )
+size 2 = [if] 
+	: limit immediate ;  ( do nothing, no need to limit )
+[else] 
+	: limit 0xffff and ; ( limit to 16-bit value )
+[then]
+
+: ccitt ( crc char -- crc : calculate polynomial 0x1021 AKA "x16 + x12 + x5 + 1" )
+	                           ( crc char )
+	limit over 256/ xor        ( crc x )
+	dup  4  rshift xor         ( crc x )
+	dup  5  lshift limit xor   ( crc x )
+	dup  12 lshift limit xor   ( crc x )
+	swap 8  lshift limit xor ; ( crc )
+
+( see http://stackoverflow.com/questions/10564491/function-to-calculate-a-crc16-checksum
+  and https://www.lammertbies.nl/comm/info/crc-calculation.html )
+: crc16-ccitt ( c-addr u -- u )
+	0xFFFF -rot
+	' ccitt
+	foreach-char ;
+hide{ limit ccitt }hide
+
+( ==================== CRC =================================== )
+
+( ==================== Rational Data Type ==================== )
+
+( See: https://en.wikipedia.org/wiki/Rational_data_type )
+
+: simplify ( a b -- a/gcd{a,b} b/gcd{a/b} : simplify a rational )
+  2dup
+  gcd
+  tuck
+  /
+  -rot
+  /
+  swap ; \ ? check this
+
+: crossmultiply ( a b c d -- a*d b*d c*b d*b )
+  rot   ( a c d b )
+  2dup  ( a c d b d b )
+  *     ( a c d b d*b )
+  >r    ( a c d b , d*b )
+  rot   ( a d b c , d*b )
+  *     ( a d b*c , d*b )
+  -rot  ( b*c a d , d*b )
+  *     ( b*c a*d , d*b )
+  r>    ( b*c a*d d*b )
+  tuck  ( b*c d*b a*d d*b )
+  2swap ; ( done! )
+
+: *rat ( a/b c/d -- a/b : multiply two rationals together )
+  rot * -rot * swap simplify ;
+
+: /rat ( a/b c/d -- a/b : divide one rational by another )
+  swap *rat ;
+
+: +rat ( a/b c/d -- a/b : add two rationals together )
+  crossmultiply
+  rot
+  drop ( or check if equal, if not there is an error )
+  -rot
+  +
+  swap
+  simplify ;
+
+: -rat ( a/b c/d -- a/b : subtract one rational from another )
+  crossmultiply 
+  rot
+  drop ( or check if equal, if not there is an error )
+  -rot
+  -
+  swap
+  simplify ;
+
+: .rat ( a/b --  : print out a rational number )
+  simplify swap . [char] / emit space . ;
+
+: =rat ( a/b c/d -- bool : rational equal )
+  crossmultiply rot = -rot = = ;
+
+: >rat ( a/b c/d -- bool : rational greater than )
+  crossmultiply rot 2drop > ;
+
+: <=rat ( a/b c/d -- bool : rational less than or equal to )
+	>rat not ;
+
+: <rat ( a/b c/d -- bool : rational less than )
+  crossmultiply rot 2drop < ;
+
+: >=rat ( a/b c/d -- bool : rational greater or equal to )
+	<rat not ;
+
+( ==================== Rational Data Type ==================== )
+
 ( ==================== Signal Handling ======================= )
 ( Signal handling at the moment is quite primitive. When a signal
 occurs it has to be explicitly tested for by the programmer, this
@@ -3019,7 +3156,7 @@ hide{
  do-string ')' alignment-bits 
  dictionary-start hidden-mask instruction-mask immediate-mask compiling?
  compile-bit
- max-core dolist doconst x x! x@ write-exit
+ max-core dolist doconst x x! x@ 
  max-string-length 
  _exit
  pnum evaluator 
@@ -3053,7 +3190,8 @@ minimal set of functions should be added [f+,f-,f/,f*,f<,f>,>float,...]
 * Allow the processing of argc and argv, the mechanism by which that
 this can be achieved needs to be worked out. However all processing that
 is currently done in "main.c" should be done within the Forth interpreter
-instead.
+instead. Words for manipulating rationals and double width cells should
+be made first.
 * A built in version of "dump" and "words" should be added to the Forth
 starting vocabulary, simplified versions that can be hidden.
 * Here documents, string literals. Examples of these can be found online
@@ -3065,6 +3203,7 @@ false.
 * Attempt to add crypto primitives, not for serious use, like TEA, XTEA,
 XXTEA, RC4, MD5, ...
 * Add hash functions: CRC-32, CRC-16, ...
+http://stackoverflow.com/questions/10564491/function-to-calculate-a-crc16-checksum
 * File operation primitives that close the file stream [and possibly restore
 I/O to stdin/stdout] if an error occurs, and then re-throws, should be made.
 * Implement as many things from http://lars.nocrew.org/forth2012/implement.html
@@ -3073,15 +3212,29 @@ as is sensible.
 * The current words that implement I/O redirection need to be improved, and documented,
 I think this is quite a useful and powerful mechanism to use within Forth that simplifies
 programs. This is a must and will make writing utilities in Forth a *lot* easier 
-* Simple debugger could be made that can set breakpoints by swapping out code with
-pointers, only a limited number of breakpoints could be set [say 32], and what they are
-swapped out by would have to identify what part of the breakpoint table to proper code
-is stored in. Using this debugger could not be used on any words that are in use by
-the debugger however [a fence like mechanism could be introduced]. It is an interesting 
-concept. Alternatively a monitor could be built into 'libforth.c'. Either way poses
-problems.
 * Words for manipulating words should be added, for navigating to different
-fields within them, to the end of the word, etcetera. )
+fields within them, to the end of the word, etcetera.
+* The data structure used for parsing Forth words needs changing in libforth so a
+counted string is produced. Counted strings should be used more often. The current
+layout of a Forth word prevents a counted string being used and uses a byte more
+than it has to.
+* Whether certain simple words [such as '1+', '1-', '>', '<', '<>', 'not', '<=',
+'>='] should be added as virtual machine instructions for speed [and size] reasons
+should be investigated.
+* An analysis of the interpreter and the code it executes could be done to find
+the most commonly executed words and instructions, as well as the most common two and
+three sequences of words and instructions. This could be used to use to optimize the
+interpreter, in terms of both speed and size.
+
+### libforth.c todo
+
+* A halt, a parse, and a print/type instruction could be added to the Forth virtual
+machine.
+* Throw/Catch need to be added and used in the virtual machine
+* Various edge cases and exceptions should be removed [for example counted strings
+are not used internally, and '0x' can be used as a prefix only when base is zero].
+
+ )
 
 verbose [if] 
 	.( FORTH: libforth successfully loaded.) cr
@@ -3095,4 +3248,5 @@ not `fin.
 : key 32 chars> 1 `fin @ read-file drop 0 = if 0 else 32 chars> c@ then ; )
 
 \ : ' immediate state @ if postpone ['] else find then ;
+
 
