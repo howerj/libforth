@@ -154,6 +154,14 @@ min-signed-integer constant max-signed-integer
 : > ( x1 x2 -- bool : signed greater than comparison )
 	- dup if max-signed-integer u< else logical then ;
 
+: #pad ( -- u : offset into pad area )
+	64 ;
+
+: pad
+	( the pad is used for temporary storage, and moves
+	along with dictionary pointer, always in front of it )
+	here #pad + ;
+
 ( @todo this can be improved a lot, currently it uses more
 space than it has to, 4 cells instead of three.
 
@@ -541,7 +549,6 @@ Instead of:
 : hider ( WORD -- : hide with drop ) 
 	find dup if hide then drop ;
 
-
 : reveal ( hide-token -- : reveal a hidden word ) 
 	dup @ hidden-mask invert and swap ! ;
 
@@ -580,17 +587,17 @@ Instead of:
 : start-address ( -- c-addr : push the start address  )
 	`start-address @ ;
 
-: >real-address ( c-addr -- c-addr : convert an interpreter address to a real address )
-	start-address - ;
-
-: real-address> ( c-addr -- c-addr : convert a real address to an interpreter address )
+: >real-address ( c-addr -- r-addr : convert an interpreter address to a real address )
 	start-address + ;
 
-: peek ( c-addr -- char : peek at real memory )
-	>real-address c@ ;
+: real-address> ( c-addr -- r-addr : convert a real address to an interpreter address )
+	start-address - ;
 
-: poke ( char c-addr -- : poke a real memory address  )
-	>real-address c! ;
+: peek ( r-addr -- n : )
+	pad chars> >real-address swap size memory-copy pad @ ;
+
+: poke ( n r-addr -- : )
+	swap pad ! pad chars> >real-address size memory-copy ;
 
 : die! ( x -- : controls actions when encountering certain errors )
 	`error-handler ! ;
@@ -626,14 +633,6 @@ Instead of:
 : verbose ( -- : get the log level )
 	`debug @ ;
 
-: #pad ( -- u : offset into pad area )
-	64 ;
-
-: pad
-	( the pad is used for temporary storage, and moves
-	along with dictionary pointer, always in front of it )
-	here #pad + ;
-
 : count ( c-addr1 -- c-addr2 u : get a string whose first char is its length )
 	dup c@ nos1+ ;
 
@@ -657,6 +656,12 @@ Instead of:
 	begin dup while rot dup . >r 1- repeat drop
 	then  drop cr 
 	>r ;
+
+: argv ( -- r-addr : push pointer to array of string pointers to program )
+	`argv @ ;
+
+: argc ( -- u : push the number of arguments in the argv array )
+	`argc @ ;
 
 : sign-bit
 	[ -1 -1 1 rshift and invert ] literal ;
@@ -801,6 +806,7 @@ Instead of:
 		( when catch began execution )
 	then ; 
 
+
 : interpret 
 	begin 
 	' read catch 
@@ -818,6 +824,36 @@ find [interpret] cell+ start! ( the word executed on restart is now our new word
 
 ( ========================== Basic Word Set ================================== )
 
+( ========================== DOER/MAKE ======================================= )
+( DOER/MAKE is a word set that is quite powerful and is described in Leo Brodie's
+book "Thinking Forth". It can be used to make words whose behavior can change
+after they are defined. It essentially makes the structured use of self-modifying
+code possible, along with the more common definitions of "defer/is".
+
+)
+
+: noop ;
+
+: doer
+	:: ['] noop , postpone ; ;
+
+: found? ( xt -- xt : ) 
+	dup 0= if -13 throw then ;
+
+: make immediate ( c" xxx" c" xxx" : )
+	find found? cell+
+	find found?
+	state @ if ( compiling )
+		swap postpone 2literal ['] ! ,
+	else ( command mode )
+		swap !
+	then ;
+
+hider noop
+hider found?
+
+( ========================== DOER/MAKE ======================================= )
+
 ( ========================== Extended Word Set =============================== )
 
 : log2 ( x -- log2 )
@@ -834,8 +870,7 @@ find [interpret] cell+ start! ( the word executed on restart is now our new word
 	find execute
 	clock r> - ;
 
-( defer...is is probably not standards compliant, it is still neat! Also, there
-  is no error handling if "find" fails... )
+( defer...is is probably not standards compliant, it is still neat! )
 : (do-defer) ( -- self : pushes the location into which it is compiled )
 	r> dup >r 1- ;
 
@@ -844,7 +879,7 @@ find [interpret] cell+ start! ( the word executed on restart is now our new word
 	:: ' (do-defer) , postpone ; ;
 
 : is ( location " ccc" -- : make a deferred word execute a word ) 
-	find cfa swap ! ;
+	find dup 0= if -13 throw then cfa swap ! ;
 
 
 hider (do-defer)
@@ -1277,18 +1312,16 @@ cell it will act on.
 
 This seems to be a useful, general, mechanism that is missing from
 most Forths. More words like this should be made, they are powerful
-like the word 'compose', but they need to be created correctly.
+like the word 'compose', but they need to be created correctly. )
 
-@todo improve this by using by using change the '@' word using defer/is like mechanism )
 0 variable xt
 : foreach ( addr u xt -- : execute xt for each cell in addr-u )
 	xt !
-	over + swap do i @ xt @ execute loop ;
+	bounds do i @ xt @ execute loop ;
 
 : foreach-char ( c-addr u xt -- : execute xt for each cell in c-addr u )
 	xt !
-	over + swap do i c@ xt @ execute loop ;
-
+	bounds do i c@ xt @ execute loop ;
 hider xt
 
 : type ( c-addr u -- : print out 'u' characters at c-addr )
@@ -1511,13 +1544,12 @@ hide{
 
 ( ==================== Endian Words =========================== )
 
-size 2 = [if] 0x0123           variable endianess [then]
-size 4 = [if] 0x01234567       variable endianess [then]
-size 8 = [if] 0x01234567abcdef variable endianess [then]
+size 2 = [if] 0x0123           `x ! [then]
+size 4 = [if] 0x01234567       `x ! [then]
+size 8 = [if] 0x01234567abcdef `x ! [then]
 
 : endian ( -- bool : returns the endianess of the processor, little = 0, big = 1 )
-	[ endianess chars> c@ 0x01 = ] literal ;
-hider endianess
+	[ `x chars> c@ 0x01 = ] literal ;
 
 : swap16 ( x -- x : swap the byte order a 16 bit number )
 	dup 256* 0xff00 and >r 256/ lsb r> or ;
@@ -1611,9 +1643,7 @@ size 8 = [if]
 ( @todo this function should make use of 'defer' and 'is', then different
 version of dump could be made that swapped out 'lister' )
 : dump  ( addr u -- : dump out 'u' cells of memory starting from 'addr' )
-\	base @ >r hex 
 	1+ over + under lister drop 
-\	r> base ! 
 	cr ;
 
 hide{ counted-column counter as-chars }hide
@@ -3376,4 +3406,5 @@ not `fin.
 : key 32 chars> 1 `fin @ read-file drop 0 = if 0 else 32 chars> c@ then ; )
 
 \ : ' immediate state @ if postpone ['] else find then ;
+
 

@@ -922,7 +922,7 @@ up for debugging purposes (like **pnum**).
  X(0, TMPFILE,   "temporary-file",  "-- file-id ior : open a temporary file")\
  X(1, RAISE,     "raise",           "signal -- bool : raise a signal")\
  X(0, DATE,      "date",          " -- date : push the time")\
- X(3, MEMMOVE,   "memory-copy",   " r-addr1 r-addr2 u -- : move a block of memory")\
+ X(3, MEMMOVE,   "memory-copy",   " r-addr1 r-addr2 u -- : move a block of memory from r-addr2 to r-addr1")\
  X(3, MEMCHR,    "memory-locate", " r-addr char u -- r-addr | 0 : locate a character memory")\
  X(3, MEMSET,    "memory-set",    " r-addr char u -- : set a block of memory")\
  X(3, MEMCMP,    "memory-compare", " r-addr1 r-addr2 u -- x : compare two blocks of memory")\
