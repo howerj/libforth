@@ -73,6 +73,20 @@ extract the document string for a given work.
 0 constant false
 1 constant true ( @warning not standards compliant )
 
+10 constant '\n'
+
+1 hidden-bit lshift constant hidden-mask ( mask for the hide bit in a words CODE field )
+
+-1 -1 1 rshift invert and constant min-signed-integer
+
+min-signed-integer invert constant max-signed-integer
+
+1 constant cell ( size of a cell in address units )
+
+cell size 8 * * constant address-unit-bits ( the number of bits in an address )
+
+-1 -1 1 rshift and invert constant sign-bit ( bit corresponding to the sign in a number )
+
 ( @todo test by how much, if at all, making words like 1+, 1-, <>, and other
 simple words, part of the interpreter would speed things up )
 
@@ -125,9 +139,6 @@ with some extra effort in libforth.c as well )
 : ['] ( I: c" xxx", Run: -- xt  )
 	immediate find [literal] ;
 
-: hidden-mask ( -- x : pushes mask for the hide bit in a words CODE field )
-	[ 1 hidden-bit lshift ] literal  ;
-
 : >instruction ( CODE -- Instruction : extract instruction from instruction field ) 
 	instruction-mask and ;
 
@@ -140,13 +151,9 @@ with some extra effort in libforth.c as well )
 : compiling? ( PWD -- PWD bool : is a word immediate, given the words PWD field )
 	dup 1+ @ immediate-mask and logical ;
 
-10 constant '\n'
 
 : cr  ( -- : emit a newline character )
 	'\n' emit ;
-
--1 -1 1 rshift invert and constant min-signed-integer
-min-signed-integer constant max-signed-integer
 
 : < ( x1 x2 -- bool : signed less than comparison )
 	- dup if max-signed-integer u> else logical then ;
@@ -263,20 +270,15 @@ Instead of:
 : endif ( synonym for 'then' ) 
 	immediate  postpone then ;
 
-: cell+ ( a-addr1 -- a-addr2 ) 
-	1+ ;
-
-: cells ( n1 -- n2 ) 
+: cells ( n1 -- n2 : convert a number of cells into a number of cells in address units ) 
 	immediate  ;
 
-: cell ( -- u : defined as 1 cells )
-	1 cells ;
 
-: address-unit-bits ( -- x : push the number of bits in an address )
-	[ cell size 8* * ] literal ;
+: cell+ ( a-addr1 -- a-addr2 ) 
+	cell + ;
 
 : negative? ( x -- bool : is a number negative? )
-	[ 1 address-unit-bits 1- lshift ] literal and logical ;
+	sign-bit and logical ;
 
 : mask-byte ( x -- x : generate mask byte ) 
 	8* 255 swap lshift ;
@@ -663,9 +665,6 @@ Instead of:
 : argc ( -- u : push the number of arguments in the argv array )
 	`argc @ ;
 
-: sign-bit
-	[ -1 -1 1 rshift and invert ] literal ;
-
 : +- ( x1 x2 -- x3 : copy the sign of x1 to x2 giving x3 )
 	[ sign-bit 1- ] literal and
 	swap
@@ -830,7 +829,38 @@ book "Thinking Forth". It can be used to make words whose behavior can change
 after they are defined. It essentially makes the structured use of self-modifying
 code possible, along with the more common definitions of "defer/is".
 
-)
+According to "Thinking Forth", it has two purposes:
+
+1. To change the state of a function.
+2. To factor out common phrases of a words definition.
+
+An example of the first instance:
+
+	doer say
+	: sad " Good bye, cruel World!" cr ;
+	: happy " Hello, World!" cr ;
+
+	: person say ;
+
+	make person happy
+	person \ prints "Good bye, cruel World!"
+
+	make person sad 
+	person \ prints "Hello, World!" 
+
+An example of the second:
+
+	doer op
+
+	: sum \ n0 ... nX X -- sum<0..X> 
+		make op + 1 do op loop ;
+
+	: mul \ n0 ... nX X -- mul<0..X>  
+		make op * 1 do op loop ;
+
+The above example is a bit contrived, the definitions and functionality
+are too simple for this to be worth factoring out, but it shows how you
+can use DOER/MAKE. )
 
 : noop ;
 
@@ -840,7 +870,7 @@ code possible, along with the more common definitions of "defer/is".
 : found? ( xt -- xt : ) 
 	dup 0= if -13 throw then ;
 
-: make immediate ( c" xxx" c" xxx" : )
+: make immediate ( c1" xxx" c2" xxx" : change parsed word c1 to execute c2 )
 	find found? cell+
 	find found?
 	state @ if ( compiling )
@@ -2167,22 +2197,10 @@ hider debug-prompt
 
 : code>pwd ( CODE -- PWD/0 : calculate PWD from code address )
 	dup dictionary-start here within not if drop 0 exit then
-	>r
-	latest dup @ ( p1 p2 )
-	begin
-		over ( p1 p2 p1 )
-		rdup r> u<= swap rdup r> > and if rdrop exit then
-		dup 0=                   if rdrop exit then
-		dup @ swap
-	again ;
+	1 cells - ;
 
-: word-printer
-	( attempt to print out a word given a words code field
-	WARNING: This is a dirty hack at the moment
-	NOTE: given a pointer to somewhere in a word it is possible
-	to work out the PWD by looping through the dictionary to
-	find the PWD below it )
-	dup 1- @ -1 = if . " noname" exit then
+: word-printer ( CODE -- : print out a words name given its code field )
+	dup 1 cells - @ -1 = if . " noname" exit then ( nonames are marked by a -1 before its code field )
 	dup code>pwd ?dup-if .d name print else drop " data" then
 	        drop ;
 

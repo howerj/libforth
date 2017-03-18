@@ -1330,6 +1330,7 @@ documenting are:
  - Tabs vs Spaces (use tabs)
  - Levels of indentation
  - Exceptions to the formatting rules (like the case statement in libforth.c)
+ - Coding standards for Forth (stack comments, indentation, etcetera).
  - And much more.
 * Improve error handling by adding 'throw' and 'catch' to the virtual
 machine as both C functions callable within the confines of 'libforth.c' and

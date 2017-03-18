@@ -1273,8 +1273,30 @@ text interpreter a lot, but not the virtual machine in general.
 forth_cell_t forth_find(forth_t *o, const char *s)
 {
 	forth_cell_t *m = o->m, pwd = m[PWD];
+#ifdef USE_FAST_FIND
+	/* This implements a self organizing list, which speeds
+	 * up the searching of words (which has been profiled), however
+	 * it does not interact well with Forth words like "marker", so
+	 * it is optional. This method uses transposition, move to
+	 * front has not been tested.
+	 *
+	 * See: https://en.wikipedia.org/wiki/Self-organizing_list */
+	forth_cell_t grandparent = pwd, parent = pwd;
+	for (;pwd > DICTIONARY_START && !match(m, pwd, s);) {
+		grandparent = parent;
+		parent = pwd;
+		pwd = m[pwd];
+	}
+	if(pwd > DICTIONARY_START && parent != m[PWD]) { 
+		/* found - transpose it */
+		m[grandparent] = pwd; /* grandparent = current */
+		m[parent] = m[pwd];   /* parent = current next */
+		m[pwd] = parent;      /* new next = parent */
+	} 
+#else
 	for (;pwd > DICTIONARY_START && !match(m, pwd, s);)
 		pwd = m[pwd];
+#endif
 	return pwd > DICTIONARY_START ? pwd + 1 : 0;
 }
 
