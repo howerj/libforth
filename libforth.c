@@ -1441,10 +1441,6 @@ static void trace(forth_t *o, forth_cell_t instruction,
 {
 	if(o->m[DEBUG] < FORTH_DEBUG_INSTRUCTION)
 		return;
-	if(instruction >= LAST_INSTRUCTION) {
-		error("traced invalid instruction %"PRIdCell, instruction);
-		return;
-	}
 	fprintf(stderr, "\t( %s\t ", instruction_names[instruction]);
 	print_stack(o, stderr, S, f);
 	fputs(" )\n", stderr);
@@ -2144,9 +2140,9 @@ than **RUN**, they contain the instructions **DUP** and **MUL** respectively.
 	for(;(pc = m[ck(I++)]);) { 
 	INNER:  
 		w = instruction(m[ck(pc++)]);
-		TRACE(o, w, S, f);
 		if(w < LAST_INSTRUCTION) {
 			cd(stack_bounds[w]);
+			TRACE(o, w, S, f);
 		}
 
 		switch (w) { 
