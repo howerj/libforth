@@ -5,21 +5,21 @@
 1 trace
 
 marker cleanup
-T{ 0 not -> 1 }T
+T{ 0 not -> true }T
 
 T{ 0 1+ -> 1 }T
 T{ 1 1- -> 0 }T
 
-T{ 0 0= -> 1 }T
-T{ 1 0= -> 0 }T
-T{ 0 not -> 1 }T
-T{ 1 not -> 0 }T
-T{ 1 not -> 0 }T
+T{ 0 0= -> true }T
+T{ 1 0= -> false }T
+T{ 0 not -> true }T
+T{ 1 not -> false }T
+T{ 1 not -> false }T
 
-T{ 4 logical -> 1 }T
-T{ 1 logical -> 1 }
-T{ -1 logical -> 1 }
-T{ 0 logical -> 0 }
+T{ 4 logical -> true }T
+T{ 1 logical -> true }
+T{ -1 logical -> true }
+T{ 0 logical -> false }
 
 T{ 9 3 4 *+ -> 21 }T
 
@@ -46,25 +46,25 @@ T{ 2 3 drup -> 2 2 }T
 
 T{ char a -> 97 }T ( assumes ASCII is used )
 T{ bl -> 32 }T ( assumes ASCII is used )
-T{ -1 negative? -> 1 }T
-T{ -40494 negative? -> 1 }T
-T{ 46960 negative? -> 0 }T
-T{ 0 negative? -> 0 }T
+T{ -1 negative? -> true }T
+T{ -40494 negative? -> true }T
+T{ 46960 negative? -> false }T
+T{ 0 negative? -> false }T
 
-T{ -5 4 +- negative? -> 1 }T
-T{  6 6 +- negative? -> 0 }T
-T{  7 -1023 +- negative? 0 }T
-T{  0 0 +- negative? -> 0 }T
-T{ -1 -99 +- negative? -> 1 }T
+T{ -5 4 +- negative? -> true }T
+T{  6 6 +- negative? -> false }T
+T{  7 -1023 +- negative? false }T
+T{  0 0 +- negative? -> false }T
+T{ -1 -99 +- negative? -> true }T
 
-T{ char / number? -> 0 }T
-T{ char : number? -> 0 }T
-T{ char 0 number? -> 1 }T
-T{ char 3 number? -> 1 }T
-T{ char 9 number? -> 1 }T
-T{ char x number? -> 0 }T
-T{ char l lowercase? -> 1 }T
-T{ char L lowercase? -> 0 }T
+T{ char / number? -> false }T
+T{ char : number? -> false }T
+T{ char 0 number? -> true }T
+T{ char 3 number? -> true }T
+T{ char 9 number? -> true }T
+T{ char x number? -> false }T
+T{ char l lowercase? -> true }T
+T{ char L lowercase? -> false }T
 
 T{ 9 log2 -> 3 }T
 T{ 8 log2 -> 3 }T
@@ -103,9 +103,9 @@ T{ 0xFFAA lsb -> 0xAA }T
 T{ 3 ?dup -> 3 3 }T
 \ T{ 0 ?dup -> }T ( need to improve T{ before this can be tested )
 
-T{ 3 2 4 within -> 1 }T
-T{ 2 2 4 within -> 1 }T
-T{ 4 2 4 within -> 0 }T
+T{ 3 2 4 within -> true }T
+T{ 2 2 4 within -> true }T
+T{ 4 2 4 within -> false }T
 T{ 6 1 5 limit -> 5 }T
 T{ 0 1 5 limit -> 1 }T
 
@@ -122,7 +122,7 @@ T{ -5 s>d -> -5 -1 }T
 
 T{ 4 5 bounds -> 9 4 }T
 
-( @todo tests when alignment is 2 and 4 bytes )
+( @todo tests when alignment is 2 bytes )
 size 8 = [if]
 T{ 0  aligned -> 0 }T
 T{ 1  aligned -> size }T
@@ -134,13 +134,23 @@ T{ 16 aligned -> size 2* }T
 T{ 17 aligned -> size 3 * }T
 [then]
 
+size 4 = [if]
+T{ 0 aligned -> 0 }T
+T{ 1 aligned -> size }T
+T{ 3 aligned -> size }T
+T{ 4 aligned -> size }T
+T{ 5 aligned -> size 2* }T
+T{ 8 aligned -> size 2* }T
+T{ 9 aligned -> size 3 * }T
+[then]
+
 T{ 8 16 4 /string -> 12 12 }T
 T{ 0 17 3 /string -> 3  14 }T
 
-T{ -1 odd -> 1 }T
-T{ 0 odd  -> 0 }T
-T{ 4 odd  -> 0 }T
-T{ 3 odd  -> 1 }T
+T{ -1 odd -> true }T
+T{ 0 odd  -> false }T
+T{ 4 odd  -> false }T
+T{ 3 odd  -> true }T
 
 T{ 4 square -> 16 }T
 T{ -1 square -> 1 }T
@@ -149,17 +159,17 @@ T{ 55 signum -> 1 }T
 T{ -4 signum -> -1 }T
 T{ 0 signum -> 0 }T
 
+T{ -2 3  < -> true }T
+T{  2 -3 < -> false }T
+T{  2  3 < -> true }T
+T{ -2 -1 < -> true }T
+T{ -2 -2 < -> false }T
+T{  5 5  < -> false }T
+
 T{ 5 5 <=> -> 0 }T
 T{ 4 5 <=> -> 1 }T
 T{ 5 3 <=> -> -1 }T
 T{ -5 3 <=> -> 1  }T
-
-T{ -2 3  < -> 1 }T
-T{  2 -3 < -> 0 }T
-T{  2  3 < -> 1 }T
-T{ -2 -1 < -> 1 }T
-T{ -2 -2 < -> 0 }T
-T{  5 5  < -> 0 }T
 
 ( test the built in version of factorial )
 T{ 6 factorial -> 720  }T
@@ -224,27 +234,25 @@ T{ 1 2 3 4 2over -> 1 2 3 4 1 2 }
 T{ 1 2 3 4 2swap -> 3 4 1 2 }
 
 .( match ) cr
-T{ c" hello" drop c" hello" drop match -> 1 }T
-T{ c" hello" drop c" hellx" drop match -> 0 }T
-T{ c" hellx" drop c" hello" drop match -> 0 }T
-T{ c" hello" drop c" hell"  drop match -> 0 }T
-T{ c" hell"  drop c" hello" drop match -> 0 }T
-T{ c" hello" drop c" he.lo" drop match -> 1 }T
-T{ c" hello" drop c" h*"    drop match -> 1 }T
-T{ c" hello" drop c" h*l."  drop match -> 1 }T
+T{ c" hello" drop c" hello" drop match -> true }T
+T{ c" hello" drop c" hellx" drop match -> false }T
+T{ c" hellx" drop c" hello" drop match -> false }T
+T{ c" hello" drop c" hell"  drop match -> false }T
+T{ c" hell"  drop c" hello" drop match -> false }T
+T{ c" hello" drop c" he.lo" drop match -> true }T
+T{ c" hello" drop c" h*"    drop match -> true }T
+T{ c" hello" drop c" h*l."  drop match -> true }T
 
 .( crc ) cr
 T{ c" xxx" crc16-ccitt -> 0xC35A }T
 T{ c" hello" crc16-ccitt -> 0xD26E }T
 
-cleanup
-
 .( rationals ) cr
-T{ 1 2 2 4 =rat -> 1 }T
-T{ 3 4 5 7 =rat -> 0 }T
+T{ 1 2 2 4 =rat -> true }T
+T{ 3 4 5 7 =rat -> false }T
 
-T{ 1 3 1 2 >rat -> 0 }T
-T{ 6 20 1 5 >rat -> 1 }T
+T{ 1 3 1 2 >rat -> false }T
+T{ 6 20 1 5 >rat -> true }T
 
 T{ 1 2 1 2 *rat -> 1 4 }T
 T{ 8 20 100 200 *rat -> 1 5 }T
@@ -254,6 +262,7 @@ T{ 1 2 2 4 /rat -> 1 1 }T
 T{ 5 6 3 7 /rat -> 35 18 }T 
 T{ 1 2 3 4 /rat -> 2 3 }T
 
+cleanup
 ( ==================== Unit tests ============================ )
 
 

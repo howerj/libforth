@@ -70,6 +70,9 @@ extract the document string for a given work.
  2 constant  2
  3 constant  3
 
+0 constant false
+1 constant true ( @warning not standards compliant )
+
 ( @todo test by how much, if at all, making words like 1+, 1-, <>, and other
 simple words, part of the interpreter would speed things up )
 
@@ -183,12 +186,6 @@ Instead of:
 
 : stdin? ( -- bool : are we reading from standard input )
 	`fin @ stdin = ;
-
-: false ( -- x : push the value representing false )
-	0 ;
-
-: true  ( -- x : push the value representing true )
-	-1 ;
 
 : *+ ( x1 x2 x3 -- x ) 
 	* + ;
@@ -1669,22 +1666,37 @@ hide{ a b m }hide
 : ndrop ( drop n items )
 	?dup-if 0 do drop loop then ;
 
-( @todo refactor this to use a more generic Caesar cipher )
-: r13 ( c -- o : convert a character to ROT-13 form )
-  >lower trip
-	lowercase?
-	if
-		[char] m > if -13 else 13 then +
-	else 
-		drop 
-	then ;
+: caesar ( c key -- o : encode a alphabetic character with a key using a generalization of the Caesar cipher )
+	>r
+	dup uppercase? if [char] A - r> + 26 mod [char] A + exit then
+	dup lowercase? if [char] a - r> + 26 mod [char] a + exit then
+	rdrop ; ( it goes without saying that this should not be used for anything serious! )
 
-: r13-type ( c-addr u : print string in ROT-13 encoded form )
-	bounds do i c@ r13 emit loop ;
+: caesar-type ( c-addr u key : type out encoded text with a Caesar cipher )
+	-rot bounds do i c@ over caesar emit loop drop ;
+
+: rot13 ( c -- c : encode a character with ROT-13 )
+	13 caesar ;
+
+: rot13-type ( c-addr u : print string in ROT-13 encoded form )
+	13 caesar-type ;
+
+\ s" abcdefghijklmnopqrstuvwxyz" rot13-type -> nopqrstuvwxyzabcdefghijklm
+\ s" hello" rot13-type -> uryyb
 
 ( ==================== Misc words ============================= )
 
 ( ==================== Pictured Numeric Output ================ )
+( Pictured numeric output is what Forths use to display numbers
+to the screen, this Forth has number output methods built into
+the Forth kernel and mostly uses them instead, but the mechanism
+is still useful so it has been added.
+
+
+@todo characters are added in reverse order, is this the best
+way of doing things? It makes use of hold awkward 
+@todo Pictured number output should act on a double cell number
+not a single cell number )
 
 0 variable hld
 
@@ -2467,36 +2479,6 @@ hide{ x }hide
 
 ( ==================== Files ================================== )
 
-( ==================== Blocks ================================= )
-( 
-0 variable dirty
-b/buf string buf
-0 variable loaded
-0 variable blk
-0 variable scr
-
-: update 1 dirty ! ;
-: empty-buffers 0 loaded ! ;
-: ?update dup loaded @ <> dirty @ or ;
-: ?invalid dup 0= if empty-buffers -35 throw then ;
-: write dup >r write-file r> close-file throw ;
-: read dup >r read-file r> close-file throw ;
-: name >r <# #s #> rot drop r> create-file throw ; \ @todo add .blk with holds, also create file deletes file first...
-: update! >r buf r> w/o name write throw drop empty-buffers ;
-: get >r buf r> r/o name read throw drop ;
-: block ?invalid ?update if dup update! then dup get loaded ! buf drop ;
-
-hide{ dirty ?update update! loaded name get ?invalid write read }hide
-
-: c 
-	1 block update drop
-	2 block update drop
-	3 block update drop
-	4 block update drop ;
-c )
-
-( ==================== Blocks ================================= )
-
 ( ==================== Matcher ================================ )
 ( The following section implements a very simple regular expression
 engine, which expects an ASCIIZ Forth string. It is translated from C
@@ -2954,7 +2936,7 @@ print out the correct address
 	?dup-if cdump else drop exit then
 	tail ; 
 
-hide{ more cpad clean cdump input }hide
+hide{ cpad clean cdump input }hide
 
 ( ==================== Hex dump ============================== )
 
@@ -3062,8 +3044,30 @@ hide{ limit ccitt }hide
 ( ==================== CRC =================================== )
 
 ( ==================== Rational Data Type ==================== )
+( This word set allows the manipulation of a rational data type,
+which are basically fractions. This allows numbers like 1/3 to
+be represented without any loss of precision. Conversion to and
+from the data type to an integer type is trivial, although 
+information can be lost during the conversion.
 
-( See: https://en.wikipedia.org/wiki/Rational_data_type )
+To convert to a rational, use 'dup', to convert from a rational,
+use '/'. 
+
+The denominator is the first number on the stack, the numerator the
+second number. Fractions are simplified after any rational operation,
+and all rational words can accept unsimplified arguments. For example
+the fraction 1/3 can be represented as 6/18, they are equivalent, so
+the rational equality operator "=rat" can accept both and returns
+true.
+
+	T{ 1 3 6 18 =rat -> 1 }T
+
+See: https://en.wikipedia.org/wiki/Rational_data_type 
+For more information.
+
+This set of words use two cells to represent a fraction, however
+a single cell could be used, with the numerator and the denominator
+stored in upper and lower half of a single cell. )
 
 : simplify ( a b -- a/gcd{a,b} b/gcd{a/b} : simplify a rational )
   2dup
@@ -3131,6 +3135,130 @@ hide{ limit ccitt }hide
 
 ( ==================== Rational Data Type ==================== )
 
+( ==================== Block Layer =========================== )
+( This is the block layer, it assumes that the file access words
+exists and use them, it would have to be rewritten for an embedded
+device that used EEPROM or something similar. Currently it does
+not interact well with the current input methods used by the
+interpreter which will need changing. 
+
+The block layer is the traditional way Forths implement a system
+to interact with mass storage, one which imposes little on the
+underlying system only requiring that blocks 1024 bytes can be loaded
+and saved to it [which make it suitable for microcomputers that lack
+a file system or an embedded device]. 
+
+The block layer is used less than it once as a lot more Forths are
+hosted under a guest operating system so have access to methods
+for reading and writing to files through it. 
+
+Each block number accepted by 'block' is backed by a file [or created
+if it does not exist]. The name of the file is the block number with
+".blk" appended to it. 
+
+@todo allow evaluation of a block )
+
+0 variable dirty
+b/buf string buf  ( block buffer, only one exists )
+0 variable blk ( 0 = invalid block number, >0 block number stored in buf)
+0 variable scr
+
+: invalid? ( n -- : throw if block number is invalid )
+	0= if -35 throw then ;
+
+: update ( -- : mark currently loaded block buffer as dirty )
+	1 dirty ! ;
+
+: block.name ( n -- c-addr u : make a block name )
+	<# 
+		[char] k hold
+		[char] l hold
+		[char] b hold
+		[char] . hold
+		#s 
+	#> rot drop ;
+
+( @warning this will not work if we do not have permission,
+or in various other cases where we cannot open the file, for
+whatever reason )
+: file-exists ( c-addr u : does a file exist? )
+	r/o open-file if drop 0 else close-file throw 1 then ;
+
+: buffer.exists ( n -- bool : does a block buffer exist on disk? )
+	block.name file-exists ;
+
+( @note block.write and block.read do not check if they have
+wrote or read in 1024 bytes, nor do they check that they can
+only write or read 1024 and not a byte more )
+
+: block.read ( file-id -- file-id : read in buffer )
+	dup >r buf r> read-file nip if close-file -33 throw then ;
+
+: block.write ( file-id -- file-id : write out buffer )
+	dup >r buf r> write-file nip if close-file -34 throw then ;
+
+: block.open ( n fam -- file-id )
+	>r block.name r> open-file throw ;
+
+: save-buffers 
+	blk @ 0= if exit then    ( not a valid block number, exit )
+	dirty @ not if exit then ( not dirty, no need to save )
+	blk @ w/o block.open    ( open file backing block buffer )
+	block.write             ( write it out )
+	close-file throw         ( close it )
+	0 dirty ! ;              ( but only mark it clean if everything succeeded )
+
+: empty-buffers ( -- : deallocate any saved buffers )
+	0 blk ! ;
+
+: flush ( -- : perform save-buffers followed by empty-buffers )
+	save-buffers
+	empty-buffers ;
+
+( Block is a complex word that does a lot, although it has a simple
+interface. It does the following given a block number:
+
+1. Checks the provided block buffer number to make sure it is valid
+2. If the block is already loaded from the disk, then return the
+address of the block buffer it is loaded into.
+3. If not, it checks to see if the currently loaded block buffer is
+dirty, if it is then it flushes the buffer to disk.
+4. If the block buffer does not exists on disk then it creates it.
+5. It then stores the block number in blk and returns an address to
+the block buffer. )
+: block ( n -- c-addr : load a block )
+	dup invalid? 
+	dup blk @ = if drop buf drop then
+	flush
+	dup buffer.exists if        ( if the buffer exits on disk load it in )
+		dup r/o block.open 
+		block.read        
+		close-file throw    
+	else                        ( else it does not exist )
+		buf 0 fill          ( clean the buffer )
+	then 
+	blk !                       ( save the block number )
+	buf drop ;
+
+: buffer block ;
+
+: list ( n -- : display a block number and update scr )
+	dup >r block r> scr ! b/buf type ;
+
+: thru
+	key drop
+	1+ swap do i list more loop ;
+
+: make-blocks ( n1 n2 -- : make blocks on disk from n1 to n2 inclusive )
+	1+ swap do i block drop update loop save-buffers ;
+
+hide{ 
+	buf block.name invalid? block.write 
+	block.read buffer.exists block.open dirty
+}hide
+
+( ==================== Block Layer =========================== )
+
 ( ==================== Signal Handling ======================= )
 ( Signal handling at the moment is quite primitive. When a signal
 occurs it has to be explicitly tested for by the programmer, this
@@ -3165,7 +3293,7 @@ hide{
  `state
  `source-id `sin `sidx `slen `start-address `fin `fout `stdin
  `stdout `stderr `argc `argv `debug `invalid `top `instruction
- `stack-size `error-handler `x `handler _emit `signal
+ `stack-size `error-handler `x `handler _emit `signal 
 }hide
 
 ( 
@@ -3176,7 +3304,7 @@ other ideas.
 
 * FORTH, VOCABULARY
 * "Value", "To", "Is"
-* Double cell words and floating point library
+* Double cell words 
 * The interpreter should use character based addresses, instead of
 word based, and use values that are actual valid pointers, this
 will allow easier interaction with the world outside the virtual machine
@@ -3248,5 +3376,4 @@ not `fin.
 : key 32 chars> 1 `fin @ read-file drop 0 = if 0 else 32 chars> c@ then ; )
 
 \ : ' immediate state @ if postpone ['] else find then ;
-
 
