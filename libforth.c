@@ -863,80 +863,80 @@ up for debugging purposes (like **pnum**).
 **/
 
 #define XMACRO_INSTRUCTIONS\
- X(PUSH,      "push",       " -- x : push a literal")\
- X(CONST,     "const",      " -- x : push a literal")\
- X(RUN,       "run",        " -- : run a Forth word")\
- X(DEFINE,    "define",     " -- : make new Forth word, set compile mode")\
- X(IMMEDIATE, "immediate",  " -- : make a Forth word immediate")\
- X(READ,      "read",       " c\" xxx\" -- : read in a Forth word and execute it")\
- X(LOAD,      "@",          "addr -- x : load a value")\
- X(STORE,     "!",          "x addr -- : store a value")\
- X(CLOAD,     "c@",         "c-addr -- x : load character value")\
- X(CSTORE,    "c!",         "x c-addr -- : store character value")\
- X(SUB,       "-",          "x1 x2 -- x3 : subtract x2 from x1 yielding x3")\
- X(ADD,       "+",          "x x -- x : add two values")\
- X(AND,       "and",        "x x -- x : bitwise and of two values")\
- X(OR,        "or",         "x x -- x : bitwise or of two values")\
- X(XOR,       "xor",        "x x -- x : bitwise exclusive or of two values")\
- X(INV,       "invert",     "x -- x : invert bits of value")\
- X(SHL,       "lshift",     "x1 x2 -- x3 : left shift x1 by x2")\
- X(SHR,       "rshift",     "x1 x2 -- x3 : right shift x1 by x2")\
- X(MUL,       "*",          "x x -- x : multiply to values")\
- X(DIV,       "/",          "x1 x2 -- x3 : divide x1 by x2 yielding x3")\
- X(ULESS,     "u<",         "x x -- bool : unsigned less than")\
- X(UMORE,     "u>",         "x x -- bool : unsigned greater than")\
- X(EXIT,      "_exit",      " -- : return from a word definition")\
- X(KEY,       "key",        " -- char : get one character of input")\
- X(EMIT,      "_emit",      " char -- status : get one character of input")\
- X(FROMR,     "r>",         " -- x, R: x -- : move from return stack")\
- X(TOR,       ">r",         "x --, R: -- x : move to return stack")\
- X(BRANCH,    "branch",     " -- : unconditional branch")\
- X(QBRANCH,   "?branch",    "x -- : branch if x is zero")\
- X(PNUM,      "pnum",       "x -- : print a number")\
- X(COMMA,     ",",          "x -- : write a value into the dictionary")\
- X(EQUAL,     "=",          "x x -- bool : compare two values for equality")\
- X(SWAP,      "swap",       "x1 x2 -- x2 x1 : swap two values")\
- X(DUP,       "dup",        "x -- x x : duplicate a value")\
- X(DROP,      "drop",       "x -- : drop a value")\
- X(OVER,      "over",       "x1 x2 -- x1 x2 x1 : copy over a value")\
- X(TAIL,      "tail",       " -- : tail recursion")\
- X(FIND,      "find",       "c\" xxx\" -- addr | 0 : find a Forth word")\
- X(DEPTH,     "depth",      " -- x : get current stack depth")\
- X(SPLOAD,    "sp@",        " -- addr : load current stack pointer ")\
- X(SPSTORE,   "sp!",        " addr -- : modify the stack pointer")\
- X(CLOCK,     "clock",      " -- x : push a time value")\
- X(EVALUATOR, "evaluator", "c-addr u 0 | file-id 0 1 -- x : evaluate file/str")\
- X(PSTK,      ".s",         " -- : print out values on the stack")\
- X(RESTART,   "restart",    " error -- : restart system, cause error")\
- X(CALL,      "call",       "x1...xn c -- x1...xn c : call a function")\
- X(SYSTEM,    "system",     "c-addr u -- bool : execute system command")\
- X(FCLOSE,    "close-file", "file-id -- ior : close a file")\
- X(FOPEN,     "open-file",  "c-addr u fam -- open a file")\
- X(FDELETE,   "delete-file",     "c-addr u -- : delete a file")\
- X(FREAD,     "read-file",       "c-addr u file-id -- u ior : write block")\
- X(FWRITE,    "write-file",      "c-addr u file-id -- u ior : read block")\
- X(FPOS,      "file-position",   "file-id -- u : get the file position")\
- X(FSEEK,     "reposition-file", "file-id u -- ior : reposition file")\
- X(FFLUSH,    "flush-file",      "file-id -- ior : flush a file")\
- X(FRENAME,   "rename-file",     "c-addr1 u1 c-addr2 u2 -- ior : rename file")\
- X(TMPFILE,   "temporary-file",  "-- file-id ior : open a temporary file")\
- X(RAISE,     "raise",           "signal -- bool : raise a signal")\
- X(DATE,      "date",          " -- date : push the time")\
- X(MEMMOVE,   "memory-copy",   " r-addr1 r-addr2 u -- : move a block of memory")\
- X(MEMCHR,    "memory-locate", " r-addr char u -- r-addr | 0 : locate a character memory")\
- X(MEMSET,    "memory-set",    " r-addr char u -- : set a block of memory")\
- X(MEMCMP,    "memory-compare", " r-addr1 r-addr2 u -- x : compare two blocks of memory")\
- X(ALLOCATE,  "allocate",       " u -- r-addr ior : allocate a block of memory")\
- X(FREE,      "free",           " r-addr1 -- ior : free a block of memory")\
- X(RESIZE,    "resize",         " r-addr u -- r-addr ior : resize a block of memory")\
- X(GETENV,    "getenv",         " c-addr u -- r-addr u : return an environment variable")\
- X(LAST_INSTRUCTION, NULL, "")
+ X(0, PUSH,      "push",       " -- x : push a literal")\
+ X(0, CONST,     "const",      " -- x : push a literal")\
+ X(0, RUN,       "run",        " -- : run a Forth word")\
+ X(0, DEFINE,    "define",     " -- : make new Forth word, set compile mode")\
+ X(0, IMMEDIATE, "immediate",  " -- : make a Forth word immediate")\
+ X(0, READ,      "read",       " c\" xxx\" -- : read in a Forth word and execute it")\
+ X(1, LOAD,      "@",          "addr -- x : load a value")\
+ X(2, STORE,     "!",          "x addr -- : store a value")\
+ X(1, CLOAD,     "c@",         "c-addr -- x : load character value")\
+ X(2, CSTORE,    "c!",         "x c-addr -- : store character value")\
+ X(2, SUB,       "-",          "x1 x2 -- x3 : subtract x2 from x1 yielding x3")\
+ X(2, ADD,       "+",          "x x -- x : add two values")\
+ X(2, AND,       "and",        "x x -- x : bitwise and of two values")\
+ X(2, OR,        "or",         "x x -- x : bitwise or of two values")\
+ X(2, XOR,       "xor",        "x x -- x : bitwise exclusive or of two values")\
+ X(1, INV,       "invert",     "x -- x : invert bits of value")\
+ X(2, SHL,       "lshift",     "x1 x2 -- x3 : left shift x1 by x2")\
+ X(2, SHR,       "rshift",     "x1 x2 -- x3 : right shift x1 by x2")\
+ X(2, MUL,       "*",          "x x -- x : multiply to values")\
+ X(2, DIV,       "/",          "x1 x2 -- x3 : divide x1 by x2 yielding x3")\
+ X(2, ULESS,     "u<",         "x x -- bool : unsigned less than")\
+ X(2, UMORE,     "u>",         "x x -- bool : unsigned greater than")\
+ X(0, EXIT,      "_exit",      " -- : return from a word definition")\
+ X(0, KEY,       "key",        " -- char : get one character of input")\
+ X(1, EMIT,      "_emit",      " char -- status : get one character of input")\
+ X(0, FROMR,     "r>",         " -- x, R: x -- : move from return stack")\
+ X(1, TOR,       ">r",         "x --, R: -- x : move to return stack")\
+ X(0, BRANCH,    "branch",     " -- : unconditional branch")\
+ X(1, QBRANCH,   "?branch",    "x -- : branch if x is zero")\
+ X(1, PNUM,      "pnum",       "x -- : print a number")\
+ X(1, COMMA,     ",",          "x -- : write a value into the dictionary")\
+ X(2, EQUAL,     "=",          "x x -- bool : compare two values for equality")\
+ X(2, SWAP,      "swap",       "x1 x2 -- x2 x1 : swap two values")\
+ X(1, DUP,       "dup",        "x -- x x : duplicate a value")\
+ X(1, DROP,      "drop",       "x -- : drop a value")\
+ X(2, OVER,      "over",       "x1 x2 -- x1 x2 x1 : copy over a value")\
+ X(0, TAIL,      "tail",       " -- : tail recursion")\
+ X(0, FIND,      "find",       "c\" xxx\" -- addr | 0 : find a Forth word")\
+ X(0, DEPTH,     "depth",      " -- x : get current stack depth")\
+ X(0, SPLOAD,    "sp@",        " -- addr : load current stack pointer ")\
+ X(0, SPSTORE,   "sp!",        " addr -- : modify the stack pointer")\
+ X(0, CLOCK,     "clock",      " -- x : push a time value")\
+ X(3, EVALUATOR, "evaluator", "c-addr u 0 | file-id 0 1 -- x : evaluate file/str")\
+ X(0, PSTK,      ".s",         " -- : print out values on the stack")\
+ X(1, RESTART,   "restart",    " error -- : restart system, cause error")\
+ X(0, CALL,      "call",       "x1...xn c -- x1...xn c : call a function")\
+ X(2, SYSTEM,    "system",     "c-addr u -- bool : execute system command")\
+ X(1, FCLOSE,    "close-file", "file-id -- ior : close a file")\
+ X(3, FOPEN,     "open-file",  "c-addr u fam -- open a file")\
+ X(2, FDELETE,   "delete-file",     "c-addr u -- : delete a file")\
+ X(3, FREAD,     "read-file",       "c-addr u file-id -- u ior : write block")\
+ X(3, FWRITE,    "write-file",      "c-addr u file-id -- u ior : read block")\
+ X(1, FPOS,      "file-position",   "file-id -- u : get the file position")\
+ X(2, FSEEK,     "reposition-file", "file-id u -- ior : reposition file")\
+ X(1, FFLUSH,    "flush-file",      "file-id -- ior : flush a file")\
+ X(4, FRENAME,   "rename-file",     "c-addr1 u1 c-addr2 u2 -- ior : rename file")\
+ X(0, TMPFILE,   "temporary-file",  "-- file-id ior : open a temporary file")\
+ X(1, RAISE,     "raise",           "signal -- bool : raise a signal")\
+ X(0, DATE,      "date",          " -- date : push the time")\
+ X(3, MEMMOVE,   "memory-copy",   " r-addr1 r-addr2 u -- : move a block of memory")\
+ X(3, MEMCHR,    "memory-locate", " r-addr char u -- r-addr | 0 : locate a character memory")\
+ X(3, MEMSET,    "memory-set",    " r-addr char u -- : set a block of memory")\
+ X(3, MEMCMP,    "memory-compare", " r-addr1 r-addr2 u -- x : compare two blocks of memory")\
+ X(1, ALLOCATE,  "allocate",       " u -- r-addr ior : allocate a block of memory")\
+ X(1, FREE,      "free",           " r-addr1 -- ior : free a block of memory")\
+ X(2, RESIZE,    "resize",         " r-addr u -- r-addr ior : resize a block of memory")\
+ X(2, GETENV,    "getenv",         " c-addr u -- r-addr u : return an environment variable")\
+ X(0, LAST_INSTRUCTION, NULL, "")
 
 /**
 @brief All of the instructions that can be used by the Forth virtual machine.
 **/
 enum instructions { 
-#define X(ENUM, STRING, HELP) ENUM,
+#define X(STACK, ENUM, STRING, HELP) ENUM,
 	XMACRO_INSTRUCTIONS
 #undef X
 };
@@ -950,7 +950,17 @@ fed into the C function **compile** in a process described later.
 enumeration used in **enum instructions**, so it does not get a name.
 **/
 static const char *instruction_names[] = { /**< instructions with names */
-#define X(ENUM, STRING, HELP) STRING,
+#define X(STACK, ENUM, STRING, HELP) STRING,
+	XMACRO_INSTRUCTIONS
+#undef X
+};
+
+/**
+This contains an array of values that are the minimum number of values
+needed on the stack before a word can execute.
+**/
+static const int stack_bounds[] = { /**< number stack variables needed*/
+#define X(STACK, ENUM, STRING, HELP) STACK,
 	XMACRO_INSTRUCTIONS
 #undef X
 };
@@ -2135,10 +2145,10 @@ than **RUN**, they contain the instructions **DUP** and **MUL** respectively.
 	INNER:  
 		w = instruction(m[ck(pc++)]);
 		TRACE(o, w, S, f);
-		/**@todo move depth check to here, using the
-		 * XMACRO_INSTRUCTIONS to record the depth function have before
-		 * it executes. The number off items it pushes could also be
-		 * checked against */
+		if(w < LAST_INSTRUCTION) {
+			cd(stack_bounds[w]);
+		}
+
 		switch (w) { 
 
 /**
@@ -2252,21 +2262,20 @@ However, the reason for these words existing, and under what circumstances
 some of the can be used is a different matter, the COMMA and TAIL word will
 require some explaining, but ADD, SUB and DIV will not.
 **/
-		case LOAD:    cd(1); f = m[ck(f)];                   break;
-		case STORE:   cd(2); m[ck(f)] = *S--; f = *S--;      break;
-		case CLOAD:   cd(1); f = *(((uint8_t*)m) + ckchar(f)); break;
-		case CSTORE:  cd(2); ((uint8_t*)m)[ckchar(f)] = *S--; f = *S--; break;
-		case SUB:     cd(2); f = *S-- - f;                   break;
-		case ADD:     cd(2); f = *S-- + f;                   break;
-		case AND:     cd(2); f = *S-- & f;                   break;
-		case OR:      cd(2); f = *S-- | f;                   break;
-		case XOR:     cd(2); f = *S-- ^ f;                   break;
-		case INV:     cd(1); f = ~f;                         break;
-		case SHL:     cd(2); f = *S-- << f;                  break;
-		case SHR:     cd(2); f = *S-- >> f;                  break;
-		case MUL:     cd(2); f = *S-- * f;                   break;
+		case LOAD:    f = m[ck(f)];                   break;
+		case STORE:   m[ck(f)] = *S--; f = *S--;      break;
+		case CLOAD:   f = *(((uint8_t*)m) + ckchar(f)); break;
+		case CSTORE:  ((uint8_t*)m)[ckchar(f)] = *S--; f = *S--; break;
+		case SUB:     f = *S-- - f;                   break;
+		case ADD:     f = *S-- + f;                   break;
+		case AND:     f = *S-- & f;                   break;
+		case OR:      f = *S-- | f;                   break;
+		case XOR:     f = *S-- ^ f;                   break;
+		case INV:     f = ~f;                         break;
+		case SHL:     f = *S-- << f;                  break;
+		case SHR:     f = *S-- >> f;                  break;
+		case MUL:     f = *S-- * f;                   break;
 		case DIV:
-			cd(2);
 			if(f) {
 				f = *S-- / f;
 			} else {
@@ -2274,23 +2283,22 @@ require some explaining, but ADD, SUB and DIV will not.
 				longjmp(on_error, RECOVERABLE);
 			} 
 			break;
-		case ULESS:   cd(2); f = *S-- < f;                       break;
-		case UMORE:   cd(2); f = *S-- > f;                       break;
+		case ULESS:   f = *S-- < f;                       break;
+		case UMORE:   f = *S-- > f;                       break;
 		case EXIT:    I = m[ck(m[RSTK]--)];                      break;
 		case KEY:     *++S = f; f = forth_get_char(o);           break;
 		case EMIT:    f = fputc(f, (FILE*)o->m[FOUT]);           break;
 		case FROMR:   *++S = f; f = m[ck(m[RSTK]--)];            break;
-		case TOR:     cd(1); m[ck(++m[RSTK])] = f; f = *S--;     break;
+		case TOR:     m[ck(++m[RSTK])] = f; f = *S--;     break;
 		case BRANCH:  I += m[ck(I)];                             break;
-		case QBRANCH: cd(1); I += f == 0 ? m[I] : 1; f = *S--;   break;
-		case PNUM:    cd(1); 
-			      f = print_cell(o, (FILE*)(o->m[FOUT]), f); break;
-		case COMMA:   cd(1); m[dic(m[DIC]++)] = f; f = *S--;     break;
-		case EQUAL:   cd(2); f = *S-- == f;                      break;
-		case SWAP:    cd(2); w = f;  f = *S--;   *++S = w;       break;
-		case DUP:     cd(1); *++S = f;                           break;
-		case DROP:    cd(1); f = *S--;                           break;
-		case OVER:    cd(2); w = *S; *++S = f; f = w;            break;
+		case QBRANCH: I += f == 0 ? m[I] : 1; f = *S--;   break;
+		case PNUM:    f = print_cell(o, (FILE*)(o->m[FOUT]), f); break;
+		case COMMA:   m[dic(m[DIC]++)] = f; f = *S--;     break;
+		case EQUAL:   f = *S-- == f;                      break;
+		case SWAP:    w = f;  f = *S--;   *++S = w;       break;
+		case DUP:     *++S = f;                           break;
+		case DROP:    f = *S--;                           break;
+		case OVER:    w = *S; *++S = f; f = w;            break;
 /**
 **TAIL** is a crude method of doing tail recursion, it should not be used 
 generally but is useful at startup, there are limitations when using it 
@@ -2389,7 +2397,6 @@ or from a file.
 			char *s = NULL;
 			FILE *file = NULL;
 			int file_in = 0;
-			cd(3);
 			file_in = f; /*get file/string in bool*/
 			f = *S--;
 			if(file_in) {
@@ -2428,7 +2435,7 @@ or from a file.
 		case PSTK:    print_stack(o, (FILE*)(o->m[STDOUT]), S, f);
 			      fputc('\n', (FILE*)(o->m[STDOUT]));
 			      break;
-		case RESTART: cd(1); longjmp(on_error, f);                   break;
+		case RESTART: longjmp(on_error, f);                   break;
 
 /**
 CALL allows arbitrary C functions to be passed in and used within
@@ -2443,7 +2450,6 @@ and executes the function.
 **/
 		case CALL:
 		{
-			cd(1);
 			if(!(o->calls) || !(o->calls->count)) {
 				/* no call structure, or count is zero */
 				f = -1;
@@ -2484,22 +2490,21 @@ written to. This would allow the KEY to be removed as a virtual machine
 instruction, and would be a useful abstraction. 
 **/
 
-		case SYSTEM:  cd(2); f = system(forth_get_string(o, &on_error, &S, f)); break;
-		case FCLOSE:  cd(1); 
+		case SYSTEM:  f = system(forth_get_string(o, &on_error, &S, f)); break;
+		case FCLOSE:  
 			      errno = 0;
 			      f = fclose((FILE*)f) ? ferrno() : 0;       
 			      break;
-		case FDELETE: cd(2); 
+		case FDELETE: 
 			      errno = 0;
 			      f = remove(forth_get_string(o, &on_error, &S, f)) ? ferrno() : 0; 
 			      break;
-		case FFLUSH:  cd(1); 
+		case FFLUSH:  
 			      errno = 0; 
 			      f = fflush((FILE*)f) ? ferrno() : 0;       
 			      break;
 		case FSEEK:   
 			{
-				cd(2); 
 				errno = 0;
 				int r = fseek((FILE*)(*S--), f, SEEK_SET);
 				f = r == -1 ? errno ? ferrno() : -1 : 0;
@@ -2507,7 +2512,6 @@ instruction, and would be a useful abstraction.
 			}
 		case FPOS:    
 			{
-				cd(1); 
 				errno = 0;
 				int r = ftell((FILE*)f);
 				*++S = r;
@@ -2515,7 +2519,6 @@ instruction, and would be a useful abstraction.
 				break;
 			}
 		case FOPEN: 
-			cd(3);
 			{
 				const char *fam = forth_get_fam(&on_error, f);
 				f = *S--;
@@ -2526,7 +2529,6 @@ instruction, and would be a useful abstraction.
 			}
 			break;
 		case FREAD:
-			cd(3);
 			{
 				FILE *file = (FILE*)f;
 				forth_cell_t count = *S--;
@@ -2537,7 +2539,6 @@ instruction, and would be a useful abstraction.
 			}
 			break;
 		case FWRITE:
-			cd(3);
 			{
 				FILE *file = (FILE*)f;
 				forth_cell_t count = *S--;
@@ -2548,7 +2549,6 @@ instruction, and would be a useful abstraction.
 			}
 			break;
 		case FRENAME:  
-			cd(3); 
 			{
 				const char *f1 = forth_get_fam(&on_error, f);
 				f = *S--;
@@ -2566,7 +2566,6 @@ instruction, and would be a useful abstraction.
 			}
 			break;
 		case RAISE:
-			cd(1);
 			f = raise((f*-1) - BIAS_SIGNAL);
 			break;
 		case DATE:
@@ -2593,29 +2592,24 @@ for faster memory operations, but more importantly they can be used
 to interact with memory outside of the Forth core.
 **/
 		case MEMMOVE:
-			cd(3);
 			w = *S--;
 			memmove((char*)(*S--), (char*)w, f);
 			f = *S--;
 			break;
 		case MEMCHR:
-			cd(3);
 			w = *S--;
 			f = (forth_cell_t)memchr((char*)(*S--), w, f);
 			break;
 		case MEMSET:
-			cd(3);
 			w = *S--;
 			memset((char*)(*S--), w, f);
 			f = *S--;
 			break;
 		case MEMCMP:
-			cd(3);
 			w = *S--;
 			f = memcmp((char*)(*S--), (char*)w, f);
 			break;
 		case ALLOCATE:
-			cd(1);
 			errno = 0;
 			*++S = (forth_cell_t)calloc(f, 1);
 			f = ferrno();
@@ -2627,7 +2621,6 @@ problem, it will most likely either abort the program or silently
 corrupt the heap if something goes wrong, however the Forth standard
 requires that an error status is returned.
 **/
-			cd(1);
 			errno = 0;
 			free((char*)f);
 			f = ferrno();
@@ -2640,7 +2633,6 @@ requires that an error status is returned.
 			break;
 		case GETENV:
 		{
-			cd(2);
 			char *s = getenv(forth_get_string(o, &on_error, &S, f));
 			f = s ? strlen(s) : 0;
 			*++S = (forth_cell_t)s;
