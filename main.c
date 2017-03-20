@@ -63,6 +63,7 @@ fail:
 #ifdef USE_LINE_EDITOR
 #include "libline.h"
 #define LINE_EDITOR_AVAILABLE (1) /**< line editor is available */
+/**@todo add list of words to auto complete */
 
 /**
 The Forth history file will be stored in this file, if the 

@@ -73,7 +73,7 @@ extract the document string for a given work.
 0 constant false
 1 constant true ( @warning not standards compliant )
 
-10 constant '\n'
+10 constant nl ( new line )
 
 1 hidden-bit lshift constant hidden-mask ( mask for the hide bit in a words CODE field )
 
@@ -153,7 +153,7 @@ with some extra effort in libforth.c as well )
 
 
 : cr  ( -- : emit a newline character )
-	'\n' emit ;
+	nl emit ;
 
 : < ( x1 x2 -- bool : signed less than comparison )
 	- dup if max-signed-integer u> else logical then ;
@@ -346,7 +346,7 @@ Instead of:
 	255 and ;
 
 : \ ( -- : immediate word, used for single line comments )
-	immediate begin key '\n' = until ;
+	immediate begin key nl = until ;
 
 : ?dup ( x -- ? ) 
 	dup if dup then ;
@@ -1282,7 +1282,7 @@ hider delim
 hider skip
 
 : accept ( c-addr +n1 -- +n2 : see accepter definition ) 
-	'\n' accepter ;
+	nl accepter ;
 
 0xFFFF constant max-string-length
 
@@ -2037,8 +2037,8 @@ hide{ counter }hide
 
 ( string handling should really be done with PARSE, and CMOVE )
 
-: sh ( c'\n' -- ior : execute a line as a system command )
-	'\n' word count system ;
+: sh ( cnl -- ior : execute a line as a system command )
+	nl word count system ;
 
 hide{ .s }hide
 : .s    ( -- : print out the stack for debugging )
@@ -2082,6 +2082,7 @@ address by the word size in bytes. )
 
 : words ( -- : print out all defined an visible words )
 	latest
+	space
 	begin
 		dup
 		hidden? hide-words @ and
@@ -2184,7 +2185,7 @@ make debug-prompt prompt-default
 	begin
 		key
 		case
-			'\n'     of debug-prompt endof
+			nl     of debug-prompt endof
 			[char] h of debug-help endof
 			[char] q of bye        endof
 			[char] r of registers  endof
@@ -2493,14 +2494,14 @@ hide{ x }hide
 	-rot bounds
 	do
 		dup i swap read-char drop
-		i c@ '\n' = if drop i 0 0 leave then
+		i c@ nl = if drop i 0 0 leave then
 	loop drop ;
 
 : write-line  ( c-addr u fileid -- u2 flag ior : write a line of text )
 	-rot bounds
 	do
 		dup i swap write-char drop
-		i c@ '\n' = if drop i 0 0 leave then
+		i c@ nl = if drop i 0 0 leave then
 	loop ;
 
 : resize-file  ( ud fileid -- ior : attempt to resize a file )
@@ -2828,18 +2829,18 @@ Example usage:
 0 variable out
 128 constant run-length
 
-: more ( file-id -- char : read in a single character )
+: next.char ( file-id -- char : read in a single character )
 	>r cpad r> read-char throw cpad c@ ;
 
 : repeated ( count file-id -- : repeat a character count times )
-	more swap 0 do dup emit loop drop ;
+	next.char swap 0 do dup emit loop drop ;
 
 : literals ( count file-id -- : extract a literal run )
 	>r cpad swap r> read-file throw cpad swap type ;
 
 : command ( file-id -- : process an RLE command )
 	dup 
-	>r more 
+	>r next.char
 	dup run-length u> 
 	if 
 		run-length - r> literals 
@@ -2860,7 +2861,7 @@ Example usage:
 	2drop ( drop twice because catch will restore stack before 'command' )
 	restore ; ( restore input stream )
 
-hide{ literals repeated more out run-length command }hide
+hide{ literals repeated next.char out run-length command }hide
 
 ( ==================== RLE =================================== )
 
@@ -3209,8 +3210,8 @@ if it does not exist]. The name of the file is the block number with
 
 0 variable dirty
 b/buf string buf  ( block buffer, only one exists )
+0 , ( make sure buffer is NUL terminated, just in case )
 0 variable blk ( 0 = invalid block number, >0 block number stored in buf)
-0 variable scr
 
 : invalid? ( n -- : throw if block number is invalid )
 	0= if -35 throw then ;
@@ -3252,8 +3253,8 @@ only write or read 1024 and not a byte more )
 : save-buffers 
 	blk @ 0= if exit then    ( not a valid block number, exit )
 	dirty @ not if exit then ( not dirty, no need to save )
-	blk @ w/o block.open    ( open file backing block buffer )
-	block.write             ( write it out )
+	blk @ w/o block.open     ( open file backing block buffer )
+	block.write              ( write it out )
 	close-file throw         ( close it )
 	0 dirty ! ;              ( but only mark it clean if everything succeeded )
 
@@ -3277,7 +3278,7 @@ dirty, if it is then it flushes the buffer to disk.
 the block buffer. )
 : block ( n -- c-addr : load a block )
 	dup invalid? 
-	dup blk @ = if drop buf drop then
+	dup blk @ = if drop buf drop exit then
 	flush
 	dup buffer.exists if        ( if the buffer exits on disk load it in )
 		dup r/o block.open 
@@ -3291,22 +3292,48 @@ the block buffer. )
 
 : buffer block ;
 
+hide{ 
+	block.name invalid? block.write 
+	block.read buffer.exists block.open dirty
+}hide
+
+( ==================== Block Layer =========================== )
+
+( ==================== List ================================== )
+1 variable list.lines
+0 variable scr
+64 constant #line ( line length )
+
+: line.number ( n -- : print line number )
+	list.lines @ if
+		dup 10 < if space then ( leading space: works up to #line = 99)
+		. [char] | emit ( print " line-number : ")
+	else
+		drop
+	then ;
+
+: line ( c-addr -- c-addr u : given a line number, display that line )
+	dup    
+	line.number ( display line number )
+	#line * +   ( calculate offset )
+	#line ;     ( add line length )
+
+: list.type ( c-addr u -- : list a block )
+	b/buf #line / 0 do dup i line type cr loop drop ;
+
 : list ( n -- : display a block number and update scr )
-	dup >r block r> scr ! b/buf type ;
+	dup >r block r> scr ! list.type ;
 
 : thru
 	key drop
 	1+ swap do i list more loop ;
 
 : make-blocks ( n1 n2 -- : make blocks on disk from n1 to n2 inclusive )
-	1+ swap do i block drop update loop save-buffers ;
+	1+ swap do i block b/buf bl fill update loop save-buffers ;
 
-hide{ 
-	buf block.name invalid? block.write 
-	block.read buffer.exists block.open dirty
-}hide
+hide{ buf line line.number list.type list.lines }hide
 
-( ==================== Block Layer =========================== )
+( ==================== List ================================== )
 
 ( ==================== Signal Handling ======================= )
 ( Signal handling at the moment is quite primitive. When a signal
@@ -3413,6 +3440,10 @@ are not used internally, and '0x' can be used as a prefix only when base is zero
 * A potential optimization is to order the words in the dictionary by frequency order,
 this would mean chaning the X Macro that contains the list of words, after collecting
 statistics. This should make find faster.
+* Investigate adding operating system specific code into the interpreter and
+isolating it to make it semi-portable.
+* Make equivalents for various Unix utilities in Forth, like a CRC check, cat,
+tr, etcetera.
 
  )
 
@@ -3441,56 +3472,62 @@ was just an experiment.
 	: vocabulary
 		create does> drop 0 [ find forth 1- ] literal ! ; )
 
-( \ Very experimental block editor: Do not use yet!
-\ Before this is used, the CASE statement needs to be fixed.
-\ The goal is to make a simple block editor from which source code
-\ can edited, saved, and run.
+( Experimental block editor Mark II )
+( @todo '\' needs extending to work with the block editor, for now, 
+use parenthesis for comments 
+@todo make an 'm' word for forgetting all words defined since the
+editor was invoked.
+@todo add multi line insertion mode
+@todo Add to an editor vocabulary, which will need the vocabulary
+system to exist.
+@todo Using 'page' should be optional as not all terminals support
+ANSI escape codes - thanks to CMD.EXE. Damned Windows.
+@todo How line numbers are printed out should be investigated,
+also I should refactor 'dump' to use a similar line number system.
 
-: raw c" stty raw" system ;
-: cooked c" stty cooked" system ;
-: blk@ blk @ ;
+Adapted from http://retroforth.org/pages/?PortsOfRetroEditor )
+: h
+page
+" Block Editor Help Menu
 
-0 variable count
-127 constant del
+      n    move to next block
+      p    move to previous block
+    # d    delete line in current block
+      x    erase current block
+      e    evaluate current block
+    # i    insert line
+ # #2 ia   insert at line #2 at column #
+      q    quit editor loop
+    # b    set block number
+      s    save block and write it out
 
-: editor-help
-	page
-	cooked
-	" s - save current block" cr
-	" h - editor help menu" cr
-	" q - quit the editor" cr
-	" -- press any key to continue -- " cr
-	raw
-	key drop ;
+ -- press any key to continue -- " cr ( " )
+char drop ;
 
-: command 
-	save-cursor
-	0 20 at-xy
-	" command: Type 'h' for help "
-	key
-	case 
-		[char] s of update save-buffers endof
-		[char] h of editor-help endof
-		[char] q of exit endof
-		" invalid command" cr
-	endcase
-	restore-cursor ;
-
-: editor 
-	list
-	raw
-	page
+: (block) blk @ block ; 
+: (line) #line * (block) + ; ( n -- c-addr : push current line address )
+: n blk @ 1+ block ;
+: p blk @ 1- block ;
+: l blk @ list ;
+: d (line) #line bl fill ; 
+: x (block) b/buf bl fill ;
+: b block ;
+: s update save-buffers ;
+: q rdrop rdrop ;
+: e (block) b/buf 1+ evaluate drop char drop ; ( @warning uses hack, block buffer is NUL terminated)
+: ia #line * + dup b/buf swap - >r (block) + r> accept ; ( @bug accept NUL terminates the string! )
+: i 0 swap ia ;
+: editor
+	1 block
+	postpone [ 
 	begin
-		key 
-		dup 'escape' = if
-			command [char] q = if cooked exit then
-		else
-			scr @ block 
-			count @ + 
-			c!
-			count 1+!
-			\ count @ b/buf > if scr 1+! then
-		then
+		page
+		" BLOCK EDITOR: TYPE H FOR HELP " cr
+		blk @ list
+		" CURRENT BLOCK: " blk @ . cr
+		read
 	again ;
 
-)
+hide{ (block) (line) }hide
+
+here fence !

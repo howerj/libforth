@@ -2405,6 +2405,7 @@ for **forth_eval** when called from C). It can read either from a string
 or from a file.
 
 @todo EVALUATOR needs to setjmp after forth_eval has been called.
+@todo EVALUATOR should accept a Forth string.
 **/
 		case EVALUATOR:
 		{ 
