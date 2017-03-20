@@ -118,6 +118,7 @@ C application, this test program only has one active. This is stored in a
 global variable so signal handlers can access it.
 **/
 static forth_t *global_forth_environment; 
+static int enable_signal_handling;
 
 typedef void (*signal_handler)(int sig); /**< functions for handling signals*/
 
@@ -132,8 +133,12 @@ static void register_signal_handler(int sig, signal_handler handler)
 
 static void sig_generic_handler(int sig)
 {
-	forth_signal(global_forth_environment, sig);
-	register_signal_handler(sig, sig_generic_handler);
+	if(enable_signal_handling) {
+		forth_signal(global_forth_environment, sig);
+		register_signal_handler(sig, sig_generic_handler);
+	} else {
+		exit(EXIT_FAILURE);
+	}
 }
 
 /** 
@@ -163,7 +168,7 @@ static void usage(const char *name)
 {
 	fprintf(stderr, 
 		"usage: %s "
-		"[-(s|l|f) file] [-e expr] [-m size] [-LSVthvn] [-] files\n", 
+		"[-(s|l|f) file] [-e expr] [-m size] [-LSVthvnx] [-] files\n", 
 		name);
 }
 
@@ -191,6 +196,7 @@ static void help(void)
 "\t-m size   specify forth memory size in KiB (cannot be used with '-l')\n"
 "\t-t        process stdin after processing forth files\n"
 "\t-v        turn verbose mode on\n"
+"\t-x        enable signal handling\n"
 "\t-V        print out version information and exit\n"
 "\t-         stop processing options\n\n"
 "Options must come before files to execute.\n\n"
@@ -394,6 +400,9 @@ sacrifice portability.
 		case 'V':
 			version();
 			return EXIT_SUCCESS;
+			break;
+		case 'x':
+			enable_signal_handling = 1;
 			break;
 		default:
 		fail:

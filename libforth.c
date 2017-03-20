@@ -787,7 +787,7 @@ More information about X-Macros can be found here:
  X("`instruction",    INSTRUCTION,    26,  "start up instruction")\
  X("`stack-size",     STACK_SIZE,     27,  "size of the stacks")\
  X("`error-handler",  ERROR_HANDLER,  28,  "actions to take on error")\
- X("`handler",        THROW,          29,  "exception handler is stored here")\
+ X("`handler",        THROW_HANDLER,  29,  "exception handler is stored here")\
  X("`signal",         SIGNAL_HANDLER, 30,  "signal handler")\
  X("`x",              SCRATCH_X,      31,  "scratch variable x")
 
@@ -2301,22 +2301,22 @@ require some explaining, but ADD, SUB and DIV will not.
 				longjmp(on_error, RECOVERABLE);
 			} 
 			break;
-		case ULESS:   f = *S-- < f;                       break;
-		case UMORE:   f = *S-- > f;                       break;
-		case EXIT:    I = m[ck(m[RSTK]--)];                      break;
-		case KEY:     *++S = f; f = forth_get_char(o);           break;
-		case EMIT:    f = fputc(f, (FILE*)o->m[FOUT]);           break;
-		case FROMR:   *++S = f; f = m[ck(m[RSTK]--)];            break;
-		case TOR:     m[ck(++m[RSTK])] = f; f = *S--;     break;
-		case BRANCH:  I += m[ck(I)];                             break;
-		case QBRANCH: I += f == 0 ? m[I] : 1; f = *S--;   break;
+		case ULESS:   f = *S-- < f;                     break;
+		case UMORE:   f = *S-- > f;                     break;
+		case EXIT:    I = m[ck(m[RSTK]--)];             break;
+		case KEY:     *++S = f; f = forth_get_char(o);  break;
+		case EMIT:    f = fputc(f, (FILE*)o->m[FOUT]);  break;
+		case FROMR:   *++S = f; f = m[ck(m[RSTK]--)];   break;
+		case TOR:     m[ck(++m[RSTK])] = f; f = *S--;   break;
+		case BRANCH:  I += m[ck(I)];                    break;
+		case QBRANCH: I += f == 0 ? m[I] : 1; f = *S--; break;
 		case PNUM:    f = print_cell(o, (FILE*)(o->m[FOUT]), f); break;
-		case COMMA:   m[dic(m[DIC]++)] = f; f = *S--;     break;
-		case EQUAL:   f = *S-- == f;                      break;
-		case SWAP:    w = f;  f = *S--;   *++S = w;       break;
-		case DUP:     *++S = f;                           break;
-		case DROP:    f = *S--;                           break;
-		case OVER:    w = *S; *++S = f; f = w;            break;
+		case COMMA:   m[dic(m[DIC]++)] = f; f = *S--;   break;
+		case EQUAL:   f = *S-- == f;                    break;
+		case SWAP:    w = f;  f = *S--;   *++S = w;     break;
+		case DUP:     *++S = f;                         break;
+		case DROP:    f = *S--;                         break;
+		case OVER:    w = *S; *++S = f; f = w;          break;
 /**
 **TAIL** is a crude method of doing tail recursion, it should not be used 
 generally but is useful at startup, there are limitations when using it 

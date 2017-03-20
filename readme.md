@@ -8,7 +8,7 @@ forth - a forth interpreter
 
 # SYNOPSIS
 
-**forth** \[**-s** file\] \[**-e** string\] \[**-l** file\] \[**-m** size\] \[**-VthvLSn**\] \[**-**\] \[**files**\]
+**forth** \[**-s** file\] \[**-e** string\] \[**-l** file\] \[**-m** size\] \[**-VthvLSnx**\] \[**-**\] \[**files**\]
 
 # DESCRIPTION
 
@@ -93,6 +93,14 @@ intermingled.
 If the line editing library is compiled into the executable, which is a compile
 time option, then when reading from [stdin][] this will use a [line editor][]
 to read in a line at a time. This option implies *-t*.
+
+* -x
+
+Enable signal handling, signal handling is experimental and not quite worked
+out yet. It is off by default as I find it annoying when programs catch signals
+when you really want to program to *die*. This cannot be enabled from within
+the Forth interpreter. This option should disappear once signal handling has
+been sorted out.
 
 * file...
 

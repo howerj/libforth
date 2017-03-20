@@ -259,20 +259,19 @@ Instead of:
 
 : compose ( xt1 xt2 -- xt3 : create a new function from two xt-tokens )
 	>r >r            ( save execution tokens )
-	postpone :noname ( )
+	postpone :noname ( create a new :noname word for our xt-tokens )
 	r> ,             ( write first token )
 	r> ,             ( write second token )
 	postpone ; ;     ( terminate new :noname )
 
 : unless ( bool -- : like 'if' but execute clause if false )
-	immediate ' 0= , postpone if ;
+	immediate ['] 0= , postpone if ;
 
 : endif ( synonym for 'then' ) 
 	immediate  postpone then ;
 
 : cells ( n1 -- n2 : convert a number of cells into a number of cells in address units ) 
 	immediate  ;
-
 
 : cell+ ( a-addr1 -- a-addr2 ) 
 	cell + ;
@@ -500,7 +499,7 @@ Instead of:
 	#tib   ( size of input buffer, in characters )
 	tib ;  ( start of input buffer, in characters )
 
-: stdin?
+: stdin? ( -- bool : are we reading from standard in? )
 	`fin @ `stdin @ = ;
 
 : source-id ( -- 0 | -1 | file-id )
@@ -648,7 +647,6 @@ Instead of:
 : rdepth
 	max-core `stack-size @ - r @ swap - ;
 
-
 : r.s ( -- : print the contents of the return stack )
 	r>         
 	[char] < emit rdepth . [char] > emit
@@ -671,6 +669,8 @@ Instead of:
 	sign-bit and or
 	;
 
+hider stdin?
+
 ( ================================== DUMP ================================== )
 \ : newline ( x -- x+1 : print a new line every fourth value )
 \ 	dup 3 and 0= if cr then 1+ ;
@@ -681,7 +681,6 @@ Instead of:
 \ 	r> ;
 \ 
 \ : dump ( start count -- : print the contents of a section of memory )
-\ \	base @ >r ( save current base )
 \ \	hex       ( switch to hex mode )
 \ 	1 >r      ( save counter on return stack )
 \ 	over + swap ( calculate limits: start start+count )
@@ -693,7 +692,6 @@ Instead of:
 \ 		r> newline >r
 \ 	repeat 
 \ 	r> drop
-\ \	r> base !
 \ 	2drop ;
 \ 
 \ hider newline
@@ -805,16 +803,14 @@ Instead of:
 		( when catch began execution )
 	then ; 
 
-
-: interpret 
+: interpret ( c1" xxx" ... cn" xxx" -- : This word implements the interpreter loop )
 	begin 
 	' read catch 
 	?dup-if [char] ! emit tab . cr then ( exception handler of last resort )
 	again ;
 
-: [interpret] 
+: [interpret] ( c1" xxx" ... cn" xxx" -- : immediate version of interpret )
 	immediate interpret ;
-
 
 interpret ( use the new interpret word, which can catch exceptions )
 
@@ -862,13 +858,18 @@ The above example is a bit contrived, the definitions and functionality
 are too simple for this to be worth factoring out, but it shows how you
 can use DOER/MAKE. )
 
-: noop ;
+: noop ; ( -- : default word to execute for doer )
 
-: doer
+: doer ( c" xxx" -- : )
 	:: ['] noop , postpone ; ;
 
-: found? ( xt -- xt : ) 
+: found? ( xt -- xt : thrown an exception if the execution token is zero [not found] ) 
 	dup 0= if -13 throw then ;
+
+( It would be nice to provide a MAKE that worked with execution tokens
+as well, although "defer" and "is" can be used for that. MAKE expects
+two word names to be given as arguments. It will then change the behavior 
+of the first word to use the second. MAKE is a state aware word. )
 
 : make immediate ( c1" xxx" c2" xxx" : change parsed word c1 to execute c2 )
 	find found? cell+
@@ -880,7 +881,6 @@ can use DOER/MAKE. )
 	then ;
 
 hider noop
-hider found?
 
 ( ========================== DOER/MAKE ======================================= )
 
@@ -909,10 +909,10 @@ hider found?
 	:: ' (do-defer) , postpone ; ;
 
 : is ( location " ccc" -- : make a deferred word execute a word ) 
-	find dup 0= if -13 throw then cfa swap ! ;
-
+	find found? swap ! ;
 
 hider (do-defer)
+hider found?
 
 ( The "tail" function implements tail calls, which is just a jump
 to the beginning of the words definition, for example this
@@ -1040,7 +1040,6 @@ and constants, as we mentioned before. )
 
 : variable ( x c" xxx" -- : create a variable will initial value of x )
 	create ,     does>   ;
-
 
 \ : constant ( x c" xxx" -- : create a constant with value of x ) 
 \	create ,     does> @ ;
@@ -1201,7 +1200,7 @@ testing and debugging:
 : column ( i -- )	
 	column-width @ mod not if cr then ;
 
-: reset-column		
+: column.reset		
 	0 column-counter ! ;
 
 : auto-column		
@@ -1210,8 +1209,6 @@ testing and debugging:
 : alignment-bits 
 	[ 1 size log2 lshift 1- literal ] and ;
 
-: name ( PWD -- c-addr : given a pointer to the PWD field of a word get a pointer to the name of the word )
-	dup 1+ @ 256/ word-mask and lsb - chars> ;
 
 0 variable x
 : x! ( x -- ) 
@@ -2022,7 +2019,7 @@ and prints prime numbers. )
 	0 counter !
 	"  The primes from " dup . " to " over . " are: "
 	cr
-	reset-column
+	column.reset
 	do
 		i prime?
 		if
@@ -2052,6 +2049,9 @@ hide{ .s }hide
 	cr ;
 
 1 variable hide-words ( do we want to hide hidden words or not )
+
+: name ( PWD -- c-addr : given a pointer to the PWD field of a word get a pointer to the name of the word )
+	dup 1+ @ 256/ word-mask and lsb - chars> ;
 
 ( This function prints out all of the defined words, excluding hidden words.
 An understanding of the layout of a Forth word helps here. The dictionary
@@ -2128,7 +2128,6 @@ hide{ words.immediate words.defined words.hidden hidden? hidden-bit }hide
 	" start of variable stack: " max-core `stack-size @ 2* - . cr
 	" start of return stack:   " max-core `stack-size @ - . cr
 	" current input source:    " source-id -1 = if " string" else " file" then cr
-	" reading from stdin:      " source-id 0 = stdin? and TrueFalse cr
 	" tracing on:              " `debug   @ TrueFalse cr
 	" starting word:           " `instruction ? cr
 	" real start address:      " `start-address ? cr
@@ -2163,27 +2162,29 @@ hide{ words.immediate words.defined words.hidden hidden? hidden-bit }hide
 : more ( -- : wait for more input )
 	"  -- press any key to continue -- " key drop cr page ;
 
-: debug-help ( -- : this is not quite ready for prime time )
+: debug-help ( -- : print out the help for the debug command )
  " debug mode commands
 	h - print help
-	q - exit containing word
+	q - exit interpreter word
 	r - print registers
 	s - print stack
 	R - print return stack
 	c - continue on with execution
 " ;
 
-: debug-prompt 
+doer debug-prompt
+: prompt-default
 	." debug> " ;
 
-: debug ( a work in progress, debugging support, needs parse-word )
-	\ " Entered Debug Prompt. Type 'h' <return> for help. " cr 
-	key drop
+make debug-prompt prompt-default
+
+: debug ( -- : enter interactive debug prompt )
 	cr
+	" Entered Debug Prompt. Type 'h' <return> for help. " cr 
 	begin
-		debug-prompt
-		'\n' word count drop c@
+		key
 		case
+			'\n'     of debug-prompt endof
 			[char] h of debug-help endof
 			[char] q of bye        endof
 			[char] r of registers  endof
@@ -3409,6 +3410,9 @@ machine.
 * Throw/Catch need to be added and used in the virtual machine
 * Various edge cases and exceptions should be removed [for example counted strings
 are not used internally, and '0x' can be used as a prefix only when base is zero].
+* A potential optimization is to order the words in the dictionary by frequency order,
+this would mean chaning the X Macro that contains the list of words, after collecting
+statistics. This should make find faster.
 
  )
 
@@ -3425,4 +3429,68 @@ not `fin.
 
 \ : ' immediate state @ if postpone ['] else find then ;
 
+( This really does not implement a correct FORTH/VOCABULARY, for that
+wordlists will need to be introduced and used in libforth.c. The best
+that this word set can do is to hide and reveal words to the user, this
+was just an experiment. 
 
+	: forth 
+		[ find forth 1- @ ] literal
+		[ find forth 1- ] literal ! ;
+
+	: vocabulary
+		create does> drop 0 [ find forth 1- ] literal ! ; )
+
+( \ Very experimental block editor: Do not use yet!
+\ Before this is used, the CASE statement needs to be fixed.
+\ The goal is to make a simple block editor from which source code
+\ can edited, saved, and run.
+
+: raw c" stty raw" system ;
+: cooked c" stty cooked" system ;
+: blk@ blk @ ;
+
+0 variable count
+127 constant del
+
+: editor-help
+	page
+	cooked
+	" s - save current block" cr
+	" h - editor help menu" cr
+	" q - quit the editor" cr
+	" -- press any key to continue -- " cr
+	raw
+	key drop ;
+
+: command 
+	save-cursor
+	0 20 at-xy
+	" command: Type 'h' for help "
+	key
+	case 
+		[char] s of update save-buffers endof
+		[char] h of editor-help endof
+		[char] q of exit endof
+		" invalid command" cr
+	endcase
+	restore-cursor ;
+
+: editor 
+	list
+	raw
+	page
+	begin
+		key 
+		dup 'escape' = if
+			command [char] q = if cooked exit then
+		else
+			scr @ block 
+			count @ + 
+			c!
+			count 1+!
+			\ count @ b/buf > if scr 1+! then
+		then
+	again ;
+
+)
