@@ -3217,16 +3217,13 @@ b/buf string buf  ( block buffer, only one exists )
 	0= if -35 throw then ;
 
 : update ( -- : mark currently loaded block buffer as dirty )
-	1 dirty ! ;
+	true dirty ! ;
+
+: updated?
+	dirty @ ;
 
 : block.name ( n -- c-addr u : make a block name )
-	<# 
-		[char] k hold
-		[char] l hold
-		[char] b hold
-		[char] . hold
-		#s 
-	#> rot drop ;
+	c" .blk" <# holds #s #> rot drop ;
 
 ( @warning this will not work if we do not have permission,
 or in various other cases where we cannot open the file, for
@@ -3256,7 +3253,7 @@ only write or read 1024 and not a byte more )
 	blk @ w/o block.open     ( open file backing block buffer )
 	block.write              ( write it out )
 	close-file throw         ( close it )
-	0 dirty ! ;              ( but only mark it clean if everything succeeded )
+	false dirty ! ;          ( but only mark it clean if everything succeeded )
 
 : empty-buffers ( -- : deallocate any saved buffers )
 	0 blk ! ;
@@ -3292,6 +3289,12 @@ the block buffer. )
 
 : buffer block ;
 
+( @warning uses hack, block buffer is NUL terminated, and evaluate requires
+a NUL terminated string, evaluate checks that the last character is NUL, 
+hence the 1+ )
+: load ( n -- : load and execute a block )
+	block b/buf 1+ evaluate throw ;
+
 hide{ 
 	block.name invalid? block.write 
 	block.read buffer.exists block.open dirty
@@ -3300,13 +3303,13 @@ hide{
 ( ==================== Block Layer =========================== )
 
 ( ==================== List ================================== )
-1 variable list.lines
+1 variable fancy-list
 0 variable scr
-64 constant #line ( line length )
+64 constant c/l ( characters per line )
 
 : line.number ( n -- : print line number )
-	list.lines @ if
-		dup 10 < if space then ( leading space: works up to #line = 99)
+	fancy-list @ if
+		dup 10 < if space then ( leading space: works up to c/l = 99)
 		. [char] | emit ( print " line-number : ")
 	else
 		drop
@@ -3315,14 +3318,25 @@ hide{
 : line ( c-addr -- c-addr u : given a line number, display that line )
 	dup    
 	line.number ( display line number )
-	#line * +   ( calculate offset )
-	#line ;     ( add line length )
+	c/l * +     ( calculate offset )
+	c/l ;       ( add line length )
+
+: list.end
+	fancy-list @ not if exit then
+	[char] | emit ;
 
 : list.type ( c-addr u -- : list a block )
-	b/buf #line / 0 do dup i line type cr loop drop ;
+	b/buf c/l / 0 do dup i line type list.end cr loop drop ;
+
+: list.border " +---|---" ;
+
+: list.box
+	fancy-list @ not if exit then
+	4 spaces
+	8 0 do list.border loop cr ;
 
 : list ( n -- : display a block number and update scr )
-	dup >r block r> scr ! list.type ;
+	dup >r block r> scr ! list.box list.type list.box ;
 
 : thru
 	key drop
@@ -3331,7 +3345,7 @@ hide{
 : make-blocks ( n1 n2 -- : make blocks on disk from n1 to n2 inclusive )
 	1+ swap do i block b/buf bl fill update loop save-buffers ;
 
-hide{ buf line line.number list.type list.lines }hide
+hide{ buf line line.number list.type fancy-list }hide
 
 ( ==================== List ================================== )
 
@@ -3484,10 +3498,11 @@ system to exist.
 ANSI escape codes - thanks to CMD.EXE. Damned Windows.
 @todo How line numbers are printed out should be investigated,
 also I should refactor 'dump' to use a similar line number system.
+@todo Format the output of list better, put a nice box around it.
 
 Adapted from http://retroforth.org/pages/?PortsOfRetroEditor )
 : h
-page
+page cr
 " Block Editor Help Menu
 
       n    move to next block
@@ -3505,29 +3520,33 @@ page
 char drop ;
 
 : (block) blk @ block ; 
-: (line) #line * (block) + ; ( n -- c-addr : push current line address )
+: (line) c/l * (block) + ; ( n -- c-addr : push current line address )
 : n blk @ 1+ block ;
 : p blk @ 1- block ;
-: l blk @ list ;
-: d (line) #line bl fill ; 
+: d (line) c/l bl fill ; 
 : x (block) b/buf bl fill ;
-: b block ;
 : s update save-buffers ;
 : q rdrop rdrop ;
-: e (block) b/buf 1+ evaluate drop char drop ; ( @warning uses hack, block buffer is NUL terminated)
-: ia #line * + dup b/buf swap - >r (block) + r> accept ; ( @bug accept NUL terminates the string! )
+: e blk @ load ;
+: ia c/l * + dup b/buf swap - >r (block) + r> accept ; ( @bug accept NUL terminates the string! )
 : i 0 swap ia ;
 : editor
 	1 block
 	postpone [ 
 	begin
-		page
+		page cr
 		" BLOCK EDITOR: TYPE H FOR HELP " cr
 		blk @ list
 		" CURRENT BLOCK: " blk @ . cr
 		read
 	again ;
 
+( Extra niceties )
+: u update ;
+: b block ;
+: l blk @ list ;
+
 hide{ (block) (line) }hide
 
 here fence !
+
