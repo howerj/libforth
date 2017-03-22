@@ -1299,6 +1299,151 @@ Save the following file on [Unix][] systems to */etc/magic*:
 	>7 byte   x                size=[2^%d]
 	## Extra tests could be added, such as whether the core file is still valid
 
+## Coding Standards
+
+The coding standards used for both the C and Forth code deviate from what is
+normal, the Forth code mostly so. Nonetheless they should be abided by
+regardless of what one may think of them. The C code is also written in a
+literate style (although the documentation is generated from it, rather than
+the code being generated from the documentation), this imposes extra
+requirements on comments.
+
+### C Coding Standards
+
+The libforth Forth interpreter is primarily a library first and should be
+thought of as such, it is possible that multiple instances of the Forth
+interpreter are active at the same time, as such absolutely no global state can
+be used within the Forth library. Be very careful in what functions you export,
+by default all functions should be declared as static. 
+
+Global state can be used in the [main.c][] file which contains a wrapper 
+around libforth. This wrapper is used to make the **forth** executable, and
+there is only ever one instance of the interpreter in use at a time.
+
+The library is also written in [C99][] and made to be portable. Any
+non-portable code should be placed in [main.c][] and should be optionally
+compiled only if the correct macro for that functionality is defined. The
+macros **\_WIN32** and **\_\_unix\_\_** are currently used to test for the
+operating system in use for example. 
+
+The program [doxygen][] is used to extract and built the API documentation for
+libforth. At minimum all functions and macros that are exported by the library
+should be documented using [doxygen][] style markup. 
+
+All functions exported by [libforth.c][] should be tested, and should be
+prefixed with "forth\_". Unit tests against [libforth.c][] belong in
+[unit.c][]. The same portability guidelines that apply to [libforth.c][] 
+also apply to [unit.c][].
+
+Try to use assertions and checks on code liberally, even if the check is
+expensive to do. Expensive checks should be disabled with by defining the
+**NDEBUG** macro, like **assert** is.
+
+The Linux kernel coding standards are to be roughly followed. Line lengths
+should be limited to 80 characters in length (this is much more important given
+documentation is generated from the source). 
+
+The main exception to the rule on code indentation is the **forth\_run**
+function, which mostly consists of a large switch statement that implements the
+Forth virtual machine. 
+
+Bellow is a cut down version of the switch statement:
+
+	switch(w) { /* switches on instruction */
+	/* ...More instructions... */
+	case DEFINE:
+		m[STATE] = 1; /* compile mode */
+		if(forth_get_word(o, o->s) < 0)
+			goto end;
+		compile(o, RUN, (char*)o->s, true);
+		break;
+	/* ...More instructions... */
+	case ADD:     f = *S-- + f;                   break;
+	case AND:     f = *S-- & f;                   break;
+	case OR:      f = *S-- | f;                   break;
+	case XOR:     f = *S-- ^ f;                   break;
+	case INV:     f = ~f;                         break;
+	/* ...More instructions... */
+	}
+
+Of note is that simple instructions like **ADD** and **OR** take up a single
+line, having worked on the virtual machine for a while this aids in readability
+for me. The **DEFINE** instruction is a lot longer and so is split up into
+multiple lines.
+
+A [AWK][] script, specifically [GAWK][], is used to turn the [C][] code into a
+single [PDF][] document, by first generating [markdown][] from it. The script,
+called [convert][], is simple. The script by default indents any [C][] code
+which in [markdown][] means it is treated as a code block, to turn the
+indentation on or off the commands "/\*\*" turns if off and the command
+"\*\*/" turns it back on, these obviously double as both [C][] comment blocks,
+but also make [doxygen][] look for tags within the comments. The script only
+looks for comment commands at the beginning of a line.
+
+The following [C][] program:
+
+	/**
+	## A title using markdown syntax
+	This comment will not be indented in the resulting mark down
+	file and can be used to describe any of the following code.
+	**/
+	int main(void) 
+	{ 
+		printf("Hello, World\n"); /* a normal C comment */
+		return 0;
+	}
+
+Will be turned into:
+
+	## A title using markdown syntax
+	This comment will not be indented in the resulting mark down
+	file and can be used to describe any of the following code.
+	<NEW-LINE>
+		int main(void) 
+		{ 
+			printf("Hello, World\n"); /* a normal C comment */
+			return 0;
+		}
+
+The comment blocks are used to explain the code in detail.
+
+### Forth Coding Standards
+
+The way code is formatted is idiosyncratic for Forth, the main difference is
+that tabs are used to indent code. Spaces and new lines are used to breakup
+longer word definitions, for short definitions only the entire definition
+should take up only two lines, as so:
+
+	: foo ( n -- n : add bar to 'n')
+		bar + ;
+
+All functions exposed to the user should be unit tested (which currently is not
+the case, but that is not an excuse not to test them). Unit tests go in the
+file [unit.fth][].
+
+Sections of related code should be enclosed with decoration that makes it
+obvious that the code belongs together, like so:
+
+	( ============ The Foo Library ============ )
+	( The Foo library implements the standard 
+	words 'foo', 'bar' and 'foobar' )
+	( ... )
+	: foo ( n -- n )
+		bar + ;
+	( ... )
+	( ============ The Foo Library ============ )
+
+The standard way of making a word immediate in Forth is to place the word
+**immediate** after a word definition. This is still possible to do in
+libforth, however the preferred method is to place it just after the word being
+defined:
+
+	: example immediate ; ( preferred way )
+	: example ; immediate ( traditional way )
+
+I prefer the first way of making a word immediate as it implies that it is part
+of the word definition and not something that acts on the word.
+
 ## Bugs
 
 As mentioned in the standards compliance section, this Forth does things in a
@@ -1337,7 +1482,6 @@ documenting are:
  - How comments should look like (literate and doxygen comments)
  - Tabs vs Spaces (use tabs)
  - Levels of indentation
- - Exceptions to the formatting rules (like the case statement in libforth.c)
  - Coding standards for Forth (stack comments, indentation, etcetera).
  - And much more.
 * Improve error handling by adding 'throw' and 'catch' to the virtual
@@ -1449,6 +1593,7 @@ you should use a different language, or implementation.
 [libforth.c]: libforth.c
 [libforth.h]: libforth.h
 [unit.c]: unit.c
+[unit.fth]: unit.fth
 [ANS Forth]: http://lars.nocrew.org/dpans/dpans.htm
 [musl]: https://www.musl-libc.org/
 [MIT]: https://opensource.org/licenses/MIT
@@ -1471,5 +1616,10 @@ you should use a different language, or implementation.
 [magic]: https://linux.die.net/man/5/magic
 [Unix]: www.opengroup.org/unix
 [environment variable]: https://en.wikipedia.org/wiki/Environment_variable
+[doxygen]: https://en.wikipedia.org/wiki/Doxygen
+[AWK]: https://en.wikipedia.org/wiki/AWK
+[GAWK]: https://www.gnu.org/software/gawk/
+[PDF]: https://en.wikipedia.org/wiki/Portable_Document_Format
+[convert]: convert
 
 <style type="text/css">body{margin:40px auto;max-width:850px;line-height:1.6;font-size:16px;color:#444;padding:0 10px}h1,h2,h3{line-height:1.2}</style>

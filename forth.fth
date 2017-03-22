@@ -86,6 +86,8 @@ min-signed-integer invert constant max-signed-integer
 
 1 constant cell ( size of a cell in address units )
 
+4 constant version ( version number for the interpreter )
+
 cell size 8 * * constant address-unit-bits ( the number of bits in an address )
 
 -1 -1 1 rshift and invert constant sign-bit ( bit corresponding to the sign in a number )
@@ -153,7 +155,6 @@ with some extra effort in libforth.c as well )
 
 : compiling? ( PWD -- PWD bool : is a word immediate, given the words PWD field )
 	dup 1+ @ immediate-mask and logical ;
-
 
 : cr  ( -- : emit a newline character )
 	nl emit ;
@@ -536,8 +537,8 @@ Instead of:
 : 2tuck ( n1 n2 n3 n4 – n3 n4 n1 n2 n3 n4 )
 	2swap 2over ;
 
-:  3drop ( x1 x2 x3 -- )
-	2drop ;
+: 3drop ( x1 x2 x3 -- )
+	drop 2drop ;
 
 : nos1+ ( x1 x2 -- x1+1 x2 : increment the next variable on that stack )
 	swap 1+ swap ;
@@ -674,6 +675,8 @@ Instead of:
 	swap
 	sign-bit and or ;
 
+: /string ( c-addr1 u1 u2 -- c-addr2 u2 : advance a string by n characters )
+	over min rot over + -rot - ;
 
 hide stdin?
 
@@ -815,12 +818,22 @@ hide stdin?
 	?dup-if [char] ! emit tab . cr then ( exception handler of last resort )
 	again ;
 
+
 : [interpret] ( c1" xxx" ... cn" xxx" -- : immediate version of interpret )
 	immediate interpret ;
 
 interpret ( use the new interpret word, which can catch exceptions )
 
 find [interpret] cell+ start! ( the word executed on restart is now our new word )
+
+( The following words are using in various control structure related
+words to make sure they only execute in the correct state )
+
+: ?comp ( -- : error if not compiling )
+	state @ 0= if -22 throw then ; 
+
+: ?exec ( -- : error if not executing )
+	state @    if -22 throw then ; 
 
 
 ( ========================== Basic Word Set ================================== )
@@ -864,10 +877,10 @@ The above example is a bit contrived, the definitions and functionality
 are too simple for this to be worth factoring out, but it shows how you
 can use DOER/MAKE. )
 
-: noop ; ( -- : default word to execute for doer )
+: noop ; ( -- : default word to execute for doer, does nothing )
 
-: doer ( c" xxx" -- : )
-	:: ['] noop , postpone ; ;
+: doer ( c" xxx" -- : make a work whose behavior can be changed by make )
+	immediate ?exec :: ['] noop , postpone ; ;
 
 : found? ( xt -- xt : thrown an exception if the execution token is zero [not found] ) 
 	dup 0= if -13 throw then ;
@@ -886,13 +899,13 @@ of the first word to use the second. MAKE is a state aware word. )
 		swap !
 	then ;
 
-hide noop
+hide noop ( noop! noop! )
 
 ( ========================== DOER/MAKE ======================================= )
 
 ( ========================== Extended Word Set =============================== )
 
-: log ( u base -- u : command the logarithm of u in base )
+: log ( u base -- u : command the _integer_ logarithm of u in base )
 	>r 
 	dup 0= if -11 throw then ( logarithm of zero is an error )
 	0 swap
@@ -901,7 +914,7 @@ hide noop
 	until
 	drop 1- rdrop ;
 
-: log2 ( u -- u : compute the logarithm of u )
+: log2 ( u -- u : compute the _integer_ logarithm of u )
 	2 log ;
 
 : time ( " ccc" -- n : time the number of milliseconds it takes to execute a word )
@@ -913,8 +926,9 @@ hide noop
 : (do-defer) ( -- self : pushes the location into which it is compiled )
 	r> dup >r 1- ;
 
-: defer  ( " ccc" -- , Run Time -- location : 
+: defer immediate ( " ccc" -- , Run Time -- location : 
 	creates a word that pushes a location to write an execution token into )
+	?exec
 	:: ' (do-defer) , postpone ; ;
 
 : is ( location " ccc" -- : make a deferred word execute a word ) 
@@ -943,6 +957,7 @@ Would overflow the return stack. )
 hide tail
 : tail ( -- : perform tail recursion in current word definition )
 	immediate
+	?comp
 	latest cell+
 	' branch ,
 	here - cell+ , ;
@@ -954,6 +969,7 @@ hide tail
 
 	We can test "recurse" with this factorial function:
 	  : factorial  dup 2 < if drop 1 exit then dup 1- recurse * ; )
+	?comp
 	latest cell+ , ;
 
 : factorial ( x -- x : compute the factorial of a number )
@@ -966,6 +982,80 @@ hide tail
 	dup if tuck mod tail then drop ;
 
 ( ========================== Extended Word Set =============================== )
+
+( ========================== For Each Loop =================================== )
+
+( The foreach word set allows the user to take action over an entire array
+without setting up loops and checking bounds. It behaves like the foreach loops
+that are popular in other languages. 
+
+The foreach word accepts a string and an execution token, for each character
+in the string it passes the current address of the character that it should
+operate on. 
+
+The complexity of the foreach loop is due to the requirements placed on it.
+It cannot pollute the variable stack with values it needs to operate on, and
+it cannot store values in local variables as a foreach loop could be called
+from within the execution token it was passed. It therefore has to store all
+of it uses on the return stack for the duration of EXECUTE.
+
+At the moment it only acts on strings as "/string" only increments the address 
+passed to the word foreach executes to the next character address. )
+
+\ (FOREACH) leaves the point at which the foreach loop terminated on the stack,
+\ this allows programmer to determine if the loop terminated early or not, and
+\ at which point.
+: (foreach) ( c-addr u xt -- c-addr u : execute xt for each cell in c-addr u 
+	returning number of items not processed )
+	begin 
+		3dup >r >r >r ( c-addr u xt R: c-addr u xt )
+		nip           ( c-addr xt   R: c-addr u xt )
+		execute       ( R: c-addr u xt )
+		r> r> r>      ( c-addr u xt )
+		-rot          ( xt c-addr u )
+		1 /string     ( xt c-addr u )
+		dup 0= if rot drop exit then ( End of string - drop and exit! )
+		rot           ( c-addr u xt )
+	again ;
+
+\ If we do not care about returning early from the foreach loop we
+\ can instead call FOREACH instead of (FOREACH), it simply drops the
+\ results (FOREACH) placed on the stack.
+: foreach ( c-addr u xt -- : execute xt for each cell in c-addr u )
+	(foreach) 2drop ;
+
+\ RETURN is used for an early exit from within the execution token, it
+\ leaves the point at which it exited 
+: return ( -- n : return early from within a foreach loop function, returning number of items left )
+	rdrop   ( pop off this words return value )
+	rdrop   ( pop off the calling words return value )
+	rdrop   ( pop off the xt token )
+	r>      ( save u )
+	r>      ( save c-addr )
+	rdrop ; ( pop off the foreach return value )
+
+\ SKIP is an example of a word that uses the foreach loop mechanism. It
+\ takes a string and a character and returns a string that starts at
+\ the first occurrence of that character in that string - or until it
+\ reaches the end of the string.
+
+\ SKIP is defined in two steps, first there is a word, (SKIP), that
+\ exits the foreach loop if there is a match, if there is no match it
+\ does nothing. In either case it leaves the character to skip until
+\ on the stack.
+
+: (skip) ( char c-addr -- char : exit out of foreach loop if there is a match )
+	over swap c@ = if return then ;
+
+\ SKIP then setups up the foreach loop, the char argument will present on the
+\ stack when (SKIP) is executed, it must leave a copy on the stack whatever
+\ happens, this is then dropped at the end. (FOREACH) leaves the point at
+\ which the loop terminated on the stack, which is what we want.
+: skip ( c-addr u char --  c-addr u : skip until char is found or until end of string )
+	-rot ['] (skip) (foreach) rot drop ;
+hide (skip)
+
+( ========================== For Each Loop =================================== )
 
 ( The words described here on out get more complex and will require more
 of an explanation as to how they work. )
@@ -999,11 +1089,8 @@ and thus allows us to extend the language easily.
 : write-compile, ( -- : A word that writes , into the dictionary ) 
 	' , , ;
 
-: state! ( bool -- : set the compilation state variable ) 
-	state ! ;
-
 : command-mode ( -- : put the interpreter into command mode )
-	false state! ;
+	false state ! ;
 
 : command-mode-create   ( create a new work that pushes its data field )
 	::              ( compile a word )
@@ -1029,10 +1116,10 @@ and thus allows us to extend the language easily.
 	then ;
 
 hide command-mode-create
-hide state!
 
 : does> ( hole-to-patch -- )
 	immediate
+	?comp
 	write-exit   ( we don't want the defining word to exit, but the *defined* word to )
 	here swap !  ( patch in the code fields to point to )
 	dolist , ;   ( write a run in )
@@ -1044,7 +1131,7 @@ hide write-exit
 ( Now that we have create...does> we can use it to create arrays, variables
 and constants, as we mentioned before. )
 
-: array ( u c" xxx" -- : create a named array of length u )   
+: array ( u c" xxx" -- : create a named array of length u )
 	create allot does> + ;
 
 : variable ( x c" xxx" -- : create a variable will initial value of x )
@@ -1135,6 +1222,7 @@ should use a value to return to which it pushes to the return stack )
 	>r ;    ( restore our return address )
 
 : do immediate  ( Run time: high low -- : begin do...loop construct )
+	?comp
 	' (do) ,
 	postpone begin ; 
 
@@ -1159,10 +1247,10 @@ should use a value to return to which it pushes to the return stack )
 	u>= ;
 
 : loop  ( -- : end do...loop construct )
-	immediate ' (loop) , postpone until ' (unloop) , ;
+	immediate ?comp ' (loop) , postpone until ' (unloop) , ;
 
 : +loop ( x -- : end do...+loop loop construct )
-	immediate ' (+loop) , postpone until ' (unloop) , ;
+	immediate ?comp ' (+loop) , postpone until ' (unloop) , ;
 
 : leave ( -- , R: i limit return -- : break out of a do-loop construct )
 	(unloop)
@@ -1288,36 +1376,6 @@ hide delim
 	chere ;
 hide skip
 
-( This foreach mechanism needs thinking about, what is the best information to
-present to the word to be executed? At the moment only the contents of the
-cell that it should be processing is.
-
-At the moment foreach uses a do...loop construct, which means that the
-following cannot be used to exit from the foreach loop:
-
-	: return [ : exit early from a foreach loop ]
-		r> rdrop >r ;
-
-Although this can be remedied, we know that it puts a loop onto the return
-stack.
-
-It also uses a variable 'xt', which means that foreach loops cannot be
-nested. This word really needs thinking about.
-
-This seems to be a useful, general, mechanism that is missing from
-most Forths. More words like this should be made, they are powerful
-like the word 'compose', but they need to be created correctly. )
-
-0 variable xt
-: foreach ( addr u xt -- : execute xt for each cell in addr-u )
-	xt !
-	bounds do i xt @ execute 1 cell +loop ;
-
-: foreach-char ( c-addr u xt -- : execute xt for each cell in c-addr u )
-	xt !
-	bounds do i xt @ execute loop ;
-hide xt
-
 : accept ( c-addr +n1 -- +n2 : see accepter definition ) 
 	nl accepter ;
 
@@ -1332,7 +1390,7 @@ hide xt
 : subst ( c-addr u char1 char2 -- replace all char1 with char2 in string )
 	swap
 	2swap
-	['] (subst) foreach-char 2drop ;
+	['] (subst) foreach 2drop ;
 hide (subst)
 
 0xFFFF constant max-string-length
@@ -1374,7 +1432,7 @@ hide (subst)
 	c@ emit ;
 
 : type ( c-addr u -- : print out 'u' characters at c-addr )
-	['] (type) foreach-char ;
+	['] (type) foreach ;
 hide (type)
 
 : do-string ( char -- : write a string into the dictionary reading it until char is encountered )
@@ -1385,9 +1443,6 @@ hide (type)
 	-rot
 	0 do 2dup i + c! loop
 	2drop ;
-
-: /string ( c-addr1 u1 n -- c-addr2 u2 : advance a string by n characters )
-	over min rot over + -rot - ;
 
 : compare ( c-addr1 u1 c-addr2 u2 -- n : compare two strings, not quite compliant yet )
 	>r swap r> min >r
@@ -1461,28 +1516,53 @@ prints it out, it also does not checking of the returned values from write-file 
 	' cr , ' (abort") , ;
 
 ( ==================== CASE statements ======================== )
+( This simple set of words adds case statements to the interpreter,
+the implementation is not particularly efficient, but it works and
+is simple.
 
-( for a simpler case statement:
-	see Volume 2, issue 3, page 48 of Forth Dimensions at
-	http://www.forth.org/fd/contents.html )
+Below is an example of how to use the CASE statement, the following
+word, "example" will read in a character and switch to different
+statements depending on the character input. There are two cases,
+when 'a' and 'b' are input, and a default case which occurs when
+none of the statements match:
 
-( These case statements need improving, it is not standards compliant )
+	: example
+		char 
+		case
+			[char] a of " a was selected " cr endof
+			[char] b of " b was selected " cr endof
+
+			dup \ encase will drop the selector
+			" unknown char: " emit cr
+		endcase ;
+
+	example a \ prints "a was selected"
+	example b \ prints "b was selected"
+	example c \ prints "unknown char: c"
+
+Other examples of how to use case statements can be found throughout 
+the code. 
+
+For a simpler case statement see, Volume 2, issue 3, page 48 
+of Forth Dimensions at http://www.forth.org/fd/contents.html )
+
 : case immediate
+	?comp
 	' branch , 3 ,   ( branch over the next branch )
 	here ' branch ,  ( mark: place endof branches back to with again )
 	>mark swap ;     ( mark: place endcase writes jump to with then )
 
-: over= ( x y -- x bool : over ... then = )
-	over = ;
+: over= ( x y -- [x 0] | 1 : )
+	over = if drop 1 else 0 then ;
 
 : of
-	immediate ' over= , postpone if ;
+	immediate ?comp ' over= , postpone if ;
 
 : endof
-	immediate over postpone again postpone then ;
+	immediate ?comp over postpone again postpone then ;
 
 : endcase
-	immediate 1+ postpone then drop ;
+	immediate ?comp ' drop , 1+ postpone then drop ;
 
 ( ==================== CASE statements ======================== )
 
@@ -1492,6 +1572,7 @@ prints it out, it also does not checking of the returned values from write-file 
 	immediate -22 throw ;
 
 : hide{ ( -- : hide a list of words, the list is terminated with "}hide" )
+	?exec
 	begin
 		find ( find next word )
 		dup [ find }hide ] literal = if
@@ -1721,17 +1802,18 @@ Usage:
 	here fence ! )
 0 variable fence
 
-: forgetter ( pwd-token -- : forget a found word and everything after it )
+: (forget) ( pwd-token -- : forget a found word and everything after it )
 	dup 0= if -15 throw then         ( word not found! )
 	dup fence @ u< if -15 throw then ( forgetting a word before fence! )
 	dup @ pwd ! h ! ;
 
-: forget ( WORD -- : forget word and every word defined after it )
-	find 1- forgetter ;
+: forget ( c" xxx" -- : forget word and every word defined after it )
+	find 1- (forget) ;
 
-: marker ( WORD -- : make word the forgets itself and words after it)
-	:: latest [literal] ' forgetter , postpone ; ;
-hide forgetter
+: marker ( c" xxx" -- : make word the forgets itself and words after it)
+	:: latest [literal] ' (forget) , postpone ; ;
+here fence ! ( This should also be done at the end of the file )
+hide (forget)
 
 : ** ( b e -- x : exponent, raise 'b' to the power of 'e')
 	?dup-if
@@ -2260,11 +2342,11 @@ make debug-prompt prompt-default
 			[char] h of debug-help endof
 			[char] q of bye        endof
 			[char] r of registers  endof
-			[char] s of >r .s  r>  endof
-			[char] R of r> r.s >r  endof
-			[char] c of drop exit  endof
+			[char] s of .s         endof
+			[char] R of r.s        endof
+			[char] c of exit       endof
 			( @todo add throw here )
-		endcase drop
+		endcase 
 	again ;
 hide debug-prompt
 
@@ -2343,12 +2425,12 @@ Also of note, a number greater than "here" must be data )
 : decompile ( code-pointer -- code-pointer increment|0 : )
 	.d [char] : emit space dup @
 	case
-		dolit             of drup decompile-literal cr endof
-		get-branch        of drup decompile-branch     endof
-		get-quote         of drup decompile-quote   cr endof
-		get-?branch       of drup decompile-?branch cr endof
-		get-original-exit of drup decompile-exit       endof
-		word-printer 1 cr
+		dolit             of dup decompile-literal cr endof
+		get-branch        of dup decompile-branch     endof
+		get-quote         of dup decompile-quote   cr endof
+		get-?branch       of dup decompile-?branch cr endof
+		get-original-exit of dup decompile-exit       endof
+		dup word-printer 1 swap cr
 	endcase reset-color ;
 
 : decompiler ( code-field-ptr -- : decompile a word in its entirety )
@@ -2673,9 +2755,9 @@ defer matcher
 	  @warning This uses a non-standards compliant version of case! )
 	*pat
 	case
-		       0 of drop drop c@ not        exit endof
-		[char] * of drop advance-regex      exit endof
-		[char] . of drop *str       advance exit endof
+		       0 of drop c@ not        endof
+		[char] * of advance-regex      endof
+		[char] . of *str       advance endof
 		            drop *pat==*str advance exit
 	endcase ;
 
@@ -2713,14 +2795,6 @@ free allocated cells )
 
 : cons0 0 0 cons ;
 
-marker cleanup
-77 987 cons constant x
-T{ x car@ -> 77  }T
-T{ x cdr@ -> 987 }T
-T{ 55 x cdr! x car@ x cdr@ -> 77 55 }T
-T{ 44 x car! x car@ x cdr@ -> 44 55 }T
-cleanup
-
 ( ==================== Cons Cells ============================= )
 
 ( ==================== Miscellaneous ========================== )
@@ -2752,11 +2826,8 @@ OTHER DEALINGS IN THE SOFTWARE.
 " 
 ;
 
-( ==================== Version information =================== )
 
-4 constant version
 
-( ==================== Version information =================== )
 
 ( ==================== Core utilities ======================== )
 ( Read the header of a core file and process it, printing the
@@ -3079,16 +3150,17 @@ hide{ cpad clean cdump input }hide
 		10 of " Oct " endof
 		11 of " Nov " endof
 		12 of " Dec " endof
-	endcase drop ;
+		-11 throw
+	endcase ;
 
 : .day ( day -- : add ordinal to day )
 	10 mod
 	case
-		1 of " st " drop exit endof
-		2 of " nd " drop exit endof
-		3 of " rd " drop exit endof
+		1 of " st " exit endof
+		2 of " nd " exit endof
+		3 of " rd " exit endof
 		" th " 
-	endcase drop ;
+	endcase ;
 
 : >day ( day -- : add ordinal to day of month )
 	dup u.
@@ -3105,12 +3177,12 @@ hide{ cpad clean cdump input }hide
 		4 of " Thu " endof
 		5 of " Fri " endof
 		6 of " Sat " endof
-	endcase drop ;
+	endcase ;
 
 : padded ( u -- : print out a run of zero characters )
 	0 do [char] 0 emit loop ;
 
-: 0u. ( u -- : print a zero padded number )
+: 0u. ( u -- : print a zero padded number @todo replace with u.r )
 	dup 10 u< if 1 padded then u. space ;
 
 : .date ( date -- : print the date )
@@ -3159,7 +3231,7 @@ size 2 = [if]
 : crc16-ccitt ( c-addr u -- u )
 	0xFFFF -rot
 	['] ccitt
-	foreach-char ;
+	foreach ;
 hide{ limit ccitt }hide
 
 ( ==================== CRC =================================== )
@@ -3290,7 +3362,8 @@ b/buf string buf  ( block buffer, only one exists )
 : update ( -- : mark currently loaded block buffer as dirty )
 	true dirty ! ;
 
-: updated?
+: updated? ( n -- bool : )
+	
 	dirty @ ;
 
 : block.name ( n -- c-addr u : make a block name )
@@ -3416,7 +3489,7 @@ hide{
 : make-blocks ( n1 n2 -- : make blocks on disk from n1 to n2 inclusive )
 	1+ swap do i block b/buf bl fill update loop save-buffers ;
 
-hide{ buf line line.number list.type fancy-list (base) }hide
+hide{ buf line line.number list.type fancy-list (base) list.box list.border list.end }hide
 
 ( ==================== List ================================== )
 
@@ -3497,7 +3570,6 @@ http://stackoverflow.com/questions/10564491/function-to-calculate-a-crc16-checks
 I/O to stdin/stdout] if an error occurs, and then re-throws, should be made.
 * Implement as many things from http://lars.nocrew.org/forth2012/implement.html
 as is sensible. 
-* CASE Statements http://dxforth.netbay.com.au/miser.html
 * The current words that implement I/O redirection need to be improved, and documented,
 I think this is quite a useful and powerful mechanism to use within Forth that simplifies
 programs. This is a must and will make writing utilities in Forth a *lot* easier 
@@ -3514,6 +3586,9 @@ should be investigated.
 the most commonly executed words and instructions, as well as the most common two and
 three sequences of words and instructions. This could be used to use to optimize the
 interpreter, in terms of both speed and size.
+* As a thought, a word for inlining other words could be made by copying everything
+into the current definition until it reaches a _exit, it would need to be aware of
+literals written into a word, like 'see' is.
 
 ### libforth.c todo
 
@@ -3565,10 +3640,14 @@ was just an experiment.
 \ 0 variable csp
 \ : !csp sp@ csp ! ;
 \ : ?csp sp@ csp @ <> if -22 throw then ;
-\ \ Is there a better throw value than -11?
-\ : ?comp state @ 0= if -11 throw then ; \ Error if not compiling
-\ : ?exec state @    if -11 throw then ; \ Error if not executing
 
+\ @todo Make this work
+\ : >body ??? ;
+\ : noop ( -- ) ;
+\ : defer  create ( "name" -- ) ['] noop ,   does> ( -- ) @ execute ;
+\ : is ( xt "name" -- ) find >body ! ;
+\ defer lessthan
+\ find < is lessthan
 
 ( ==================== Test Code ============================= )
 
@@ -3652,6 +3731,7 @@ hide{ (block) (line) (clean) yank }hide
 
 ( ==================== Block Editor ========================== )
 
-here fence !
+here fence ! ( final fence - works before this cannot be forgotten )
+
 
 

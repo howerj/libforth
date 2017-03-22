@@ -1,4 +1,15 @@
-#!./forth 
+
+( @todo Test more words )
+
+( Define a new version of interpret which catches errors, but then
+invalidates the Forth core and quits, signaling a test failure )
+: interpret ( c1" xxx" ... cn" xxx" -- )
+	begin 
+	' read catch 
+	?dup-if [char] ! emit tab . cr invalidate then 
+	again ;
+
+interpret ( use the new interpret word )
 
 .( Unit tests ) cr
 
@@ -281,6 +292,17 @@ T{ 0 c" 12x" >number nip   -> 12 1 }T
 hex
 T{ 0 c" ded" >number 2drop -> ded }T
 decimal
+
+.( cons cells ) cr
+77 987 cons constant x
+T{ x car@ -> 77  }T
+T{ x cdr@ -> 987 }T
+T{ 55 x cdr! x car@ x cdr@ -> 77 55 }T
+T{ 44 x car! x car@ x cdr@ -> 44 55 }T
+
+.( skip )
+T{ c" hello" char l skip nip -> 3 }T
+T{ c" hello" char x skip nip -> 0 }T
 
 cleanup
 ( ==================== Unit tests ============================ )

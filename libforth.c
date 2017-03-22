@@ -2178,7 +2178,6 @@ instructions enumeration will not be used (such as **ADD** or
 		case PUSH:    *++S = f;     f = m[ck(I++)];          break;
 		case CONST:   *++S = f;     f = m[ck(pc)];           break;
 		case RUN:     m[ck(++m[RSTK])] = I; I = pc;          break;
-		case DEFINE:
 /**
 **DEFINE** backs the Forth word **:**, which is an immediate word, it reads in a
 new word name, creates a header for that word and enters into compile mode,
@@ -2196,7 +2195,7 @@ The created header looks like this:
 
 The CODE field contains the RUN instruction.
 **/
-
+		case DEFINE:
 			m[STATE] = 1; /* compile mode */
 			if(forth_get_word(o, o->s) < 0)
 				goto end;
