@@ -73,6 +73,7 @@ extract the document string for a given work.
 0 constant false
 1 constant true ( @warning not standards compliant )
 
+( Confusingly the word 'cr' prints a line feed )
 10 constant lf   ( line feed )
 lf constant nl   ( new line - line feed on Unixen )
 13 constant cret ( carriage return )
@@ -552,7 +553,7 @@ Instead of:
 		dup @ hidden-mask or swap tuck ! exit
 	then 0 ;
 
-: hider ( WORD -- : hide with drop ) 
+: hide ( WORD -- : hide with drop ) 
 	find dup if (hide) then drop ;
 
 : reveal ( hide-token -- : reveal a hidden word ) 
@@ -674,7 +675,7 @@ Instead of:
 	sign-bit and or ;
 
 
-hider stdin?
+hide stdin?
 
 ( ================================== DUMP ================================== )
 \ : newline ( x -- x+1 : print a new line every fourth value )
@@ -699,8 +700,8 @@ hider stdin?
 \ 	r> drop
 \ 	2drop ;
 \ 
-\ hider newline
-\ hider address 
+\ hide newline
+\ hide address 
 ( ================================== DUMP ================================== )
 
 : cfa immediate ( find-address -- cfa )
@@ -885,7 +886,7 @@ of the first word to use the second. MAKE is a state aware word. )
 		swap !
 	then ;
 
-hider noop
+hide noop
 
 ( ========================== DOER/MAKE ======================================= )
 
@@ -919,8 +920,8 @@ hider noop
 : is ( location " ccc" -- : make a deferred word execute a word ) 
 	find found? swap ! ;
 
-hider (do-defer)
-hider found?
+hide (do-defer)
+hide found?
 
 ( The "tail" function implements tail calls, which is just a jump
 to the beginning of the words definition, for example this
@@ -939,7 +940,7 @@ or
 
 Would overflow the return stack. )
 
-hider tail
+hide tail
 : tail ( -- : perform tail recursion in current word definition )
 	immediate
 	latest cell+
@@ -1027,8 +1028,8 @@ and thus allows us to extend the language easily.
 		command-mode-create 
 	then ;
 
-hider command-mode-create
-hider state!
+hide command-mode-create
+hide state!
 
 : does> ( hole-to-patch -- )
 	immediate
@@ -1036,9 +1037,9 @@ hider state!
 	here swap !  ( patch in the code fields to point to )
 	dolist , ;   ( write a run in )
 
-hider write-quote
-hider write-compile,
-hider write-exit
+hide write-quote
+hide write-compile,
+hide write-exit
 
 ( Now that we have create...does> we can use it to create arrays, variables
 and constants, as we mentioned before. )
@@ -1272,7 +1273,7 @@ testing and debugging:
 		then
 	loop
 	-18 throw ; ( read in too many chars )
-hider delim
+hide delim
 
 : skip ( char -- : read input until string is reached )
 	key drop >r 0 begin drop key dup rdup r> <> until rdrop ;
@@ -1285,7 +1286,7 @@ hider delim
 	r> accepter 1+
 	chere c!
 	chere ;
-hider skip
+hide skip
 
 ( This foreach mechanism needs thinking about, what is the best information to
 present to the word to be executed? At the moment only the contents of the
@@ -1315,7 +1316,7 @@ like the word 'compose', but they need to be created correctly. )
 : foreach-char ( c-addr u xt -- : execute xt for each cell in c-addr u )
 	xt !
 	bounds do i xt @ execute loop ;
-hider xt
+hide xt
 
 : accept ( c-addr +n1 -- +n2 : see accepter definition ) 
 	nl accepter ;
@@ -1332,7 +1333,7 @@ hider xt
 	swap
 	2swap
 	['] (subst) foreach-char 2drop ;
-hider (subst)
+hide (subst)
 
 0xFFFF constant max-string-length
 
@@ -1374,7 +1375,7 @@ hider (subst)
 
 : type ( c-addr u -- : print out 'u' characters at c-addr )
 	['] (type) foreach-char ;
-hider (type)
+hide (type)
 
 : do-string ( char -- : write a string into the dictionary reading it until char is encountered )
 	(.") 
@@ -1396,7 +1397,7 @@ hider (type)
 128 string sbuf
 : s" ( "ccc<quote>" --, Run Time -- c-addr u )
 	key drop sbuf 0 fill sbuf [char] " accepter sbuf drop swap ;
-hider sbuf
+hide sbuf
 
 ( @todo these strings really need rethinking, state awareness needs to be removed... )
 : type, 
@@ -1419,12 +1420,12 @@ hider sbuf
 
 : .( 
 	immediate [char] ) sprint ;
-hider sprint
+hide sprint
 
 : ." 
 	immediate key drop [char] " do-string type, ;
 
-hider type,
+hide type,
 
 (  This word really should be removed along with any usages of this word, it
 is not a very "Forth" like word, it accepts a pointer to an ASCIIZ string and
@@ -1500,7 +1501,7 @@ prints it out, it also does not checking of the returned values from write-file 
 		(hide) drop
 	again ;
 
-hider (hide)
+hide (hide)
 
 ( ==================== Hiding Words =========================== )
 
@@ -1730,7 +1731,7 @@ Usage:
 
 : marker ( WORD -- : make word the forgets itself and words after it)
 	:: latest [literal] ' forgetter , postpone ; ;
-hider forgetter
+hide forgetter
 
 : ** ( b e -- x : exponent, raise 'b' to the power of 'e')
 	?dup-if
@@ -2265,7 +2266,7 @@ make debug-prompt prompt-default
 			( @todo add throw here )
 		endcase drop
 	again ;
-hider debug-prompt
+hide debug-prompt
 
 : code>pwd ( CODE -- PWD/0 : calculate PWD from code address )
 	dup dictionary-start here within not if drop 0 exit then
