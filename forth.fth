@@ -554,6 +554,10 @@ Instead of:
 		dup @ hidden-mask or swap tuck ! exit
 	then 0 ;
 
+( @todo refine ':' and ';' to use smudge, this could be done in libforth.c )
+: smudge ( -- : hide the latest defined word )
+	latest 1+ dup @ hidden-mask xor swap ! ;
+
 : hide ( WORD -- : hide with drop ) 
 	find dup if (hide) then drop ;
 
@@ -1262,6 +1266,9 @@ should use a value to return to which it pushes to the return stack )
 		rdrop ( return to the caller's caller routine )
 	then ;
 
+\ @todo define '(i)', '(j)' and '(k)', then make their wrappers, 'i', 'j'
+\ and 'k' call ?comp then compile a pointer to the thing that implements them,
+\ likewise for leave, loop and +loop.
 : i ( -- i : Get current, or innermost, loop index in do...loop construct )
 	r> r>   ( pop off return address and i )
 	tuck    ( tuck i away )
