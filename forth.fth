@@ -73,7 +73,9 @@ extract the document string for a given work.
 0 constant false
 1 constant true ( @warning not standards compliant )
 
-10 constant nl ( new line )
+10 constant lf   ( line feed )
+lf constant nl   ( new line - line feed on Unixen )
+13 constant cret ( carriage return )
 
 1 hidden-bit lshift constant hidden-mask ( mask for the hide bit in a words CODE field )
 
@@ -445,6 +447,9 @@ Instead of:
 : pick ( xu ... x1 x0 u -- xu ... x1 x0 xu )
 	sp@ swap cells - cell - @ ;
 
+: 3dup ( x1 x2 x3 -- x1 x2 x3 x1 x2 x3 : duplicate a set of three items )
+	2 pick 2 pick 2 pick ;
+
 : rpick ( R: xu ... x1 x0 u -- xu ... x1 x0 xu )
 	r@ swap - @ ;
 
@@ -542,13 +547,13 @@ Instead of:
 : ?if ( -- : non destructive if ) 
 	immediate ['] dup , postpone if ;
 
-: hide  ( token -- hide-token : this hides a word from being found by the interpreter )
+: (hide) ( token -- hide-token : this hides a word from being found by the interpreter )
 	?dup-if
 		dup @ hidden-mask or swap tuck ! exit
 	then 0 ;
 
 : hider ( WORD -- : hide with drop ) 
-	find dup if hide then drop ;
+	find dup if (hide) then drop ;
 
 : reveal ( hide-token -- : reveal a hidden word ) 
 	dup @ hidden-mask invert and swap ! ;
@@ -556,7 +561,7 @@ Instead of:
 : ?exit ( x -- : exit current definition if not zero ) 
 	if rdrop exit then ;
 
-: number? ( c -- f : is character a number? )
+: decimal? ( c -- f : is character a number? )
 	[char] 0 [ char 9 1+ ] literal within ;
 
 : lowercase? ( c -- f : is character lower case? )
@@ -569,7 +574,7 @@ Instead of:
 	dup lowercase? swap uppercase? or ;
 
 : alphanumeric? ( C -- f : is character alphabetic or a number ? )
-	dup alpha? swap number? or ;
+	dup alpha? swap decimal? or ;
 
 : printable? ( c -- bool : is printable, excluding new lines and tables )
 	32 127 within ;
@@ -666,8 +671,8 @@ Instead of:
 : +- ( x1 x2 -- x3 : copy the sign of x1 to x2 giving x3 )
 	[ sign-bit 1- ] literal and
 	swap
-	sign-bit and or
-	;
+	sign-bit and or ;
+
 
 hider stdin?
 
@@ -886,14 +891,17 @@ hider noop
 
 ( ========================== Extended Word Set =============================== )
 
-: log2 ( x -- log2 )
-	( Computes the binary integer logarithm of a number,
-	zero however returns itself instead of reporting an error )
+: log ( u base -- u : command the logarithm of u in base )
+	>r 
+	dup 0= if -11 throw then ( logarithm of zero is an error )
 	0 swap
 	begin
-		nos1+ 2/ dup 0=
+		nos1+ rdup r> / dup 0= ( keep dividing until 'u' is zero )
 	until
-	drop 1- ;
+	drop 1- rdrop ;
+
+: log2 ( u -- u : compute the logarithm of u )
+	2 log ;
 
 : time ( " ccc" -- n : time the number of milliseconds it takes to execute a word )
 	clock >r
@@ -1209,7 +1217,6 @@ testing and debugging:
 : alignment-bits 
 	[ 1 size log2 lshift 1- literal ] and ;
 
-
 0 variable x
 : x! ( x -- ) 
 	x ! ;
@@ -1267,7 +1274,7 @@ testing and debugging:
 	-18 throw ; ( read in too many chars )
 hider delim
 
-: skip
+: skip ( char -- : read input until string is reached )
 	key drop >r 0 begin drop key dup rdup r> <> until rdrop ;
 
 : word ( c -- c-addr : parse until 'c' is encountered, push transient counted string  )
@@ -1278,11 +1285,54 @@ hider delim
 	r> accepter 1+
 	chere c!
 	chere ;
-
 hider skip
+
+( This foreach mechanism needs thinking about, what is the best information to
+present to the word to be executed? At the moment only the contents of the
+cell that it should be processing is.
+
+At the moment foreach uses a do...loop construct, which means that the
+following cannot be used to exit from the foreach loop:
+
+	: return [ : exit early from a foreach loop ]
+		r> rdrop >r ;
+
+Although this can be remedied, we know that it puts a loop onto the return
+stack.
+
+It also uses a variable 'xt', which means that foreach loops cannot be
+nested. This word really needs thinking about.
+
+This seems to be a useful, general, mechanism that is missing from
+most Forths. More words like this should be made, they are powerful
+like the word 'compose', but they need to be created correctly. )
+
+0 variable xt
+: foreach ( addr u xt -- : execute xt for each cell in addr-u )
+	xt !
+	bounds do i xt @ execute 1 cell +loop ;
+
+: foreach-char ( c-addr u xt -- : execute xt for each cell in c-addr u )
+	xt !
+	bounds do i xt @ execute loop ;
+hider xt
 
 : accept ( c-addr +n1 -- +n2 : see accepter definition ) 
 	nl accepter ;
+
+: (subst) ( char1 char2 c-addr )
+	3dup          ( char1 char2 c-addr char1 char2 c-addr )
+	c@ = if ( char1 char2 c-addr char1 )
+		swap c! ( match, substitute character )
+	else    ( char1 char2 c-addr char1 )
+		2drop ( no match )
+	then ;
+
+: subst ( c-addr u char1 char2 -- replace all char1 with char2 in string )
+	swap
+	2swap
+	['] (subst) foreach-char 2drop ;
+hider (subst)
 
 0xFFFF constant max-string-length
 
@@ -1318,42 +1368,13 @@ hider skip
 : asciiz ( c-addr u -- : trim a string until NUL terminator )
 	2dup length nip ;
 
-( This foreach mechanism needs thinking about, what is the best information to
-present to the word to be executed? At the moment only the contents of the
-cell that it should be processing is.
 
-At the moment foreach uses a do...loop construct, which means that the
-following cannot be used to exit from the foreach loop:
-
-	: return [ : exit early from a foreach loop ]
-		r> rdrop >r ;
-
-Although this can be remedied, we know that it puts a loop onto the return
-stack.
-
-It also uses a variable 'xt', which means that foreach loops cannot be
-nested. This word really needs thinking about.
-
-It might be more useful to present the word with only the address of the
-cell it will act on.
-
-This seems to be a useful, general, mechanism that is missing from
-most Forths. More words like this should be made, they are powerful
-like the word 'compose', but they need to be created correctly. )
-
-0 variable xt
-: foreach ( addr u xt -- : execute xt for each cell in addr-u )
-	xt !
-	bounds do i @ xt @ execute loop ;
-
-: foreach-char ( c-addr u xt -- : execute xt for each cell in c-addr u )
-	xt !
-	bounds do i c@ xt @ execute loop ;
-hider xt
+: (type) ( c-addr -- ) 
+	c@ emit ;
 
 : type ( c-addr u -- : print out 'u' characters at c-addr )
-	\ 0 do dup c@ emit 1+ loop drop ;
-	['] emit foreach-char ;
+	['] (type) foreach-char ;
+hider (type)
 
 : do-string ( char -- : write a string into the dictionary reading it until char is encountered )
 	(.") 
@@ -1476,8 +1497,10 @@ prints it out, it also does not checking of the returned values from write-file 
 			drop exit ( terminate hide{ )
 		then
 		dup 0= if -15 throw then
-		hide drop
+		(hide) drop
 	again ;
+
+hider (hide)
 
 ( ==================== Hiding Words =========================== )
 
@@ -1642,11 +1665,28 @@ size 8 = [if]
 
 ( ==================== Misc words ============================= )
 
+: (base) ( -- base : unmess up libforth's base variable )
+	base @ 0= if 10 else base @ then ;
+
+: #digits ( u -- u : number of characters needed to represent 'u' in current base )
+	dup 0= if 1+ exit then
+	(base) log 1+ ;
+
+: digits ( -- u : number of characters needed to represent largest unsigned number in current base )
+	-1 #digits ;
+
+: print-number ( u -- print a number taking up a fixed amount of space on the screen )
+	base @ 16 = if . exit then ( @todo this is a hack related to libforth printing out hex specially)
+	dup #digits digits swap - dup 0<> if spaces else drop then . ;
+
+: address ( u -- : print out and address )
+	@ print-number ;
+
 0 variable counter
 
 : counted-column ( index -- : special column printing for dump )
 	counter @ column-width @ mod
-	not if cr . " :" space else drop then
+	not if cr print-number " :" space else drop then
 	counter 1+! ;
 
 : as-chars ( x n -- : print a cell out as characters, upto n chars )
@@ -1664,7 +1704,7 @@ size 8 = [if]
 : lister ( addr u addr -- )
 	0 counter ! 1- swap 
 	do 
-		dup counted-column 1+ i ? i @ size as-chars 
+		dup counted-column 1+ i address i @ size as-chars 
 	loop ;
 
 ( @todo this function should make use of 'defer' and 'is', then different
@@ -1673,7 +1713,7 @@ version of dump could be made that swapped out 'lister' )
 	1+ over + under lister drop 
 	cr ;
 
-hide{ counted-column counter as-chars }hide
+hide{ counted-column counter as-chars address print-number }hide
 
 ( Fence can be used to prevent any word defined before it from being forgotten 
 Usage:
@@ -1749,9 +1789,6 @@ to the screen, this Forth has number output methods built into
 the Forth kernel and mostly uses them instead, but the mechanism
 is still useful so it has been added.
 
-
-@todo characters are added in reverse order, is this the best
-way of doing things? It makes use of hold awkward 
 @todo Pictured number output should act on a double cell number
 not a single cell number )
 
@@ -1796,6 +1833,39 @@ not a single cell number )
 hide{ nbase overflow }hide
 
 ( ==================== Pictured Numeric Output ================ )
+
+( ==================== Numeric Input ========================= )
+( The Forth executable can handle numeric input and does not need
+the routines defined here, however the user might want to write
+routines that use >NUMBER. >NUMBER is a generic word, but it
+is a bit difficult to use on its own. )
+
+: map ( char -- n|-1 : convert character in 0-9 a-z range to number )
+	dup lowercase? if [char] a - 10 + exit then
+	dup decimal?   if [char] 0 -      exit then
+	drop -1 ;
+
+: number? ( char -- bool : is a character a number in the current base )
+	>lower map (base) u< ;
+
+: >number ( n c-addr u -- n c-addr u : convert string )
+	begin
+		( get next character )
+		2dup >r >r drop c@ dup number? ( n char bool, R: c-addr u )
+		if   ( n char )
+			swap (base) * swap map + ( accumulate number )
+		else ( n char )
+			drop
+			r> r> ( restore string )
+			exit
+		then
+		r> r> ( restore string )
+		1 /string dup 0= ( advance string and test for end )
+	until ;
+
+hide{ map }hide
+
+( ==================== Numeric Input ========================= )
 
 ( ==================== ANSI Escape Codes ====================== )
 ( Terminal colorization module, via ANSI Escape Codes
@@ -3075,8 +3145,8 @@ size 2 = [if]
 	: limit 0xffff and ; ( limit to 16-bit value )
 [then]
 
-: ccitt ( crc char -- crc : calculate polynomial 0x1021 AKA "x16 + x12 + x5 + 1" )
-	                           ( crc char )
+: ccitt ( crc c-addr -- crc : calculate polynomial 0x1021 AKA "x16 + x12 + x5 + 1" )
+	c@                         ( get char )
 	limit over 256/ xor        ( crc x )
 	dup  4  rshift xor         ( crc x )
 	dup  5  lshift limit xor   ( crc x )
@@ -3087,7 +3157,7 @@ size 2 = [if]
   and https://www.lammertbies.nl/comm/info/crc-calculation.html )
 : crc16-ccitt ( c-addr u -- u )
 	0xFFFF -rot
-	' ccitt
+	['] ccitt
 	foreach-char ;
 hide{ limit ccitt }hide
 
@@ -3309,7 +3379,7 @@ hide{
 
 : line.number ( n -- : print line number )
 	fancy-list @ if
-		dup 10 < if space then ( leading space: works up to c/l = 99)
+		dup 10 < (base) 10 = and if space then ( leading space: works up to c/l = 99)
 		. [char] | emit ( print " line-number : ")
 	else
 		drop
@@ -3345,7 +3415,7 @@ hide{
 : make-blocks ( n1 n2 -- : make blocks on disk from n1 to n2 inclusive )
 	1+ swap do i block b/buf bl fill update loop save-buffers ;
 
-hide{ buf line line.number list.type fancy-list }hide
+hide{ buf line line.number list.type fancy-list (base) }hide
 
 ( ==================== List ================================== )
 
@@ -3468,6 +3538,9 @@ verbose [if]
 	 license
 [then]
 
+
+( ==================== Test Code ============================= )
+
 ( The following will not work as we might actually be reading from a string [`sin]
 not `fin. 
 : key 32 chars> 1 `fin @ read-file drop 0 = if 0 else 32 chars> c@ then ; )
@@ -3486,22 +3559,40 @@ was just an experiment.
 	: vocabulary
 		create does> drop 0 [ find forth 1- ] literal ! ; )
 
-( Experimental block editor Mark II )
-( @todo '\' needs extending to work with the block editor, for now, 
+\ @todo The built in primitives should be redefined so to make sure
+\ they are called and nested correctly, using the following words
+\ 0 variable csp
+\ : !csp sp@ csp ! ;
+\ : ?csp sp@ csp @ <> if -22 throw then ;
+\ \ Is there a better throw value than -11?
+\ : ?comp state @ 0= if -11 throw then ; \ Error if not compiling
+\ : ?exec state @    if -11 throw then ; \ Error if not executing
+
+
+( ==================== Test Code ============================= )
+
+( ==================== Block Editor ========================== )
+( Experimental block editor Mark II 
+
+@todo Improve the block editor 
+
+- '\' needs extending to work with the block editor, for now, 
 use parenthesis for comments 
-@todo make an 'm' word for forgetting all words defined since the
+- make an 'm' word for forgetting all words defined since the
 editor was invoked.
-@todo add multi line insertion mode
-@todo Add to an editor vocabulary, which will need the vocabulary
+- add multi line insertion mode
+- Add to an editor vocabulary, which will need the vocabulary
 system to exist.
-@todo Using 'page' should be optional as not all terminals support
+- Using 'page' should be optional as not all terminals support
 ANSI escape codes - thanks to CMD.EXE. Damned Windows.
-@todo How line numbers are printed out should be investigated,
+- How line numbers are printed out should be investigated,
 also I should refactor 'dump' to use a similar line number system.
-@todo Format the output of list better, put a nice box around it.
+- Format the output of list better, put a nice box around it.
 
 Adapted from http://retroforth.org/pages/?PortsOfRetroEditor )
-: h
+
+ 
+: help ( @todo renamed to 'h' once vocabularies are implemented )
 page cr
 " Block Editor Help Menu
 
@@ -3521,32 +3612,45 @@ char drop ;
 
 : (block) blk @ block ; 
 : (line) c/l * (block) + ; ( n -- c-addr : push current line address )
+: (clean) 
+	(block) b/buf
+	2dup nl bl subst
+	2dup cret bl subst
+	      0 bl subst ;
 : n blk @ 1+ block ;
 : p blk @ 1- block ;
 : d (line) c/l bl fill ; 
 : x (block) b/buf bl fill ;
 : s update save-buffers ;
 : q rdrop rdrop ;
-: e blk @ load ;
-: ia c/l * + dup b/buf swap - >r (block) + r> accept ; ( @bug accept NUL terminates the string! )
+: e blk @ load char drop ;
+: ia c/l * + dup b/buf swap - >r (block) + r> accept (clean) ; 
 : i 0 swap ia ;
 : editor
 	1 block
-	postpone [ 
 	begin
+		postpone [ ( need to be in command mode )
 		page cr
-		" BLOCK EDITOR: TYPE H FOR HELP " cr
+		" BLOCK EDITOR: TYPE 'HELP' FOR A LIST OF COMMANDS" cr
 		blk @ list
 		" CURRENT BLOCK: " blk @ . cr
 		read
 	again ;
 
 ( Extra niceties )
+c/l string yank
+yank bl fill
 : u update ;
 : b block ;
 : l blk @ list ;
+: y (line) yank >r swap r> cmove ;
+: c (line) yank cmove ;
+: ct swap y c ;
 
-hide{ (block) (line) }hide
+hide{ (block) (line) (clean) yank }hide
+
+( ==================== Block Editor ========================== )
 
 here fence !
+
 

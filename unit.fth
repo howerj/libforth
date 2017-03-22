@@ -71,7 +71,6 @@ T{ 8 log2 -> 3 }T
 T{ 4 log2 -> 2 }T
 T{ 2 log2 -> 1 }T
 T{ 1 log2 -> 0 }T
-T{ 0 log2 -> 0 }T ( not ideal behavior - but then again, what do you expect? )
 
 T{ 50 25 gcd -> 25 }T
 T{ 13 23 gcd -> 1 }T
@@ -261,6 +260,27 @@ T{ 8 1 4 2 /rat -> 4 1 }T
 T{ 1 2 2 4 /rat -> 1 1 }T
 T{ 5 6 3 7 /rat -> 35 18 }T 
 T{ 1 2 3 4 /rat -> 2 3 }T
+
+.( numbers conversion ) cr
+decimal
+T{ char 0 number? -> 1 }T
+T{ char 1 number? -> 1 }T
+T{ char 9 number? -> 1 }T
+T{ char a number? -> 0 }T
+T{ char * number? -> 0 }T
+hex
+T{ char 8 number? -> 1 }T
+T{ char a number? -> 1 }T
+T{ char / number? -> 0 }T
+T{ char F number? -> 1 }T
+decimal
+
+T{ 0 c" 123" >number 2drop -> 123 }T
+T{ 0 c" 1"   >number 2drop -> 1   }T
+T{ 0 c" 12x" >number nip   -> 12 1 }T
+hex
+T{ 0 c" ded" >number 2drop -> ded }T
+decimal
 
 cleanup
 ( ==================== Unit tests ============================ )
