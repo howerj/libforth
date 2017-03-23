@@ -463,11 +463,10 @@ when they get to the Forth interpreter.
 
 /**
 This following string is a forth program that gets called when creating a
-new Forth environment, it is not actually the first program that gets
-run, but it is run before the user gets a chance to do anything.
+new Forth environment, it is run before the user gets a chance to do anything.
 
 The program is kept as small as possible, but is dependent on the virtual
-machine image being set up correctly with other, basic, words being defined
+machine image being set up correctly with other, basic, constants being defined
 first, they will be described as they are encountered. Suffice to say,
 before this program is executed the following happens:
 
@@ -539,6 +538,7 @@ named registers being defined, as well as **state** and **;**.
 	.         - print out current top of stack, followed by a space 
 **/
 static const char *initial_forth_program = 
+": ; immediate ' _exit , 0 state ! ;\n"
 ": here h @ ; \n"
 ": [ immediate 0 state ! ; \n"
 ": ] 1 state ! ; \n"
@@ -559,7 +559,7 @@ static const char *initial_forth_program =
 ": emit _emit drop ; \n" 
 ": space bl emit ; \n"
 ": evaluate 0 evaluator ; \n"
-": . pnum drop space ; \n"
+": . (.) drop space ; \n"
 ": ? @ . ;\n" ;
 
 /**
@@ -713,7 +713,6 @@ struct forth { /**< FORTH environment */
 	uint8_t header[sizeof(header)]; /**< ~~ header for core file */
 	forth_cell_t core_size;  /**< size of VM */
 	uint8_t *s;          /**< convenience pointer for string input buffer */
-	char hex_fmt[16];    /**< calculated hex format */
 	char word_fmt[16];   /**< calculated word format */
 	forth_cell_t *S;     /**< stack pointer */
 	forth_cell_t *vstart;/**< index into m[] where variable stack starts*/
@@ -766,7 +765,7 @@ More information about X-Macros can be found here:
 #define XMACRO_REGISTERS \
  X("h",               DIC,            6,   "dictionary pointer")\
  X("r",               RSTK,           7,   "return stack pointer")\
- X("`state",          STATE,          8,   "interpreter state")\
+ X("state",           STATE,          8,   "interpreter state")\
  X("base",            BASE,           9,   "base conversion variable")\
  X("pwd",             PWD,            10,  "pointer to previous word")\
  X("`source-id",      SOURCE_ID,      11,  "input source selector")\
@@ -892,7 +891,7 @@ up for debugging purposes (like **pnum**).
  X(1, TOR,       ">r",         "x --, R: -- x : move to return stack")\
  X(0, BRANCH,    "branch",     " -- : unconditional branch")\
  X(1, QBRANCH,   "?branch",    "x -- : branch if x is zero")\
- X(1, PNUM,      "pnum",       "x -- : print a number")\
+ X(1, PNUM,      "(.)",        "x -- n : print a number returning an error on failure")\
  X(1, COMMA,     ",",          "x -- : write a value into the dictionary")\
  X(2, EQUAL,     "=",          "x x -- bool : compare two values for equality")\
  X(2, SWAP,      "swap",       "x1 x2 -- x2 x1 : swap two values")\
@@ -1123,6 +1122,7 @@ static int forth_get_word(forth_t *o, uint8_t *p)
 @param o    Forth environment to do the compilation in
 @param code virtual machine instruction for that word
 @param str  name of Forth word
+@return returns a pointer to the code field of the word just defined
 
 The function **compile** is not that complicated in itself, however it
 requires an understanding of the structure of a Forth word definition and
@@ -1192,10 +1192,11 @@ if it is cleared the word will always be executed.
 The instruction is the virtual machine instruction that is to be executed
 by the interpreter.
 **/
-static void compile(forth_t *o, forth_cell_t code, const char *str, forth_cell_t compiling)
+static forth_cell_t compile(forth_t *o, forth_cell_t code, const char *str, 
+		forth_cell_t compiling, forth_cell_t hide)
 { 
 	assert(o && code < LAST_INSTRUCTION);
-	forth_cell_t *m = o->m, header = m[DIC], l = 0;
+	forth_cell_t *m = o->m, header = m[DIC], l = 0, cf = 0;
 	/*FORTH header structure */
 	/*Copy the new FORTH word into the new header */
 	strcpy((char *)(o->m + header), str); 
@@ -1209,7 +1210,13 @@ static void compile(forth_t *o, forth_cell_t code, const char *str, forth_cell_t
 	m[PWD] = m[DIC] - 1;  /*Update the PWD register to new word */
 	/*size of words name and code field*/
 	assert(l < WORD_MASK);
-	m[m[DIC]++] = ((!!compiling) << COMPILING_BIT_OFFSET) | (l << WORD_LENGTH_OFFSET) | code; 
+	cf = m[DIC];
+	m[m[DIC]++] = 
+		((!!compiling) << COMPILING_BIT_OFFSET) 
+		| (l << WORD_LENGTH_OFFSET) 
+		| (hide << WORD_HIDDEN_BIT_OFFSET)
+		| code; 
+	return cf;
 }
 
 /**
@@ -1302,41 +1309,28 @@ forth_cell_t forth_find(forth_t *o, const char *s)
 
 /**
 @brief Print a number in a given base to an output stream
-@param u    number to print
-@param base base to print in (must be between 1 and 37)
+@param o    initialized forth environment
 @param out  output file stream
-@return zero or positive on success, negative on failure 
+@param u    number to print
+@return number of characters written, or negative on failure 
 **/
-static int print_unsigned_number(forth_cell_t u, forth_cell_t base, FILE *out)
+static int print_cell(forth_t *o, FILE *out, forth_cell_t u)
 {
-	assert(base > 1 && base < 37);
 	int i = 0, r = 0;
-	char s[64 + 1] = ""; 
+	char s[64 + 1] = {0}; 
+	unsigned base = o->m[BASE];
+	base = base ? base : 10 ;
+	if(base >= 37)
+		return -1;
+	if(base == 10)
+		return fprintf(out, "%"PRIdCell, u);
 	do 
 		s[i++] = conv[u % base];
 	while ((u /= base));
-	for(; i >= 0 && r >= 0; i--)
-		r = fputc(s[i], out);
+	for(r = --i; i >= 0; i--)
+		if(fputc(s[i], out) != s[i])
+			return -1;
 	return r;
-}
-
-/**
-@brief  Print out a forth cell as a number, the output base being determined
-by the **BASE** registers:
- @param  o     an initialized forth environment, contains BASE
- @param  f     value to print out
- @return int   zero or positive on success, negative on failure 
-**/
-static int print_cell(forth_t *o, FILE *output, forth_cell_t f)
-{
-	unsigned base = o->m[BASE];
-	if(base == 10 || base == 0)
-		return fprintf(output, "%"PRIdCell, f);
-	if(base == 16)
-		return fprintf(output, o->hex_fmt, f);
-	if(base == 1 || base > 36)
-		return -1;
-	return print_unsigned_number(f, base, output);
 }
 
 /**
@@ -1509,7 +1503,7 @@ int forth_define_constant(forth_t *o, const char *name, forth_cell_t c)
 {
 	assert(o);
 	assert(name);
-	compile(o, CONST, name, true);
+	compile(o, CONST, name, true, false);
 	if(strlen(name) >= MAXIMUM_WORD_LENGTH)
 		return -1;
 	if(o->m[DIC] + 1 >= o->core_size)
@@ -1590,8 +1584,6 @@ static void forth_make_default(forth_t *o, size_t size, FILE *in, FILE *out)
 	o->S       = o->m + size - (2 * o->m[STACK_SIZE]); /* v. stk pointer */
 	o->vstart  = o->m + size - (2 * o->m[STACK_SIZE]);
 	o->vend    = o->vstart + o->m[STACK_SIZE];
-	VERIFY(sprintf(o->hex_fmt, "0x%%0%d"PRIxCell, 
-				(int)sizeof(forth_cell_t)*2) > 0);
 	VERIFY(sprintf(o->word_fmt, "%%%ds%%n", MAXIMUM_WORD_LENGTH - 1) > 0);
 	forth_set_file_input(o, in);  /* set up input after our eval */
 }
@@ -1735,8 +1727,8 @@ The **CODE** field here contains either **DEFINE** or **IMMEDIATE**, as well as
 the hidden bit field and an offset to the beginning of name. The compiling bit
 is cleared for these words.
 **/
-	compile(o, DEFINE,    ":", false);
-	compile(o, IMMEDIATE, "immediate", false);
+	compile(o, DEFINE,    ":", false, false);
+	compile(o, IMMEDIATE, "immediate", false, false);
 
 /**
 All of the other built in words that use a virtual machine instruction to
@@ -1748,15 +1740,9 @@ The CODE field here also contains the VM instructions, the READ word will
 compile pointers to this CODE field into the dictionary.
 **/
 	for(i = READ, w = READ; instruction_names[i]; i++)
-		compile(o, w++, instruction_names[i], true);
-	compile(o, EXIT, "exit", true); /* needed for 'see', trust me */
-	compile(o, PUSH, "'", true);
-
-/**
-The next eval is the absolute minimum needed for a sane environment, it
-defines two words **state** and **;**
-**/
-	VERIFY(forth_eval(o, ": state 8 _exit : ; immediate ' _exit , 0 state ! ;") >= 0);
+		compile(o, w++, instruction_names[i], true, false);
+	compile(o, EXIT, "exit", true, false); /* needed for 'see', trust me */
+	compile(o, PUSH, "'", true, false); /* crude starting version of ' */
 
 /**
 We now name all the registers so we can refer to them by name instead of by
@@ -2199,9 +2185,8 @@ The CODE field contains the RUN instruction.
 			m[STATE] = 1; /* compile mode */
 			if(forth_get_word(o, o->s) < 0)
 				goto end;
-			compile(o, RUN, (char*)o->s, true);
+			compile(o, RUN, (char*)o->s, true, false);
 			break;
-		case IMMEDIATE:
 /**
 **IMMEDIATE** makes the current word definition execute regardless of whether we
 are in compile or command mode. This word simply clears the compiling bit of the
@@ -2213,6 +2198,7 @@ the following for making a word immediate ('immediate' is itself immediate):
 	: xxx immediate ... ; ( New way )
 
 **/
+		case IMMEDIATE:
 			w = m[PWD] + 1;
 			m[w] &= ~COMPILING_BIT;
 			break;
@@ -2448,8 +2434,8 @@ or from a file.
 			o->m[SOURCE_ID] = source;
 			if(forth_is_invalid(o))
 				return -1;
+			break;
 		}
-		break;
 		case PSTK:    print_stack(o, (FILE*)(o->m[STDOUT]), S, f);
 			      fputc('\n', (FILE*)(o->m[STDOUT]));
 			      break;

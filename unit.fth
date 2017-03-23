@@ -1,5 +1,6 @@
-
-( @todo Test more words )
+( This file contains the unit tests for the code in "forth.fth,
+when developing this should be run periodically and definitely
+before checking in any code. )
 
 ( Define a new version of interpret which catches errors, but then
 invalidates the Forth core and quits, signaling a test failure )
@@ -11,11 +12,28 @@ invalidates the Forth core and quits, signaling a test failure )
 
 interpret ( use the new interpret word )
 
+( We setup a marker which when called will restore the dictionary
+to a state before marker is called )
+marker cleanup
+
 .( Unit tests ) cr
 
+( By setting the trace level to one unit tests will print out the
+tests they are performing )
 1 trace
 
-marker cleanup
+.( ===================== BASIC TESTS ===================== ) cr
+( Most of the tests in the basic test suite a redundant, if
+these words did not work then the unit test suite itself would
+not work. One of the problems of making a unit test suite in
+Forth is make the testing words use as few words as possible,
+this unit test suite does not do so well on that front. 
+
+Another purpose of unit tests is to document what a word should
+do, so these tests do serve some utility. Not only that, but it
+should be possible to rewrite T{ to use few words in the future. )
+
+
 T{ 0 not -> true }T
 
 T{ 0 1+ -> 1 }T
@@ -102,6 +120,14 @@ T{ 1 2 drup -> 1 1 }T
 
 T{ -3 4 sum-of-squares -> 25 }T
 
+T{ 1 2 under -> 1 1 2 }T
+T{ 1 2 3 4 2nip -> 3 4 }
+T{ 1 2 3 4 2over -> 1 2 3 4 1 2 }
+T{ 1 2 3 4 2swap -> 3 4 1 2 }
+
+T{ 3 ?dup -> 3 3 }T
+\ T{ 0 ?dup -> }T ( need to improve T{ before this can be tested )
+
 5 variable x
 T{ 3 x +! x @ -> 8 }T
 T{ x 1+! x @ -> 9 }T
@@ -109,9 +135,6 @@ T{ x 1-! x @ -> 8 }T
 forget x
 
 T{ 0xFFAA lsb -> 0xAA }T
-
-T{ 3 ?dup -> 3 3 }T
-\ T{ 0 ?dup -> }T ( need to improve T{ before this can be tested )
 
 T{ 3 2 4 within -> true }T
 T{ 2 2 4 within -> true }T
@@ -121,11 +144,11 @@ T{ 0 1 5 limit -> 1 }T
 
 T{ 1 2 3 3 sum -> 6 }T
 
-T{ 1 2 3 4 5 1 pick -> 1 2 3 4 5 4 }
-T{ 1 2 3 4 5 0 pick -> 1 2 3 4 5 5 }
-T{ 1 2 3 4 5 3 pick -> 1 2 3 4 5 2 }
+T{ 1 2 3 4 5 1 pick -> 1 2 3 4 5 4 }T
+T{ 1 2 3 4 5 0 pick -> 1 2 3 4 5 5 }T
+T{ 1 2 3 4 5 3 pick -> 1 2 3 4 5 2 }T
 
-T{ 1 2 3 4 5 6 2rot -> 3 4 5 6 1 2 }
+T{ 1 2 3 4 5 6 2rot -> 3 4 5 6 1 2 }T
 
 T{  4 s>d ->  4  0 }T
 T{ -5 s>d -> -5 -1 }T
@@ -207,7 +230,7 @@ T{ 5 3 repeater 3 sum -> 15 }T
 T{ 6 1 range dup mul -> 720 }T
 T{ 5 factorial -> 120 }T
 
-.( jump tables ) cr
+.( ===================== JUMP TABLES ===================== ) cr
 : j1 1 ;
 : j2 2 ;
 : j3 3 ;
@@ -221,7 +244,7 @@ T{ 2 jump -> j3 }T
 T{ 3 jump -> j4 }T
 T{ 4 jump -> j4 }T ( check limit )
 
-.( defer ) cr
+.( ===================== DEFER =========================== ) cr
 defer alpha 
 alpha constant alpha-location
 : beta 2 * 3 + ;
@@ -238,12 +261,8 @@ T{ x -1 toggle x @ -> -10 }T
 T{ x -1 toggle x @ -> 9 }T
 forget x
 
-T{ 1 2 under -> 1 1 2 }T
-T{ 1 2 3 4 2nip -> 3 4 }
-T{ 1 2 3 4 2over -> 1 2 3 4 1 2 }
-T{ 1 2 3 4 2swap -> 3 4 1 2 }
+.( ===================== MATCH =========================== ) cr
 
-.( match ) cr
 T{ c" hello" drop c" hello" drop match -> true }T
 T{ c" hello" drop c" hellx" drop match -> false }T
 T{ c" hellx" drop c" hello" drop match -> false }T
@@ -253,11 +272,13 @@ T{ c" hello" drop c" he.lo" drop match -> true }T
 T{ c" hello" drop c" h*"    drop match -> true }T
 T{ c" hello" drop c" h*l."  drop match -> true }T
 
-.( crc ) cr
+.( ===================== CRC ============================= ) cr
+
 T{ c" xxx" crc16-ccitt -> 0xC35A }T
 T{ c" hello" crc16-ccitt -> 0xD26E }T
 
-.( rationals ) cr
+.( ===================== RATIONALS ======================= ) cr
+
 T{ 1 2 2 4 =rat -> true }T
 T{ 3 4 5 7 =rat -> false }T
 
@@ -272,39 +293,46 @@ T{ 1 2 2 4 /rat -> 1 1 }T
 T{ 5 6 3 7 /rat -> 35 18 }T 
 T{ 1 2 3 4 /rat -> 2 3 }T
 
-.( numbers conversion ) cr
+.( ===================== NUMBER CONVERSION =============== ) cr
+
 decimal
 T{ char 0 number? -> 1 }T
 T{ char 1 number? -> 1 }T
 T{ char 9 number? -> 1 }T
 T{ char a number? -> 0 }T
 T{ char * number? -> 0 }T
+
 hex
 T{ char 8 number? -> 1 }T
 T{ char a number? -> 1 }T
 T{ char / number? -> 0 }T
 T{ char F number? -> 1 }T
-decimal
 
+decimal
 T{ 0 c" 123" >number 2drop -> 123 }T
 T{ 0 c" 1"   >number 2drop -> 1   }T
 T{ 0 c" 12x" >number nip   -> 12 1 }T
+
 hex
 T{ 0 c" ded" >number 2drop -> ded }T
+
 decimal
 
-.( cons cells ) cr
+.( ===================== CONS CELLS ====================== ) cr
+
 77 987 cons constant x
 T{ x car@ -> 77  }T
 T{ x cdr@ -> 987 }T
 T{ 55 x cdr! x car@ x cdr@ -> 77 55 }T
 T{ 44 x car! x car@ x cdr@ -> 44 55 }T
 
-.( skip )
+.( ===================== SKIP ============================ ) cr
+
 T{ c" hello" char l skip nip -> 3 }T
 T{ c" hello" char x skip nip -> 0 }T
 
 cleanup
-( ==================== Unit tests ============================ )
+
+.( END OF UNIT TESTS ) cr
 
 

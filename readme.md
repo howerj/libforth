@@ -828,7 +828,7 @@ Jump unconditionally to the destination next in the instruction stream.
 Pop a value from the variable stack, if it is zero the jump to the
 destination next in the instruction stream, otherwise skip over it.
 
-* 'pnum'           ( x -- status )
+* '(.)'           ( x -- status )
 
 Pop a value from the variable stack and print it to the output either
 as a ASCII decimal or hexadecimal value depending on the BASE register. A
