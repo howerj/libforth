@@ -1255,17 +1255,9 @@ system unstable.
 This Forth interpreter is in no way compliant with any of the standards
 relating to Forth, such as [ANS Forth][], or previous Forth standardization
 efforts. However attempts to support words and behavior typical of these
-standards are made.
+standards are made (although there is still a lot to do).
 
 Some important deviations are:
-
-* recursion and definition hiding
-
-A word can be called immediately before the terminating semi-colon has been
-reached, in the middle of a word definition. This makes the recurse keyword
-redundant but means using a previous definition of a word with the same name
-more difficult (but can be done). This might be a candidate for behavior that
-should be made more compliant.
 
 * ok
 

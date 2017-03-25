@@ -94,7 +94,7 @@ language to another can be created in Forth.
 	['] (bf) foreach	
 	['] swap , ( swap pointer and current cell value )
 	['] c! ,   ( write it back )
-	postpone ; ;
+	(;) ;
 
 hide{ bf-len bf-compile init check right left (bf) }hide
 

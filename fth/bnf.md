@@ -92,7 +92,8 @@ We will address these next.
 
 ## 4. A Better Solution
 
-Several improvements can be made to this "rough" BNF parser, to remove its limitations and improve its "cosmetics."
+Several improvements can be made to this "rough" BNF parser, to remove
+its limitations and improve its "cosmetics."
 
 a) Concatenation by juxtaposition. We can cause the action of && to be
 performed "invisibly" by enforcing this rule for all terms (terminals
@@ -104,8 +105,8 @@ To illustrate this: consider a series of terms
 
 	<ONE> <TWO> <THREE> <FOUR>
 
-Let &lt;ONE\> execute normally and return "false." The <TWO> is entered,
-and exits immediately, doing nothing. Likewise, <THREE> and <FOUR> do
+Let &lt;ONE\> execute normally and return "false." The &lt;TWO\> is entered,
+and exits immediately, doing nothing. Likewise, &lt;THREE\> and &lt;FOUR\> do
 nothing. Thus the remainder of the expression is skipped, without the
 need for a return-stack exit.
 

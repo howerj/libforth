@@ -538,7 +538,10 @@ named registers being defined, as well as **state** and **;**.
 	.         - print out current top of stack, followed by a space 
 **/
 static const char *initial_forth_program = 
-": ; immediate ' _exit , 0 state ! ;\n"
+": smudge pwd @ 1 + dup @ hidden-mask xor swap ! _exit\n"
+": (;) ' _exit , 0 state ! _exit\n"
+": ; immediate (;) smudge _exit\n"
+": : immediate :: smudge _exit\n"
 ": here h @ ; \n"
 ": [ immediate 0 state ! ; \n"
 ": ] 1 state ! ; \n"
@@ -884,7 +887,7 @@ up for debugging purposes (like **pnum**).
  X(2, DIV,       "/",          "x1 x2 -- x3 : divide x1 by x2 yielding x3")\
  X(2, ULESS,     "u<",         "x x -- bool : unsigned less than")\
  X(2, UMORE,     "u>",         "x x -- bool : unsigned greater than")\
- X(0, EXIT,      "_exit",      " -- : return from a word definition")\
+ X(0, EXIT,      "exit",       " -- : return from a word definition")\
  X(0, KEY,       "key",        " -- char : get one character of input")\
  X(1, EMIT,      "_emit",      " char -- status : get one character of input")\
  X(0, FROMR,     "r>",         " -- x, R: x -- : move from return stack")\
@@ -911,7 +914,7 @@ up for debugging purposes (like **pnum**).
  X(2, SYSTEM,    "system",     "c-addr u -- bool : execute system command")\
  X(1, FCLOSE,    "close-file", "file-id -- ior : close a file")\
  X(3, FOPEN,     "open-file",  "c-addr u fam -- open a file")\
- X(2, FDELETE,   "delete-file",     "c-addr u -- : delete a file")\
+ X(2, FDELETE,   "delete-file",     "c-addr u -- ior : delete a file")\
  X(3, FREAD,     "read-file",       "c-addr u file-id -- u ior : write block")\
  X(3, FWRITE,    "write-file",      "c-addr u file-id -- u ior : read block")\
  X(1, FPOS,      "file-position",   "file-id -- u : get the file position")\
@@ -987,11 +990,13 @@ Forth interpreter.
  X("instruction-mask", INSTRUCTION_MASK, "instruction mask for CODE field")\
  X("word-mask",   WORD_MASK,    "word length mask for CODE field")\
  X("hidden-bit",  WORD_HIDDEN_BIT_OFFSET, "hide bit in CODE field")\
+ X("hidden-mask", 1u << WORD_HIDDEN_BIT_OFFSET, "hide mask for CODE ")\
  X("compile-bit", COMPILING_BIT_OFFSET, "compile/immediate bit in CODE field")\
  X("dolist",      RUN,          "instruction for executing a words body")\
  X("doconst",     CONST,        "instruction for pushing a constant")\
  X("bl",          ' ',          "space character")\
- X("')'",         ')',          "')' character")
+ X("')'",         ')',          "')' character")\
+ X("cell",        1,            "space a single cell takes up")
 
 /**
 @brief A structure that contains a constant to be added to the
@@ -1728,6 +1733,7 @@ the hidden bit field and an offset to the beginning of name. The compiling bit
 is cleared for these words.
 **/
 	compile(o, DEFINE,    ":", false, false);
+	compile(o, DEFINE,    "::", true, false);
 	compile(o, IMMEDIATE, "immediate", false, false);
 
 /**
@@ -1741,7 +1747,7 @@ compile pointers to this CODE field into the dictionary.
 **/
 	for(i = READ, w = READ; instruction_names[i]; i++)
 		compile(o, w++, instruction_names[i], true, false);
-	compile(o, EXIT, "exit", true, false); /* needed for 'see', trust me */
+	compile(o, EXIT, "_exit", true, false); /* needed for 'see', trust me */
 	compile(o, PUSH, "'", true, false); /* crude starting version of ' */
 
 /**
@@ -2046,6 +2052,9 @@ int forth_run(forth_t *o)
 		     f = o->m[TOP], /* top of stack */
 		     w,          /* working pointer */
 		     clk;        /* clock variable */
+
+	assert(m);
+	assert(S);
 
 	clk = (1000 * clock()) / CLOCKS_PER_SEC;
 

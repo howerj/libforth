@@ -52,9 +52,6 @@ extract the document string for a given work.
 : postpone ( -- : postpone execution of the following immediate word )
 	immediate find , ;
 
-: :: ( -- : compiling version of ':' )
-	[ find : , ] ;
-
 : constant 
 	:: ( compile word header )
 	here 1 - h ! ( decrement dictionary pointer )
@@ -78,13 +75,8 @@ extract the document string for a given work.
 lf constant nl   ( new line - line feed on Unixen )
 13 constant cret ( carriage return )
 
-1 hidden-bit lshift constant hidden-mask ( mask for the hide bit in a words CODE field )
-
 -1 -1 1 rshift invert and constant min-signed-integer
-
 min-signed-integer invert constant max-signed-integer
-
-1 constant cell ( size of a cell in address units )
 
 4 constant version ( version number for the interpreter )
 
@@ -265,13 +257,7 @@ Instead of:
 	postpone :noname ( create a new :noname word for our xt-tokens )
 	r> ,             ( write first token )
 	r> ,             ( write second token )
-	postpone ; ;     ( terminate new :noname )
-
-: unless ( bool -- : like 'if' but execute clause if false )
-	immediate ['] 0= , postpone if ;
-
-: endif ( synonym for 'then' ) 
-	immediate  postpone then ;
+	(;) ;     ( terminate new :noname )
 
 : cells ( n1 -- n2 : convert a number of cells into a number of cells in address units ) 
 	immediate  ;
@@ -496,23 +482,6 @@ Instead of:
 	dup          ( ... )
 	>r >r >r ;   ( make it all work )
 
-: again immediate
-	( loop unconditionally in a begin-loop:
-		begin ... again )
-	' branch , <resolve ;
-
-( begin...while...repeat These are defined in a very "Forth" way )
-: while 
-	immediate postpone if ( branch to repeats 'then') ;
-
-: repeat immediate
-	swap            ( swap 'begin' here and 'while' here )
-	postpone again  ( again jumps to begin )
-	postpone then ; ( then writes to the hole made in if )
-
-: never ( never...then : reserve space in word )
-	immediate 0 [literal] postpone if ;
-
 : chere ( -- c-addr : here as in character address units )
 	here chars> ;
 
@@ -570,10 +539,6 @@ Instead of:
 	?dup-if
 		dup @ hidden-mask or swap tuck ! exit
 	then 0 ;
-
-( @todo refine ':' and ';' to use smudge, this could be done in libforth.c )
-: smudge ( -- : hide the latest defined word )
-	latest 1+ dup @ hidden-mask xor swap ! ;
 
 : hide ( WORD -- : hide with drop ) 
 	find dup if (hide) then drop ;
@@ -641,12 +606,14 @@ Instead of:
 	dup dup ;
 
 : roll  ( xu xu-1 ... x0 u -- xu-1 ... x0 xu : move u+1 items on the top of the stack by u )
+	[ smudge ] ( un-hide this word so we can call it recursively )
 	dup 0 >
 	if
 		swap >r 1- roll r> swap
 	else
 		drop
 	then ;
+smudge
 
 : 2rot (  n1 n2 n3 n4 n5 n6 – n3 n4 n5 n6 n1 n2 )
 	5 roll 5 roll ;
@@ -675,16 +642,6 @@ Instead of:
 : rdepth
 	max-core `stack-size @ - r @ swap - ;
 
-: r.s ( -- : print the contents of the return stack )
-	r>         
-	[char] < emit rdepth . [char] > emit
-	space
-	rdepth dup 0> if dup
-	begin dup while r> -rot 1- repeat drop dup
-	begin dup while rot dup . >r 1- repeat drop
-	then  drop cr 
-	>r ;
-
 : argv ( -- r-addr : push pointer to array of string pointers to program )
 	`argv @ ;
 
@@ -701,38 +658,18 @@ Instead of:
 
 hide stdin?
 
-( ================================== DUMP ================================== )
-\ : newline ( x -- x+1 : print a new line every fourth value )
-\ 	dup 3 and 0= if cr then 1+ ;
-\ 
-\ : address ( num count -- count : print current address we are dumping every fourth value )
-\ 	dup >r
-\ 	1- 3 and 0= if . [char] : emit space else drop then
-\ 	r> ;
-\ 
-\ : dump ( start count -- : print the contents of a section of memory )
-\ \	hex       ( switch to hex mode )
-\ 	1 >r      ( save counter on return stack )
-\ 	over + swap ( calculate limits: start start+count )
-\ 	begin 
-\ 		2dup u> ( stop if gone past limits )
-\ 	while 
-\ 		dup r> address >r
-\ 		dup @ . 1+ 
-\ 		r> newline >r
-\ 	repeat 
-\ 	r> drop
-\ 	2drop ;
-\ 
-\ hide newline
-\ hide address 
-( ================================== DUMP ================================== )
-
 : cfa immediate ( find-address -- cfa )
 	( Given the address of the PWD field of a word this
 	function will return an execution token for the word )
 	( @todo if < dictionary start PWD is invalid )
 	 ;
+
+: again immediate
+	( loop unconditionally in a begin-loop:
+		begin ... again )
+	' branch , <resolve ;
+
+
 
 \ : >body ( xt -- a-addr : a-addr is data field of a CREATEd word )
 \	cfa 5 + ;
@@ -839,7 +776,6 @@ hide stdin?
 	?dup-if [char] ! emit tab . cr then ( exception handler of last resort )
 	again ;
 
-
 : [interpret] ( c1" xxx" ... cn" xxx" -- : immediate version of interpret )
 	immediate interpret ;
 
@@ -855,6 +791,29 @@ words to make sure they only execute in the correct state )
 
 : ?exec ( -- : error if not executing )
 	state @    if -22 throw then ; 
+
+( begin...while...repeat These are defined in a very "Forth" way )
+: while 
+	?comp
+	immediate postpone if ( branch to repeats 'then') ;
+
+: whilst postpone while ;
+
+: repeat immediate
+	?comp
+	swap            ( swap 'begin' here and 'while' here )
+	postpone again  ( again jumps to begin )
+	postpone then ; ( then writes to the hole made in if )
+
+: never ( never...then : reserve space in word )
+	?comp
+	immediate 0 [literal] postpone if ;
+
+: unless ( bool -- : like 'if' but execute clause if false )
+	immediate ?comp ['] 0= , postpone if ;
+
+: endif ( synonym for 'then' ) 
+	immediate ?comp postpone then ;
 
 ( ==================== Basic Word Set ========================= )
 
@@ -900,7 +859,7 @@ can use DOER/MAKE. )
 : noop ; ( -- : default word to execute for doer, does nothing )
 
 : doer ( c" xxx" -- : make a work whose behavior can be changed by make )
-	immediate ?exec :: ['] noop , postpone ; ;
+	immediate ?exec :: ['] noop , (;) ;
 
 : found? ( xt -- xt : thrown an exception if the execution token is zero [not found] ) 
 	dup 0= if -13 throw then ;
@@ -919,11 +878,19 @@ of the first word to use the second. MAKE is a state aware word. )
 		swap !
 	then ;
 
-hide noop ( noop! noop! )
-
 ( ==================== DOER/MAKE ============================== )
 
 ( ==================== Extended Word Set ====================== )
+
+: r.s ( -- : print the contents of the return stack )
+	r>         
+	[char] < emit rdepth (.) drop [char] > emit
+	space
+	rdepth dup 0> if dup
+	begin dup while r> -rot 1- repeat drop dup
+	begin dup while rot dup . >r 1- repeat drop
+	then  drop cr 
+	>r ;
 
 : log ( u base -- u : command the _integer_ logarithm of u in base )
 	>r 
@@ -942,7 +909,7 @@ hide noop ( noop! noop! )
 
 : time ( " ccc" -- n : time the number of milliseconds it takes to execute a word )
 	clock >r
-	find execute
+	find found? execute
 	clock r> - ;
 
 ( defer...is is probably not standards compliant, it is still neat! )
@@ -952,7 +919,7 @@ hide noop ( noop! noop! )
 : defer immediate ( " ccc" -- , Run Time -- location : 
 	creates a word that pushes a location to write an execution token into )
 	?exec
-	:: ' (do-defer) , postpone ; ;
+	:: ' (do-defer) , (;) ;
 
 : is ( location " ccc" -- : make a deferred word execute a word ) 
 	find found? swap ! ;
@@ -1159,7 +1126,7 @@ and thus allows us to extend the language easily.
 	::              ( compile a word )
 	dolit ,         ( write push into new word )
 	here 2 cells + ,       ( push a pointer to data field )
-	postpone ; ;    ( write exit and switch to command mode )
+	(;) ;    ( write exit and switch to command mode )
 
 : <build immediate
 	( @note ' command-mode-create , *nearly* works )
@@ -1723,6 +1690,7 @@ if true )
 : match-[else]? [else]-word @ = nest @ 1 = and ;
 
 : [if] ( bool -- : conditional execution )
+	?exec
 	unless
 		reset-nest
 		begin
@@ -1735,6 +1703,7 @@ if true )
 	then ;
 
 : [else] ( discard input until [then] encounter, nesting for [if] )
+	?exec
 	reset-nest
 	begin
 		find
@@ -1842,6 +1811,9 @@ size 8 = [if]
 : digits ( -- u : number of characters needed to represent largest unsigned number in current base )
 	-1 #digits ;
 
+: cdigits ( -- u : number of characters needed to represent largest characters in current base )
+	0xff #digits ;
+
 : .r ( u -- print a number taking up a fixed amount of space on the screen )
 	dup #digits digits swap - spaces . ;
 
@@ -1910,7 +1882,7 @@ Usage:
 hide{ fp }hide
 
 : marker ( c" xxx" -- : make word the forgets itself and words after it)
-	:: latest [literal] ' (forget) , postpone ; ;
+	:: latest [literal] ' (forget) , (;) ;
 here fence ! ( This should also be done at the end of the file )
 hide (forget)
 
@@ -1921,7 +1893,7 @@ hide (forget)
 		nip
 	else
 		drop 1
-	endif ;
+	then ;
 
 0 variable a
 0 variable b
@@ -2006,13 +1978,22 @@ not a single cell number )
 	pad chars> hld @ 
 	tuck - 1+ swap ;
 
+doer characters
+make characters spaces
+
+: u.rc
+	>r <# #s #> rot drop r> over - characters type ;
+
 : u.r ( u n -- print a number taking up a fixed amount of space on the screen )
-	>r <# #s #> rot drop r> over - spaces type ;
+	make characters spaces u.rc ;
+
+: u.rz ( u n -- print a number taking up a fixed amount of space on the screen, using leading zeros )
+	make characters zeros u.rc ;
 
 : u. ( u -- : display an unsigned number in current base )
 	0 u.r ;
 
-hide{ overflow }hide
+hide{ overflow u.rc characters }hide
 
 ( ==================== Pictured Numeric Output ================ )
 
@@ -2579,7 +2560,7 @@ A good way to test decompilation is with the following Unix pipe:
 )
 
 ( @todo refactor into word that takes a PWD pointer and one that attempts to parse/find name )
-: see ( c" xxx" -- : decompile the next word in the input stream )
+: see ( c" xxx" -- : decompile a word )
 	find
 	dup 0= if -32 throw then
 	cell- ( move to PWD field )
@@ -2889,10 +2870,12 @@ defer matcher
 	  @warning This uses a non-standards compliant version of case! )
 	*pat
 	case
-		       0 of drop c@ not        endof
-		[char] * of advance-regex      endof
-		[char] . of *str       advance endof
-		            drop *pat==*str advance exit
+		       0 of drop c@ not   endof
+		[char] * of advance-regex endof
+		[char] . of *str advance  endof
+		
+		drop *pat==*str advance exit
+
 	endcase ;
 
 matcher is match
@@ -2906,11 +2889,11 @@ hide{
 
 
 ( ==================== Cons Cells ============================= )
-
 ( From http://sametwice.com/cons.fs, this could be improved if the optional
 memory allocation words were added to the interpreter. This provides
 a simple "cons cell" data structure. There is currently no way to
-free allocated cells )
+free allocated cells. I do not think this is particularly useful,
+but it is interesting. )
 
 : car! ( value cons-addr -- : store a value in the car cell of a cons cell ) 
 	! ;
@@ -2931,7 +2914,14 @@ free allocated cells )
 
 ( ==================== Cons Cells ============================= )
 
-( ==================== Miscellaneous ========================== )
+( ==================== License ================================ )
+( The license has been chosen specifically to make this library
+and any associated programs easy to integrate into arbitrary products
+without any hassle. For the main libforth program the LGPL license
+would have been also suitable [although it is MIT licensed as well],
+but to keep confusion down the same license, the MIT license, is
+used in both the Forth code and C code. This has not been done for
+any ideological reasons, and I am not that bothered about licenses. )
 
 : license ( -- : print out license information )
 " 
@@ -2960,8 +2950,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 " 
 ;
 
-
-
+( ==================== License ================================ )
 
 ( ==================== Core utilities ======================== )
 ( Read the header of a core file and process it, printing the
@@ -3252,18 +3241,51 @@ hide{ redirect restore data encore header }hide
 ( @todo hexdump can read in too many characters and it does not
 print out the correct address
 @todo utilities for easy redirecting of file input/output )
-: input >r cpad 128 r> read-file ; ( file-id -- u 0 | error )
-: clean  cpad 128 0 fill ; ( -- )
-: cdump  cpad chars swap aligned chars dump ; ( u -- )
-: hexdump ( file-id -- : [hex]dump a file to the screen )
-	dup 
-	clean
-	input if 2drop exit then
-	?dup-if cdump else drop exit then
-	tail ; 
-
-hide{ cpad clean cdump input }hide
-
+\ : input >r cpad 128 r> read-file ; ( file-id -- u 0 | error )
+\ : clean  cpad 128 0 fill ; ( -- )
+\ : cdump  cpad chars swap aligned chars dump ; ( u -- )
+\ : hexdump ( file-id -- : [hex]dump a file to the screen )
+\ 	dup 
+\ 	clean
+\ 	input if 2drop exit then
+\ 	?dup-if cdump else drop exit then
+\ 	tail ; 
+\ 
+\ 0 variable u
+\ 0 variable u1
+\ 0 variable cdigs
+\ 0 variable digs
+\ 
+\ : address ( -- bool : is it time to print out a new line and an address )
+\ 	u @ u1 @ - 4 size * mod 0= ;
+\ 
+\ : (dump) ( u c-addr u : u -- )
+\ 	rot dup u ! u1 !
+\ 	cdigits cdigs !
+\ 	digits digs !
+\ 	bounds
+\ 	do
+\ 		address if cr u @ digs @ u.rz [char] : emit space then
+\ 		i c@ cdigs @ u.rz
+\ 		
+\ 		i 1+ size mod 0= if space then
+\ 		u 1+!
+\ 	loop 
+\ 	u @
+\ 	;
+\ 
+\ : hexdump-file ( c-addr u )
+\ 	r/o open-file throw 
+\ 	
+\ 	;
+\ 
+\ hide{ u u1 cdigs digs address }hide
+\ hex
+\ 999 0 197 (dump)
+\ decimal
+\ 
+\ hide{ cpad clean cdump input }hide
+\ 
 ( ==================== Hex dump ============================== )
 
 ( ==================== Date ================================== )
@@ -3486,7 +3508,7 @@ be used in lieu of floating point numbers.
 : >=rat ( a/b c/d -- bool : rational greater or equal to )
 	<rat not ;
 
-( @note >rational is a work in progress )
+( @todo >rational is a work in progress, make it better )
 : 0>number 0 -rot >number ;
 0 0 2variable saved
 : failed 0 0 saved 2@ ;
@@ -3520,9 +3542,8 @@ for reading and writing to files through it.
 
 Each block number accepted by 'block' is backed by a file [or created
 if it does not exist]. The name of the file is the block number with
-".blk" appended to it. 
+".blk" appended to it. )
 
-@todo allow evaluation of a block )
 
 0 variable dirty
 b/buf string buf  ( block buffer, only one exists )
@@ -3535,9 +3556,8 @@ b/buf string buf  ( block buffer, only one exists )
 : update ( -- : mark currently loaded block buffer as dirty )
 	true dirty ! ;
 
-: updated? ( n -- bool : )
-	
-	dirty @ ;
+: updated? ( n -- bool : is a block updated? )
+ 	blk @ <> if 0 else dirty @ then ;
 
 : block.name ( n -- c-addr u : make a block name )
 	c" .blk" <# holds #s #> rot drop ;
@@ -3548,7 +3568,7 @@ whatever reason )
 : file-exists ( c-addr u : does a file exist? )
 	r/o open-file if drop 0 else close-file throw 1 then ;
 
-: buffer.exists ( n -- bool : does a block buffer exist on disk? )
+: block.exists ( n -- bool : does a block buffer exist on disk? )
 	block.name file-exists ;
 
 ( @note block.write and block.read do not check if they have
@@ -3594,7 +3614,7 @@ the block buffer. )
 	dup invalid? 
 	dup blk @ = if drop buf drop exit then
 	flush
-	dup buffer.exists if        ( if the buffer exits on disk load it in )
+	dup block.exists if        ( if the buffer exits on disk load it in )
 		dup r/o block.open 
 		block.read        
 		close-file throw    
@@ -3621,9 +3641,19 @@ hence the 1+ )
 : blocks.make ( n1 n2 -- : make blocks on disk from n1 to n2 inclusive )
 	1+ swap do i block b/buf bl fill update loop save-buffers ;
 
+: block.copy ( n1 n2 -- bool : copy block n2 to n1 if n2 exists )
+	swap dup block.exists 0= if 2drop false exit then ( n2 n1 )
+	block drop ( load in block n1 )
+	w/o block.open block.write close-file throw
+	true ;
+
+: block.delete ( n -- : delete block )
+	dup block.exists 0= if drop exit then
+	block.name delete-file drop ;
+
 hide{ 
 	block.name invalid? block.write 
-	block.read buffer.exists block.open dirty
+	block.read block.exists block.open dirty
 }hide
 
 ( ==================== Block Layer =========================== )
@@ -3920,6 +3950,46 @@ hide{ (block) (line) (clean) yank }hide
 
 ( ==================== Block Editor ========================== )
 
+( ==================== Error checking ======================== )
+( This is a series of redefinitions that make the use of control
+structures a bit safer. )
+
+: if    immediate ?comp postpone if    [ hide if ]    ;
+: else  immediate ?comp postpone else  [ hide else ]  ;
+: then  immediate ?comp postpone then  [ hide then ]  ;
+: begin immediate ?comp postpone begin [ hide begin ] ;
+: until immediate ?comp postpone until [ hide until ] ;
+\ : ;     immediate ?comp postpone ;     [ hide ; ]  ; ( @todo do nesting checking for control statements )
+
+( ==================== Error checking ======================== )
+
+( ==================== DUMP ================================== )
+\ : newline ( x -- x+1 : print a new line every fourth value )
+\ 	dup 3 and 0= if cr then 1+ ;
+\ 
+\ : address ( num count -- count : print current address we are dumping every fourth value )
+\ 	dup >r
+\ 	1- 3 and 0= if . [char] : emit space else drop then
+\ 	r> ;
+\ 
+\ : dump ( start count -- : print the contents of a section of memory )
+\ \	hex       ( switch to hex mode )
+\ 	1 >r      ( save counter on return stack )
+\ 	over + swap ( calculate limits: start start+count )
+\ 	begin 
+\ 		2dup u> ( stop if gone past limits )
+\ 	while 
+\ 		dup r> address >r
+\ 		dup @ . 1+ 
+\ 		r> newline >r
+\ 	repeat 
+\ 	r> drop
+\ 	2drop ;
+\ 
+\ hide newline
+\ hide address 
+( ==================== DUMP ================================== )
+
 ( ==================== End of File Functions ================= )
 
 ( set up a rendezvous point, we can call the word 'retreat' to
@@ -3930,5 +4000,6 @@ rendezvous
 : task ; ( Task is a word that can safely be forgotten )
 
 ( ==================== End of File Functions ================= )
+
 
 
