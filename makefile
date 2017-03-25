@@ -171,7 +171,7 @@ decompile: ${TARGET} forth.fth
 clean:
 	${RM} ${TARGET} unit *.a *.so *.o
 	${RM} *.log *.htm *.tgz *.pdf
-	${RM} *.blk *.core *.dump
+	${RM} *.core *.dump
 	${RM} tags
 	${RM} *.i *.s *.gcov *.gcda *.gcno *.out
 	${RM} html latex Doxyfile *.db *.bak

@@ -216,6 +216,15 @@ T{ 5 prime? -> 5 }T
 T{ 15 prime? -> 0 }T
 T{ 17 prime? -> 17 }T
 
+T{ 0 sqrt -> 0 }T
+T{ 1 sqrt -> 1 }T
+T{ 2 sqrt -> 1 }T
+T{ 3 sqrt -> 1 }T
+T{ 9 sqrt -> 3 }T
+T{ 10 sqrt -> 3 }T
+T{ 16 sqrt -> 4 }T
+T{ 36 sqrt -> 6 }T
+
 : factorial ( n -- n! )
 	( This factorial is only here to test range, mul, do and loop )
 	dup 1 <=

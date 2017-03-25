@@ -165,8 +165,7 @@ with some extra effort in libforth.c as well )
 : > ( x1 x2 -- bool : signed greater than comparison )
 	- dup if max-signed-integer u< else logical then ;
 
-: #pad ( -- u : offset into pad area )
-	64 ;
+128 constant #pad
 
 : pad
 	( the pad is used for temporary storage, and moves
@@ -358,65 +357,71 @@ Instead of:
 : ?dup ( x -- ? ) 
 	dup if dup then ;
 
-: min ( x y -- min : return the minimum of two integers ) 
-	2dup < if drop else swap drop then  ;
+: min ( n n -- n : return the minimum of two integers ) 
+	2dup < if drop else nip then  ;
 
-: max ( x y -- max : return the maximum of two integers ) 
-	2dup > if drop else swap drop then  ;
+: max ( n n -- n : return the maximum of two integers ) 
+	2dup > if drop else nip then  ;
+
+: umin ( u u -- u : return the minimum of two unsigned numbers )
+	2dup u< if drop else nip then ;
+
+: umax ( u u -- u : return the maximum of two unsigned numbers )
+	2dup > if drop else nip then ;
 
 : limit ( x min max -- x : limit x with a minimum and maximum )
 	rot min max ;
 
-: >= ( x y -- bool ) 
+: >= ( n n -- bool ) 
 	< not ;
 
-: <= ( x y -- bool ) 
+: <= ( n n -- bool ) 
 	> not ;
 
-: 2@ ( a-addr -- x1 x2 : load two consecutive memory cells )
+: 2@ ( a-addr -- u1 u2 : load two consecutive memory cells )
 	dup 1+ @ swap @ ;
 
-: 2! ( x1 x2 a-addr -- : store two values as two consecutive memory cells )
+: 2! ( u1 u2 a-addr -- : store two values at two consecutive memory cells )
 	2dup ! nip 1+ ! ;
 
-: r@  (  -- x, R: x -- )
+: r@  (  -- u, R: u -- )
 	r> r @ swap >r ;
 
-: rp@ (  -- x, R: x -- )
+: rp@ (  -- u, R: u -- )
 	r> r @ swap >r ;
 
 ( @todo r!, rp! )
 
-: 0> ( x -- bool )
+: 0> ( n -- bool )
 	0 > ;
 
-: 0<= ( x -- bool )
+: 0<= ( n -- bool )
 	0> not ;
 
-: 0< ( x -- bool )
+: 0< ( n -- bool )
 	0 < ;
 
-: 0>= ( x -- bool )
+: 0>= ( n -- bool )
 	0< not ;
 
-: 0<> ( x -- bool )
+: 0<> ( n -- bool )
 	0 <> ;
 
-: signum ( x -- -1 | 0 | 1 : )
+: signum ( n -- -1 | 0 | 1 : )
 	dup 0< if drop -1 exit then
 	    0> if       1 exit then
 	0 ;
 
-: nand ( x x -- x : bitwise NAND ) 
+: nand ( u u -- u : bitwise NAND ) 
 	and invert ;
 
-: odd ( x -- bool : is 'x' odd? )
+: odd ( u -- bool : is 'x' odd? )
 	1 and ;
 
-: even ( x -- bool : is 'x' even? )
+: even ( u -- bool : is 'x' even? )
 	odd not ;
 
-: nor  ( x x -- x : bitwise NOR  )  
+: nor  ( u u -- u : bitwise NOR  )  
 	or invert ;
 
 : ms ( u -- : wait at least 'u' milliseconds ) 
@@ -546,8 +551,11 @@ Instead of:
 : 2tuck ( n1 n2 n3 n4 – n3 n4 n1 n2 n3 n4 )
 	2swap 2over ;
 
-: 3drop ( x1 x2 x3 -- )
+: 3drop ( n1 n2 n3 -- )
 	drop 2drop ;
+
+: 4drop  ( n1 n2 n3 n4 -- )
+	2drop 2drop ;
 
 : nos1+ ( x1 x2 -- x1+1 x2 : increment the next variable on that stack )
 	swap 1+ swap ;
@@ -843,7 +851,7 @@ find [interpret] cell+ start! ( the word executed on restart is now our new word
 words to make sure they only execute in the correct state )
 
 : ?comp ( -- : error if not compiling )
-	state @ 0= if -22 throw then ; 
+	state @ 0= if -14 throw then ; 
 
 : ?exec ( -- : error if not executing )
 	state @    if -22 throw then ; 
@@ -994,6 +1002,23 @@ hide tail
 
 : gcd ( x1 x2 -- x : greatest common divisor )
 	dup if tuck mod tail then drop ;
+
+( From: https://en.wikipedia.org/wiki/Integer_square_root
+
+This function computes the integer square root of a number.
+
+@note this should be changed to the iterative algorithm so it takes up less
+space on the stack - not that is takes up a hideous amount as it is. )
+: sqrt ( n -- u : integer square root )
+	dup 0<  if -11 throw then ( does not work for signed values )
+	dup 2 < if exit then      ( return 0 or 1 )
+	dup ( u u )
+	2 rshift recurse 2*       ( u sc : 'sc' == unsigned small candidate )
+	dup                       ( u sc sc )
+	1+ dup square             ( u sc lc lc^2 : 'lc' == unsigned large candidate )
+	>r rot r> <               ( sc lc bool )
+	if drop else nip then ;   ( return small or large candidate respectively )
+
 
 ( ==================== Extended Word Set ====================== )
 
@@ -1212,6 +1237,10 @@ and constants, as we mentioned before. )
 	dup constant 1+ ; 
 
 ( ========================== CREATE DOES> ==================================== )
+
+
+
+
 
 ( ========================== DO...LOOP ======================================= )
 
@@ -1856,13 +1885,29 @@ Usage:
 	here fence ! )
 0 variable fence
 
+: ?fence ( addr -- : throw an exception of address is before fence )
+	fence @ u< if -15 throw then ;
+
 : (forget) ( pwd-token -- : forget a found word and everything after it )
 	dup 0= if -15 throw then         ( word not found! )
-	dup fence @ u< if -15 throw then ( forgetting a word before fence! )
+	dup ?fence
 	dup @ pwd ! h ! ;
 
 : forget ( c" xxx" -- : forget word and every word defined after it )
 	find 1- (forget) ;
+
+0 variable fp ( FIND Pointer )
+
+: rendezvous ( -- : set up a rendezvous point )
+	here ?fence
+	here fence !
+	latest fp ! ;
+
+: retreat ( -- : retreat to the rendezvous point, forgetting any words )
+	fence @ h !
+	fp @ pwd ! ;
+
+hide{ fp }hide
 
 : marker ( c" xxx" -- : make word the forgets itself and words after it)
 	:: latest [literal] ' (forget) , postpone ; ;
@@ -1937,7 +1982,7 @@ not a single cell number )
 : hold ( char -- : add a character to the numeric output string )
 	overflow pad chars> hld @ - c! hld 1+! ;
 
-: holds ( addr u -- )
+: holds ( c-addr u -- : hold an entire string )
   begin dup while 1- 2dup + c@ hold repeat 2drop ;
 
 : <# ( -- : setup pictured numeric output )
@@ -2504,7 +2549,7 @@ hide{
 : see.name         " name:          " name print cr ;
 : see.start        " word start:    " name chars . cr ;
 : see.previous     " previous word: " @ . cr ;
-: see.immediate    " immediate:     " compiling? swap drop not TrueFalse cr ;
+: see.immediate    " immediate:     " compiling? nip not TrueFalse cr ;
 : see.instruction  " instruction:   " xt-instruction . cr ;
 : see.defined      " defined:       " defined-word? TrueFalse cr ;
 
@@ -3222,74 +3267,94 @@ hide{ cpad clean cdump input }hide
 ( ==================== Hex dump ============================== )
 
 ( ==================== Date ================================== )
+( This word set implements a words for date processing, so you
+can print out nicely formatted date strings. It implements the
+standard Forth word time&date and two words which interact
+with the libforth DATE instruction, which pushes the current
+time information onto the stack. 
 
-( Rather annoyingly months are start from 1 but weekdays from 0 )
+Rather annoyingly months are start from 1 but weekdays from 0. )
 
-: >month ( month -- )
+: >month ( month -- c-addr u : convert month to month string )
 	case
-		 1 of " Jan " endof
-		 2 of " Feb " endof
-		 3 of " Mar " endof
-		 4 of " Apr " endof
-		 5 of " May " endof
-		 6 of " Jun " endof
-		 7 of " Jul " endof
-		 8 of " Aug " endof
-		 9 of " Sep " endof
-		10 of " Oct " endof
-		11 of " Nov " endof
-		12 of " Dec " endof
+		 1 of c" Jan " endof
+		 2 of c" Feb " endof
+		 3 of c" Mar " endof
+		 4 of c" Apr " endof
+		 5 of c" May " endof
+		 6 of c" Jun " endof
+		 7 of c" Jul " endof
+		 8 of c" Aug " endof
+		 9 of c" Sep " endof
+		10 of c" Oct " endof
+		11 of c" Nov " endof
+		12 of c" Dec " endof
 		-11 throw
 	endcase ;
 
-: .day ( day -- : add ordinal to day )
+: .day ( day -- c-addr u : add ordinal to day )
 	10 mod
 	case
-		1 of " st " exit endof
-		2 of " nd " exit endof
-		3 of " rd " exit endof
-		" th " 
+		1 of c" st " endof
+		2 of c" nd " endof
+		3 of c" rd " endof
+		drop c" th " exit
 	endcase ;
 
-: >day ( day -- : add ordinal to day of month )
-	dup u.
-	dup  1 10 within if .day       exit then
-	dup 10 20 within if " th" drop exit then
+: >day ( day -- c-addr u: add ordinal to day of month )
+	dup  1 10 within if .day   exit then
+	dup 10 20 within if drop c" th" exit then
 	.day ;
 
-: >weekday ( weekday -- : print the weekday )
+: >weekday ( weekday -- c-addr u : print the weekday )
 	case
-		0 of " Sun " endof
-		1 of " Mon " endof
-		2 of " Tue " endof
-		3 of " Wed " endof
-		4 of " Thu " endof
-		5 of " Fri " endof
-		6 of " Sat " endof
+		0 of c" Sun " endof
+		1 of c" Mon " endof
+		2 of c" Tue " endof
+		3 of c" Wed " endof
+		4 of c" Thu " endof
+		5 of c" Fri " endof
+		6 of c" Sat " endof
+		-11 throw
 	endcase ;
 
-: padded ( u -- : print out a run of zero characters )
-	0 do [char] 0 emit loop ;
+: >gmt ( bool -- GMT or DST? )
+	if c" DST " else c" GMT " then ;
 
-: 0u. ( u -- : print a zero padded number @todo replace with u.r )
-	dup 10 u< if 1 padded then u. space ;
+: colon ( -- char : push a colon character )
+	[char] : ;
+
+: 0? ( n -- : hold a space if number is less than base )
+	(base) u< if [char] 0 hold then ;
+
+( .NB You can format the date in hex if you want! )
+: date-string ( date -- c-addr u : format a date string in transient memory )
+	9 reverse ( reverse the date string )
+	<# 
+		dup #s drop 0? ( seconds )
+		colon hold
+		dup #s drop 0? ( minute )
+		colon hold
+		dup #s drop 0? ( hour )
+		dup >day holds
+		#s drop ( day )
+		>month holds
+		bl hold
+		#s drop ( year )
+		>weekday holds
+		drop ( no need for days of year )
+		>gmt holds
+		0
+	#> ;
 
 : .date ( date -- : print the date )
-	if " DST " else " GMT " then 
-	drop ( no need for days of year)
-	>weekday
-	. ( year ) 
-	>month 
-	>day 
-	0u. ( hour )
-	0u. ( minute )
-	0u. ( second ) cr ;
+	date-string type ;
 
 : time&date ( -- second minute hour day month year )
 	date
 	3drop ;
 
-hide{ 0u. >weekday .day >day >month padded }hide
+hide{ >weekday .day >day >month colon >gmt 0? }hide
 
 ( ==================== Date ================================== )
 
@@ -3318,9 +3383,8 @@ size 2 = [if]
 ( see http://stackoverflow.com/questions/10564491/function-to-calculate-a-crc16-checksum
   and https://www.lammertbies.nl/comm/info/crc-calculation.html )
 : crc16-ccitt ( c-addr u -- u )
-	0xFFFF -rot
-	['] ccitt
-	foreach ;
+	0xffff -rot
+	['] ccitt foreach ;
 hide{ limit ccitt }hide
 
 ( ==================== CRC =================================== )
@@ -3349,7 +3413,14 @@ For more information.
 
 This set of words use two cells to represent a fraction, however
 a single cell could be used, with the numerator and the denominator
-stored in upper and lower half of a single cell. )
+stored in upper and lower half of a single cell. 
+
+@todo add saturating Q numbers to the interpreter, as well as
+arithmetic word for acting on double cells [d+, d-, etcetera]
+https://en.wikipedia.org/wiki/Q_%28number_format%29, this can
+be used in lieu of floating point numbers.
+
+)
 
 : simplify ( a b -- a/gcd{a,b} b/gcd{a/b} : simplify a rational )
   2dup
@@ -3398,7 +3469,7 @@ stored in upper and lower half of a single cell. )
   simplify ;
 
 : .rat ( a/b --  : print out a rational number )
-  simplify swap . [char] / emit space . ;
+  simplify swap (.) drop [char] / emit . ;
 
 : =rat ( a/b c/d -- bool : rational equal )
   crossmultiply rot = -rot = = ;
@@ -3414,6 +3485,19 @@ stored in upper and lower half of a single cell. )
 
 : >=rat ( a/b c/d -- bool : rational greater or equal to )
 	<rat not ;
+
+( @note >rational is a work in progress )
+: 0>number 0 -rot >number ;
+0 0 2variable saved
+: failed 0 0 saved 2@ ;
+: >rational ( c-addr u -- a/b c-addr u )
+	2dup saved 2!
+	0>number 2dup 0= if 4drop failed exit then ( @note could convert to rational n/1 )
+	c@ [char] / <> if 3drop failed exit then
+	1 /string
+	0>number ;
+
+hide{ 0>number saved failed }hide
 
 ( ==================== Rational Data Type ==================== )
 
@@ -3534,6 +3618,9 @@ hence the 1+ )
 : --> ( -- : load next block )
 	1 +block load ;
 
+: blocks.make ( n1 n2 -- : make blocks on disk from n1 to n2 inclusive )
+	1+ swap do i block b/buf bl fill update loop save-buffers ;
+
 hide{ 
 	block.name invalid? block.write 
 	block.read buffer.exists block.open dirty
@@ -3580,9 +3667,6 @@ hide{
 : thru
 	key drop
 	1+ swap do i list more loop ;
-
-: make-blocks ( n1 n2 -- : make blocks on disk from n1 to n2 inclusive )
-	1+ swap do i block b/buf bl fill update loop save-buffers ;
 
 hide{ 
 	buf line line.number list.type fancy-list 
@@ -3703,11 +3787,15 @@ tr, etcetera.
 * It would be interesting to make a primitive file system based upon Forth blocks,
 this could then be ported to systems that do not have file systems, such as
 microcontrollers [which usually have EEPROM].
-
+* In a _very_ unportable way it would be possible to have an instruction that
+takes the top of the stack, treats it as a function pointer and then attempts
+to call said function. This would allow us to assemble machine dependant code
+within the core file, generate a new function, then call it. It is just a thought.
  )
 
 verbose [if] 
 	.( FORTH: libforth successfully loaded.) cr
+	date .date cr
 	.( Type 'help' and press return for a basic introduction.) cr
 	.( Core: ) here . " / " here unused + . cr
 	 license
@@ -3789,7 +3877,8 @@ page cr
 char drop ;
 
 : (block) blk @ block ; 
-: (line) c/l * (block) + ; ( n -- c-addr : push current line address )
+: (check) dup b/buf c/l / u>= if -24 throw then ;
+: (line) (check) c/l * (block) + ; ( n -- c-addr : push current line address )
 : (clean) 
 	(block) b/buf
 	2dup nl bl subst
@@ -3802,10 +3891,11 @@ char drop ;
 : s update save-buffers ;
 : q rdrop rdrop ;
 : e blk @ load char drop ;
-: ia c/l * + dup b/buf swap - >r (block) + r> accept (clean) ; 
+: ia c/l * + dup b/buf swap - >r (block) + r> accept drop (clean) ; 
 : i 0 swap ia ;
 : editor
 	1 block
+	rendezvous
 	begin
 		page cr
 		" BLOCK EDITOR: TYPE 'HELP' FOR A LIST OF COMMANDS" cr
@@ -3824,15 +3914,20 @@ yank bl fill
 : y (line) yank >r swap r> cmove ;
 : c (line) yank cmove ;
 : ct swap y c ;
+: m retreat ;
 
 hide{ (block) (line) (clean) yank }hide
 
 ( ==================== Block Editor ========================== )
 
 ( ==================== End of File Functions ================= )
-here fence ! ( final fence - works before this cannot be forgotten )
 
-: task ;
+( set up a rendezvous point, we can call the word 'retreat' to
+restore the dictionary to this point. This word also updates
+fence to this location in the dictionary )
+rendezvous 
+
+: task ; ( Task is a word that can safely be forgotten )
 
 ( ==================== End of File Functions ================= )
 
