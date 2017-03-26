@@ -1266,6 +1266,11 @@ reasons, firstly because of limitations in the implementation, and secondly
 there is no reason for cluttering up the output window with this. The
 implementation should be silent by default.
 
+* Control structures
+
+Various control structures in Forth behave slightly differently than in
+normal Forths. This should be fixed, given time.
+
 ## forth.core magic 
 
 The [Forth][] interpreters core files can be detected by the [file][] utility

@@ -865,52 +865,52 @@ up for debugging purposes (like **pnum**).
 **/
 
 #define XMACRO_INSTRUCTIONS\
- X(0, PUSH,      "push",       " -- x : push a literal")\
- X(0, CONST,     "const",      " -- x : push a literal")\
+ X(0, PUSH,      "push",       " -- u : push a literal")\
+ X(0, CONST,     "const",      " -- u : push a literal")\
  X(0, RUN,       "run",        " -- : run a Forth word")\
  X(0, DEFINE,    "define",     " -- : make new Forth word, set compile mode")\
  X(0, IMMEDIATE, "immediate",  " -- : make a Forth word immediate")\
- X(0, READ,      "read",       " c\" xxx\" -- : read in a Forth word and execute it")\
- X(1, LOAD,      "@",          "addr -- x : load a value")\
- X(2, STORE,     "!",          "x addr -- : store a value")\
- X(1, CLOAD,     "c@",         "c-addr -- x : load character value")\
- X(2, CSTORE,    "c!",         "x c-addr -- : store character value")\
- X(2, SUB,       "-",          "x1 x2 -- x3 : subtract x2 from x1 yielding x3")\
- X(2, ADD,       "+",          "x x -- x : add two values")\
- X(2, AND,       "and",        "x x -- x : bitwise and of two values")\
- X(2, OR,        "or",         "x x -- x : bitwise or of two values")\
- X(2, XOR,       "xor",        "x x -- x : bitwise exclusive or of two values")\
- X(1, INV,       "invert",     "x -- x : invert bits of value")\
- X(2, SHL,       "lshift",     "x1 x2 -- x3 : left shift x1 by x2")\
- X(2, SHR,       "rshift",     "x1 x2 -- x3 : right shift x1 by x2")\
- X(2, MUL,       "*",          "x x -- x : multiply to values")\
- X(2, DIV,       "/",          "x1 x2 -- x3 : divide x1 by x2 yielding x3")\
- X(2, ULESS,     "u<",         "x x -- bool : unsigned less than")\
- X(2, UMORE,     "u>",         "x x -- bool : unsigned greater than")\
+ X(0, READ,      "read",       " c\" xxx\" -- : read Forth word, execute it")\
+ X(1, LOAD,      "@",          "addr -- u : load a value")\
+ X(2, STORE,     "!",          "u addr -- : store a value")\
+ X(1, CLOAD,     "c@",         "c-addr -- u : load character value")\
+ X(2, CSTORE,    "c!",         "u c-addr -- : store character value")\
+ X(2, SUB,       "-",          "u1 u2 -- u3 : subtract u2 from u1 yielding u3")\
+ X(2, ADD,       "+",          "u u -- u : add two values")\
+ X(2, AND,       "and",        "u u -- u : bitwise and of two values")\
+ X(2, OR,        "or",         "u u -- u : bitwise or of two values")\
+ X(2, XOR,       "xor",        "u u -- u : bitwise exclusive or of two values")\
+ X(1, INV,       "invert",     "u -- u : invert bits of value")\
+ X(2, SHL,       "lshift",     "u1 u2 -- u3 : left shift u1 by u2")\
+ X(2, SHR,       "rshift",     "u1 u2 -- u3 : right shift u1 by u2")\
+ X(2, MUL,       "*",          "u u -- u : multiply to values")\
+ X(2, DIV,       "/",          "u1 u2 -- u3 : divide u1 by u2 yielding u3")\
+ X(2, ULESS,     "u<",         "u u -- bool : unsigned less than")\
+ X(2, UMORE,     "u>",         "u u -- bool : unsigned greater than")\
  X(0, EXIT,      "exit",       " -- : return from a word definition")\
  X(0, KEY,       "key",        " -- char : get one character of input")\
  X(1, EMIT,      "_emit",      " char -- status : get one character of input")\
- X(0, FROMR,     "r>",         " -- x, R: x -- : move from return stack")\
- X(1, TOR,       ">r",         "x --, R: -- x : move to return stack")\
+ X(0, FROMR,     "r>",         " -- u, R: u -- : move from return stack")\
+ X(1, TOR,       ">r",         "u --, R: -- u : move to return stack")\
  X(0, BRANCH,    "branch",     " -- : unconditional branch")\
- X(1, QBRANCH,   "?branch",    "x -- : branch if x is zero")\
- X(1, PNUM,      "(.)",        "x -- n : print a number returning an error on failure")\
- X(1, COMMA,     ",",          "x -- : write a value into the dictionary")\
- X(2, EQUAL,     "=",          "x x -- bool : compare two values for equality")\
+ X(1, QBRANCH,   "?branch",    "u -- : branch if u is zero")\
+ X(1, PNUM,      "(.)",        "u -- n : print a number returning an error on failure")\
+ X(1, COMMA,     ",",          "u -- : write a value into the dictionary")\
+ X(2, EQUAL,     "=",          "u u -- bool : compare two values for equality")\
  X(2, SWAP,      "swap",       "x1 x2 -- x2 x1 : swap two values")\
- X(1, DUP,       "dup",        "x -- x x : duplicate a value")\
- X(1, DROP,      "drop",       "x -- : drop a value")\
+ X(1, DUP,       "dup",        "u -- u u : duplicate a value")\
+ X(1, DROP,      "drop",       "u -- : drop a value")\
  X(2, OVER,      "over",       "x1 x2 -- x1 x2 x1 : copy over a value")\
  X(0, TAIL,      "tail",       " -- : tail recursion")\
  X(0, FIND,      "find",       "c\" xxx\" -- addr | 0 : find a Forth word")\
- X(0, DEPTH,     "depth",      " -- x : get current stack depth")\
+ X(0, DEPTH,     "depth",      " -- u : get current stack depth")\
  X(0, SPLOAD,    "sp@",        " -- addr : load current stack pointer ")\
  X(0, SPSTORE,   "sp!",        " addr -- : modify the stack pointer")\
- X(0, CLOCK,     "clock",      " -- x : push a time value")\
- X(3, EVALUATOR, "evaluator", "c-addr u 0 | file-id 0 1 -- x : evaluate file/str")\
+ X(0, CLOCK,     "clock",      " -- u : push a time value")\
+ X(3, EVALUATOR, "evaluator", "c-addr u 0 | file-id 0 1 -- u : evaluate file/str")\
  X(0, PSTK,      ".s",         " -- : print out values on the stack")\
  X(1, RESTART,   "restart",    " error -- : restart system, cause error")\
- X(0, CALL,      "call",       "x1...xn c -- x1...xn c : call a function")\
+ X(0, CALL,      "call",       "n1...nn c -- n1...nn c : call a function")\
  X(2, SYSTEM,    "system",     "c-addr u -- bool : execute system command")\
  X(1, FCLOSE,    "close-file", "file-id -- ior : close a file")\
  X(3, FOPEN,     "open-file",  "c-addr u fam -- open a file")\
@@ -927,7 +927,7 @@ up for debugging purposes (like **pnum**).
  X(3, MEMMOVE,   "memory-copy",   " r-addr1 r-addr2 u -- : move a block of memory from r-addr2 to r-addr1")\
  X(3, MEMCHR,    "memory-locate", " r-addr char u -- r-addr | 0 : locate a character memory")\
  X(3, MEMSET,    "memory-set",    " r-addr char u -- : set a block of memory")\
- X(3, MEMCMP,    "memory-compare", " r-addr1 r-addr2 u -- x : compare two blocks of memory")\
+ X(3, MEMCMP,    "memory-compare", " r-addr1 r-addr2 u -- u : compare two blocks of memory")\
  X(1, ALLOCATE,  "allocate",       " u -- r-addr ior : allocate a block of memory")\
  X(1, FREE,      "free",           " r-addr1 -- ior : free a block of memory")\
  X(2, RESIZE,    "resize",         " r-addr u -- r-addr ior : resize a block of memory")\
@@ -1000,10 +1000,11 @@ Forth interpreter.
 
 /**
 @brief A structure that contains a constant to be added to the
-Forth environment by **forth_init**.
+Forth environment by **forth_init**. A constants name, like
+any other Forth word, should be shorter than MAXIMUM_WORD_LENGTH.
 **/
 static struct constants {
-	const char *name; /**< name of constants, should be shorter than MAXIMUM_WORD_LENGTH */
+	const char *name; /**< constants name */
 	forth_cell_t value; /**< value of the named constant */
 } constants[] = {
 #define X(NAME, VALUE, DESCRIPTION) { NAME, (VALUE) },
@@ -1099,7 +1100,6 @@ due to the simple nature of Forth this is as complex as parsing and
 lexing gets. It can either read from a file handle or a string, 
 like forth_get_char() 
 
-@note MAXIMUM_WORD_LENGTH cells are allocated in the core instead of MAXIMUM_WORD_LENGTH/sizeof(forth_cell_t)
 **/
 static int forth_get_word(forth_t *o, uint8_t *p)
 {
@@ -1760,7 +1760,8 @@ number.
 /**
 More constants are now defined:
 **/
-	VERIFY(forth_define_constant(o, "stack-start", size - (2 * o->m[STACK_SIZE])) >= 0);
+	w = size - (2 * o->m[STACK_SIZE]); /* start of stack */
+	VERIFY(forth_define_constant(o, "stack-start", w) >= 0);
 	VERIFY(forth_define_constant(o, "max-core", size) >= 0);
 
 	for(i = 0; constants[i].name; i++)
@@ -1878,7 +1879,8 @@ forth_t *forth_load_core_memory(char *m, size_t size)
 	errno = 0;
 	o = calloc(sizeof(*o) + size, 1);
 	if(!o) {
-		error("allocation of size %zu failed, %s", sizeof(*o) + size, forth_strerror());
+		error("allocation of size %zu failed, %s", 
+				sizeof(*o) + size, forth_strerror());
 		return NULL;
 	}
 	make_header(o->header, forth_blog2(size));
@@ -2150,8 +2152,9 @@ and then jumps to that words CODE field, executing the instruction it finds
 for that word.
 
 Words like **dup** and ***** are built in words, they are slightly differently
-in that their **CODE** field contains contains a virtual machine instruction other
-than **RUN**, they contain the instructions **DUP** and **MUL** respectively.
+in that their **CODE** field contains contains a virtual machine instruction 
+other than **RUN**, they contain the instructions **DUP** and **MUL** 
+respectively.
 
 **/
 	for(;(pc = m[ck(I++)]);) { 
@@ -2199,8 +2202,9 @@ The CODE field contains the RUN instruction.
 /**
 **IMMEDIATE** makes the current word definition execute regardless of whether we
 are in compile or command mode. This word simply clears the compiling bit of the
-most recently defined Forth word, which makes the word immediate. This Forth allows
-the following for making a word immediate ('immediate' is itself immediate):
+most recently defined Forth word, which makes the word immediate. This Forth 
+allows the following for making a word immediate ('immediate' is itself 
+immediate):
 
 	: xxx ... ; immediate ( Traditional way )
 

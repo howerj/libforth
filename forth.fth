@@ -1,53 +1,88 @@
 #!./forth 
-( Welcome to libforth, A dialect of Forth. Like all versions of Forth this
-version is  a little idiosyncratic, but how the interpreter works is
-documented here and in various other files.
+( Welcome to libforth, A dialect of Forth. Like all versions
+of Forth this version is  a little idiosyncratic, but how
+the interpreter works is documented here and in various
+other files.
 
-This file contains most of the start up code, some basic start up code
-is executed in the C file as well which makes programming at least bearable.
-Most of Forth is programmed in itself, which may seem odd if your back
-ground in programming comes from more traditional language [such as C],
-although less so if you know already know lisp.
+This file contains most of the start up code, some basic
+start up code is executed in the C file as well which makes
+programming at least bearable.  Most of Forth is programmed in
+itself, which may seem odd if your back ground in programming
+comes from more traditional language [such as C], although
+less so if you know already know lisp.
 
 For more information about this interpreter and Forth see:
-	https://en.wikipedia.org/wiki/Forth_%28programming_language%29
-	readme.md   : for a manual for this interpreter
-	libforth.h  : for information about the C API
-	libforth.c  : for the interpreter itself
-	unit.c      : a series of unit tests against libforth.c
-	unit.fth    : a series of unit tests against this file
 
-The interpreter and this code originally descend from a Forth interpreter
-written in 1992 for the International obfuscated C Coding Competition
+https://en.wikipedia.org/wiki/Forth_%28programming_language%29
+
+And within this code base:
+
+	readme.md  : for a manual for this interpreter
+	libforth.h : for information about the C API
+	libforth.c : for the interpreter itself 
+	unit.c     : unit tests for libforth.c 
+	unit.fth   : unit tests against this file
+	main.c     : an example interpreter
+
+The interpreter and this code originally descend from a Forth
+interpreter written in 1992 for the International obfuscated
+C Coding Competition.
 
 See:
 	http://www.ioccc.org/1992/buzzard.2.design
 
-The manual for the interpreter should be read first before looking into this
-code. It is important to understand the execution model of Forth, especially
-the differences between command and compile mode, and how immediate and compiling
+The manual for the interpreter should be read first before
+looking into this code. It is important to understand the
+execution model of Forth, especially the differences between
+command and compile mode, and how immediate and compiling
 words work.
 
-@todo Restructure and describe structure of this file.
+Each of these sections is clearly labeled and they are
+generally in dependency order.
 
-Each of these sections is clearly labeled and they are generally in dependency order.
+Unfortunately the code in this file is not as portable as it
+could be, it makes assumptions about the size of cells provided
+by the virtual machine, which will take time to rectify. Some
+of the constructs are subtly different from the DPANs Forth
+specification, which is usually noted. Eventually this should
+also be fixed. 
 
-Unfortunately the code in this file is not as portable as it could be, it makes
-assumptions about the size of cells provided by the virtual machine, which will
-take time to rectify. Some of the constructs are subtly different from the
-DPANs Forth specification, which is usually noted. Eventually this should
-also be fixed.)
+A little note on how code is formatted, a line of Forth code
+should not exceed 64 characters. All words stack effect, how
+many variables on the stack it accepts and returns, should
+be commented with the following types: 
 
-( ========================== Basic Word Set ================================== )
+	char / c  A character
+	c-addr    An address of a character
+	addr      An address of a cell
+	r-addr    A real address*
+	u         A unsigned number
+	n         A signed number
+	c" xxx"   The word parses a word
+	xt        An execution token
+	bool      A boolean value
+	ior       A file error return status [0 on no error]
+	fileid    A file identifier.
+	* A real address is one outside the range of the
+	Forth address space.
 
-( 
-We'll begin by defining very simple words we can use later, these a very
-basic words, that perform simple tasks, they will not require much explanation.
+In the comments Forth words should be written in uppercase. As
+this is supposed to be a tutorial about Forth and describe the
+internals of a Forth interpreter, be as verbose as possible.
 
-Even though the words are simple, their stack comment and a description for
-them will still be included so external tools can process and automatically
-extract the document string for a given work.
-)
+The code in this file will need to be modified to abide by
+these standards, but new code should follow it from the start.)
+
+( ==================== Basic Word Set ======================== )
+
+( We'll begin by defining very simple words we can use later,
+these a very basic words, that perform simple tasks, they
+will not require much explanation.
+
+Even though the words are simple, their stack comment and
+a description for them will still be included so external
+tools can process and automatically extract the document
+string for a given work. )
 
 : postpone ( -- : postpone execution of the following immediate word )
 	immediate find , ;
@@ -55,7 +90,8 @@ extract the document string for a given work.
 : constant 
 	:: ( compile word header )
 	here 1 - h ! ( decrement dictionary pointer )
-	here @ instruction-mask invert and doconst or here ! ( change instruction to CONST )
+	( change instruction to CONST )
+	here @ instruction-mask invert and doconst or here ! 
 	here 1 + h ! ( increment dictionary pointer )
 	,            ( write in value )
 	postpone [ ; ( back into command mode )
@@ -70,7 +106,7 @@ extract the document string for a given work.
 0 constant false
 1 constant true ( @warning not standards compliant )
 
-( Confusingly the word 'cr' prints a line feed )
+( Confusingly the word CR prints a line feed )
 10 constant lf   ( line feed )
 lf constant nl   ( new line - line feed on Unixen )
 13 constant cret ( carriage return )
@@ -102,20 +138,20 @@ simple words, part of the interpreter would speed things up )
 : tab ( -- : print a tab character to current output device )
 	9 emit ;
 
-: 0=  ( x -- bool : is 'x' equal to zero? )
+: 0=  ( n -- bool : is 'n' equal to zero? )
 	0 = ;
 
-: not ( x -- bool : is 'x' true? )
+: not ( n -- bool : is 'n' true? )
 	0= ;
 
-: <> ( x x -- bool : not equal )
+: <> ( n n -- bool : not equal )
 	= 0= ;
 
-: logical ( x -- bool : turn a value into a boolean ) 
+: logical ( n -- bool : turn a value into a boolean ) 
 	not not ;
 
 ( @todo ": dolit ' ' ;" works but does not interact well with 
-'decompile', if this was fixed the special work could be removed,
+DECOMPILE, if this was fixed the special work could be removed,
 with some extra effort in libforth.c as well )
 : dolit ( -- x : location of special "push" word )
 	2 ; 
@@ -136,7 +172,7 @@ with some extra effort in libforth.c as well )
 : ['] ( I: c" xxx", Run: -- xt  )
 	immediate find [literal] ;
 
-: >instruction ( CODE -- Instruction : extract instruction from instruction field ) 
+: >instruction ( CODE -- Instruction : extract instruction CODE field ) 
 	instruction-mask and ;
 
 : immediate-mask ( -- x : pushes the mask for the compile bit in a words CODE field )
@@ -401,10 +437,10 @@ Instead of:
 : nand ( u u -- u : bitwise NAND ) 
 	and invert ;
 
-: odd ( u -- bool : is 'x' odd? )
+: odd ( u -- bool : is 'n' odd? )
 	1 and ;
 
-: even ( u -- bool : is 'x' even? )
+: even ( u -- bool : is 'n' even? )
 	odd not ;
 
 : nor  ( u u -- u : bitwise NOR  )  
@@ -795,13 +831,13 @@ words to make sure they only execute in the correct state )
 ( begin...while...repeat These are defined in a very "Forth" way )
 : while 
 	?comp
-	immediate postpone if ( branch to repeats 'then') ;
+	immediate postpone if ( branch to repeats THEN) ;
 
 : whilst postpone while ;
 
 : repeat immediate
 	?comp
-	swap            ( swap 'begin' here and 'while' here )
+	swap            ( swap BEGIN here and WHILE here )
 	postpone again  ( again jumps to begin )
 	postpone then ; ( then writes to the hole made in if )
 
@@ -809,19 +845,21 @@ words to make sure they only execute in the correct state )
 	?comp
 	immediate 0 [literal] postpone if ;
 
-: unless ( bool -- : like 'if' but execute clause if false )
+: unless ( bool -- : like IF but execute clause if false )
 	immediate ?comp ['] 0= , postpone if ;
 
-: endif ( synonym for 'then' ) 
+: endif ( synonym for THEN ) 
 	immediate ?comp postpone then ;
 
-( ==================== Basic Word Set ========================= )
+( ==================== Basic Word Set ======================== )
 
-( ==================== DOER/MAKE ============================== )
-( DOER/MAKE is a word set that is quite powerful and is described in Leo Brodie's
-book "Thinking Forth". It can be used to make words whose behavior can change
-after they are defined. It essentially makes the structured use of self-modifying
-code possible, along with the more common definitions of "defer/is".
+( ==================== DOER/MAKE ============================= )
+( DOER/MAKE is a word set that is quite powerful and is
+described in Leo Brodie's book "Thinking Forth". It can be
+used to make words whose behavior can change after they
+are defined. It essentially makes the structured use of
+self-modifying code possible, along with the more common
+definitions of "defer/is".
 
 According to "Thinking Forth", it has two purposes:
 
@@ -852,9 +890,9 @@ An example of the second:
 	: mul \ n0 ... nX X -- mul<0..X>  
 		make op * 1 do op loop ;
 
-The above example is a bit contrived, the definitions and functionality
-are too simple for this to be worth factoring out, but it shows how you
-can use DOER/MAKE. )
+The above example is a bit contrived, the definitions and
+functionality are too simple for this to be worth factoring
+out, but it shows how you can use DOER/MAKE. )
 
 : noop ; ( -- : default word to execute for doer, does nothing )
 
@@ -864,10 +902,11 @@ can use DOER/MAKE. )
 : found? ( xt -- xt : thrown an exception if the execution token is zero [not found] ) 
 	dup 0= if -13 throw then ;
 
-( It would be nice to provide a MAKE that worked with execution tokens
-as well, although "defer" and "is" can be used for that. MAKE expects
-two word names to be given as arguments. It will then change the behavior 
-of the first word to use the second. MAKE is a state aware word. )
+( It would be nice to provide a MAKE that worked with
+execution tokens as well, although "defer" and "is" can be
+used for that. MAKE expects two word names to be given as
+arguments. It will then change the behavior of the first word
+to use the second. MAKE is a state aware word. )
 
 : make immediate ( c1" xxx" c2" xxx" : change parsed word c1 to execute c2 )
 	find found? cell+
@@ -878,9 +917,9 @@ of the first word to use the second. MAKE is a state aware word. )
 		swap !
 	then ;
 
-( ==================== DOER/MAKE ============================== )
+( ==================== DOER/MAKE ============================= )
 
-( ==================== Extended Word Set ====================== )
+( ==================== Extended Word Set ===================== )
 
 : r.s ( -- : print the contents of the return stack )
 	r>         
@@ -926,10 +965,35 @@ of the first word to use the second. MAKE is a state aware word. )
 
 hide (do-defer)
 
-( The "tail" function implements tail calls, which is just a jump
-to the beginning of the words definition, for example this
-word will never overflow the stack and will print "1" followed
-by a new line forever,
+( This RECURSE word is the standard Forth word for allowing
+functions to be called recursively. A word is hidden from the
+compiler until the matching ';' is hit. This allows for previous
+definitions of words to be used when redefining new words, it
+also means that words cannot be called recursively unless the
+recurse word is used.
+
+RECURSE calls the word being defined, which means that it
+takes up space on the return stack. Words using recursion
+should be careful not to take up too much space on the return
+stack, and of course they should terminate after a finite
+number of steps.
+
+We can test "recurse" with this factorial function:
+
+  : factorial dup 2 < if drop 1 exit then dup 1- recurse * ; 
+
+)
+: recurse immediate
+	?comp
+	latest cell+ , ;
+
+: myself ( -- : myself is a synonym for recurse ) 
+	immediate postpone recurse ;
+
+( The "tail" function implements tail calls, which is just a
+jump to the beginning of the words definition, for example
+this word will never overflow the stack and will print "1"
+followed by a new line forever,
 
 	: forever 1 . cr tail ;
 
@@ -951,21 +1015,8 @@ hide tail
 	' branch ,
 	here - cell+ , ;
 
-: recurse immediate
-	( This function implements recursion, although this interpreter
-	allows calling a word directly. If used incorrectly this will
-	blow up the return stack.
-
-	We can test "recurse" with this factorial function:
-	  : factorial  dup 2 < if drop 1 exit then dup 1- recurse * ; )
-	?comp
-	latest cell+ , ;
-
 : factorial ( x -- x : compute the factorial of a number )
 	dup 2 < if drop 1 exit then dup 1- recurse * ;
-
-: myself ( -- : myself is a synonym for recurse ) 
-	immediate postpone recurse ;
 
 : gcd ( x1 x2 -- x : greatest common divisor )
 	dup if tuck mod tail then drop ;
@@ -974,8 +1025,10 @@ hide tail
 
 This function computes the integer square root of a number.
 
-@note this should be changed to the iterative algorithm so it takes up less
-space on the stack - not that is takes up a hideous amount as it is. )
+@note this should be changed to the iterative algorithm so
+it takes up less space on the stack - not that is takes up
+a hideous amount as it is. )
+
 : sqrt ( n -- u : integer square root )
 	dup 0<  if -11 throw then ( does not work for signed values )
 	dup 2 < if exit then      ( return 0 or 1 )
@@ -987,30 +1040,33 @@ space on the stack - not that is takes up a hideous amount as it is. )
 	if drop else nip then ;   ( return small or large candidate respectively )
 
 
-( ==================== Extended Word Set ====================== )
+( ==================== Extended Word Set ===================== )
 
-( ==================== For Each Loop ========================== )
+( ==================== For Each Loop ========================= )
+( The foreach word set allows the user to take action over an
+entire array without setting up loops and checking bounds. It
+behaves like the foreach loops that are popular in other
+languages.
 
-( The foreach word set allows the user to take action over an entire array
-without setting up loops and checking bounds. It behaves like the foreach loops
-that are popular in other languages. 
+The foreach word accepts a string and an execution token,
+for each character in the string it passes the current address
+of the character that it should operate on.
 
-The foreach word accepts a string and an execution token, for each character
-in the string it passes the current address of the character that it should
-operate on. 
+The complexity of the foreach loop is due to the requirements
+placed on it.  It cannot pollute the variable stack with
+values it needs to operate on, and it cannot store values in
+local variables as a foreach loop could be called from within
+the execution token it was passed. It therefore has to store
+all of it uses on the return stack for the duration of EXECUTE.
 
-The complexity of the foreach loop is due to the requirements placed on it.
-It cannot pollute the variable stack with values it needs to operate on, and
-it cannot store values in local variables as a foreach loop could be called
-from within the execution token it was passed. It therefore has to store all
-of it uses on the return stack for the duration of EXECUTE.
+At the moment it only acts on strings as "/string" only
+increments the address passed to the word foreach executes
+to the next character address. )
 
-At the moment it only acts on strings as "/string" only increments the address 
-passed to the word foreach executes to the next character address. )
+\ (FOREACH) leaves the point at which the foreach loop
+\ terminated on the stack, this allows programmer to determine
+\ if the loop terminated early or not, and at which point.
 
-\ (FOREACH) leaves the point at which the foreach loop terminated on the stack,
-\ this allows programmer to determine if the loop terminated early or not, and
-\ at which point.
 : (foreach) ( c-addr u xt -- c-addr u : execute xt for each cell in c-addr u 
 	returning number of items not processed )
 	begin 
@@ -1024,14 +1080,14 @@ passed to the word foreach executes to the next character address. )
 		rot           ( c-addr u xt )
 	again ;
 
-\ If we do not care about returning early from the foreach loop we
-\ can instead call FOREACH instead of (FOREACH), it simply drops the
-\ results (FOREACH) placed on the stack.
+\ If we do not care about returning early from the foreach
+\ loop we can instead call FOREACH instead of (FOREACH),
+\ it simply drops the results (FOREACH) placed on the stack.
 : foreach ( c-addr u xt -- : execute xt for each cell in c-addr u )
 	(foreach) 2drop ;
 
-\ RETURN is used for an early exit from within the execution token, it
-\ leaves the point at which it exited 
+\ RETURN is used for an early exit from within the execution
+\ token, it leaves the point at which it exited
 : return ( -- n : return early from within a foreach loop function, returning number of items left )
 	rdrop   ( pop off this words return value )
 	rdrop   ( pop off the calling words return value )
@@ -1040,34 +1096,36 @@ passed to the word foreach executes to the next character address. )
 	r>      ( save c-addr )
 	rdrop ; ( pop off the foreach return value )
 
-\ SKIP is an example of a word that uses the foreach loop mechanism. It
-\ takes a string and a character and returns a string that starts at
-\ the first occurrence of that character in that string - or until it
-\ reaches the end of the string.
-
-\ SKIP is defined in two steps, first there is a word, (SKIP), that
-\ exits the foreach loop if there is a match, if there is no match it
-\ does nothing. In either case it leaves the character to skip until
-\ on the stack.
-
+\ SKIP is an example of a word that uses the foreach loop
+\ mechanism. It  takes a string and a character and returns a
+\ string that starts at  the first occurrence of that character
+\ in that string - or until it  reaches the end of the string.
+ 
+\ SKIP is defined in two steps, first there is a word,
+\ (SKIP), that  exits the foreach loop if there is a match,
+\ if there is no match it  does nothing. In either case it
+\ leaves the character to skip until  on the stack.
+ 
 : (skip) ( char c-addr -- char : exit out of foreach loop if there is a match )
 	over swap c@ = if return then ;
 
-\ SKIP then setups up the foreach loop, the char argument will present on the
-\ stack when (SKIP) is executed, it must leave a copy on the stack whatever
-\ happens, this is then dropped at the end. (FOREACH) leaves the point at
-\ which the loop terminated on the stack, which is what we want.
+\ SKIP then setups up the foreach loop, the char argument
+\ will present on the stack when (SKIP) is executed, it must
+\ leave a copy on the stack whatever happens, this is then
+\ dropped at the end. (FOREACH) leaves the point at  which
+\ the loop terminated on the stack, which is what we want.
+
 : skip ( c-addr u char --  c-addr u : skip until char is found or until end of string )
 	-rot ['] (skip) (foreach) rot drop ;
 hide (skip)
 
-( ==================== For Each Loop ========================== )
+( ==================== For Each Loop ========================= )
 
-( ==================== Hiding Words =========================== )
-( The two functions hide{ and }hide allow lists of words to be
-hidden, instead of just hiding individual words. It stops the
-dictionary from being polluted with meaningless words in an
-easy way. )
+( ==================== Hiding Words ========================== )
+( The two functions hide{ and }hide allow lists of words to
+be hidden, instead of just hiding individual words. It stops
+the dictionary from being polluted with meaningless words in
+an easy way. )
 
 : }hide ( should only be matched with 'hide{' )
 	immediate -22 throw ;
@@ -1085,19 +1143,20 @@ easy way. )
 
 hide (hide)
 
-( ==================== Hiding Words =========================== )
+( ==================== Hiding Words ========================== )
 
-( The words described here on out get more complex and will require more
-of an explanation as to how they work. )
+( The words described here on out get more complex and will 
+require more of an explanation as to how they work. )
 
-( ========================== CREATE DOES> ==================================== )
+( ==================== Create Does> ========================== )
 
-( The following section defines a pair of words "create" and "does>" which
-are a powerful set of words that can be used to make words that can create
-other words. "create" has both run time and compile time behavior, whilst
-"does>" only works at compile time in conjunction with "create". These two
-words can be used to add constants, variables and arrays to the language,
-amongst other things.
+( The following section defines a pair of words "create"
+and "does>" which are a powerful set of words that can be
+used to make words that can create other words. "create"
+has both run time and compile time behavior, whilst "does>"
+only works at compile time in conjunction with "create". These
+two words can be used to add constants, variables and arrays
+to the language, amongst other things.
 
 A simple version of create is as follows
 
@@ -1105,10 +1164,10 @@ A simple version of create is as follows
 
 But this version is much more limited.
 
-"create"..."does>" is one of the constructs that makes Forth Forth, it
-allows the creation of words which can define new words in themselves,
-and thus allows us to extend the language easily.
-)
+"create"..."does>" is one of the constructs that makes Forth
+Forth, it allows the creation of words which can define new
+words in themselves, and thus allows us to extend the language
+easily. )
 
 : write-quote ( -- : A word that writes ' into the dictionary )
 	['] ' , ;   
@@ -1155,8 +1214,8 @@ and thus allows us to extend the language easily.
 
 hide{ command-mode-create write-quote write-compile, write-exit }hide
 
-( Now that we have create...does> we can use it to create arrays, variables
-and constants, as we mentioned before. )
+( Now that we have create...does> we can use it to create
+arrays, variables and constants, as we mentioned before. )
 
 : array ( u c" xxx" -- : create a named array of length u )
 	create allot does> + ;
@@ -1203,27 +1262,28 @@ and constants, as we mentioned before. )
 : enum ( x " ccc" -- x+1 : define a series of enumerations )
 	dup constant 1+ ; 
 
-( ========================== CREATE DOES> ==================================== )
+( ==================== Create Does> ========================== )
 
+( ==================== Do ... Loop =========================== )
 
+( The following section implements Forth's do...loop
+constructs, the word definitions are quite complex as it
+involves a lot of juggling of the return stack. Along with
+begin...until do loops are one of the main looping constructs.
 
-
-
-( ========================== DO...LOOP ======================================= )
-
-( The following section implements Forth's do...loop constructs, the
-word definitions are quite complex as it involves a lot of juggling of
-the return stack. Along with begin...until do loops are one of the
-main looping constructs. 
-
-Unlike begin...until do accepts two values a limit and a starting value,
-they are also words only to be used within a word definition, some Forths
-extend the semantics so looping constructs operate in command mode, this
-Forth does not do that as it complicates things unnecessarily.
+Unlike begin...until do accepts two values a limit and a
+starting value, they are also words only to be used within a
+word definition, some Forths extend the semantics so looping
+constructs operate in command mode, this Forth does not do
+that as it complicates things unnecessarily.
 
 Example:
-	
-	: example-1 10 1 do i . i 5 > if cr leave then loop 100 . cr ; 
+
+	: example-1 
+		10 1 do 
+			i . i 5 > if cr leave then loop
+		100 . cr ; 
+
 	example-1
 
 Prints:
@@ -1232,17 +1292,20 @@ Prints:
 In "example-1" we can see the following:
 
 1. A limit, 10, and a start value, 1, passed to "do".
-2. A word called 'i', which is the current count of the loop
-3. If the count is greater than 5, we call a word call 'leave', this
-word exits the current loop context as well as the current calling
-word.
-4. "100 . cr" is never called. This should be changed in future
-revision, but this version of leave exits the calling word as well.
+2. A word called 'i', which is the current count of the loop.
+3. If the count is greater than 5, we call a word call
+LEAVE, this word exits the current loop context as well as
+the current calling word.
+4. "100 . cr" is never called. This should be changed in
+future revision, but this version of leave exits the calling
+word as well.
 
-'i', 'j', and 'leave' *must* be used within a do...loop construct. 
+'i', 'j', and LEAVE *must* be used within a do...loop
+construct.
 
-In order to remedy point 4. loop should not use branch but instead 
-should use a value to return to which it pushes to the return stack )
+In order to remedy point 4. loop should not use branch but
+instead should use a value to return to which it pushes to
+the return stack )
 
 : (do)
 	swap    ( swap the limit and start )
@@ -1293,9 +1356,10 @@ should use a value to return to which it pushes to the return stack )
 		rdrop ( return to the caller's caller routine )
 	then ;
 
-\ @todo define '(i)', '(j)' and '(k)', then make their wrappers, 'i', 'j'
-\ and 'k' call ?comp then compile a pointer to the thing that implements them,
-\ likewise for leave, loop and +loop.
+\ @todo define '(i)', '(j)' and '(k)', then make their
+\ wrappers, 'i', 'j'  and 'k' call ?comp then compile a pointer
+\ to the thing that implements them,  likewise for leave,
+\ loop and +loop.
 : i ( -- i : Get current, or innermost, loop index in do...loop construct )
 	r> r>   ( pop off return address and i )
 	tuck    ( tuck i away )
@@ -1323,9 +1387,9 @@ testing and debugging:
 : reverse ( x1 ... xn n -- xn ... x1 : reverse n items on the stack )
 	0 do i roll loop ;
 
-( ========================== DO...LOOP ======================================= )
+( ==================== Do ... Loop =========================== )
 
-( ========================== STRING SUBSTITUTION ============================== )
+( ==================== String Substitution =================== )
 
 : (subst) ( char1 char2 c-addr )
 	3dup          ( char1 char2 c-addr char1 char2 c-addr )
@@ -1361,7 +1425,7 @@ hide (subst)
 
 hide{ c sub #sub (subst-all) }hide
 
-( ========================== STRING SUBSTITUTION ============================== )
+( ==================== String Substitution =================== )
 
 0 variable column-counter
 4 variable column-width
@@ -1537,9 +1601,10 @@ hide sprint
 
 hide type,
 
-(  This word really should be removed along with any usages of this word, it
-is not a very "Forth" like word, it accepts a pointer to an ASCIIZ string and
-prints it out, it also does not checking of the returned values from write-file )
+( This word really should be removed along with any usages
+of this word, it is not a very "Forth" like word, it accepts
+a pointer to an ASCIIZ string and prints it out, it also does
+not checking of the returned values from write-file )
 : print ( c-addr -- : print out a string to the standard output )
 	-1 over >r length r> swap stdout write-file 2drop ;
 
@@ -1570,16 +1635,16 @@ prints it out, it also does not checking of the returned values from write-file 
 	postpone "
 	' cr , ' (abort") , ;
 
-( ==================== CASE statements ======================== )
-( This simple set of words adds case statements to the interpreter,
-the implementation is not particularly efficient, but it works and
-is simple.
+( ==================== CASE statements ======================= )
+( This simple set of words adds case statements to the
+interpreter, the implementation is not particularly efficient,
+but it works and is simple.
 
-Below is an example of how to use the CASE statement, the following
-word, "example" will read in a character and switch to different
-statements depending on the character input. There are two cases,
-when 'a' and 'b' are input, and a default case which occurs when
-none of the statements match:
+Below is an example of how to use the CASE statement,
+the following word, "example" will read in a character and
+switch to different statements depending on the character
+input. There are two cases, when 'a' and 'b' are input, and
+a default case which occurs when none of the statements match:
 
 	: example
 		char 
@@ -1595,10 +1660,10 @@ none of the statements match:
 	example b \ prints "b was selected"
 	example c \ prints "unknown char: c"
 
-Other examples of how to use case statements can be found throughout 
-the code. 
+Other examples of how to use case statements can be found
+throughout the code.
 
-For a simpler case statement see, Volume 2, issue 3, page 48 
+For a simpler case statement see, Volume 2, issue 3, page 48
 of Forth Dimensions at http://www.forth.org/fd/contents.html )
 
 : case immediate
@@ -1619,7 +1684,7 @@ of Forth Dimensions at http://www.forth.org/fd/contents.html )
 : endcase
 	immediate ?comp ' drop , 1+ postpone then drop ;
 
-( ==================== CASE statements ======================== )
+( ==================== CASE statements ======================= )
 
 doer (banner)
 make (banner) space
@@ -1662,20 +1727,20 @@ hide{ (banner) banner }hide
 	loop
 	2drop ;
 
-( ==================== Conditional Compilation ================ )
+( ==================== Conditional Compilation =============== )
+( The words "[if]", "[else]" and "[then]" implement conditional
+compilation, they can be nested as well
 
-( The words "[if]", "[else]" and "[then]" implement conditional compilation,
-they can be nested as well
-
-See http://lars.nocrew.org/dpans/dpans15.htm for more information
+See http://lars.nocrew.org/dpans/dpans15.htm for more
+information
 
 A much simpler conditional compilation method is the following
 single word definition:
 
  : compile-line? 0= if [ find \\ , ] then ;
 
-Which will skip a line if a conditional is false, and compile it
-if true )
+Which will skip a line if a conditional is false, and compile
+it if true )
 
 ( These words really, really need refactoring, I could use the newly defined 
   "defer" to help out with this )
@@ -1726,9 +1791,12 @@ hide{
 	end-nest? nest? 
 }hide
 
-( ==================== Conditional Compilation ================ )
+( ==================== Conditional Compilation =============== )
 
-( ==================== Endian Words =========================== )
+( ==================== Endian Words ========================== )
+( This words are allow the user to determinate the endianess
+of the machine that is currently being used to execute libforth,
+they make heavy use of conditional compilation )
 
 size 2 = [if] 0x0123           `x ! [then]
 size 4 = [if] 0x01234567       `x ! [then]
@@ -1797,9 +1865,9 @@ size 8 = [if]
 	[then]
 [then]
 
-( ==================== Endian Words =========================== )
+( ==================== Endian Words ========================== )
 
-( ==================== Misc words ============================= )
+( ==================== Misc words ============================ )
 
 : (base) ( -- base : unmess up libforth's base variable )
 	base @ dup 0= if drop 10 then ;
@@ -1844,8 +1912,8 @@ size 8 = [if]
 		dup counted-column 1+ i ?.r i @ size .chars space
 	loop ;
 
-( @todo this function should make use of 'defer' and 'is', then different
-version of dump could be made that swapped out 'lister' )
+( @todo this function should make use of DEFER and IS, then different
+version of dump could be made that swapped out LISTER )
 : dump  ( addr u -- : dump out 'u' cells of memory starting from 'addr' )
 	1+ over + under lister drop 
 	cr ;
@@ -1914,7 +1982,7 @@ hide (forget)
 
 hide{ a b m }hide
 
-: ndrop ( drop n items )
+: ndrop ( u1...un n -- : drop n items )
 	?dup-if 0 do drop loop then ;
 
 : caesar ( c key -- o : encode a alphabetic character with a key using a generalization of the Caesar cipher )
@@ -1935,16 +2003,16 @@ hide{ a b m }hide
 \ s" abcdefghijklmnopqrstuvwxyz" rot13-type -> nopqrstuvwxyzabcdefghijklm
 \ s" hello" rot13-type -> uryyb
 
-( ==================== Misc words ============================= )
+( ==================== Misc words ============================ )
 
-( ==================== Pictured Numeric Output ================ )
-( Pictured numeric output is what Forths use to display numbers
-to the screen, this Forth has number output methods built into
-the Forth kernel and mostly uses them instead, but the mechanism
-is still useful so it has been added.
+( ==================== Pictured Numeric Output =============== )
+( Pictured numeric output is what Forths use to display
+numbers to the screen, this Forth has number output methods
+built into the Forth kernel and mostly uses them instead,
+but the mechanism is still useful so it has been added.
 
-@todo Pictured number output should act on a double cell number
-not a single cell number )
+@todo Pictured number output should act on a double cell
+number not a single cell number )
 
 0 variable hld
 
@@ -1995,13 +2063,13 @@ make characters spaces
 
 hide{ overflow u.rc characters }hide
 
-( ==================== Pictured Numeric Output ================ )
+( ==================== Pictured Numeric Output =============== )
 
 ( ==================== Numeric Input ========================= )
-( The Forth executable can handle numeric input and does not need
-the routines defined here, however the user might want to write
-routines that use >NUMBER. >NUMBER is a generic word, but it
-is a bit difficult to use on its own. )
+( The Forth executable can handle numeric input and does not
+need the routines defined here, however the user might want
+to write routines that use >NUMBER. >NUMBER is a generic word,
+but it is a bit difficult to use on its own. )
 
 : map ( char -- n|-1 : convert character in 0-9 a-z range to number )
 	dup lowercase? if [char] a - 10 + exit then
@@ -2030,7 +2098,7 @@ hide{ map }hide
 
 ( ==================== Numeric Input ========================= )
 
-( ==================== ANSI Escape Codes ====================== )
+( ==================== ANSI Escape Codes ===================== )
 ( Terminal colorization module, via ANSI Escape Codes
  
 see: https://en.wikipedia.org/wiki/ANSI_escape_code
@@ -2087,7 +2155,7 @@ false variable colorize
 	CSI ." 0m" ;
 
 hide{ CSI 10u. }hide
-( ==================== ANSI Escape Codes ====================== )
+( ==================== ANSI Escape Codes ===================== )
 
 ( ==================== Unit test framework =================== )
 
@@ -2176,7 +2244,7 @@ hide{ CSI 10u. }hide
 	key drop       ( drop next character, which is a space )
 	estring [char] } accepter #estring ! ( read in string to test )
 	test display   ( print which string we are testing )
-	test evaluate ( perform test )
+	test evaluate  ( perform test )
 	evaluate?      ( evaluate successfully? )
 	depth?         ( correct depth )
 	equal?         ( results equal to expected values? )
@@ -2189,6 +2257,8 @@ T{ -> }T
 T{ 1 -> 1 }T
 T{ 1 2 -> 1 2 }T
 T{ : c 1 2 ; c -> 1 2 }T
+( @bug ';' smudges the previous word, but :noname does
+not. )
 T{ :noname 2 ; :noname 3 + ; compose execute -> 5 }T
 
 hide{ 
@@ -2201,16 +2271,17 @@ hide{
 ( ==================== Unit test framework =================== )
 
 
-( ==================== Random Numbers ========================= )
-
-( 
+( ==================== Pseudo Random Numbers ================= )
+( This section implements a Pseudo Random Number generator, it
+uses the xor-shift algorithm to do so. 
 See:
-uses xorshift
 https://en.wikipedia.org/wiki/Xorshift
 http://excamera.com/sphinx/article-xorshift.html
+http://xoroshiro.di.unimi.it/
 http://www.arklyffe.com/main/2010/08/29/xorshift-pseudorandom-number-generator/
-these constants have be collected from the web 
-)
+
+The constants used have been collected from various places
+on the web and are specific to the size of a cell. )
 
 size 2 = [if] 13 constant a 9  constant b 7  constant c [then]
 size 4 = [if] 13 constant a 17 constant b 5  constant c [then]
@@ -2230,12 +2301,12 @@ size 8 = [if] 12 constant a 25 constant b 27 constant c [then]
 
 hide{ a b c seed }hide
 
-( ==================== Random Numbers ========================= )
+( ==================== Random Numbers ======================== )
 
-( ==================== Prime Numbers ========================== )
-( From original "third" code from the IOCCC at 
-http://www.ioccc.org/1992/buzzard.2.design, the module works out
-and prints prime numbers. )
+( ==================== Prime Numbers ========================= )
+( From original "third" code from the IOCCC at
+http://www.ioccc.org/1992/buzzard.2.design, the module works
+out and prints prime numbers. )
 
 : prime? ( u -- u | 0 : return number if it is prime, zero otherwise )
 	dup 1 = if 1- exit then
@@ -2267,12 +2338,14 @@ and prints prime numbers. )
 	cr ;
 
 hide{ counter }hide
-( ==================== Prime Numbers ========================== )
+( ==================== Prime Numbers ========================= )
 
-( ==================== Debugging info ========================= )
+( ==================== Debugging info ======================== )
+( This section implements various debugging utilities that the
+programmer can use to inspect the environment and debug Forth
+words. )
 
-( string handling should really be done with PARSE, and CMOVE )
-
+( String handling should really be done with PARSE, and CMOVE )
 : sh ( cnl -- ior : execute a line as a system command )
 	nl word count system ;
 
@@ -2289,23 +2362,29 @@ hide{ .s }hide
 : name ( PWD -- c-addr : given a pointer to the PWD field of a word get a pointer to the name of the word )
 	dup 1+ @ 256/ word-mask and lsb - chars> ;
 
-( This function prints out all of the defined words, excluding hidden words.
-An understanding of the layout of a Forth word helps here. The dictionary
-contains a linked list of words, each forth word has a pointer to the previous
-word until the first word. The layout of a Forth word looks like this:
+( This function prints out all of the defined words, excluding
+hidden words.  An understanding of the layout of a Forth word
+helps here. The dictionary contains a linked list of words,
+each forth word has a pointer to the previous word until the
+first word. The layout of a Forth word looks like this:
 
-NAME:  Forth Word - A variable length ASCII NUL terminated string
-PWD:   Previous Word Pointer, points to the previous word
-CODE:  Flags, code word and offset from previous word pointer to start of Forth word string
-DATA:  The body of the forth word definition, not interested in this.
+NAME:  Forth Word - A variable length ASCII NUL terminated
+       string.
+PWD:   Previous Word Pointer, points to the previous
+       word.
+CODE:  Flags, code word and offset from previous word
+       pointer to start of Forth word string.
+DATA:  The body of the forth word definition, not interested 
+       in this.
 
-There is a register which stores the latest defined word which can be
-accessed with the code "pwd @". In order to print out a word we need to
-access a words CODE field, the offset to the NAME is stored here in bits
-8 to 14 and the offset is calculated from the PWD field.
+There is a register which stores the latest defined word which
+can be accessed with the code "pwd @". In order to print out
+a word we need to access a words CODE field, the offset to
+the NAME is stored here in bits 8 to 14 and the offset is
+calculated from the PWD field.
 
-"print" expects a character address, so we need to multiply any calculated
-address by the word size in bytes. )
+"print" expects a character address, so we need to multiply
+any calculated address by the word size in bytes. )
 
 : words.immediate ( bool -- : emit or mark a word being printed as being immediate )
 	not if dark red foreground color then ;
@@ -2444,14 +2523,16 @@ hide debug-prompt
 
 hide{ code>pwd }hide
 
-( these words push the execution tokens for various special cases for decompilation )
+( these words push the execution tokens for various special
+cases for decompilation )
 : get-branch  [ find branch  ] literal ;
 : get-?branch [ find ?branch ] literal ;
 : get-original-exit [ find _exit ] literal ;
 : get-quote   [ find ' ] literal ;
 
-( @todo replace 2- nos1+ nos1+ with appropriate word, like the string word 
-that increments a string by an amount, but that operates on CELLS )
+( @todo replace 2- nos1+ nos1+ with appropriate word, like
+the string word that increments a string by an amount, but
+that operates on CELLS )
 : branch-increment ( addr branch -- increment : calculate decompile increment for "branch" )
 	1+ dup negative? 
 	if 
@@ -2460,9 +2541,9 @@ that increments a string by an amount, but that operates on CELLS )
 		2dup 2- nos1+ nos1+ dump 
 	then ;
 
-( these words take a code field to a primitive they implement, decompile it
-and any data belonging to that operation, and push a number to increment the
-decompilers code stream pointer by )
+( these words take a code field to a primitive they implement,
+decompile it and any data belonging to that operation, and push
+a number to increment the decompilers code stream pointer by )
 
 : decompile-literal ( code -- increment )
 	1+ ? " literal" 2 ;
@@ -2482,26 +2563,34 @@ decompilers code stream pointer by )
 : decompile-exit ( code -- 0 )
 	" _exit" cr " End of word:   " .  0 ;
 
-( The decompile word expects a pointer to the code field of a word, it
-decompiles a words code field, it needs a lot of work however.
-There are several complications to implementing this decompile
-function.
+( The decompile word expects a pointer to the code field of
+a word, it decompiles a words code field, it needs a lot of
+work however.  There are several complications to implementing
+this decompile function.
 
-	'        The next cell should be pushed
-	:noname  This has a marker before its code field of -1 which
-		 cannot occur normally, this is handled in word-printer
-	branch   branches are used to skip over data, but also for
-		 some branch constructs, any data in between can only
-		 be printed out generally speaking
-	exit     There are two definitions of exit, the one used in
-		 ';' and the one everything else uses, this is used
-		 to determine the actual end of the word
-	literals Literals can be distinguished by their low value,
-		 which cannot possibly be a word with a name, the
-		 next field is the actual literal
+	'	 The next cell should be pushed
 
-Of special difficult is processing 'if' 'else' 'then' statements,
-this will require keeping track of '?branch'.
+	:noname  This has a marker before its code field of
+	         -1 which cannot occur normally, this is 
+	         handled in word-printer
+
+	branch	 branches are used to skip over data, but
+	         also for some branch constructs, any data 
+	         in between can only be printed out 
+	         generally speaking
+
+	exit	 There are two definitions of exit, the one
+	         used in ';' and the one everything else uses, 
+	         this is used to determine the actual end 
+	         of the word
+
+	literals Literals can be distinguished by their
+	         low value, which cannot possibly be a word 
+	         with a name, the next field is the 
+	         actual literal
+
+Of special difficult is processing IF, THEN and ELSE
+statements, this will require keeping track of '?branch'.
 
 Also of note, a number greater than "here" must be data )
 
@@ -2544,6 +2633,7 @@ hide{
 
 ( @todo This does not work for all words, so needs fixing. 
  Specifically: 
+
 	2variable
 	2constant
 	table
@@ -2552,7 +2642,8 @@ hide{
 	array 
 Which are all complex CREATE words
 
-A good way to test decompilation is with the following Unix pipe: 
+A good way to test decompilation is with the following
+Unix pipe:
 
 	./forth -f forth.fth -e words 
 		| sed 's/ / see /g' 
@@ -2578,9 +2669,9 @@ A good way to test decompilation is with the following Unix pipe:
 		then
 	then cr ;
 
-( @todo This has a bug, if any data within a word happens to match
-the address of _exit word.end calculates the wrong address, this
-needs to mirror the DECOMPILE word )
+( @todo This has a bug, if any data within a word happens
+to match the address of _exit word.end calculates the wrong
+address, this needs to mirror the DECOMPILE word )
 : word.end ( addr -- addr : find the end of a word )
 	begin
 		dup
@@ -2615,21 +2706,22 @@ hide{
 	(inline) word.end
 }hide
 
-( These help messages could be moved to blocks, the blocks could then
-be loaded from disk and printed instead of defining the help here,
-this would allow much larger help )
+( These help messages could be moved to blocks, the blocks
+could then be loaded from disk and printed instead of defining
+the help here, this would allow much larger help )
 
 : help ( -- : print out a short help message )
 	page
 	key drop
-" Welcome to Forth, an imperative stack based language. It is both a low
-level and a high level language, with a very small memory footprint. Most
-of Forth is defined as a combination of various primitives.
+" Welcome to Forth, an imperative stack based language. It is
+both a low level and a high level language, with a very small
+memory footprint. Most of Forth is defined as a combination
+of various primitives.
 
-A short description of the available function (or Forth words) follows,
-words marked (1) are immediate and cannot be used in command mode, words
-marked with (2) define new words. Words marked with (3) have both command
-and compile functionality.
+A short description of the available function (or Forth words)
+follows, words marked (1) are immediate and cannot be used in
+command mode, words marked with (2) define new words. Words
+marked with (3) have both command and compile functionality.
 
 "
 more " Some of the built in words that accessible are:
@@ -2673,8 +2765,8 @@ more "
 	rename-file       rename a file on disk
  "
 
-more " All of the other words in the interpreter are built from these
-primitive words. A few examples:
+more " All of the other words in the interpreter are built
+from these primitive words. A few examples:
 
 (1)	if...else...then  FORTH branching construct
 (1)	begin...until     loop until top of stack is non zero
@@ -2706,8 +2798,8 @@ more " Some more advanced words:
 	::                compile ':' into the dictionary
 
 " more "
-For more information either consult the manual pages forth(1) and libforth(1)
-or consult the following sources:
+For more information either consult the manual pages forth(1)
+and libforth(1) or consult the following sources:
 
 	https://github.com/howerj/libforth
 	http://work.anapnea.net/html/html/projects.html
@@ -2726,18 +2818,45 @@ For resources on Forth:
 " cr
 ;
 
-( ==================== Debugging info ========================= )
+( ==================== Debugging info ======================== )
 
-( ==================== Files ================================== )
+( ==================== Files ================================= )
+( These words implement more of the standard file access words
+in terms of the ones provided by the virtual machine. These
+words are not the most easy to use words, although the ones
+defined here and the ones that are part of the interpreter are
+the standard ones. 
 
-( @todo implement the other file access methods in terms of the
-  built in ones [see http://forth.sourceforge.net/std/dpans/dpans11.htm]
-  @todo read-line and write-line need their flag and ior setting correctly
+Some thoughts:
+
+I believe extensions to this word set, once I have figured
+out the semantics, should be made to make them easier to use,
+ones which automatically clean up after failure and call throw
+would be more useful [and safer] when dealing with a single
+input or output stream. The most common action after calling
+one of the file access words is to call throw any way.
+
+For example, a word like:
+
+	: #write-file \ c-addr u fileid -- fileid u 
+		dup >r 
+		write-file dup if r> close-file throw throw then
+		r> swap ;
+
+Would be easier to deal with, it preserves the file identifier
+and throws if there is any problem. It would be a bit more
+difficult to use when there are two files open at a time.
+
+@todo implement the other file access methods in terms of the
+built in ones.
+@todo read-line and write-line need their flag and ior setting
+correctly
 
 	FILE-SIZE    [ use file-positions ]
 
-  Also of note:	
-  * Source ID needs extending. )
+Also of note, Source ID needs extending.
+
+See: [http://forth.sourceforge.net/std/dpans/dpans11.htm]  )
 
 : read-char ( c-addr fileid -- ior : read a char )
 	1 swap read-file 0<> swap 1 <> or ;
@@ -2795,12 +2914,12 @@ hide{ x }hide
 	( Do nothing, all file access methods are binary )
 	;
 
-( ==================== Files ================================== )
+( ==================== Files ================================= )
 
-( ==================== Matcher ================================ )
-( The following section implements a very simple regular expression
-engine, which expects an ASCIIZ Forth string. It is translated from C
-code and performs an identical function.
+( ==================== Matcher =============================== )
+( The following section implements a very simple regular
+expression engine, which expects an ASCIIZ Forth string. It
+is translated from C code and performs an identical function.
 
 The regular expression language is as follows:
 
@@ -2808,21 +2927,21 @@ The regular expression language is as follows:
 	.	match any character
 	*	match any characters
 
-The "*" operator performs the same function as ".*" does in most
-other regular expression engines. Most other regular expression engines
-also do not anchor their selections to the beginning and the end of
-the string to match, instead using the operators '^' and '$' to do
-so, to emulate this behavior '*' can be added as either a suffix,
-or a prefix, or both, to the matching expression.
+The "*" operator performs the same function as ".*" does in
+most other regular expression engines. Most other regular
+expression engines also do not anchor their selections to the
+beginning and the end of the string to match, instead using
+the operators '^' and '$' to do so, to emulate this behavior
+'*' can be added as either a suffix, or a prefix, or both,
+to the matching expression.
 
 As an example "*, World!" matches both "Hello, World!" and
 "Good bye, cruel World!". "Hello, ...." matches "Hello, Bill"
 and "Hello, Fred" but not "Hello, Tim" as there are two few
 characters in the last string.
 
-@todo make a matcher that expects a Forth string, which do not
-have to be NUL terminated
-)
+@todo make a matcher that expects a Forth string, which do
+not have to be NUL terminated )
 
 \ Translated from http://c-faq.com/lib/regex.html
 \ int match(char *pat, char *str)
@@ -2885,15 +3004,16 @@ hide{
 	advance-string advance-regex matcher ++ 
 }hide
 
-( ==================== Matcher ================================ )
+( ==================== Matcher =============================== )
 
 
-( ==================== Cons Cells ============================= )
-( From http://sametwice.com/cons.fs, this could be improved if the optional
-memory allocation words were added to the interpreter. This provides
-a simple "cons cell" data structure. There is currently no way to
-free allocated cells. I do not think this is particularly useful,
-but it is interesting. )
+( ==================== Cons Cells ============================ )
+( From http://sametwice.com/cons.fs, this could be improved
+if the optional memory allocation words were added to
+the interpreter. This provides a simple "cons cell" data
+structure. There is currently no way to free allocated
+cells. I do not think this is particularly useful, but it is
+interesting. )
 
 : car! ( value cons-addr -- : store a value in the car cell of a cons cell ) 
 	! ;
@@ -2912,16 +3032,17 @@ but it is interesting. )
 
 : cons0 0 0 cons ;
 
-( ==================== Cons Cells ============================= )
+( ==================== Cons Cells ============================ )
 
-( ==================== License ================================ )
+( ==================== License =============================== )
 ( The license has been chosen specifically to make this library
-and any associated programs easy to integrate into arbitrary products
-without any hassle. For the main libforth program the LGPL license
-would have been also suitable [although it is MIT licensed as well],
-but to keep confusion down the same license, the MIT license, is
-used in both the Forth code and C code. This has not been done for
-any ideological reasons, and I am not that bothered about licenses. )
+and any associated programs easy to integrate into arbitrary
+products without any hassle. For the main libforth program
+the LGPL license would have been also suitable [although it
+is MIT licensed as well], but to keep confusion down the same
+license, the MIT license, is used in both the Forth code and
+C code. This has not been done for any ideological reasons,
+and I am not that bothered about licenses. )
 
 : license ( -- : print out license information )
 " 
@@ -2929,28 +3050,31 @@ The MIT License (MIT)
 
 Copyright (c) 2016, 2017 Richard James Howe
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the 'Software'),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
+Permission is hereby granted, free of charge, to any person
+obtaining a copy of this software and associated documentation
+files (the 'Software'), to deal in the Software without
+restriction, including without limitation the rights to use,
+copy, modify, merge, publish, distribute, sublicense, and/or
+sell copies of the Software, and to permit persons to whom
+the Software is furnished to do so, subject to the following
+conditions:
 
-The above copyright notice and this permission notice shall be included
-in all copies or substantial portions of the Software.
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
-THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
-OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-OTHER DEALINGS IN THE SOFTWARE. 
+THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY
+KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE
+AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+OR OTHER DEALINGS IN THE SOFTWARE.
 
 " 
 ;
 
-( ==================== License ================================ )
+( ==================== License =============================== )
 
 ( ==================== Core utilities ======================== )
 ( Read the header of a core file and process it, printing the
@@ -3052,37 +3176,41 @@ read-or-abort size?
 
 ( ==================== RLE =================================== )
 
-( These set of words implement Run Length Compression, which can be used for
-saving space when compressing the core files generated by Forth programs, which
-contain mostly runs of NUL characters. 
+( These set of words implement Run Length Compression, which
+can be used for saving space when compressing the core files
+generated by Forth programs, which contain mostly runs of
+NUL characters.
 
-The format of the encoded data is quite simple, there is a command byte
-followed by data. The command byte encodes only two commands; encode a run of
-literal data and repeat the next character. 
+The format of the encoded data is quite simple, there is a
+command byte followed by data. The command byte encodes only
+two commands; encode a run of literal data and repeat the
+next character.
 
-If the command byte is greater than X the command is a run of characters, 
-X is then subtracted from the command byte and this is the number of 
-characters that is to be copied verbatim when decompressing.
+If the command byte is greater than X the command is a run
+of characters, X is then subtracted from the command byte
+and this is the number of characters that is to be copied
+verbatim when decompressing.
 
-If the command byte is less than or equal to X then this number, plus one, is 
-used to repeat the next data byte in the input stream.
+If the command byte is less than or equal to X then this
+number, plus one, is used to repeat the next data byte in
+the input stream.
 
-X is 128 for this application, but could be adjusted for better compression
-depending on what the data looks like. 
+X is 128 for this application, but could be adjusted for
+better compression depending on what the data looks like.
 
 Example:
-	
+
 	2 'a' 130 'b' 'c' 3 'd'
 
 Becomes:
 
-	aabcddd 
+	aabcddd
 
 Example usage:
 
 	: extract
-		c" forth.core" w/o open-file throw
-		c" forth.core.rle" r/o open-file throw
+		c" forth.core" w/o open-file throw c"
+		forth.core.rle" r/o open-file throw
 		decompress ;
 	extract
 
@@ -3123,7 +3251,7 @@ Example usage:
 	swap
 	redirect
 	begin dup ' command catch until ( process commands until input exhausted )
-	2drop ( drop twice because catch will restore stack before 'command' )
+	2drop ( drop twice because catch will restore stack before COMMAND )
 	restore ; ( restore input stream )
 
 hide{ literals repeated next.char out run-length command }hide
@@ -3131,9 +3259,22 @@ hide{ literals repeated next.char out run-length command }hide
 ( ==================== RLE =================================== )
 
 ( ==================== Generate C Core file ================== )
-( The word core2c reads in a core file and turns it into a C file which 
-can then be compiled into the forth interpreter in a bootstrapping like
-process.
+( The word core2c reads in a core file and turns it into a
+C file which can then be compiled into the forth interpreter
+in a bootstrapping like process. The process is described 
+elsewhere as well, but it goes like this.
+
+1. We want to generate an executable program that contains the
+core Forth interpreter, written in C, and the contents of this
+file in compiled form. However, in order to compile this code 
+we need a Forth interpreter to do so. This is the problem.
+2. To solve the problem we first make a program which is capable
+of compiling "forth.fth".
+3. We then generate a core file from this.
+4. We then convert the generated core file to C code.
+5. We recompile the original program to includes this core
+file, and which runs the core file at start up.
+6. We run the new executable.
 
 Usage:
  c" forth.core" c" core.gen.c" core2c )
@@ -3172,18 +3313,29 @@ hide{ wbyte hexify count quote advance }hide
  
 ( ==================== Generate C Core file ================== )
 
+( ==================== Word Count Program ==================== )
+
+( @todo implement FILE-SIZE in terms of this program )
+( @todo extend wc to include line count and word count )
 : wc ( c-addr u -- u : count the bytes in a file )
 	r/o open-file throw
 	0 swap
-	begin dup getchar nip 0= while nos1+ repeat close-file throw ;
+	begin 
+		dup getchar nip 0= 
+	while 
+		nos1+ 
+	repeat 
+	close-file throw ;
+
+( ==================== Word Count Program ==================== )
 
 ( ==================== Save Core file ======================== )
-
-( The following functionality allows the user to save the core file
-from within the running interpreter. The Forth core files have a very simple
-format which means the words for doing this do not have to be too long, a header
-has to emitted with a few calculated values and then the contents of the
-Forths memory after this )
+( The following functionality allows the user to save the
+core file from within the running interpreter. The Forth
+core files have a very simple format which means the words
+for doing this do not have to be too long, a header has to
+emitted with a few calculated values and then the contents
+of the Forths memory after this )
 
 ( This write the header out to the current output device, this
 will be redirected to a file )
@@ -3212,25 +3364,28 @@ will be redirected to a file )
 
 ( The following code illustrates an example of setting up a
 Forth core file to execute a word when the core file is loaded.
-In the example the word "hello-world" will be executed, which will
-also quit the interpreter:
+In the example the word "hello-world" will be executed,
+which will also quit the interpreter:
 
-	\ Only works for immediate words for now, we define
-	\ the word we wish to be executed when the forth core
-	\ is loaded
+This only works for immediate words for now, we define 
+the word we wish to be executed when the forth core
+is loaded:
+
 	: hello-world immediate
 		" Hello, World!" cr bye ;
 
-	\ The following sets the starting word to our newly
-	\ defined word:
+The following sets the starting word to our newly
+defined word:
+
 	find hello-world cfa start!
 
 	\ Now we can save the core file out:
 	s" forth.core" save-core 
 
-This can be used, in conjunction with aspects of the build system,
-to produce a standalone executable that will run only a single Forth
-word. )
+This can be used, in conjunction with aspects of the build
+system, to produce a standalone executable that will run only
+a single Forth word. This is known as creating a 'turn-key'
+application. )
 
 hide{ redirect restore data encore header }hide
 
@@ -3289,13 +3444,14 @@ print out the correct address
 ( ==================== Hex dump ============================== )
 
 ( ==================== Date ================================== )
-( This word set implements a words for date processing, so you
-can print out nicely formatted date strings. It implements the
-standard Forth word time&date and two words which interact
+( This word set implements a words for date processing, so
+you can print out nicely formatted date strings. It implements
+the standard Forth word time&date and two words which interact
 with the libforth DATE instruction, which pushes the current
-time information onto the stack. 
+time information onto the stack.
 
-Rather annoyingly months are start from 1 but weekdays from 0. )
+Rather annoyingly months are start from 1 but weekdays from
+0. )
 
 : >month ( month -- c-addr u : convert month to month string )
 	case
@@ -3383,9 +3539,9 @@ hide{ >weekday .day >day >month colon >gmt 0? }hide
 
 ( ==================== CRC =================================== )
 
-( @todo implement all common CRC algorithms, but only if
-the word size allows it [ie. 32 bit CRCs on a 32 or 64 bit
-machine, 64 bit CRCs on a 64 bit machine] )
+( @todo implement all common CRC algorithms, but only if the
+word size allows it [ie. 32 bit CRCs on a 32 or 64 bit machine,
+64 bit CRCs on a 64 bit machine] )
 
 ( Make a word to limit arithmetic to a 16-bit value )
 size 2 = [if] 
@@ -3402,7 +3558,7 @@ size 2 = [if]
 	dup  12 lshift limit xor   ( crc x )
 	swap 8  lshift limit xor ; ( crc )
 
-( see http://stackoverflow.com/questions/10564491/function-to-calculate-a-crc16-checksum
+( See http://stackoverflow.com/questions/10564491
   and https://www.lammertbies.nl/comm/info/crc-calculation.html )
 : crc16-ccitt ( c-addr u -- u )
 	0xffff -rot
@@ -3412,37 +3568,35 @@ hide{ limit ccitt }hide
 ( ==================== CRC =================================== )
 
 ( ==================== Rational Data Type ==================== )
-( This word set allows the manipulation of a rational data type,
-which are basically fractions. This allows numbers like 1/3 to
-be represented without any loss of precision. Conversion to and
-from the data type to an integer type is trivial, although 
-information can be lost during the conversion.
+( This word set allows the manipulation of a rational data
+type, which are basically fractions. This allows numbers like
+1/3 to be represented without any loss of precision. Conversion
+to and from the data type to an integer type is trivial,
+although information can be lost during the conversion.
 
-To convert to a rational, use 'dup', to convert from a rational,
-use '/'. 
+To convert to a rational, use DUP, to convert from a
+rational, use '/'.
 
-The denominator is the first number on the stack, the numerator the
-second number. Fractions are simplified after any rational operation,
-and all rational words can accept unsimplified arguments. For example
-the fraction 1/3 can be represented as 6/18, they are equivalent, so
-the rational equality operator "=rat" can accept both and returns
-true.
+The denominator is the first number on the stack, the numerator
+the second number. Fractions are simplified after any rational
+operation, and all rational words can accept unsimplified
+arguments. For example the fraction 1/3 can be represented as
+6/18, they are equivalent, so the rational equality operator
+"=rat" can accept both and returns true.
 
 	T{ 1 3 6 18 =rat -> 1 }T
 
-See: https://en.wikipedia.org/wiki/Rational_data_type 
-For more information.
+See: https://en.wikipedia.org/wiki/Rational_data_type For
+more information.
 
-This set of words use two cells to represent a fraction, however
-a single cell could be used, with the numerator and the denominator
-stored in upper and lower half of a single cell. 
+This set of words use two cells to represent a fraction,
+however a single cell could be used, with the numerator and the
+denominator stored in upper and lower half of a single cell.
 
 @todo add saturating Q numbers to the interpreter, as well as
 arithmetic word for acting on double cells [d+, d-, etcetera]
-https://en.wikipedia.org/wiki/Q_%28number_format%29, this can
-be used in lieu of floating point numbers.
-
-)
+https://en.wikipedia.org/wiki/Q_%28number_format%29, this
+can be used in lieu of floating point numbers. )
 
 : simplify ( a b -- a/gcd{a,b} b/gcd{a/b} : simplify a rational )
   2dup
@@ -3524,26 +3678,30 @@ hide{ 0>number saved failed }hide
 ( ==================== Rational Data Type ==================== )
 
 ( ==================== Block Layer =========================== )
-( This is the block layer, it assumes that the file access words
-exists and use them, it would have to be rewritten for an embedded
-device that used EEPROM or something similar. Currently it does
-not interact well with the current input methods used by the
-interpreter which will need changing. 
+( This is the block layer, it assumes that the file access
+words exists and use them, it would have to be rewritten
+for an embedded device that used EEPROM or something
+similar. Currently it does not interact well with the current
+input methods used by the interpreter which will need changing.
 
-The block layer is the traditional way Forths implement a system
-to interact with mass storage, one which imposes little on the
-underlying system only requiring that blocks 1024 bytes can be loaded
-and saved to it [which make it suitable for microcomputers that lack
-a file system or an embedded device]. 
+The block layer is the traditional way Forths implement a
+system to interact with mass storage, one which imposes little
+on the underlying system only requiring that blocks 1024 bytes
+can be loaded and saved to it [which make it suitable for
+microcomputers that lack a file system or an embedded device].
 
-The block layer is used less than it once as a lot more Forths are
-hosted under a guest operating system so have access to methods
-for reading and writing to files through it. 
+The block layer is used less than it once as a lot more Forths
+are hosted under a guest operating system so have access to
+methods for reading and writing to files through it.
 
-Each block number accepted by 'block' is backed by a file [or created
-if it does not exist]. The name of the file is the block number with
-".blk" appended to it. )
+Each block number accepted by BLOCK is backed by a file
+[or created if it does not exist]. The name of the file is
+the block number with ".blk" appended to it. 
 
+Another way of storing the blocks could be made, which is to
+store the blocks in a single file and seek to the correct 
+place within it. This might be implemented in the future,
+or offered as an alternative. )
 
 0 variable dirty
 b/buf string buf  ( block buffer, only one exists )
@@ -3563,8 +3721,8 @@ b/buf string buf  ( block buffer, only one exists )
 	c" .blk" <# holds #s #> rot drop ;
 
 ( @warning this will not work if we do not have permission,
-or in various other cases where we cannot open the file, for
-whatever reason )
+or in various other cases where we cannot open the file,
+for whatever reason )
 : file-exists ( c-addr u : does a file exist? )
 	r/o open-file if drop 0 else close-file throw 1 then ;
 
@@ -3599,17 +3757,19 @@ only write or read 1024 and not a byte more )
 	save-buffers
 	empty-buffers ;
 
-( Block is a complex word that does a lot, although it has a simple
-interface. It does the following given a block number:
+( Block is a complex word that does a lot, although it has
+a simple interface. It does the following given a block number:
 
-1. Checks the provided block buffer number to make sure it is valid
-2. If the block is already loaded from the disk, then return the
-address of the block buffer it is loaded into.
-3. If not, it checks to see if the currently loaded block buffer is
-dirty, if it is then it flushes the buffer to disk.
-4. If the block buffer does not exists on disk then it creates it.
-5. It then stores the block number in blk and returns an address to
-the block buffer. )
+1. Checks the provided block buffer number to make sure it
+is valid.
+2. If the block is already loaded from the disk, then return
+the address of the block buffer it is loaded into.
+3. If not, it checks to see if the currently loaded block
+buffer is dirty, if it is then it flushes the buffer to disk.
+4. If the block buffer does not exists on disk then it
+creates it.
+5. It then stores the block number in blk and returns an
+address to the block buffer. )
 : block ( n -- c-addr : load a block )
 	dup invalid? 
 	dup blk @ = if drop buf drop exit then
@@ -3659,6 +3819,20 @@ hide{
 ( ==================== Block Layer =========================== )
 
 ( ==================== List ================================== )
+( The list word set allows the viewing of Forth blocks,
+this version of list can create two Formats, a simple mode
+where it just spits out the block with a carriage return
+after each line and a more fancy version which also prints
+out line numbers and draws a box around the data. LIST is
+not aware of any formatting and characters that might be
+present in the data, or none printable characters.
+
+A very primitive version of list can be defined as follows:
+
+	: list block b/buf type ;
+
+)
+
 1 variable fancy-list
 0 variable scr
 64 constant c/l ( characters per line )
@@ -3699,21 +3873,21 @@ hide{
 	1+ swap do i list more loop ;
 
 hide{ 
-	buf line line.number list.type fancy-list 
+	buf line line.number list.type 
 	(base) list.box list.border list.end pipe 
 }hide
 
 ( ==================== List ================================== )
 
 ( ==================== Signal Handling ======================= )
-( Signal handling at the moment is quite primitive. When a signal
-occurs it has to be explicitly tested for by the programmer, this
-could be improved on quite a bit. One way of doing this would be
-to check for signals in the virtual machine and cause a THROW
-from within it. )
+( Signal handling at the moment is quite primitive. When
+a signal occurs it has to be explicitly tested for by the
+programmer, this could be improved on quite a bit. One way
+of doing this would be to check for signals in the virtual
+machine and cause a THROW from within it. )
 
-( signals are biased to fall outside the range of the error numbers
-defined in the ANS Forth standard. )
+( signals are biased to fall outside the range of the error
+numbers defined in the ANS Forth standard. )
 -512 constant signal-bias 
 
 : signal ( -- signal/0 : push the results of the signal register ) 
@@ -3722,10 +3896,10 @@ defined in the ANS Forth standard. )
 
 ( ==================== Signal Handling ======================= )
 
-( Looking at most Forths dictionary with "words" command they tend
-to have a lot of words that do not mean anything but to the implementers
-of that specific Forth, here we clean up as many non standard words as
-possible. )
+( Looking at most Forths dictionary with "words" command they
+tend to have a lot of words that do not mean anything but to
+the implementers of that specific Forth, here we clean up as
+many non standard words as possible. )
 hide{ 
  do-string ')' alignment-bits 
  dictionary-start hidden-mask instruction-mask immediate-mask compiling?
@@ -3743,84 +3917,136 @@ hide{
 ( 
 ## Forth To List
 
-The following is a To-Do list for the Forth code itself, along with any
-other ideas.
+The following is a To-Do list for the Forth code itself,
+along with any other ideas.
 
 * FORTH, VOCABULARY
+
 * "Value", "To", "Is"
-* Double cell words 
-* The interpreter should use character based addresses, instead of
-word based, and use values that are actual valid pointers, this
-will allow easier interaction with the world outside the virtual machine
+
+* Double cell words
+
+* The interpreter should use character based addresses,
+instead of word based, and use values that are actual valid
+pointers, this will allow easier interaction with the world
+outside the virtual machine
+
 * common words and actions should be factored out to simplify
-definitions of other words, their standards compliant version found
-if any
-* A soft floating point library would be useful which could be used
-to optionally implement floats [which is not something I really want
-to add to the virtual machine]. If floats were to be added, only the
-minimal set of functions should be added [f+,f-,f/,f*,f<,f>,>float,...]
-* Allow the processing of argc and argv, the mechanism by which that
-this can be achieved needs to be worked out. However all processing that
-is currently done in "main.c" should be done within the Forth interpreter
-instead. Words for manipulating rationals and double width cells should
-be made first.
-* A built in version of "dump" and "words" should be added to the Forth
-starting vocabulary, simplified versions that can be hidden.
-* Here documents, string literals. Examples of these can be found online
-* Document the words in this file and built in words better, also turn this
-document into a literate Forth file.
-* Sort out "'", "[']", "find", "compile," 
-* Proper booleans should be used throughout, that is -1 is true, and 0 is
-false.
-* Attempt to add crypto primitives, not for serious use, like TEA, XTEA,
-XXTEA, RC4, MD5, ...
+definitions of other words, their standards compliant version
+found if any.
+
+* A soft floating point library would be useful which could be
+used to optionally implement floats [which is not something I
+really want to add to the virtual machine]. If floats were to
+be added, only the minimal set of functions should be added
+[f+,f-,f/,f*,f<,f>,>float,...]
+
+* Allow the processing of argc and argv, the mechanism by which
+that this can be achieved needs to be worked out. However all
+processing that is currently done in "main.c" should be done
+within the Forth interpreter instead. Words for manipulating
+rationals and double width cells should be made first.
+
+* A built in version of "dump" and "words" should be added
+to the Forth starting vocabulary, simplified versions that
+can be hidden.
+
+* Here documents, string literals. Examples of these can be
+found online
+
+* Document the words in this file and built in words better,
+also turn this document into a literate Forth file.
+
+* Sort out "'", "[']", "find", "compile,"
+
+* Proper booleans should be used throughout, that is -1 is
+true, and 0 is false.
+
+* Attempt to add crypto primitives, not for serious use,
+like TEA, XTEA, XXTEA, RC4, MD5, ...
+
 * Add hash functions: CRC-32, CRC-16, ...
-http://stackoverflow.com/questions/10564491/function-to-calculate-a-crc16-checksum
-* File operation primitives that close the file stream [and possibly restore
-I/O to stdin/stdout] if an error occurs, and then re-throws, should be made.
-* Implement as many things from http://lars.nocrew.org/forth2012/implement.html
-as is sensible. 
-* The current words that implement I/O redirection need to be improved, and documented,
-I think this is quite a useful and powerful mechanism to use within Forth that simplifies
-programs. This is a must and will make writing utilities in Forth a *lot* easier 
-* Words for manipulating words should be added, for navigating to different
-fields within them, to the end of the word, etcetera.
-* The data structure used for parsing Forth words needs changing in libforth so a
-counted string is produced. Counted strings should be used more often. The current
-layout of a Forth word prevents a counted string being used and uses a byte more
-than it has to.
-* Whether certain simple words [such as '1+', '1-', '>', '<', '<>', 'not', '<=',
-'>='] should be added as virtual machine instructions for speed [and size] reasons
-should be investigated.
-* An analysis of the interpreter and the code it executes could be done to find
-the most commonly executed words and instructions, as well as the most common two and
-three sequences of words and instructions. This could be used to use to optimize the
-interpreter, in terms of both speed and size.
-* As a thought, a word for inlining other words could be made by copying everything
-into the current definition until it reaches a _exit, it would need to be aware of
-literals written into a word, like 'see' is.
+http://stackoverflow.com/questions/10564491/
+
+* Implement as many things from
+http://lars.nocrew.org/forth2012/implement.html as is sensible.
+
+* The current words that implement I/O redirection need to
+be improved, and documented, I think this is quite a useful
+and powerful mechanism to use within Forth that simplifies
+programs. This is a must and will make writing utilities in
+Forth a *lot* easier
+
+* Words for manipulating words should be added, for navigating
+to different fields within them, to the end of the word,
+etcetera.
+
+* The data structure used for parsing Forth words needs
+changing in libforth so a counted string is produced. Counted
+strings should be used more often. The current layout of a
+Forth word prevents a counted string being used and uses a
+byte more than it has to.
+
+* Whether certain simple words [such as '1+', '1-', '>',
+'<', '<>', NOT, <=', '>='] should be added as virtual
+machine instructions for speed [and size] reasons should
+be investigated.
+
+* An analysis of the interpreter and the code it executes
+could be done to find the most commonly executed words
+and instructions, as well as the most common two and three
+sequences of words and instructions. This could be used to use
+to optimize the interpreter, in terms of both speed and size.
+
+* As a thought, a word for inlining other words could be
+made by copying everything into the current definition until
+it reaches a _exit, it would need to be aware of literals
+written into a word, like SEE is.
+
+* The source code for this file should go through a code
+review, which should focus on formatting, stack comments and
+reorganizing the code. Currently it is not clear that variables
+like COLORIZE and 'fancy-list' exist and can be changed by
+the user. Lines should be 64 characters in length - maximum,
+including the new line at the end of the file.
 
 ### libforth.c todo
 
-* A halt, a parse, and a print/type instruction could be added to the Forth virtual
-machine.
+* A halt, a parse, and a print/type instruction could be
+added to the Forth virtual machine.
+
+* u.r, or a more generic version should be added to the
+interpreter instead of the current simpler primitive. As
+should >number - for fast numeric input and output.
+
 * Throw/Catch need to be added and used in the virtual machine
-* Various edge cases and exceptions should be removed [for example counted strings
-are not used internally, and '0x' can be used as a prefix only when base is zero].
-* A potential optimization is to order the words in the dictionary by frequency order,
-this would mean chaning the X Macro that contains the list of words, after collecting
+
+* Various edge cases and exceptions should be removed [for
+example counted strings are not used internally, and '0x'
+can be used as a prefix only when base is zero].
+
+* A potential optimization is to order the words in the
+dictionary by frequency order, this would mean chaning the
+X Macro that contains the list of words, after collecting
 statistics. This should make find faster.
-* Investigate adding operating system specific code into the interpreter and
-isolating it to make it semi-portable.
-* Make equivalents for various Unix utilities in Forth, like a CRC check, cat,
-tr, etcetera.
-* It would be interesting to make a primitive file system based upon Forth blocks,
-this could then be ported to systems that do not have file systems, such as
-microcontrollers [which usually have EEPROM].
-* In a _very_ unportable way it would be possible to have an instruction that
-takes the top of the stack, treats it as a function pointer and then attempts
-to call said function. This would allow us to assemble machine dependant code
-within the core file, generate a new function, then call it. It is just a thought.
+
+* Investigate adding operating system specific code into the
+interpreter and isolating it to make it semi-portable.
+
+* Make equivalents for various Unix utilities in Forth,
+like a CRC check, cat, tr, etcetera.
+
+* It would be interesting to make a primitive file system based
+upon Forth blocks, this could then be ported to systems that
+do not have file systems, such as microcontrollers [which
+usually have EEPROM].
+
+* In a _very_ unportable way it would be possible to have an
+instruction that takes the top of the stack, treats it as a
+function pointer and then attempts to call said function. This
+would allow us to assemble machine dependant code within the
+core file, generate a new function, then call it. It is just
+a thought.
  )
 
 verbose [if] 
@@ -3833,16 +4059,18 @@ verbose [if]
 
 ( ==================== Test Code ============================= )
 
-( The following will not work as we might actually be reading from a string [`sin]
-not `fin. 
-: key 32 chars> 1 `fin @ read-file drop 0 = if 0 else 32 chars> c@ then ; )
+( The following will not work as we might actually be reading
+from a string [`sin] not `fin.  
+
+: key 32 chars> 1 `fin @
+	read-file drop 0 = if 0 else 32 chars> c@ then ; )
 
 \ : ' immediate state @ if postpone ['] else find then ;
 
-( This really does not implement a correct FORTH/VOCABULARY, for that
-wordlists will need to be introduced and used in libforth.c. The best
-that this word set can do is to hide and reveal words to the user, this
-was just an experiment. 
+( This really does not implement a correct FORTH/VOCABULARY,
+for that wordlists will need to be introduced and used in
+libforth.c. The best that this word set can do is to hide
+and reveal words to the user, this was just an experiment.
 
 	: forth 
 		[ find forth 1- @ ] literal
@@ -3870,25 +4098,52 @@ was just an experiment.
 ( ==================== Block Editor ========================== )
 ( Experimental block editor Mark II 
 
+This is a simple block editor, it really shows off the power
+and simplicity of Forth systems - both the concept of a block
+editor and the implementation. 
+
+Forth source code used to organized into things called 'blocks',
+nowadays most people use normal resizeable stream based files.
+A block simply consists of 1024 bytes of data that can be
+transfered to and from mass storage. This works on systems that
+do not have a file system. A block can be used for storing
+arbitrary data as well, so the user had to know what was stored
+in what block. 
+
+1024 bytes is quite a limiting Form factor for storing source
+code, which is probably one reason Forth earned a reputation
+for being terse. A few conventions arose around dealing with
+Forth source code stored in blocks - both in how the code should
+be formatted within them, and in how programs that required
+more than one block of storage should be dealt with. 
+
+One of the conventions is how many columns and rows each block
+consists of, the traditional way is to organize the code into
+16 lines of text, with a column width of 64 characters. The only
+space character used is the space [or ASCII character 32], tabs
+and new lines are not used, as they are not needed - the editor
+knows how long a line is so it can wrap the text.
+
+Various standards and common practice evolved as to what goes
+into a block - for example the first line is usually a comment
+describing what the block does, with the date is was last edited
+and who edited the block last.
+
+
 @todo Improve the block editor 
 
 - '\' needs extending to work with the block editor, for now, 
 use parenthesis for comments 
-- make an 'm' word for forgetting all words defined since the
-editor was invoked.
 - add multi line insertion mode
 - Add to an editor vocabulary, which will need the vocabulary
 system to exist.
-- Using 'page' should be optional as not all terminals support
+- Using PAGE should be optional as not all terminals support
 ANSI escape codes - thanks to CMD.EXE. Damned Windows.
-- How line numbers are printed out should be investigated,
-also I should refactor 'dump' to use a similar line number system.
-- Format the output of list better, put a nice box around it.
 
 Adapted from http://retroforth.org/pages/?PortsOfRetroEditor )
 
  
-: help ( @todo renamed to 'h' once vocabularies are implemented )
+: help ( @todo rename to H once vocabularies are implemented )
 page cr
 " Block Editor Help Menu
 
@@ -3924,13 +4179,13 @@ char drop ;
 : ia c/l * + dup b/buf swap - >r (block) + r> accept drop (clean) ; 
 : i 0 swap ia ;
 : editor
-	1 block
-	rendezvous
+	1 block     ( load first block by default )
+	rendezvous  ( set up a rendezvous so we can forget words up to this point )
 	begin
 		page cr
 		" BLOCK EDITOR: TYPE 'HELP' FOR A LIST OF COMMANDS" cr
 		blk @ list
-		" CURRENT BLOCK: " blk @ . cr
+		" [BLOCK: " blk @ u. " ] [DICTIONARY: " here u. " ]" cr
 		postpone [ ( need to be in command mode )
 		read
 	again ;
@@ -3992,7 +4247,7 @@ structures a bit safer. )
 
 ( ==================== End of File Functions ================= )
 
-( set up a rendezvous point, we can call the word 'retreat' to
+( set up a rendezvous point, we can call the word RETREAT to
 restore the dictionary to this point. This word also updates
 fence to this location in the dictionary )
 rendezvous 
