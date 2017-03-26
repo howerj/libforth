@@ -993,6 +993,7 @@ Forth interpreter.
  X("hidden-mask", 1u << WORD_HIDDEN_BIT_OFFSET, "hide mask for CODE ")\
  X("compile-bit", COMPILING_BIT_OFFSET, "compile/immediate bit in CODE field")\
  X("dolist",      RUN,          "instruction for executing a words body")\
+ X("dolit",       2,            "location of fake word for pushing numbers")\
  X("doconst",     CONST,        "instruction for pushing a constant")\
  X("bl",          ' ',          "space character")\
  X("')'",         ')',          "')' character")\
@@ -1992,6 +1993,53 @@ void forth_signal(forth_t *o, int sig)
 {
 	assert(o);
 	o->m[SIGNAL_HANDLER] = (forth_cell_t)((sig * -1) + BIAS_SIGNAL);
+}
+
+char *forth_strdup(const char *s)
+{
+	assert(s);
+	char *str;
+	if (!(str = malloc(strlen(s) + 1)))
+		return NULL;
+	strcpy(str, s);
+	return str;
+}
+
+void forth_free_words(char **s, size_t length)
+{
+	for(size_t i = 0; i < length; i++)
+		free(s[i]);
+	free(s);
+}
+
+char **forth_words(forth_t *o, size_t *length)
+{
+	assert(o);
+	assert(length);
+	forth_cell_t pwd = o->m[PWD], len;
+	forth_cell_t *m  = o->m;
+	size_t i;
+	char **n, **s = calloc(2, sizeof(*s));
+	if(!s)
+		return NULL;
+	for (i = 0 ;pwd > DICTIONARY_START; pwd = m[pwd], i++) {
+		len = WORD_LENGTH(m[pwd + 1]);
+		s[i] = forth_strdup((char*)(&m[pwd-len]));
+		if(!s[i]) {
+			forth_free_words(s, i);
+			*length = 0;
+			return NULL;
+		}
+		n = realloc(s, sizeof(*s) * (i+2));
+		if(!n) {
+			forth_free_words(s, i);
+			*length = 0;
+			return NULL;
+		}
+		s = n;
+	}
+	*length = i;
+	return s;
 }
 
 /**

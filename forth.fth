@@ -1,4 +1,4 @@
-#!./forth 
+#!./forth
 ( Welcome to libforth, A dialect of Forth. Like all versions
 of Forth this version is  a little idiosyncratic, but how
 the interpreter works is documented here and in various
@@ -19,8 +19,8 @@ And within this code base:
 
 	readme.md  : for a manual for this interpreter
 	libforth.h : for information about the C API
-	libforth.c : for the interpreter itself 
-	unit.c     : unit tests for libforth.c 
+	libforth.c : for the interpreter itself
+	unit.c     : unit tests for libforth.c
 	unit.fth   : unit tests against this file
 	main.c     : an example interpreter
 
@@ -45,12 +45,12 @@ could be, it makes assumptions about the size of cells provided
 by the virtual machine, which will take time to rectify. Some
 of the constructs are subtly different from the DPANs Forth
 specification, which is usually noted. Eventually this should
-also be fixed. 
+also be fixed.
 
 A little note on how code is formatted, a line of Forth code
 should not exceed 64 characters. All words stack effect, how
 many variables on the stack it accepts and returns, should
-be commented with the following types: 
+be commented with the following types:
 
 	char / c  A character
 	c-addr    An address of a character
@@ -59,10 +59,13 @@ be commented with the following types:
 	u         A unsigned number
 	n         A signed number
 	c" xxx"   The word parses a word
+	c" x"     The word parses a single character
 	xt        An execution token
 	bool      A boolean value
 	ior       A file error return status [0 on no error]
 	fileid    A file identifier.
+	CODE      A number from a words code field
+	PWD       A number from a words previous word field
 	* A real address is one outside the range of the
 	Forth address space.
 
@@ -71,7 +74,11 @@ this is supposed to be a tutorial about Forth and describe the
 internals of a Forth interpreter, be as verbose as possible.
 
 The code in this file will need to be modified to abide by
-these standards, but new code should follow it from the start.)
+these standards, but new code should follow it from the start.
+
+Doxygen style tags for documenting bugs, todos and warnings
+should be used within comments. This makes finding code that
+needs working on much easier.)
 
 ( ==================== Basic Word Set ======================== )
 
@@ -84,21 +91,26 @@ a description for them will still be included so external
 tools can process and automatically extract the document
 string for a given work. )
 
-: postpone ( -- : postpone execution of the following immediate word )
+: postpone ( c" xxx" -- : postpone execution of a word )
 	immediate find , ;
 
-: constant 
-	:: ( compile word header )
+: constant
+	::           ( compile word header )
 	here 1 - h ! ( decrement dictionary pointer )
 	( change instruction to CONST )
-	here @ instruction-mask invert and doconst or here ! 
+	here @ instruction-mask invert and doconst or here !
 	here 1 + h ! ( increment dictionary pointer )
 	,            ( write in value )
 	postpone [ ; ( back into command mode )
 
-( space saving measure )
+( These constants are defined as a space saving measure,
+numbers in a definition usually take up two cells, one
+for the instruction to push the next cell and the cell
+itself, for the most frequently used numbers it is worth
+defining them as constants, it is just as fast but saves
+a lot of space )
 -1 constant -1
- 0 constant  0 
+ 0 constant  0
  1 constant  1
  2 constant  2
  3 constant  3
@@ -114,28 +126,35 @@ lf constant nl   ( new line - line feed on Unixen )
 -1 -1 1 rshift invert and constant min-signed-integer
 min-signed-integer invert constant max-signed-integer
 
+( The following version number is used to mark whether core
+files will be compatible with each other, The version number
+gets stored in the core file and is used by the loader to
+determine compatibility )
 4 constant version ( version number for the interpreter )
 
-cell size 8 * * constant address-unit-bits ( the number of bits in an address )
+( This constant defines the number of bits in an address )
+cell size 8 * * constant address-unit-bits 
 
--1 -1 1 rshift and invert constant sign-bit ( bit corresponding to the sign in a number )
+( Bit corresponding to the sign in a number )
+-1 -1 1 rshift and invert constant sign-bit 
 
-( @todo test by how much, if at all, making words like 1+, 1-, <>, and other
-simple words, part of the interpreter would speed things up )
+( @todo test by how much, if at all, making words like 1+,
+1-, <>, and other simple words, part of the interpreter would
+speed things up )
 
-: 1+ ( x -- x : increment a number ) 
+: 1+ ( x -- x : increment a number )
 	1 + ;
 
-: 1- ( x -- x : decrement a number ) 
+: 1- ( x -- x : decrement a number )
 	1 - ;
 
-: chars ( c-addr -- addr : convert a character address to an address )
-	size / ; 
+: chars ( c-addr -- addr : convert a c-addr to an addr )
+	size / ;
 
-: chars> ( addr -- c-addr: convert an address to a character address )
-	size * ; 
+: chars> ( addr -- c-addr: convert an addr to a c-addr )
+	size * ;
 
-: tab ( -- : print a tab character to current output device )
+: tab ( -- : print a tab character )
 	9 emit ;
 
 : 0=  ( n -- bool : is 'n' equal to zero? )
@@ -147,22 +166,16 @@ simple words, part of the interpreter would speed things up )
 : <> ( n n -- bool : not equal )
 	= 0= ;
 
-: logical ( n -- bool : turn a value into a boolean ) 
+: logical ( n -- bool : turn a value into a boolean )
 	not not ;
 
-( @todo ": dolit ' ' ;" works but does not interact well with 
-DECOMPILE, if this was fixed the special work could be removed,
-with some extra effort in libforth.c as well )
-: dolit ( -- x : location of special "push" word )
-	2 ; 
-
-: 2, ( x x -- : write two values into the dictionary )
+: 2, ( n n -- : write two values into the dictionary )
 	, , ;
 
-: [literal] ( x -- : write a literal into the dictionary )
-	dolit 2, ; 
+: [literal] ( n -- : write a literal into the dictionary )
+	dolit 2, ;
 
-: literal ( x -- : immediately write a literal into the dictionary )
+: literal ( n -- : immediately compile a literal )
 	immediate [literal] ;
 
 : sliteral immediate ( I: c-addr u --, Run: -- c-addr u )
@@ -172,16 +185,17 @@ with some extra effort in libforth.c as well )
 : ['] ( I: c" xxx", Run: -- xt  )
 	immediate find [literal] ;
 
-: >instruction ( CODE -- Instruction : extract instruction CODE field ) 
+: >instruction ( CODE -- u : extract instruction CODE field )
 	instruction-mask and ;
 
-: immediate-mask ( -- x : pushes the mask for the compile bit in a words CODE field )
-	[ 1 compile-bit lshift ] literal ;
+( IMMEDIATE-MASK pushes the mask for the compile bit,
+which can be used on a CODE field of a word )
+1 compile-bit lshift constant immediate-mask
 
-: hidden? ( PWD -- PWD bool : is a word hidden, given the words PWD field ) 
+: hidden? ( PWD -- PWD bool : is a word hidden? )
 	dup 1+ @ hidden-mask and logical ;
 
-: compiling? ( PWD -- PWD bool : is a word immediate, given the words PWD field )
+: compiling? ( PWD -- PWD bool : is a word immediate? )
 	dup 1+ @ immediate-mask and logical ;
 
 : cr  ( -- : emit a newline character )
@@ -193,11 +207,16 @@ with some extra effort in libforth.c as well )
 : > ( x1 x2 -- bool : signed greater than comparison )
 	- dup if max-signed-integer u< else logical then ;
 
+( The pad area is an area used for temporary storage, some
+words use it, although which ones do should be kept to a
+minimum. It is an area of space #pad amount of characters
+after the latest dictionary definition. The area between
+the end of the dictionary and start of PAD space is used for
+pictured numeric output [<#, #, #S, #>]. It is best not to
+use the pad area that much. )
 128 constant #pad
 
-: pad
-	( the pad is used for temporary storage, and moves
-	along with dictionary pointer, always in front of it )
+: pad ( -- addr : push pointer to the pad area )
 	here #pad + ;
 
 ( @todo this can be improved a lot, currently it uses more
@@ -215,90 +234,115 @@ Instead of:
 	value
 
 )
-: 2literal immediate ( x x -- : immediate write two literals into the dictionary )
+: 2literal immediate ( n n -- : compile two literals )
 	swap [literal] [literal] ;
 
 : latest ( get latest defined word )
-	pwd @ ; 
+	pwd @ ;
 
-: stdin  ( -- fileid : push the fileid for the standard input channel ) 
+: stdin  ( -- fileid : push fileid for standard input )
 	`stdin  @ ;
 
-: stdout ( -- fileid : push the fileid for the standard output channel ) 
+: stdout ( -- fileid : push fileid for standard output )
 	`stdout @ ;
 
-: stderr ( -- fileid : push the fileid for the standard error channel ) 
+: stderr ( -- fileid : push fileid for the standard error )
 	`stderr @ ;
 
 : stdin? ( -- bool : are we reading from standard input )
 	`fin @ stdin = ;
 
-: *+ ( x1 x2 x3 -- x ) 
+: *+ ( n1 n2 n3 -- n )
 	* + ;
 	
-: 2- ( x -- x : decrement by two )
-	2 - ( x -- x ) ;
+: 2- ( n -- n : decrement by two )
+	2 - ;
 
-: 2+ ( x -- x : increment by two )
-	2 + ( x -- x ) ;
+: 2+ ( n -- n : increment by two )
+	2 + ;
 
-: 3+ ( x -- x : increment by three )
-	3 + ( x -- x ) ;
+: 3+ ( n -- n : increment by three )
+	3 + ;
 
-: 2* ( x -- x : multiply by two )
-	1 lshift ( x -- x ) ;
+: 2* ( n -- n : multiply by two )
+	1 lshift ;
 
-: 2/ ( x -- x : divide by two )
-	1 rshift ( x -- x ) ;
+: 2/ ( n -- n : divide by two )
+	1 rshift ;
 
-: 4* ( x -- x : multiply by four )
-	2 lshift ( x -- x ) ;
+: 4* ( n -- n : multiply by four )
+	2 lshift ;
 
-: 4/ ( x -- x : divide by four )
-	2 rshift ( x -- x ) ;
+: 4/ ( n -- n : divide by four )
+	2 rshift ;
 
-: 8* ( x -- x : multiply by eight )
-	3 lshift ( x -- x ) ;
+: 8* ( n -- n : multiply by eight )
+	3 lshift ;
 
-: 8/ ( x -- x : divide by eight )
-	3 rshift ( x -- x ) ;
+: 8/ ( n -- n : divide by eight )
+	3 rshift ;
 
-: 256* ( x -- x : multiply by 256 )
-	8 lshift ( x -- x ) ;
+: 256* ( n -- n : multiply by 256 )
+	8 lshift ;
 
-: 256/ ( x -- x : divide by 256 )
-	8 rshift ( x -- x ) ;
+: 256/ ( n -- n : divide by 256 )
+	8 rshift ;
 
-: 2dup ( x1 x2 -- x1 x2 x1 x2 : duplicate two values )
+: 2dup ( n1 n2 -- n1 n2 n1 n2 : duplicate two values )
 	over over ;
 
-: mod ( x u -- x : calculate the remainder of x divided by u ) 
+: mod ( u1 u2 -- u : calculate the remainder of u1/u2 )
 	2dup / * - ;
 
-( @todo implement um/mod in the VM, then use this to implement / and mod )
-: um/mod ( x1 x2 -- rem quot : calculate the remainder and quotient of x1 divided by x2 ) 
+( @todo implement UM/MOD in the VM, then use this to implement
+'/' and MOD )
+: um/mod ( u1 u2 -- rem quot : remainder and quotient of u1/u2 )
 	2dup / >r mod r> ;
 
-: */ ( x1 x2 x3 -- x4 : multiply then divide, @warning this does not use a double cell for the multiply )
-	 * / ; 
+( @warning this does not use a double cell for the multiply )
+: */ ( n1 n2 n3 -- n4 : [n2*n3]/n1 )
+	 * / ;
 
-: char ( -- x : read in a character from the input steam )
+: char ( -- n : read in a character from the input steam )
 	key drop key ;
 
-: [char] ( -- x : immediately read in a character from the input stream )
+: [char] ( c" x" -- R: -- char : immediately compile next char )
 	immediate char [literal] ;
 
-: compose ( xt1 xt2 -- xt3 : create a new function from two xt-tokens )
+( COMPOSE is a high level function that can take two executions
+tokens and produce a unnamed function that can do what they
+both do.
+
+It can be used like so:
+
+	:noname 2 ;
+	:noname 3 + ;
+	compose
+	execute 
+	.
+	5 <-- 5 is printed!
+
+I have not found a use for it yet, but it sure is neat.)
+
+: compose ( xt1 xt2 -- xt3 : create a function from xt-tokens )
 	>r >r            ( save execution tokens )
-	postpone :noname ( create a new :noname word for our xt-tokens )
+	postpone :noname ( create a new :noname word )
 	r> ,             ( write first token )
 	r> ,             ( write second token )
-	(;) ;     ( terminate new :noname )
+	(;) ;            ( terminate new :noname )
 
-: cells ( n1 -- n2 : convert a number of cells into a number of cells in address units ) 
+( CELLS is a word that is not needed in this interpreter but
+it required to write portable code [I have probably missed
+quite a few places where it should be used]. The reason it
+is not needed in this interpreter is a cell address can only
+be in multiples of cells, not in characters. This should be
+addressed in the libforth interpreter as it adds complications
+when having to convert to and from character and cell address.)
+
+: cells ( n1 -- n2 : convert cell count to address count)
 	immediate  ;
 
-: cell+ ( a-addr1 -- a-addr2 ) 
+: cell+ ( a-addr1 -- a-addr2 )
 	cell + ;
 
 : cell- ( a-addr1 -- addr2 )
@@ -307,82 +351,82 @@ Instead of:
 : negative? ( x -- bool : is a number negative? )
 	sign-bit and logical ;
 
-: mask-byte ( x -- x : generate mask byte ) 
+: mask-byte ( x -- x : generate mask byte )
 	8* 255 swap lshift ;
 
-: select-byte ( u i -- c ) 
+: select-byte ( u i -- c )
 	8* rshift 0xff and ;
 
-: xt-instruction ( extract instruction from execution token )
+: xt-instruction ( PWD -- CODE : extract instruction from PWD )
 	cell+ @ >instruction ;
 
-: defined-word? ( CODE -- bool : is a word a defined or a built in words )
+: defined-word? ( PWD -- bool : is defined or a built-in word)
 	xt-instruction dolist = ;
 
-: char+ ( c-addr -- c-addr : increment a character address by the size of one character ) 
+: char+ ( c-addr -- c-addr : increment a c-addr one c-addr )
 	1+ ;
 
-: 2chars ( c-addr1 c-addr2 -- addr addr : convert two character addresses to two cell addresses ) 
+: 2chars ( c-addr1 c-addr2 -- addr addr : chars on two c-addr) 
 	chars swap chars swap ;
 
-: 2chars>  ( addr addr -- c-addr c-addr: convert two cell addresses to two character addresses )
+: 2chars>  ( addr addr -- c-addr c-addr: chars> on two addr )
 	chars> swap chars> swap ;
 
-: hex     ( -- : print out hex )     
+: hex     ( -- : print out hex )
 	16 base ! ;
 
-: octal   ( -- : print out octal )    
+: octal   ( -- : print out octal )
 	8 base ! ;
 
-: binary  ( -- : print out binary )   
+: binary  ( -- : print out binary )
 	2 base ! ;
 
-: decimal ( -- : print out decimal )  
+: decimal ( -- : print out decimal )
 	0 base ! ;
 
-: negate ( x -- x ) 
+: negate ( x -- x )
 	-1 * ;
 
 : abs ( x -- u : return the absolute value of a number )
 	dup negative? if negate then ;
 
-: square ( x -- x ) 
+: square ( x -- x )
 	dup * ;
 
 : sum-of-squares ( a b -- c : compute a^2 + b^2 to get c )
 	square swap square + ;
 
-: drup   ( x y -- x x ) 
+: drup   ( x y -- x x )
 	drop dup ;
 
-: +! ( x addr -- : add x to a value stored at addr ) 
+: +! ( x addr -- : add x to a value stored at addr )
 	tuck @ + swap ! ;
 
-: 1+! ( addr -- : increment a value at an address )  
+: 1+! ( addr -- : increment a value at an address )
 	1 swap +! ;
 
-: 1-! ( addr -- : decrement a value at an address ) 
+: 1-! ( addr -- : decrement a value at an address )
 	-1 swap +! ;
 
 : c+! ( x c-addr -- : add x to a value stored at c-addr )
 	tuck c@ + swap c! ;
 
-: toggle ( addr u -- : complement the value at address with the bit pattern u ) 
+: toggle ( addr u -- : xor value at addr with u )
 	over @ xor swap ! ;
 
-: lsb ( x -- x : mask off the least significant byte of a cell ) 
+: lsb ( x -- x : mask off the least significant byte of a cell )
 	255 and ;
 
 : \ ( -- : immediate word, used for single line comments )
 	immediate begin key nl = until ;
 
-: ?dup ( x -- ? ) 
+: ?dup ( x -- ? )
 	dup if dup then ;
 
-: min ( n n -- n : return the minimum of two integers ) 
+: min ( n n -- n : return the minimum of two integers )
 	2dup < if drop else nip then  ;
 
-: max ( n n -- n : return the maximum of two integers ) 
+: max ( n n -- n : return the maximum of two integers )
 	2dup > if drop else nip then  ;
 
 : umin ( u u -- u : return the minimum of two unsigned numbers )
@@ -394,10 +438,10 @@ Instead of:
 : limit ( x min max -- x : limit x with a minimum and maximum )
 	rot min max ;
 
-: >= ( n n -- bool ) 
+: >= ( n n -- bool )
 	< not ;
 
-: <= ( n n -- bool ) 
+: <= ( n n -- bool )
 	> not ;
 
 : 2@ ( a-addr -- u1 u2 : load two consecutive memory cells )
@@ -429,12 +473,12 @@ Instead of:
 : 0<> ( n -- bool )
 	0 <> ;
 
-: signum ( n -- -1 | 0 | 1 : )
-	dup 0< if drop -1 exit then
-	    0> if       1 exit then
+: signum ( n -- -1 | 0 | 1 : Signum function )
+	dup 0> if drop  1 exit then
+	    0< if      -1 exit then
 	0 ;
 
-: nand ( u u -- u : bitwise NAND ) 
+: nand ( u u -- u : bitwise NAND )
 	and invert ;
 
 : odd ( u -- bool : is 'n' odd? )
@@ -443,43 +487,43 @@ Instead of:
 : even ( u -- bool : is 'n' even? )
 	odd not ;
 
-: nor  ( u u -- u : bitwise NOR  )  
+: nor  ( u u -- u : bitwise NOR  )
 	or invert ;
 
-: ms ( u -- : wait at least 'u' milliseconds ) 
+: ms ( u -- : wait at least 'u' milliseconds )
 	clock +  begin dup clock u< until drop ;
 
 : sleep ( u -- : sleep for 'u' seconds )
 	1000 * ms ;
 
 : align ( addr -- addr : align an address, nop in this implemented )
-	immediate  ; 
+	immediate  ;
 
 : ) ( -- : do nothing, this allows easy commenting out of code )
 	immediate ;
 
-: bell ( -- : emit an ASCII BEL character ) 
+: bell ( -- : emit an ASCII BEL character )
 	7 emit ;
 
-: b/buf  ( -- u : bytes per buffer ) 
+: b/buf  ( -- u : bytes per buffer )
 	1024 ;
 
-: .d ( x -- x : debug print ) 
+: .d ( x -- x : debug print )
 	dup . ;
 
 : compile, ( x -- : )
 	, ;
 
-: >mark ( -- : write a hole into the dictionary and push a pointer to it ) 
+: >mark ( -- : write a hole into the dictionary and push a pointer to it )
 	here 0 , ;
 
 : <resolve ( addr -- : )
 	here - , ;
 
-: end immediate ( a synonym for until ) 
+: end immediate ( a synonym for until )
 	postpone until ;
 
-: bye ( -- : quit the interpreter ) 
+: bye ( -- : quit the interpreter )
 	0 r ! ;
 
 : pick ( xu ... x1 x0 u -- xu ... x1 x0 xu )
@@ -497,7 +541,7 @@ Instead of:
 : invalidate ( -- : invalidate this Forth core )
 	1 `invalid ! ;
 
-: signed ( x -- bool : return true if sign bit set ) 
+: signed ( x -- bool : return true if sign bit set )
 	[ 1 size 8 * 1- lshift ] literal and logical ;
 
 : u>=  ( x y -- bool : unsigned greater than or equal to )
@@ -534,7 +578,7 @@ Instead of:
 	-1       String
 	0        Reading from user input / standard in
 	file-id   )
-	`source-id @ 
+	`source-id @
 	0= if
 		stdin? if 0 else `fin @ then
 	else
@@ -544,7 +588,7 @@ Instead of:
 : under ( x1 x2 -- x1 x1 x2 )
 	>r dup r> ;
 
-: 2nip   ( n1 n2 n3 n4 -- n3 n4 ) 
+: 2nip   ( n1 n2 n3 n4 -- n3 n4 )
 	>r >r 2drop r> r> ;
 
 : 2over ( n1 n2 n3 n4 – n1 n2 n3 n4 n1 n2 )
@@ -568,7 +612,7 @@ Instead of:
 : ?dup-if immediate ( x -- x | - : ?dup and if rolled into one! )
 	['] ?dup , postpone if ;
 
-: ?if ( -- : non destructive if ) 
+: ?if ( -- : non destructive if )
 	immediate ['] dup , postpone if ;
 
 : (hide) ( token -- hide-token : this hides a word from being found by the interpreter )
@@ -576,13 +620,13 @@ Instead of:
 		dup @ hidden-mask or swap tuck ! exit
 	then 0 ;
 
-: hide ( WORD -- : hide with drop ) 
+: hide ( WORD -- : hide with drop )
 	find dup if (hide) then drop ;
 
-: reveal ( hide-token -- : reveal a hidden word ) 
+: reveal ( hide-token -- : reveal a hidden word )
 	dup @ hidden-mask invert and swap ! ;
 
-: ?exit ( x -- : exit current definition if not zero ) 
+: ?exit ( x -- : exit current definition if not zero )
 	if rdrop exit then ;
 
 : decimal? ( c -- f : is character a number? )
@@ -638,7 +682,7 @@ Instead of:
 : warm ( -- : restart the interpreter, warm restart )
 	1 restart ;
 
-: trip ( x -- x x x : triplicate a number ) 
+: trip ( x -- x x x : triplicate a number )
 	dup dup ;
 
 : roll  ( xu xu-1 ... x0 u -- xu-1 ... x0 xu : move u+1 items on the top of the stack by u )
@@ -672,7 +716,7 @@ smudge
 	over + swap ;
 
 : aligned ( unaligned -- aligned : align a pointer )
-	[ size 1- ] literal + 
+	[ size 1- ] literal +
 	[ size 1- ] literal invert and ;
 
 : rdepth
@@ -804,11 +848,11 @@ hide stdin?
 		( return to the caller of catch because return )
 		( stack is restored to the state that existed )
 		( when catch began execution )
-	then ; 
+	then ;
 
 : interpret ( c1" xxx" ... cn" xxx" -- : This word implements the interpreter loop )
-	begin 
-	' read catch 
+	begin
+	' read catch
 	?dup-if [char] ! emit tab . cr then ( exception handler of last resort )
 	again ;
 
@@ -823,15 +867,15 @@ find [interpret] cell+ start! ( the word executed on restart is now our new word
 words to make sure they only execute in the correct state )
 
 : ?comp ( -- : error if not compiling )
-	state @ 0= if -14 throw then ; 
+	state @ 0= if -14 throw then ;
 
 : ?exec ( -- : error if not executing )
-	state @    if -22 throw then ; 
+	state @    if -22 throw then ;
 
 ( begin...while...repeat These are defined in a very "Forth" way )
-: while 
+: while
 	?comp
-	immediate postpone if ( branch to repeats THEN) ;
+	immediate postpone if ( branch to repeats THEN ) ;
 
 : whilst postpone while ;
 
@@ -842,13 +886,12 @@ words to make sure they only execute in the correct state )
 	postpone then ; ( then writes to the hole made in if )
 
 : never ( never...then : reserve space in word )
-	?comp
-	immediate 0 [literal] postpone if ;
+	immediate ?comp 0 [literal] postpone if ;
 
 : unless ( bool -- : like IF but execute clause if false )
 	immediate ?comp ['] 0= , postpone if ;
 
-: endif ( synonym for THEN ) 
+: endif ( synonym for THEN )
 	immediate ?comp postpone then ;
 
 ( ==================== Basic Word Set ======================== )
@@ -877,17 +920,17 @@ An example of the first instance:
 	make person happy
 	person \ prints "Good bye, cruel World!"
 
-	make person sad 
-	person \ prints "Hello, World!" 
+	make person sad
+	person \ prints "Hello, World!"
 
 An example of the second:
 
 	doer op
 
-	: sum \ n0 ... nX X -- sum<0..X> 
+	: sum \ n0 ... nX X -- sum<0..X>
 		make op + 1 do op loop ;
 
-	: mul \ n0 ... nX X -- mul<0..X>  
+	: mul \ n0 ... nX X -- mul<0..X>
 		make op * 1 do op loop ;
 
 The above example is a bit contrived, the definitions and
@@ -899,7 +942,7 @@ out, but it shows how you can use DOER/MAKE. )
 : doer ( c" xxx" -- : make a work whose behavior can be changed by make )
 	immediate ?exec :: ['] noop , (;) ;
 
-: found? ( xt -- xt : thrown an exception if the execution token is zero [not found] ) 
+: found? ( xt -- xt : thrown an exception if the xt is zero )
 	dup 0= if -13 throw then ;
 
 ( It would be nice to provide a MAKE that worked with
@@ -922,17 +965,17 @@ to use the second. MAKE is a state aware word. )
 ( ==================== Extended Word Set ===================== )
 
 : r.s ( -- : print the contents of the return stack )
-	r>         
+	r>
 	[char] < emit rdepth (.) drop [char] > emit
 	space
 	rdepth dup 0> if dup
 	begin dup while r> -rot 1- repeat drop dup
 	begin dup while rot dup . >r 1- repeat drop
-	then  drop cr 
+	then  drop cr
 	>r ;
 
 : log ( u base -- u : command the _integer_ logarithm of u in base )
-	>r 
+	>r
 	dup 0= if -11 throw then ( logarithm of zero is an error )
 	0 swap
 	begin
@@ -943,7 +986,7 @@ to use the second. MAKE is a state aware word. )
 : log2 ( u -- u : compute the _integer_ logarithm of u )
 	2 log ;
 
-: alignment-bits ( addr -- u : get the bits used for aligning a cell )
+: alignment-bits ( c-addr -- u : get the bits used for aligning a cell )
 	[ 1 size log2 lshift 1- literal ] and ;
 
 : time ( " ccc" -- n : time the number of milliseconds it takes to execute a word )
@@ -955,12 +998,12 @@ to use the second. MAKE is a state aware word. )
 : (do-defer) ( -- self : pushes the location into which it is compiled )
 	r> dup >r 1- ;
 
-: defer immediate ( " ccc" -- , Run Time -- location : 
+: defer immediate ( " ccc" -- , Run Time -- location :
 	creates a word that pushes a location to write an execution token into )
 	?exec
 	:: ' (do-defer) , (;) ;
 
-: is ( location " ccc" -- : make a deferred word execute a word ) 
+: is ( location " ccc" -- : make a deferred word execute a word )
 	find found? swap ! ;
 
 hide (do-defer)
@@ -980,14 +1023,14 @@ number of steps.
 
 We can test "recurse" with this factorial function:
 
-  : factorial dup 2 < if drop 1 exit then dup 1- recurse * ; 
+  : factorial dup 2 < if drop 1 exit then dup 1- recurse * ;
 
 )
 : recurse immediate
 	?comp
 	latest cell+ , ;
 
-: myself ( -- : myself is a synonym for recurse ) 
+: myself ( -- : myself is a synonym for recurse )
 	immediate postpone recurse ;
 
 ( The "tail" function implements tail calls, which is just a
@@ -1067,9 +1110,9 @@ to the next character address. )
 \ terminated on the stack, this allows programmer to determine
 \ if the loop terminated early or not, and at which point.
 
-: (foreach) ( c-addr u xt -- c-addr u : execute xt for each cell in c-addr u 
+: (foreach) ( c-addr u xt -- c-addr u : execute xt for each cell in c-addr u
 	returning number of items not processed )
-	begin 
+	begin
 		3dup >r >r >r ( c-addr u xt R: c-addr u xt )
 		nip           ( c-addr xt   R: c-addr u xt )
 		execute       ( R: c-addr u xt )
@@ -1100,12 +1143,12 @@ to the next character address. )
 \ mechanism. It  takes a string and a character and returns a
 \ string that starts at  the first occurrence of that character
 \ in that string - or until it  reaches the end of the string.
- 
+
 \ SKIP is defined in two steps, first there is a word,
 \ (SKIP), that  exits the foreach loop if there is a match,
 \ if there is no match it  does nothing. In either case it
 \ leaves the character to skip until  on the stack.
- 
+
 : (skip) ( char c-addr -- char : exit out of foreach loop if there is a match )
 	over swap c@ = if return then ;
 
@@ -1145,7 +1188,7 @@ hide (hide)
 
 ( ==================== Hiding Words ========================== )
 
-( The words described here on out get more complex and will 
+( The words described here on out get more complex and will
 require more of an explanation as to how they work. )
 
 ( ==================== Create Does> ========================== )
@@ -1170,12 +1213,12 @@ words in themselves, and thus allows us to extend the language
 easily. )
 
 : write-quote ( -- : A word that writes ' into the dictionary )
-	['] ' , ;   
+	['] ' , ;
 
 : write-exit ( -- : A word that write exit into the dictionary )
 	['] _exit , ;
 
-: write-compile, ( -- : A word that writes , into the dictionary ) 
+: write-compile, ( -- : A word that writes , into the dictionary )
 	' , , ;
 
 : command-mode ( -- : put the interpreter into command mode )
@@ -1197,11 +1240,11 @@ easily. )
 	['] command-mode , ;            ( Make sure to change the state back to command mode )
 
 : create immediate  ( create word is quite a complex forth word )
-	state @ 
-	if 
-		postpone <build 
-	else 
-		command-mode-create 
+	state @
+	if
+		postpone <build
+	else
+		command-mode-create
 	then ;
 
 
@@ -1223,7 +1266,7 @@ arrays, variables and constants, as we mentioned before. )
 : variable ( x c" xxx" -- : create a variable will initial value of x )
 	create ,     does>   ;
 
-\ : constant ( x c" xxx" -- : create a constant with value of x ) 
+\ : constant ( x c" xxx" -- : create a constant with value of x )
 \	create ,     does> @ ;
 
 : table  ( u c" xxx" --, Run Time: -- addr u : create a named table )
@@ -1235,32 +1278,32 @@ arrays, variables and constants, as we mentioned before. )
 \ : +field  \ n <"name"> -- ; exec: addr -- 'addr
 \    create over , +
 \    does> @ + ;
-\ 
+\
 \ : begin-structure  \ -- addr 0 ; -- size
 \ 	create
 \ 	here 0 0 ,  \ mark stack, lay dummy
 \ 	does> @ ;   \ -- rec-len
-\ 
+\
 \ : end-structure  \ addr n --
-\    swap ! ;      \ set len  
-\ 
+\    swap ! ;      \ set len
+\
 \ begin-structure point
 \ 	point +field p.x
 \ 	point +field p.y
 \ end-structure
-\ 
+\
 \ This should work...
 \ : buffer: ( u c" xxx" --, Run Time: -- addr )
 \	create allot ;
 
-: 2constant 
+: 2constant
 	create , , does> dup 1+ @ swap @ ;
 
-: 2variable 
+: 2variable
 	create , , does> ;
 
 : enum ( x " ccc" -- x+1 : define a series of enumerations )
-	dup constant 1+ ; 
+	dup constant 1+ ;
 
 ( ==================== Create Does> ========================== )
 
@@ -1279,10 +1322,10 @@ that as it complicates things unnecessarily.
 
 Example:
 
-	: example-1 
-		10 1 do 
+	: example-1
+		10 1 do
 			i . i 5 > if cr leave then loop
-		100 . cr ; 
+		100 . cr ;
 
 	example-1
 
@@ -1318,7 +1361,7 @@ the return stack )
 : do immediate  ( Run time: high low -- : begin do...loop construct )
 	?comp
 	' (do) ,
-	postpone begin ; 
+	postpone begin ;
 
 : (unloop)    ( -- , R: i limit -- : remove limit and i from  )
 	r>           ( save our return address )
@@ -1372,16 +1415,16 @@ the return stack )
 testing and debugging:
  : mm 5 1 do i . cr 4 1 do j . tab i . cr loop loop ; )
 
-: range ( nX nY -- nX nX+1 ... nY )  
+: range ( nX nY -- nX nX+1 ... nY )
 	nos1+ do i loop ;
 
-: repeater ( n0 X -- n0 ... nX )        
+: repeater ( n0 X -- n0 ... nX )
 	1 do dup loop ;
 
-: sum ( n0 ... nX X -- sum<0..X> ) 
+: sum ( n0 ... nX X -- sum<0..X> )
 	1 do + loop ;
 
-: mul ( n0 ... nX X -- mul<0..X> ) 
+: mul ( n0 ... nX X -- mul<0..X> )
 	1 do * loop ;
 
 : reverse ( x1 ... xn n -- xn ... x1 : reverse n items on the stack )
@@ -1440,10 +1483,10 @@ hide{ c sub #sub (subst-all) }hide
 	column-counter dup @ column 1+! ;
 
 0 variable x
-: x! ( x -- ) 
+: x! ( x -- )
 	x ! ;
 
-: x@ ( -- x ) 
+: x@ ( -- x )
 	x @ ;
 
 : 2>r ( x1 x2 -- R: x1 x2 )
@@ -1468,7 +1511,7 @@ hide{ c sub #sub (subst-all) }hide
 	swap
 	x@ >r ; ( restore return address )
 
-: unused ( -- u : push the amount of core left ) 
+: unused ( -- u : push the amount of core left )
 	max-core here - ;
 
 : accumulator  ( initial " ccc" -- : make a word that increments by a value and pushes the result )
@@ -1488,8 +1531,8 @@ hide{ c sub #sub (subst-all) }hide
 		if
 			over  c! 1+
 		else ( terminate string )
-			drop 0 swap c! 
-			i 
+			drop 0 swap c!
+			i
 			leave
 		then
 	loop
@@ -1509,7 +1552,7 @@ hide delim
 	chere ;
 hide skip
 
-: accept ( c-addr +n1 -- +n2 : see accepter definition ) 
+: accept ( c-addr +n1 -- +n2 : see accepter definition )
 	nl accepter ;
 
 0xFFFF constant max-string-length
@@ -1527,7 +1570,7 @@ hide skip
 	' branch ,      ( write in jump, this will jump past the string )
 	>mark           ( make hole )
 	dup 1+ chars>   ( calculate address to write to )
-	max-string-length 
+	max-string-length
 	r>              ( restore delimiter )
 	accepter dup >r ( write string into dictionary, save index )
 	aligned 2dup size / ( stack: length hole char-len hole )
@@ -1547,7 +1590,7 @@ hide skip
 	2dup length nip ;
 
 
-: (type) ( c-addr -- : emit a single character ) 
+: (type) ( c-addr -- : emit a single character )
 	c@ emit ;
 
 : type ( c-addr u -- : print out 'u' characters at c-addr )
@@ -1555,7 +1598,7 @@ hide skip
 hide (type)
 
 : do-string ( char -- : write a string into the dictionary reading it until char is encountered )
-	(.") 
+	(.")
 	state @ if swap [literal] [literal] then ;
 
 : fill ( c-addr u char -- : fill in an area of memory with a character, only if u is greater than zero )
@@ -1574,13 +1617,13 @@ hide (type)
 hide sbuf
 
 ( @todo these strings really need rethinking, state awareness needs to be removed... )
-: type, 
+: type,
 	state @ if ' type , else type then ;
 
-: c" 
+: c"
 	immediate key drop [char] " do-string ;
 
-: "  
+: "
 	immediate key drop [char] " do-string type, ;
 
 : sprint ( c -- : print out chars until 'c' is encountered )
@@ -1592,11 +1635,11 @@ hide sbuf
 		<> if emit 0 then
 	until rdrop ;
 
-: .( 
+: .(
 	immediate [char] ) sprint ;
 hide sprint
 
-: ." 
+: ."
 	immediate key drop [char] " do-string type, ;
 
 hide type,
@@ -1608,7 +1651,7 @@ not checking of the returned values from write-file )
 : print ( c-addr -- : print out a string to the standard output )
 	-1 over >r length r> swap stdout write-file 2drop ;
 
-: ok 
+: ok
 	" ok" cr ;
 
 : empty-stack ( x-n ... x-0 -- : empty the variable stack )
@@ -1631,7 +1674,7 @@ not checking of the returned values from write-file )
 	(quit)
 	-2 throw ;
 
-: abort" immediate 
+: abort" immediate
 	postpone "
 	' cr , ' (abort") , ;
 
@@ -1647,7 +1690,7 @@ input. There are two cases, when 'a' and 'b' are input, and
 a default case which occurs when none of the statements match:
 
 	: example
-		char 
+		char
 		case
 			[char] a of " a was selected " cr endof
 			[char] b of " b was selected " cr endof
@@ -1696,7 +1739,7 @@ make (banner) space
 : zero ( -- : emit a single 0 character )
 	[char] 0 emit ;
 
-: spaces ( n -- : print n spaces if n is greater than zero ) 
+: spaces ( n -- : print n spaces if n is greater than zero )
 	make (banner) space
 	banner ;
 
@@ -1742,7 +1785,7 @@ single word definition:
 Which will skip a line if a conditional is false, and compile
 it if true )
 
-( These words really, really need refactoring, I could use the newly defined 
+( These words really, really need refactoring, I could use the newly defined
   "defer" to help out with this )
 0 variable      nest        ( level of [if] nesting )
 0 variable      [if]-word   ( populated later with "find [if]" )
@@ -1785,10 +1828,10 @@ find [else] [else]-word !
 : 32bit\ size 4 <> if postpone \ then ;
 : 64bit\ size 8 <> if postpone \ then ;
 
-hide{ 
-	[if]-word [else]-word nest 
-	reset-nest unnest? match-[else]? 
-	end-nest? nest? 
+hide{
+	[if]-word [else]-word nest
+	reset-nest unnest? match-[else]?
+	end-nest? nest?
 }hide
 
 ( ==================== Conditional Compilation =============== )
@@ -1808,8 +1851,8 @@ size 8 = [if] 0x01234567abcdef `x ! [then]
 : swap16 ( x -- x : swap the byte order a 16 bit number )
 	dup 256* 0xff00 and >r 256/ lsb r> or ;
 
-size 4 >= [if] 
-	: swap32 
+size 4 >= [if]
+	: swap32
 		dup       0xffff and swap16 16 lshift swap
 		16 rshift 0xffff and swap16 or ;
 [then]
@@ -1821,46 +1864,46 @@ size 8 >= [if]
 [then]
 
 size 2 = [if]
-	endian 
+	endian
 	[if]      ( host is big endian )
-	: >little ( x -- x : host byte order to little endian order ) 
+	: >little ( x -- x : host byte order to little endian order )
 		swap16 ;
-	: >big    ( x -- x : host byte order to big endian order ) 
+	: >big    ( x -- x : host byte order to big endian order )
 		;
 	[else]    ( host is little endian )
-	: >little ( x -- x : host byte order to little endian order ) 
+	: >little ( x -- x : host byte order to little endian order )
 		;
-	: >big    ( x -- x : host byte order to big endian order ) 
+	: >big    ( x -- x : host byte order to big endian order )
 		swap16 ;
 	[then]
 [then]
 
 size 4 = [if]
-	endian 
+	endian
 	[if]      ( host is big endian )
-	: >little ( x -- x : host byte order to little endian order ) 
+	: >little ( x -- x : host byte order to little endian order )
 		swap32 ;
-	: >big    ( x -- x : host byte order to big endian order ) 
+	: >big    ( x -- x : host byte order to big endian order )
 		;
 	[else]    ( host is little endian )
-	: >little ( x -- x : host byte order to little endian order ) 
+	: >little ( x -- x : host byte order to little endian order )
 		;
-	: >big    ( x -- x : host byte order to big endian order ) 
+	: >big    ( x -- x : host byte order to big endian order )
 		swap32 ;
 	[then]
 [then]
 
 size 8 = [if]
-	endian 
+	endian
 	[if]      ( host is big endian )
-	: >little ( x -- x : host byte order to little endian order ) 
+	: >little ( x -- x : host byte order to little endian order )
 		swap64 ;
-	: >big    ( x -- x : host byte order to big endian order ) 
+	: >big    ( x -- x : host byte order to big endian order )
 		;
 	[else]    ( host is little endian )
-	: >little ( x -- x : host byte order to little endian order ) 
+	: >little ( x -- x : host byte order to little endian order )
 		;
-	: >big    ( x -- x : host byte order to big endian order ) 
+	: >big    ( x -- x : host byte order to big endian order )
 		swap64 ;
 	[then]
 [then]
@@ -1907,20 +1950,20 @@ size 8 = [if]
 	drop ; ( drop cell we have printed out )
 
 : lister ( addr u addr -- )
-	0 counter ! 1- swap 
-	do 
+	0 counter ! 1- swap
+	do
 		dup counted-column 1+ i ?.r i @ size .chars space
 	loop ;
 
 ( @todo this function should make use of DEFER and IS, then different
 version of dump could be made that swapped out LISTER )
 : dump  ( addr u -- : dump out 'u' cells of memory starting from 'addr' )
-	1+ over + under lister drop 
+	1+ over + under lister drop
 	cr ;
 
 hide{ counted-column counter }hide
 
-( Fence can be used to prevent any word defined before it from being forgotten 
+( Fence can be used to prevent any word defined before it from being forgotten
 Usage:
 	here fence ! )
 0 variable fence
@@ -1957,7 +2000,7 @@ hide (forget)
 : ** ( b e -- x : exponent, raise 'b' to the power of 'e')
 	?dup-if
 		over swap
-		1 do over * loop 
+		1 do over * loop
 		nip
 	else
 		drop 1
@@ -1967,13 +2010,13 @@ hide (forget)
 0 variable b
 0 variable m
 : equal ( a1...an b1...bn n -- a1...an b1...bn bool : determine if two lists are equal )
-	( example: 
-		1 2 3 
-		1 2 3 
-		3 equal 
+	( example:
+		1 2 3
+		1 2 3
+		3 equal
 	returns: 1 )
 	dup m ! 1+ 1  ( store copy of length and use as loop index )
-	do 
+	do
 		i 1-       pick b ! ( store ith element of list in b1...bn )
 		i m @ + 1- pick a ! ( store ith element of list in a1...an )
 		a @ b @ <>          ( compare a and b for equality )
@@ -2032,18 +2075,18 @@ number not a single cell number )
 	[char] - hold ;
 
 : # ( x -- x : divide x by base, turn into a character, put in pictured output string )
-	(base) um/mod swap 
+	(base) um/mod swap
   	dup 9 u>
   	if 7 + then
   	48 + hold ;
 
 : #s ( x -- 0 : repeatedly call # on x until x is zero )
-	begin # dup 0= until ; 
+	begin # dup 0= until ;
 
 : #> ( -- c-addr u : end pictured output conversion, push output string to stack )
 	0 hold   ( NUL terminate string, just in case )
 	hld 1-!  ( but do not include that in the count )
-	pad chars> hld @ 
+	pad chars> hld @
 	tuck - 1+ swap ;
 
 doer characters
@@ -2100,7 +2143,7 @@ hide{ map }hide
 
 ( ==================== ANSI Escape Codes ===================== )
 ( Terminal colorization module, via ANSI Escape Codes
- 
+
 see: https://en.wikipedia.org/wiki/ANSI_escape_code
 These codes will provide a relatively portable means of
 manipulating a terminal )
@@ -2119,7 +2162,7 @@ manipulating a terminal )
 : background 40 + ;
 0 constant dark
 1 constant bright
-false variable colorize 
+false variable colorize
 
 : 10u. ( n -- : print a number in decimal )
 	base @ >r decimal u. r> base ! ;
@@ -2129,25 +2172,25 @@ false variable colorize
 	for example:
 		bright red foreground color
 	sets the foreground text to bright red )
-	colorize @ 0= if 2drop exit then 
+	colorize @ 0= if 2drop exit then
 	CSI 10u. if ." ;1" then ." m" ;
 
 : at-xy ( x y -- : set ANSI terminal cursor position to x y )
 	CSI 10u. [char] ; emit 10u. ." H" ;
 
-: page  ( -- : clear ANSI terminal screen and move cursor to beginning ) 
+: page  ( -- : clear ANSI terminal screen and move cursor to beginning )
 	CSI ." 2J" 1 1 at-xy ;
 
-: hide-cursor ( -- : hide the cursor from view ) 
+: hide-cursor ( -- : hide the cursor from view )
 	CSI ." ?25l" ;
 
-: show-cursor ( -- : show the cursor )           
+: show-cursor ( -- : show the cursor )
 	CSI ." ?25h" ;
 
-: save-cursor ( -- : save cursor position ) 
+: save-cursor ( -- : save cursor position )
 	CSI ." s" ;
 
-: restore-cursor ( -- : restore saved cursor position ) 
+: restore-cursor ( -- : restore saved cursor position )
 	CSI ." u" ;
 
 : reset-color ( -- : reset terminal color to its default value)
@@ -2169,10 +2212,10 @@ hide{ CSI 10u. }hide
 
 : T ; ( hack until T{ can process words )
 
-: -> ( -- : save depth in variable ) 
-	1 check ! depth result ! ; 
+: -> ( -- : save depth in variable )
+	1 check ! depth result ! ;
 
-: test estring drop #estring @ ; 
+: test estring drop #estring @ ;
 
 : fail ( -- : invalidate the forth interpreter and exit )
 	invalidate bye ;
@@ -2193,7 +2236,7 @@ hide{ CSI 10u. }hide
 
 : failed bad ." failed" reset-color cr ;
 
-: adjust ( x -- x : adjust a depth to take into account starting depth ) 
+: adjust ( x -- x : adjust a depth to take into account starting depth )
 	start @ - ;
 
 : no-check? ( -- bool : if true we need to check the depth )
@@ -2203,7 +2246,7 @@ hide{ CSI 10u. }hide
 	no-check? if exit then
 	depth adjust          ( get depth and adjust for starting depth )
 	result @ adjust 2* =  ( get results depth, same adjustment, should be
-	                        half size of the depth ) 
+	                        half size of the depth )
 	if exit then ( pass )
 	failed
 	." Unequal depths:" cr
@@ -2216,7 +2259,7 @@ hide{ CSI 10u. }hide
 	result @ adjust equal
 	if exit then
 	failed
-	." Result is not equal to expected values. " cr  
+	." Result is not equal to expected values. " cr
 	." Stack: " cr .s cr
 	die ;
 
@@ -2231,7 +2274,7 @@ hide{ CSI 10u. }hide
 	here dictionary ! ;
 
 : restore ( -- : restore dictionary )
-	previous @ pwd ! 
+	previous @ pwd !
 	dictionary @ h ! ;
 
 
@@ -2261,9 +2304,9 @@ T{ : c 1 2 ; c -> 1 2 }T
 not. )
 T{ :noname 2 ; :noname 3 + ; compose execute -> 5 }T
 
-hide{ 
+hide{
 	pass test display
-	adjust start save restore dictionary previous 
+	adjust start save restore dictionary previous
 	evaluate? equal? depth? estring #estring result
 	check no-check? die neutral bad good failed
 }hide
@@ -2273,7 +2316,7 @@ hide{
 
 ( ==================== Pseudo Random Numbers ================= )
 ( This section implements a Pseudo Random Number generator, it
-uses the xor-shift algorithm to do so. 
+uses the xor-shift algorithm to do so.
 See:
 https://en.wikipedia.org/wiki/Xorshift
 http://excamera.com/sphinx/article-xorshift.html
@@ -2374,7 +2417,7 @@ PWD:   Previous Word Pointer, points to the previous
        word.
 CODE:  Flags, code word and offset from previous word
        pointer to start of Forth word string.
-DATA:  The body of the forth word definition, not interested 
+DATA:  The body of the forth word definition, not interested
        in this.
 
 There is a register which stores the latest defined word which
@@ -2418,7 +2461,7 @@ any calculated address by the word size in bytes. )
 
 ( Simpler version of words
 : words
-	pwd @ 
+	pwd @
 	begin
 		dup name print space @ dup dictionary-start u<
 	until drop cr ; )
@@ -2447,7 +2490,7 @@ hide{ words.immediate words.defined words.hidden hidden? hidden-bit }hide
 	" tracing on:              " `debug   @ TrueFalse cr
 	" starting word:           " `instruction ? cr
 	" real start address:      " `start-address ? cr
-	" error handling:          " `error-handler ? cr 
+	" error handling:          " `error-handler ? cr
 	" throw handler:           " `handler ? cr
 	" signal recieved:         " `signal ? cr ;
 	
@@ -2496,7 +2539,7 @@ make debug-prompt prompt-default
 
 : debug ( -- : enter interactive debug prompt )
 	cr
-	" Entered Debug Prompt. Type 'h' <return> for help. " cr 
+	" Entered Debug Prompt. Type 'h' <return> for help. " cr
 	begin
 		key
 		case
@@ -2508,7 +2551,7 @@ make debug-prompt prompt-default
 			[char] R of r.s        endof
 			[char] c of exit       endof
 			( @todo add throw here )
-		endcase 
+		endcase
 	again ;
 hide debug-prompt
 
@@ -2534,11 +2577,11 @@ cases for decompilation )
 the string word that increments a string by an amount, but
 that operates on CELLS )
 : branch-increment ( addr branch -- increment : calculate decompile increment for "branch" )
-	1+ dup negative? 
-	if 
-		over cr . [char] : emit space . cr 2 
-	else 
-		2dup 2- nos1+ nos1+ dump 
+	1+ dup negative?
+	if
+		over cr . [char] : emit space . cr 2
+	else
+		2dup 2- nos1+ nos1+ dump
 	then ;
 
 ( these words take a code field to a primitive they implement,
@@ -2571,22 +2614,22 @@ this decompile function.
 	'	 The next cell should be pushed
 
 	:noname  This has a marker before its code field of
-	         -1 which cannot occur normally, this is 
+	         -1 which cannot occur normally, this is
 	         handled in word-printer
 
 	branch	 branches are used to skip over data, but
-	         also for some branch constructs, any data 
-	         in between can only be printed out 
+	         also for some branch constructs, any data
+	         in between can only be printed out
 	         generally speaking
 
 	exit	 There are two definitions of exit, the one
-	         used in ';' and the one everything else uses, 
-	         this is used to determine the actual end 
+	         used in ';' and the one everything else uses,
+	         this is used to determine the actual end
 	         of the word
 
 	literals Literals can be distinguished by their
-	         low value, which cannot possibly be a word 
-	         with a name, the next field is the 
+	         low value, which cannot possibly be a word
+	         with a name, the next field is the
 	         actual literal
 
 Of special difficult is processing IF, THEN and ELSE
@@ -2609,8 +2652,8 @@ Also of note, a number greater than "here" must be data )
 	begin decompile over + tuck = until drop ;
 
 hide{
-	word-printer get-branch get-?branch get-original-exit 
-	get-quote branch-increment decompile-literal 
+	word-printer get-branch get-?branch get-original-exit
+	get-quote branch-increment decompile-literal
 	decompile-branch decompile-?branch decompile-quote
 	decompile-exit
 }hide
@@ -2631,22 +2674,22 @@ hide{
 	dup see.instruction ( @todo look up instruction name )
 	see.defined ;
 
-( @todo This does not work for all words, so needs fixing. 
- Specifically: 
+( @todo This does not work for all words, so needs fixing.
+ Specifically:
 
 	2variable
 	2constant
 	table
 	constant
 	variable
-	array 
+	array
 Which are all complex CREATE words
 
 A good way to test decompilation is with the following
 Unix pipe:
 
-	./forth -f forth.fth -e words 
-		| sed 's/ / see /g' 
+	./forth -f forth.fth -e words
+		| sed 's/ / see /g'
 		| ./forth -t forth.fth &> decompiled.log
 )
 
@@ -2700,8 +2743,8 @@ address, this needs to mirror the DECOMPILE word )
 		(inline)
 	again ;
 
-hide{ 
-	see.header see.name see.start see.previous see.immediate 
+hide{
+	see.header see.name see.start see.previous see.immediate
 	see.instruction defined-word? see.defined _exit found?
 	(inline) word.end
 }hide
@@ -2747,8 +2790,8 @@ more " Some of the built in words that accessible are:
 	drop              pop and drop a value
 	over              copy the second stack value over the first
 	.                 pop the top of the stack and print it
-" 
-more " 
+"
+more "
 	print             print a NUL terminated string at a character address
 	depth             get the current stack depth
 	clock             get the time since execution start in milliseconds
@@ -2825,7 +2868,7 @@ For resources on Forth:
 in terms of the ones provided by the virtual machine. These
 words are not the most easy to use words, although the ones
 defined here and the ones that are part of the interpreter are
-the standard ones. 
+the standard ones.
 
 Some thoughts:
 
@@ -2838,8 +2881,8 @@ one of the file access words is to call throw any way.
 
 For example, a word like:
 
-	: #write-file \ c-addr u fileid -- fileid u 
-		dup >r 
+	: #write-file \ c-addr u fileid -- fileid u
+		dup >r
 		write-file dup if r> close-file throw throw then
 		r> swap ;
 
@@ -2899,18 +2942,18 @@ hide{ x }hide
 	>r 2dup w/o open-file throw close-file throw
 	r> open-file ;
 
-: include-file ( file-id -- : evaluate a file ) 
+: include-file ( file-id -- : evaluate a file )
 	dup >r 0 1 evaluator r> close-file throw throw ;
 
 : included ( c-addr u -- : attempt to open up a name file and evaluate it )
-	r/o open-file throw 
+	r/o open-file throw
 	include-file ;
 
 : include ( c" ccc" -- : attempt to evaluate a named file )
 	( @bug requires trailing space, should use parse-name )
 	bl word count included ;
 
-: bin ( fam1 -- fam2 : modify a file access method to be binary not line oriented ) 
+: bin ( fam1 -- fam2 : modify a file access method to be binary not line oriented )
 	( Do nothing, all file access methods are binary )
 	;
 
@@ -2954,16 +2997,16 @@ not have to be NUL terminated )
 \ 	}
 \ }
 
-: *pat ( regex -- regex char : grab next character of pattern ) 
+: *pat ( regex -- regex char : grab next character of pattern )
 	dup c@ ;
 
 : *str ( string regex -- string regex char : grab next character string to match )
 	over c@ ;
 
-: pass ( c-addr1 c-addr2 -- bool : pass condition, characters matched ) 
+: pass ( c-addr1 c-addr2 -- bool : pass condition, characters matched )
 	2drop 1 ;
 
-: reject ( c-addr1 c-addr2 -- bool : fail condition, character not matched ) 
+: reject ( c-addr1 c-addr2 -- bool : fail condition, character not matched )
 	2drop 0 ;
 
 : *pat==*str ( c-addr1 c-addr2 -- c-addr1 c-addr2 bool )
@@ -2985,7 +3028,7 @@ defer matcher
 
 : match ( string regex -- bool : match a ASCIIZ pattern against an ASCIIZ string )
 	( @todo Add limits and accept two Forth strings, making sure they are both
-	  ASCIIZ strings as well 
+	  ASCIIZ strings as well
 	  @warning This uses a non-standards compliant version of case! )
 	*pat
 	case
@@ -2999,9 +3042,9 @@ defer matcher
 
 matcher is match
 
-hide{ 
-	*str *pat *pat==*str pass reject advance 
-	advance-string advance-regex matcher ++ 
+hide{
+	*str *pat *pat==*str pass reject advance
+	advance-string advance-regex matcher ++
 }hide
 
 ( ==================== Matcher =============================== )
@@ -3015,7 +3058,7 @@ structure. There is currently no way to free allocated
 cells. I do not think this is particularly useful, but it is
 interesting. )
 
-: car! ( value cons-addr -- : store a value in the car cell of a cons cell ) 
+: car! ( value cons-addr -- : store a value in the car cell of a cons cell )
 	! ;
 
 : cdr! ( value cons-addr -- : store a value in the cdr cell of a cons cell )
@@ -3045,7 +3088,7 @@ C code. This has not been done for any ideological reasons,
 and I am not that bothered about licenses. )
 
 : license ( -- : print out license information )
-" 
+"
 The MIT License (MIT)
 
 Copyright (c) 2016, 2017 Richard James Howe
@@ -3071,7 +3114,7 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 OR OTHER DEALINGS IN THE SOFTWARE.
 
-" 
+"
 ;
 
 ( ==================== License =============================== )
@@ -3096,7 +3139,7 @@ create size-field size-field-size chars allot
 	size-field chars> ;
 
 0
-enum header-magic0     ( magic number 0 : FF ) 
+enum header-magic0     ( magic number 0 : FF )
 enum header-magic1     ( magic number 1 : '4' )
 enum header-magic2     ( magic number 2 : 'T' )
 enum header-magic3     ( magic number 3 : 'H' )
@@ -3119,7 +3162,7 @@ enum header-log2size   ( binary logarithm of the core size )
 	core-cell-size @ 8 = if 8 . cr exit then
 	cleanup core-cell-size @ . abort" : invalid cell size"  ;
 
-: check-version-compatibility ( char -- : checks the version compatibility of the core file ) 
+: check-version-compatibility ( char -- : checks the version compatibility of the core file )
 	core-version !
 	core-version @ version = if " version:        " version . cr exit then
 	cleanup core-version @ . abort" : unknown version number" ;
@@ -3132,7 +3175,7 @@ enum header-log2size   ( binary logarithm of the core size )
 	cleanup core-endianess @ . abort" invalid endianess" then ;
 
 : read-or-abort ( c-addr size fileid -- : )
-	over >r read-file 
+	over >r read-file
 	  0<> if cleanup abort" file read failed" then
 	r> <> if cleanup abort" header too small" then ;
 
@@ -3153,18 +3196,18 @@ enum header-log2size   ( binary logarithm of the core size )
 
 : core ( c-addr u -- : analyze a Forth core file from disk given its file name )
 	2dup " core file:" tab type cr
-	r/o open-file throw core-file ! 
+	r/o open-file throw core-file !
 	header?
 	size?
 	core-file @ close-file drop ;
 
 ( s" forth.core" core )
 
-hide{ 
-header-size header? 
+hide{
+header-size header?
 header-magic0 header-magic1 header-magic2 header-magic3
 header-version header-cell-size header-endianess header-log2size
-header 
+header
 core-file save-core-cell-size check-version-compatibility
 core-cell-size cheader
 core-endianess core-version save-endianess invalid-header
@@ -3232,13 +3275,13 @@ Example usage:
 	>r cpad swap r> read-file throw cpad swap type ;
 
 : command ( file-id -- : process an RLE command )
-	dup 
+	dup
 	>r next.char
-	dup run-length u> 
-	if 
-		run-length - r> literals 
-	else 
-		1+ r> repeated 
+	dup run-length u>
+	if
+		run-length - r> literals
+	else
+		1+ r> repeated
 	then ;
 
 : redirect ( file-id-out -- : save current output pointer, redirect to output )
@@ -3261,12 +3304,12 @@ hide{ literals repeated next.char out run-length command }hide
 ( ==================== Generate C Core file ================== )
 ( The word core2c reads in a core file and turns it into a
 C file which can then be compiled into the forth interpreter
-in a bootstrapping like process. The process is described 
+in a bootstrapping like process. The process is described
 elsewhere as well, but it goes like this.
 
 1. We want to generate an executable program that contains the
 core Forth interpreter, written in C, and the contents of this
-file in compiled form. However, in order to compile this code 
+file in compiled form. However, in order to compile this code
 we need a Forth interpreter to do so. This is the problem.
 2. To solve the problem we first make a program which is capable
 of compiling "forth.fth".
@@ -3302,15 +3345,15 @@ Usage:
 	r> redirect
 	" #include " quote " libforth.h" quote cr
 	" unsigned char forth_core_data[] = {" cr
-	hexify 
+	hexify
 	" };" cr
 	" forth_cell_t forth_core_size = " count @ . " ;" cr cr
 	close-file
-	`fout @ close-file 
+	`fout @ close-file
 	restore or ;
 
 hide{ wbyte hexify count quote advance }hide
- 
+
 ( ==================== Generate C Core file ================== )
 
 ( ==================== Word Count Program ==================== )
@@ -3320,11 +3363,11 @@ hide{ wbyte hexify count quote advance }hide
 : wc ( c-addr u -- u : count the bytes in a file )
 	r/o open-file throw
 	0 swap
-	begin 
-		dup getchar nip 0= 
-	while 
-		nos1+ 
-	repeat 
+	begin
+		dup getchar nip 0=
+	while
+		nos1+
+	repeat
 	close-file throw ;
 
 ( ==================== Word Count Program ==================== )
@@ -3356,10 +3399,10 @@ will be redirected to a file )
 	header
 	data ;
 
-: save-core ( c-addr u -- : save core file or throw error ) 
+: save-core ( c-addr u -- : save core file or throw error )
 	w/o open-file throw dup
-	redirect 
-		' encore catch swap close-file throw 
+	redirect
+		' encore catch swap close-file throw
 	restore ;
 
 ( The following code illustrates an example of setting up a
@@ -3367,7 +3410,7 @@ Forth core file to execute a word when the core file is loaded.
 In the example the word "hello-world" will be executed,
 which will also quit the interpreter:
 
-This only works for immediate words for now, we define 
+This only works for immediate words for now, we define
 the word we wish to be executed when the forth core
 is loaded:
 
@@ -3380,7 +3423,7 @@ defined word:
 	find hello-world cfa start!
 
 	\ Now we can save the core file out:
-	s" forth.core" save-core 
+	s" forth.core" save-core
 
 This can be used, in conjunction with aspects of the build
 system, to produce a standalone executable that will run only
@@ -3400,20 +3443,20 @@ print out the correct address
 \ : clean  cpad 128 0 fill ; ( -- )
 \ : cdump  cpad chars swap aligned chars dump ; ( u -- )
 \ : hexdump ( file-id -- : [hex]dump a file to the screen )
-\ 	dup 
+\ 	dup
 \ 	clean
 \ 	input if 2drop exit then
 \ 	?dup-if cdump else drop exit then
-\ 	tail ; 
-\ 
+\ 	tail ;
+\
 \ 0 variable u
 \ 0 variable u1
 \ 0 variable cdigs
 \ 0 variable digs
-\ 
+\
 \ : address ( -- bool : is it time to print out a new line and an address )
 \ 	u @ u1 @ - 4 size * mod 0= ;
-\ 
+\
 \ : (dump) ( u c-addr u : u -- )
 \ 	rot dup u ! u1 !
 \ 	cdigits cdigs !
@@ -3425,22 +3468,22 @@ print out the correct address
 \ 		
 \ 		i 1+ size mod 0= if space then
 \ 		u 1+!
-\ 	loop 
+\ 	loop
 \ 	u @
 \ 	;
-\ 
+\
 \ : hexdump-file ( c-addr u )
-\ 	r/o open-file throw 
+\ 	r/o open-file throw
 \ 	
 \ 	;
-\ 
+\
 \ hide{ u u1 cdigs digs address }hide
 \ hex
 \ 999 0 197 (dump)
 \ decimal
-\ 
+\
 \ hide{ cpad clean cdump input }hide
-\ 
+\
 ( ==================== Hex dump ============================== )
 
 ( ==================== Date ================================== )
@@ -3508,7 +3551,7 @@ Rather annoyingly months are start from 1 but weekdays from
 ( .NB You can format the date in hex if you want! )
 : date-string ( date -- c-addr u : format a date string in transient memory )
 	9 reverse ( reverse the date string )
-	<# 
+	<#
 		dup #s drop 0? ( seconds )
 		colon hold
 		dup #s drop 0? ( minute )
@@ -3544,9 +3587,9 @@ word size allows it [ie. 32 bit CRCs on a 32 or 64 bit machine,
 64 bit CRCs on a 64 bit machine] )
 
 ( Make a word to limit arithmetic to a 16-bit value )
-size 2 = [if] 
+size 2 = [if]
 	: limit immediate ;  ( do nothing, no need to limit )
-[else] 
+[else]
 	: limit 0xffff and ; ( limit to 16-bit value )
 [then]
 
@@ -3636,7 +3679,7 @@ can be used in lieu of floating point numbers. )
   simplify ;
 
 : -rat ( a/b c/d -- a/b : subtract one rational from another )
-  crossmultiply 
+  crossmultiply
   rot
   drop ( or check if equal, if not there is an error )
   -rot
@@ -3696,12 +3739,31 @@ methods for reading and writing to files through it.
 
 Each block number accepted by BLOCK is backed by a file
 [or created if it does not exist]. The name of the file is
-the block number with ".blk" appended to it. 
+the block number with ".blk" appended to it.
+
+Some Notes:
+
+BLOCK only uses one block buffer, most other Forths have
+multiple block buffers, this could be improved on, but
+would take up more space.
 
 Another way of storing the blocks could be made, which is to
-store the blocks in a single file and seek to the correct 
+store the blocks in a single file and seek to the correct
 place within it. This might be implemented in the future,
-or offered as an alternative. )
+or offered as an alternative. 
+
+Yet another way is to not have on disk blocks, but instead
+have in memory blocks, this simplifies things significantly,
+and would mean saving the blocks to disk would use the same
+mechanism as saving the core file to disk. Computers certainly
+have enough memory to do this. The block word set could
+be factored so it could use either the on disk method or
+the memory option. 
+
+To simplify the current code, and make the code portable
+to devices with EEPROM an instruction in the virtual machine
+could be made which does the task of transfering a block to
+disk. )
 
 0 variable dirty
 b/buf string buf  ( block buffer, only one exists )
@@ -3742,7 +3804,7 @@ only write or read 1024 and not a byte more )
 : block.open ( n fam -- file-id )
 	>r block.name r> open-file throw ;
 
-: save-buffers 
+: save-buffers
 	blk @ 0= if exit then    ( not a valid block number, exit )
 	dirty @ not if exit then ( not dirty, no need to save )
 	blk @ w/o block.open     ( open file backing block buffer )
@@ -3771,23 +3833,23 @@ creates it.
 5. It then stores the block number in blk and returns an
 address to the block buffer. )
 : block ( n -- c-addr : load a block )
-	dup invalid? 
+	dup invalid?
 	dup blk @ = if drop buf drop exit then
 	flush
 	dup block.exists if        ( if the buffer exits on disk load it in )
-		dup r/o block.open 
-		block.read        
-		close-file throw    
+		dup r/o block.open
+		block.read
+		close-file throw
 	else                        ( else it does not exist )
 		buf 0 fill          ( clean the buffer )
-	then 
+	then
 	blk !                       ( save the block number )
 	buf drop ;
 
 : buffer block ;
 
 ( @warning uses hack, block buffer is NUL terminated, and evaluate requires
-a NUL terminated string, evaluate checks that the last character is NUL, 
+a NUL terminated string, evaluate checks that the last character is NUL,
 hence the 1+ )
 : load ( n -- : load and execute a block )
 	block b/buf 1+ evaluate throw ;
@@ -3811,8 +3873,12 @@ hence the 1+ )
 	dup block.exists 0= if drop exit then
 	block.name delete-file drop ;
 
-hide{ 
-	block.name invalid? block.write 
+\ @todo implement a word that splits a file into blocks
+\ : split ( c-addr u : split a file into blocks )
+\	;
+
+hide{
+	block.name invalid? block.write
 	block.read block.exists block.open dirty
 }hide
 
@@ -3849,7 +3915,7 @@ A very primitive version of list can be defined as follows:
 	pipe ;
 
 : line ( c-addr -- c-addr u : given a line number, display that line number and calculate offset )
-	dup    
+	dup
 	line.number ( display line number )
 	c/l * +     ( calculate offset )
 	c/l ;       ( add line length )
@@ -3872,9 +3938,9 @@ A very primitive version of list can be defined as follows:
 	key drop
 	1+ swap do i list more loop ;
 
-hide{ 
-	buf line line.number list.type 
-	(base) list.box list.border list.end pipe 
+hide{
+	buf line line.number list.type
+	(base) list.box list.border list.end pipe
 }hide
 
 ( ==================== List ================================== )
@@ -3888,9 +3954,9 @@ machine and cause a THROW from within it. )
 
 ( signals are biased to fall outside the range of the error
 numbers defined in the ANS Forth standard. )
--512 constant signal-bias 
+-512 constant signal-bias
 
-: signal ( -- signal/0 : push the results of the signal register ) 
+: signal ( -- signal/0 : push the results of the signal register )
 	`signal @
  	0 `signal ! ;
 
@@ -3900,21 +3966,21 @@ numbers defined in the ANS Forth standard. )
 tend to have a lot of words that do not mean anything but to
 the implementers of that specific Forth, here we clean up as
 many non standard words as possible. )
-hide{ 
- do-string ')' alignment-bits 
+hide{
+ do-string ')' alignment-bits
  dictionary-start hidden-mask instruction-mask immediate-mask compiling?
  compile-bit
- max-core dolist doconst x x! x@ 
- max-string-length 
- evaluator 
- TrueFalse >instruction 
+ max-core dolist doconst x x! x@
+ max-string-length
+ evaluator
+ TrueFalse >instruction
  xt-instruction
  `source-id `sin `sidx `slen `start-address `fin `fout `stdin
  `stdout `stderr `argc `argv `debug `invalid `top `instruction
- `stack-size `error-handler `x `handler _emit `signal 
+ `stack-size `error-handler `x `handler _emit `signal
 }hide
 
-( 
+(
 ## Forth To List
 
 The following is a To-Do list for the Forth code itself,
@@ -4006,7 +4072,7 @@ written into a word, like SEE is.
 * The source code for this file should go through a code
 review, which should focus on formatting, stack comments and
 reorganizing the code. Currently it is not clear that variables
-like COLORIZE and 'fancy-list' exist and can be changed by
+like COLORIZE and FANCY-LIST exist and can be changed by
 the user. Lines should be 64 characters in length - maximum,
 including the new line at the end of the file.
 
@@ -4049,7 +4115,7 @@ core file, generate a new function, then call it. It is just
 a thought.
  )
 
-verbose [if] 
+verbose [if]
 	.( FORTH: libforth successfully loaded.) cr
 	date .date cr
 	.( Type 'help' and press return for a basic introduction.) cr
@@ -4060,7 +4126,7 @@ verbose [if]
 ( ==================== Test Code ============================= )
 
 ( The following will not work as we might actually be reading
-from a string [`sin] not `fin.  
+from a string [`sin] not `fin.
 
 : key 32 chars> 1 `fin @
 	read-file drop 0 = if 0 else 32 chars> c@ then ; )
@@ -4072,7 +4138,7 @@ for that wordlists will need to be introduced and used in
 libforth.c. The best that this word set can do is to hide
 and reveal words to the user, this was just an experiment.
 
-	: forth 
+	: forth
 		[ find forth 1- @ ] literal
 		[ find forth 1- ] literal ! ;
 
@@ -4096,11 +4162,11 @@ and reveal words to the user, this was just an experiment.
 ( ==================== Test Code ============================= )
 
 ( ==================== Block Editor ========================== )
-( Experimental block editor Mark II 
+( Experimental block editor Mark II
 
 This is a simple block editor, it really shows off the power
 and simplicity of Forth systems - both the concept of a block
-editor and the implementation. 
+editor and the implementation.
 
 Forth source code used to organized into things called 'blocks',
 nowadays most people use normal resizeable stream based files.
@@ -4108,14 +4174,14 @@ A block simply consists of 1024 bytes of data that can be
 transfered to and from mass storage. This works on systems that
 do not have a file system. A block can be used for storing
 arbitrary data as well, so the user had to know what was stored
-in what block. 
+in what block.
 
 1024 bytes is quite a limiting Form factor for storing source
 code, which is probably one reason Forth earned a reputation
 for being terse. A few conventions arose around dealing with
 Forth source code stored in blocks - both in how the code should
 be formatted within them, and in how programs that required
-more than one block of storage should be dealt with. 
+more than one block of storage should be dealt with.
 
 One of the conventions is how many columns and rows each block
 consists of, the traditional way is to organize the code into
@@ -4127,13 +4193,50 @@ knows how long a line is so it can wrap the text.
 Various standards and common practice evolved as to what goes
 into a block - for example the first line is usually a comment
 describing what the block does, with the date is was last edited
-and who edited the block last.
+and who edited it.
 
+The way the editor works is by defining a simple set of words
+that act on the currently loaded block, LIST is used to display
+the loaded block. An editor loop which executes forth words
+and automatically displays the currently block can be entered
+by calling EDITOR. This loop is essential an extension of
+the INTERPRET word, it does no special processing such as
+looking for keys - all commands are Forth words. The editor
+loop could have been implemented in the following fashion
+[or something similar]:
 
-@todo Improve the block editor 
+	: editor-command
+		key
+		case
+			[char] h of print-editor-help endof
+			[char] i of insert-text endof
+			[char] d of delete-line endof
+			... more editor commands
+			[char] q of quit-editor-loop endof
+			push-number-by-default
+		endof ;
 
-- '\' needs extending to work with the block editor, for now, 
-use parenthesis for comments 
+However this is rather limiting, it only works for single
+character commands and numeric input is handled as a special
+case. It is far simpler to just call the READ word with the
+editor commands in search order, and it can be extended not
+by adding more parsing code in CASE statements but just by
+defining new words in the ordinary manner.
+
+The editor loop does not have to be used while editing code,
+but it does make things easier. The commands defined can be
+used on there own.
+	
+The code was adapted from: 	
+
+http://retroforth.org/pages/?PortsOfRetroEditor
+
+Which contains ports of an editor written for Retro Forth.
+
+@todo Improve the block editor
+
+- '\' needs extending to work with the block editor, for now,
+use parenthesis for comments
 - add multi line insertion mode
 - Add to an editor vocabulary, which will need the vocabulary
 system to exist.
@@ -4142,7 +4245,7 @@ ANSI escape codes - thanks to CMD.EXE. Damned Windows.
 
 Adapted from http://retroforth.org/pages/?PortsOfRetroEditor )
 
- 
+
 : help ( @todo rename to H once vocabularies are implemented )
 page cr
 " Block Editor Help Menu
@@ -4161,22 +4264,22 @@ page cr
  -- press any key to continue -- " cr ( " )
 char drop ;
 
-: (block) blk @ block ; 
+: (block) blk @ block ;
 : (check) dup b/buf c/l / u>= if -24 throw then ;
 : (line) (check) c/l * (block) + ; ( n -- c-addr : push current line address )
-: (clean) 
+: (clean)
 	(block) b/buf
 	2dup nl bl subst
 	2dup cret bl subst
 	      0 bl subst ;
 : n  1 +block block ;
 : p -1 +block block ;
-: d (line) c/l bl fill ; 
+: d (line) c/l bl fill ;
 : x (block) b/buf bl fill ;
 : s update save-buffers ;
 : q rdrop rdrop ;
 : e blk @ load char drop ;
-: ia c/l * + dup b/buf swap - >r (block) + r> accept drop (clean) ; 
+: ia c/l * + dup b/buf swap - >r (block) + r> accept drop (clean) ;
 : i 0 swap ia ;
 : editor
 	1 block     ( load first block by default )
@@ -4221,28 +4324,28 @@ structures a bit safer. )
 ( ==================== DUMP ================================== )
 \ : newline ( x -- x+1 : print a new line every fourth value )
 \ 	dup 3 and 0= if cr then 1+ ;
-\ 
+\
 \ : address ( num count -- count : print current address we are dumping every fourth value )
 \ 	dup >r
 \ 	1- 3 and 0= if . [char] : emit space else drop then
 \ 	r> ;
-\ 
+\
 \ : dump ( start count -- : print the contents of a section of memory )
 \ \	hex       ( switch to hex mode )
 \ 	1 >r      ( save counter on return stack )
 \ 	over + swap ( calculate limits: start start+count )
-\ 	begin 
+\ 	begin
 \ 		2dup u> ( stop if gone past limits )
-\ 	while 
+\ 	while
 \ 		dup r> address >r
-\ 		dup @ . 1+ 
+\ 		dup @ . 1+
 \ 		r> newline >r
-\ 	repeat 
+\ 	repeat
 \ 	r> drop
 \ 	2drop ;
-\ 
+\
 \ hide newline
-\ hide address 
+\ hide address
 ( ==================== DUMP ================================== )
 
 ( ==================== End of File Functions ================= )
@@ -4250,7 +4353,7 @@ structures a bit safer. )
 ( set up a rendezvous point, we can call the word RETREAT to
 restore the dictionary to this point. This word also updates
 fence to this location in the dictionary )
-rendezvous 
+rendezvous
 
 : task ; ( Task is a word that can safely be forgotten )
 

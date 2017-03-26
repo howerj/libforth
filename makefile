@@ -150,7 +150,7 @@ show: lib${TARGET}.pdf
 # This option requires a clean build
 line: LDFLAGS += -lline
 line: CFLAGS += -L${INCLUDE} -I${INCLUDE} -DUSE_LINE_EDITOR
-line: libline/libline.a ${TARGET} libforth
+line: libline/libline.a ${TARGET} 
 
 # CFLAGS: Add "-save-temps" to keep temporary files around
 # objdump: Add "-M intel" for a more sensible assembly output

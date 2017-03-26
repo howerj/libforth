@@ -9,6 +9,7 @@
 #include "unit.h"
 #include <assert.h>
 #include <errno.h>
+#include <ctype.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,6 +25,16 @@
 extern unsigned char forth_core_data[];
 extern forth_cell_t forth_core_size;
 #endif
+
+/**
+Although multiple instances of a libforth environment can be active in a single
+C application, this test program only has one active. This is stored in a 
+global variable so signal handlers can access it.
+**/
+static forth_t *global_forth_environment; 
+static int enable_signal_handling;
+
+typedef void (*signal_handler)(int sig); /**< functions for handling signals*/
 
 #ifdef USE_ABORT_HANDLER
 #ifdef __unix__
@@ -77,19 +88,43 @@ The line editor, if used, will print a prompt for each line:
 static const char *prompt = "> ";
 
 /**
+This is the line completion callback
+**/
+void forth_line_completion_callback(const char *line, size_t pos, line_completions *lc)
+{
+	size_t length = 0;
+	char **s;
+	assert(line);
+	assert(lc);
+	assert(global_forth_environment);
+	s = forth_words(global_forth_environment, &length);
+	(void)pos;
+	if(!s)
+		return;
+	for(size_t i = 0; i < length; i++) {
+		/**@todo pattern matching on line versus s[i] */
+		line_add_completion(lc, s[i]);
+	}
+	forth_free_words(s, length);
+}
+
+/**
 @brief The following function implements a line-editor loop, quiting
 when there is no more input to be read.
-@param  o   a fully initialized for environment
+@param  o    a fully initialized for environment
+@param  mode set vi mode on or off
 @return int <0 on failure of the Forth execution or the line editor
 **/
-static int forth_line_editor(forth_t *o)
+static int forth_line_editor(forth_t *o, int mode)
 {
 	int rval = 0;
 	char *line = NULL;
 	assert(o);
+	line_set_vi_mode(mode);
 	errno = 0;
 	if(line_history_load(history_file) < 0) /* loading can fail, which is fine */
 		warning("failed to load history file %s, %s", history_file, forth_strerror());
+	line_set_completion_callback(forth_line_completion_callback);
 	while((line = line_editor(prompt))) {
 		forth_set_string_input(o, line);
 		if((rval = forth_run(o)) < 0)
@@ -112,16 +147,6 @@ end:
 #else
 #define LINE_EDITOR_AVAILABLE (0) /**< line editor is not available */
 #endif /* USE_LINE_EDITOR */
-
-/**
-Although multiple instances of a libforth environment can be active in a single
-C application, this test program only has one active. This is stored in a 
-global variable so signal handlers can access it.
-**/
-static forth_t *global_forth_environment; 
-static int enable_signal_handling;
-
-typedef void (*signal_handler)(int sig); /**< functions for handling signals*/
 
 static void register_signal_handler(int sig, signal_handler handler)
 {
@@ -428,7 +453,7 @@ done:
 
 #ifdef USE_LINE_EDITOR
 		if(use_line_editor) {
-			rval = forth_line_editor(o);
+			rval = forth_line_editor(o, 1);
 			goto end;
 		}
 #endif
@@ -471,6 +496,7 @@ no reason.  However not freeing the memory after use does not play nice with
 programs that detect memory leaks, like Valgrind. Either way, we free the
 memory used here, but only if no other errors have occurred before hand. 
 **/
+
 	forth_free(o);
 	return rval;
 }

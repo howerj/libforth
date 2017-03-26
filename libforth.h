@@ -277,6 +277,31 @@ will be) checked when the Forth environment runs again.
 void forth_signal(forth_t *o, int sig);
 
 /**
+@brief  Duplicate a string, not all C libraries have a strdup function,
+although they should!
+@param  s String to duplicate
+@return Duplicated string, caller frees.
+**/
+char *forth_strdup(const char *s);
+
+/**
+@brief Free the list of words returned by forth_words
+@param s      word list to free
+@param length length of word list to free
+**/
+void forth_free_words(char **s, size_t length);
+
+/**
+@brief This function returns a list of strings containing
+all of the names of words defined in a forth environment. This
+function returns NULL on failure and sets length to zero.
+@param o      initialized forth environment
+@param length length of returned array
+@return list of pointers to strings containing Forth word names
+**/
+char **forth_words(forth_t *o, size_t *length);
+
+/**
 @brief  Check whether a forth environment is still valid, that
 is if the environment makes sense and is still runnable, an invalid
 forth environment cannot be saved to disk or run. Once a core is
