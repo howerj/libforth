@@ -450,6 +450,7 @@ when having to convert to and from character and cell address.)
 : 2! ( u1 u2 a-addr -- : store two values at two consecutive memory cells )
 	2dup ! nip 1+ ! ;
 
+( @bug I don't think this is correct. )
 : r@  (  -- u, R: u -- )
 	r> r @ swap >r ;
 
@@ -1058,11 +1059,14 @@ hide tail
 	' branch ,
 	here - cell+ , ;
 
-: factorial ( x -- x : compute the factorial of a number )
-	dup 2 < if drop 1 exit then dup 1- recurse * ;
+: factorial ( u -- u : factorial of u )
+	dup 2 u< if drop 1 exit then dup 1- recurse * ;
 
-: gcd ( x1 x2 -- x : greatest common divisor )
+: gcd ( u1 u2 -- u : greatest common divisor )
 	dup if tuck mod tail then drop ;
+
+: lcm ( u1 u2 -- u : lowest common multiple of u1 and u2 )
+	2dup gcd / * ;
 
 ( From: https://en.wikipedia.org/wiki/Integer_square_root
 
@@ -4359,5 +4363,17 @@ rendezvous
 
 ( ==================== End of File Functions ================= )
 
+( Experimental FOR ... NEXT )
+: for immediate
+	?comp
+	['] >r ,
+	here
+	;
 
+: (next) ( -- bool,  R: val -- | val+1 )
+	r> r> 1- dup 0= if drop >r 1 else >r >r 0 then ;
 
+: next immediate
+	?comp
+	' (next) , ' ?branch , here - , ;
+ 
