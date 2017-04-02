@@ -1461,6 +1461,16 @@ are two error handlers. These mechanisms need unifying.
 * Error handling could be improved - the latest word definition should be
 erased if an error occurs before the terminating ';'. And trap handling
 should be done in pure forth, instead of as a hybrid which is currently is.
+* A series simple Unix utilities, like in <https://github.com/howerj/multicall>
+could be made in Forth, this would demonstrate that this Forth is usable
+and practical. Tools like "cat", "tr", "grep", and various other text
+formatting tools could be done in pure C, others like "kill", "mount" or "ls"
+would require operating system dependent code to be added, this would need
+to be contained somehow, so the core remains pure C.
+* Allow the main memory to be resized. A Forth primitive MORE-CORE could be
+added.
+* Move the stack space so it is before the dictionary, this would mean we
+could write to the end of memory without worrying about hitting the stack.
 * Make a debian package for the Forth interpreter.
 * For a Forth only related "To-Do" list see the end of the file [forth.fth][].
 * A compiler for the virtual machine itself should be made, as a separate

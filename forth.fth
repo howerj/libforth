@@ -3767,7 +3767,10 @@ the memory option.
 To simplify the current code, and make the code portable
 to devices with EEPROM an instruction in the virtual machine
 could be made which does the task of transfering a block to
-disk. )
+disk. 
+
+@todo refactor BLOCK to use MAKE/DOER so its behavior can
+be changed. )
 
 0 variable dirty
 b/buf string buf  ( block buffer, only one exists )
@@ -3864,6 +3867,7 @@ hence the 1+ )
 : --> ( -- : load next block )
 	1 +block load ;
 
+( @todo refactor into BLOCK.MAKE, which BLOCKS.MAKE would use )
 : blocks.make ( n1 n2 -- : make blocks on disk from n1 to n2 inclusive )
 	1+ swap do i block b/buf bl fill update loop save-buffers ;
 
@@ -4303,10 +4307,10 @@ yank bl fill
 : u update ;
 : b block ;
 : l blk @ list ;
-: y (line) yank >r swap r> cmove ;
-: c (line) yank cmove ;
-: ct swap y c ;
-: m retreat ;
+: y (line) yank >r swap r> cmove ; ( n -- yank line number to buffer )
+: c (line) yank cmove ; ( n -- copy yank buffer to line )
+: ct swap y c ; ( n1 n2 -- copy line n1 to n2 )
+: m retreat ; ( -- : forget everything since editor session began )
 
 hide{ (block) (line) (clean) yank }hide
 
