@@ -764,71 +764,6 @@ hide stdin?
 	!                   ( write an execution token to a hole )
 	[ 0 , ] ;           ( this is the hole we write )
 
-( See: http://lars.nocrew.org/dpans/dpans9.htm
-@todo turn this into a lookup table of strings
-
-       Code     Reserved for
-       ----     ------------
-        -1      ABORT
-        -2      ABORT"
-        -3      stack overflow
-        -4      stack underflow
-        -5      return stack overflow
-        -6      return stack underflow
-        -7      do-loops nested too deeply during execution
-        -8      dictionary overflow
-        -9      invalid memory address
-        -10     division by zero
-        -11     result out of range
-        -12     argument type mismatch
-        -13     undefined word
-        -14     interpreting a compile-only word
-        -15     invalid FORGET
-        -16     attempt to use zero-length string as a name
-        -17     pictured numeric output string overflow
-        -18     parsed string overflow
-        -19     definition name too long
-        -20     write to a read-only location
-        -21     unsupported operation [e.g., AT-XY on a
-                too-dumb terminal]
-        -22     control structure mismatch
-        -23     address alignment exception
-        -24     invalid numeric argument
-        -25     return stack imbalance
-        -26     loop parameters unavailable
-        -27     invalid recursion
-        -28     user interrupt
-        -29     compiler nesting
-        -30     obsolescent feature
-        -31     >BODY used on non-CREATEd definition
-        -32     invalid name argument [e.g., TO xxx]
-        -33     block read exception
-        -34     block write exception
-        -35     invalid block number
-        -36     invalid file position
-        -37     file I/O exception
-        -38     non-existent file
-        -39     unexpected end of file
-        -40     invalid BASE for floating point conversion
-        -41     loss of precision
-        -42     floating-point divide by zero
-        -43     floating-point result out of range
-        -44     floating-point stack overflow
-        -45     floating-point stack underflow
-        -46     floating-point invalid argument
-        -47     compilation word list deleted
-        -48     invalid POSTPONE
-        -49     search-order overflow
-        -50     search-order underflow
-        -51     compilation word list changed
-        -52     control-flow stack overflow
-        -53     exception stack overflow
-        -54     floating-point underflow
-        -55     floating-point unidentified fault
-        -56     QUIT
-        -57     exception in sending or receiving a character
-        -58     [IF], [ELSE], or [THEN] exception )
-
 ( @todo integrate catch/throw into the interpreter as primitives )
 : catch  ( xt -- exception# | 0 : return addr on stack )
 	sp@ >r        ( xt : save data stack pointer )
@@ -887,7 +822,7 @@ words to make sure they only execute in the correct state )
 	postpone then ; ( then writes to the hole made in if )
 
 : never ( never...then : reserve space in word )
-	immediate ?comp 0 [literal] postpone if ;
+	immediate 0 [literal] postpone if ;
 
 : unless ( bool -- : like IF but execute clause if false )
 	immediate ?comp ['] 0= , postpone if ;
@@ -1434,6 +1369,65 @@ testing and debugging:
 : reverse ( x1 ... xn n -- xn ... x1 : reverse n items on the stack )
 	0 do i roll loop ;
 
+doer (banner)
+make (banner) space
+
+: banner ( n -- : )
+	dup 0<= if drop exit then
+	0 do (banner) loop ;
+
+: zero ( -- : emit a single 0 character )
+	[char] 0 emit ;
+
+: spaces ( n -- : print n spaces if n is greater than zero )
+	make (banner) space
+	banner ;
+
+: zeros ( n -- : print n spaces if n is greater than zero )
+	make (banner) zero
+	banner ;
+
+hide{ (banner) banner }hide
+
+( @todo check u for negative )
+: fill ( c-addr u char -- : fill in an area of memory with a character, only if u is greater than zero )
+	-rot
+	0 do 2dup i + c! loop
+	2drop ;
+
+: default ( addr u n -- : fill in an area of memory with a cell )
+	-rot
+	0 do 2dup i cells + ! loop
+	2drop ;
+
+: compare ( c-addr1 u1 c-addr2 u2 -- n : compare two strings, not quite compliant yet )
+	>r swap r> min >r
+	start-address + swap start-address + r>
+	memory-compare ;
+
+: erase ( addr u : erase a block of memory )
+	2chars> 0 fill ;
+
+: blank ( c-addr u : fills a string with spaces )
+	bl fill ;
+
+( move should check that u is not negative )
+: move ( addr1 addr2 u -- : copy u words of memory from 'addr2' to 'addr1' )
+	0 do
+		2dup i + @ swap i + !
+	loop
+	2drop ;
+
+( It would be nice if move and cmove could share more code, as they do exactly
+  the same thing but with different load and store functions, cmove>  )
+: cmove ( c-addr1 c-addr2 u -- : copy u characters of memory from 'c-addr2' to 'c-addr1' )
+	0 do
+		2dup i + c@ swap i + c!
+	loop
+	2drop ;
+
+
+
 ( ==================== Do ... Loop =========================== )
 
 ( ==================== String Substitution =================== )
@@ -1521,8 +1515,8 @@ hide{ c sub #sub (subst-all) }hide
 : accumulator  ( initial " ccc" -- : make a word that increments by a value and pushes the result )
 	create , does> tuck +! @ ;
 
-: counter ( " ccc" --, Run Time: -- x : make a word that increments itself by one, starting from zero )
-	create -1 , does> dup 1+! @ ;
+: counter ( n " ccc" --, Run Time: -- x : make a word that increments itself by one, starting from 'n' )
+	create 1- , does> dup 1+! @ ;
 
 0 variable delim
 : accepter ( c-addr max delimiter -- i )
@@ -1547,13 +1541,13 @@ hide delim
 	key drop >r 0 begin drop key dup rdup r> <> until rdrop ;
 
 : word ( c -- c-addr : parse until 'c' is encountered, push transient counted string  )
-	dup skip chere 1+ c!
+	dup skip tib 1+ c!
 	>r
-	chere 2+
-	pad here - chars>
+	tib 2+
+	#tib
 	r> accepter 1+
-	chere c!
-	chere ;
+	tib c!
+	tib ;
 hide skip
 
 : accept ( c-addr +n1 -- +n2 : see accepter definition )
@@ -1604,16 +1598,6 @@ hide (type)
 : do-string ( char -- : write a string into the dictionary reading it until char is encountered )
 	(.")
 	state @ if swap [literal] [literal] then ;
-
-: fill ( c-addr u char -- : fill in an area of memory with a character, only if u is greater than zero )
-	-rot
-	0 do 2dup i + c! loop
-	2drop ;
-
-: compare ( c-addr1 u1 c-addr2 u2 -- n : compare two strings, not quite compliant yet )
-	>r swap r> min >r
-	start-address + swap start-address + r>
-	memory-compare ;
 
 128 string sbuf
 : s" ( "ccc<quote>" --, Run Time -- c-addr u )
@@ -1682,6 +1666,182 @@ not checking of the returned values from write-file )
 	postpone "
 	' cr , ' (abort") , ;
 
+
+( ==================== Error Messages ======================== )
+( This section implements a look up table for error messages,
+the word MESSAGE was inspired by FIG-FORTH, words like ERROR
+will be implemented later.
+
+The DPANS standard defines a range of numbers which correspond
+to specific errors, the word MESSAGE can decode these numbers
+by looking up known words in a table.
+
+See: http://lars.nocrew.org/dpans/dpans9.htm
+
+       Code     Reserved for
+       ----     ------------
+        -1      ABORT
+        -2      ABORT"
+        -3      stack overflow
+        -4      stack underflow
+        -5      return stack overflow
+        -6      return stack underflow
+        -7      do-loops nested too deeply during execution
+        -8      dictionary overflow
+        -9      invalid memory address
+        -10     division by zero
+        -11     result out of range
+        -12     argument type mismatch
+        -13     undefined word
+        -14     interpreting a compile-only word
+        -15     invalid FORGET
+        -16     attempt to use zero-length string as a name
+        -17     pictured numeric output string overflow
+        -18     parsed string overflow
+        -19     definition name too long
+        -20     write to a read-only location
+        -21     unsupported operation [e.g., AT-XY on a
+                too-dumb terminal]
+        -22     control structure mismatch
+        -23     address alignment exception
+        -24     invalid numeric argument
+        -25     return stack imbalance
+        -26     loop parameters unavailable
+        -27     invalid recursion
+        -28     user interrupt
+        -29     compiler nesting
+        -30     obsolescent feature
+        -31     >BODY used on non-CREATEd definition
+        -32     invalid name argument [e.g., TO xxx]
+        -33     block read exception
+        -34     block write exception
+        -35     invalid block number
+        -36     invalid file position
+        -37     file I/O exception
+        -38     non-existent file
+        -39     unexpected end of file
+        -40     invalid BASE for floating point conversion
+        -41     loss of precision
+        -42     floating-point divide by zero
+        -43     floating-point result out of range
+        -44     floating-point stack overflow
+        -45     floating-point stack underflow
+        -46     floating-point invalid argument
+        -47     compilation word list deleted
+        -48     invalid POSTPONE
+        -49     search-order overflow
+        -50     search-order underflow
+        -51     compilation word list changed
+        -52     control-flow stack overflow
+        -53     exception stack overflow
+        -54     floating-point underflow
+        -55     floating-point unidentified fault
+        -56     QUIT
+        -57     exception in sending or receiving a character
+        -58     [IF], [ELSE], or [THEN] exception )
+
+( The word X" compiles a counted string into a word definition, it
+is useful as a space saving measure and simplifies our lookup table
+definition. Instead of having to store a C-ADDR and it's length, we
+only have to store a C-ADDR in the lookup table, which occupies only
+one element instead of two. The strings used for error messages are
+short, so the limit of 256 characters that counted strings present
+is not a problem. )
+
+: x" immediate ( c" xxx" -- c-addr : compile a counted string )
+	[char] " word        ( read in a counted string )
+	count -1 /string dup ( go back to start of string )
+	postpone never >r    ( make a hole in the dictionary )
+	chere >r             ( character marker )
+	aligned chars allot  ( allocate space in hole )
+	r> dup >r -rot cmove ( copy string from word buffer )
+	r>                   ( restore pointer to counted string )
+	r> postpone then ;   ( finish hole )
+
+create lookup 64 cells allot ( our lookup table )
+
+: nomsg ( -- c-addr : push counted string to undefined error message )
+	x" Undefined Error" literal ;
+
+lookup 64 cells find nomsg default
+
+1 variable warning
+
+: message ( n -- : print an error message )
+	warning @ 0= if . exit then
+	dup -63 1 within if abs lookup + @ count type exit then
+	drop nomsg count type ;
+
+1 counter #msg
+
+: nmsg ( n -- : populate next slot in available in LOOKUP )
+	lookup #msg cells + ! ;
+
+x" ABORT"  nmsg
+x" ABORT Double Quote"  nmsg
+x" stack overflow"  nmsg
+x" stack underflow"  nmsg
+x" return stack overflow"  nmsg
+x" return stack underflow"  nmsg
+x" do-loops nested too deeply during execution"  nmsg
+x" dictionary overflow"  nmsg
+x" invalid memory address"  nmsg
+x" division by zero"  nmsg
+x" result out of range"  nmsg
+x" argument type mismatch"  nmsg
+x" undefined word"  nmsg
+x" interpreting a compile-only word"  nmsg
+x" invalid FORGET"  nmsg
+x" attempt to use zero-length string as a name"  nmsg
+x" pictured numeric output string overflow"  nmsg
+x" parsed string overflow"  nmsg
+x" definition name too long"  nmsg
+x" write to a read-only location"  nmsg
+x" unsupported operation "  nmsg
+x" control structure mismatch"  nmsg
+x" address alignment exception"  nmsg
+x" invalid numeric argument"  nmsg
+x" return stack imbalance"  nmsg
+x" loop parameters unavailable"  nmsg
+x" invalid recursion"  nmsg
+x" user interrupt"  nmsg
+x" compiler nesting"  nmsg
+x" obsolescent feature"  nmsg
+x" >BODY used on non-CREATEd definition"  nmsg
+x" invalid name argument "  nmsg
+x" block read exception"  nmsg
+x" block write exception"  nmsg
+x" invalid block number"  nmsg
+x" invalid file position"  nmsg
+x" file I/O exception"  nmsg
+x" non-existent file"  nmsg
+x" unexpected end of file"  nmsg
+x" invalid BASE for floating point conversion"  nmsg
+x" loss of precision"  nmsg
+x" floating-point divide by zero"  nmsg
+x" floating-point result out of range"  nmsg
+x" floating-point stack overflow"  nmsg
+x" floating-point stack underflow"  nmsg
+x" floating-point invalid argument"  nmsg
+x" compilation word list deleted"  nmsg
+x" invalid POSTPONE"  nmsg
+x" search-order overflow"  nmsg
+x" search-order underflow"  nmsg
+x" compilation word list changed"  nmsg
+x" control-flow stack overflow"  nmsg
+x" exception stack overflow"  nmsg
+x" floating-point underflow"  nmsg
+x" floating-point unidentified fault"  nmsg
+x" QUIT"  nmsg
+x" exception in sending or receiving a character"  nmsg
+x" [IF], [ELSE], or [THEN] exception" nmsg
+
+hide{ nmsg #msg nomsg }hide
+ 
+
+( ==================== Error Messages ======================== )
+
+
 ( ==================== CASE statements ======================= )
 ( This simple set of words adds case statements to the
 interpreter, the implementation is not particularly efficient,
@@ -1732,47 +1892,6 @@ of Forth Dimensions at http://www.forth.org/fd/contents.html )
 	immediate ?comp ' drop , 1+ postpone then drop ;
 
 ( ==================== CASE statements ======================= )
-
-doer (banner)
-make (banner) space
-
-: banner ( n -- : )
-	dup 0<= if drop exit then
-	0 do (banner) loop ;
-
-: zero ( -- : emit a single 0 character )
-	[char] 0 emit ;
-
-: spaces ( n -- : print n spaces if n is greater than zero )
-	make (banner) space
-	banner ;
-
-: zeros ( n -- : print n spaces if n is greater than zero )
-	make (banner) zero
-	banner ;
-
-hide{ (banner) banner }hide
-
-: erase ( addr u : erase a block of memory )
-	2chars> 0 fill ;
-
-: blank ( c-addr u : fills a string with spaces )
-	bl fill ;
-
-( move should check that u is not negative )
-: move ( addr1 addr2 u -- : copy u words of memory from 'addr2' to 'addr1' )
-	0 do
-		2dup i + @ swap i + !
-	loop
-	2drop ;
-
-( It would be nice if move and cmove could share more code, as they do exactly
-  the same thing but with different load and store functions, cmove>  )
-: cmove ( c-addr1 c-addr2 u -- : copy u characters of memory from 'c-addr2' to 'c-addr1' )
-	0 do
-		2dup i + c@ swap i + c!
-	loop
-	2drop ;
 
 ( ==================== Conditional Compilation =============== )
 ( The words "[if]", "[else]" and "[then]" implement conditional
@@ -2281,7 +2400,6 @@ hide{ CSI 10u. }hide
 	previous @ pwd !
 	dictionary @ h ! ;
 
-
 : T{  ( -- : perform a unit test )
 	depth start !  ( save start of stack depth )
 	0 result !     ( reset result variable )
@@ -2296,14 +2414,17 @@ hide{ CSI 10u. }hide
 	depth?         ( correct depth )
 	equal?         ( results equal to expected values? )
 	pass           ( print pass message )
+	restore        ( restore dictionary to previous state )
+	no-check? if exit then
 	result @ adjust 2* ndrop ( remove items on stack generated by test )
-	restore ;      ( restore dictionary to previous state )
+	;      
 
-T{ }T
+T{ }T 
 T{ -> }T
 T{ 1 -> 1 }T
 T{ 1 2 -> 1 2 }T
 T{ : c 1 2 ; c -> 1 2 }T
+
 ( @bug ';' smudges the previous word, but :noname does
 not. )
 T{ :noname 2 ; :noname 3 + ; compose execute -> 5 }T
@@ -2918,6 +3039,13 @@ See: [http://forth.sourceforge.net/std/dpans/dpans11.htm]  )
 
 : putchar ( char fileid -- ior )
 	swap x chars> c! x chars> swap write-char ;
+
+\ @todo This shouldn't affect the file position indicator.
+\ @todo This doesn't return a sensible error indicator.
+\ : file-size ( fileid -- ud ior )
+\	0 swap
+\	begin dup getchar nip 0= while nos1+ repeat drop ;
+
 
 hide{ x }hide
 
@@ -4045,6 +4173,8 @@ http://stackoverflow.com/questions/10564491/
 * Implement as many things from
 http://lars.nocrew.org/forth2012/implement.html as is sensible.
 
+* Works like EMIT and KEY should be DOER/MAKE words
+
 * The current words that implement I/O redirection need to
 be improved, and documented, I think this is quite a useful
 and powerful mechanism to use within Forth that simplifies
@@ -4325,6 +4455,7 @@ structures a bit safer. )
 : then  immediate ?comp postpone then  [ hide then ]  ;
 : begin immediate ?comp postpone begin [ hide begin ] ;
 : until immediate ?comp postpone until [ hide until ] ;
+: never immediate ?comp postpone never [ hide never ] ;
 \ : ;     immediate ?comp postpone ;     [ hide ; ]  ; ( @todo do nesting checking for control statements )
 
 ( ==================== Error checking ======================== )

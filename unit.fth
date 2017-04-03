@@ -327,6 +327,13 @@ T{ 0 c" ded" >number 2drop -> ded }T
 
 decimal
 
+.( ===================== COUNTED STRINGS ================= ) cr
+
+T{ x" hello" count nip -> 5 }T
+
+
+
+
 .( ===================== CONS CELLS ====================== ) cr
 
 77 987 cons constant x
