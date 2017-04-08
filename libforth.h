@@ -349,10 +349,22 @@ Multiple calls to forth_eval()
 will work however.
 
 @param   o   An initialized forth environment. Caller frees.
-@param   s   A NUL terminated string to read from.
+@param   s   A NUL terminated string to read from. Asserted.
 @return  int This is an error code, less than one is an error. 
 **/
 int forth_eval(forth_t *o, const char *s); 
+
+/**
+@brief This is the same as forth_eval, except the string to
+read from does not have to be NUL terminated.
+
+@param  o      An initialized forth environment. Caller frees.
+@param  s      A block of memory to evaluate. Asserted.
+@param  length Size of block to read from.
+@return int This is an error code, less than one is an error. 
+**/
+
+int forth_eval_block(forth_t *o, const char *s, size_t length);
 
 /** 
 @brief  Dump a raw forth object to disk, for debugging purposes, this
@@ -446,6 +458,16 @@ void forth_set_file_input(forth_t *o, FILE *in);
 @param out Open handle for writing; "w"/"wb". Caller closes. Asserted. 
 **/
 void forth_set_file_output(forth_t *o, FILE *out);
+
+/** 
+@brief Set the input of an environment 'o' to read from a block of
+memory.
+
+@param o      An initialized FORTH environment. Caller frees. Asserted.
+@param s      A block of memory to act as input. Asserted. 
+@param length Length of block
+**/
+void forth_set_block_input(forth_t *o, const char *s, size_t length); 
 
 /** 
 @brief Set the input of an environment 'o' to read from a string 's'.

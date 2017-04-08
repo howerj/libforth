@@ -748,7 +748,7 @@ hide stdin?
 : again immediate
 	( loop unconditionally in a begin-loop:
 		begin ... again )
-	' branch , <resolve ;
+	['] branch , <resolve ;
 
 
 
@@ -788,7 +788,7 @@ hide stdin?
 
 : interpret ( c1" xxx" ... cn" xxx" -- : This word implements the interpreter loop )
 	begin
-	' read catch
+	['] read catch
 	?dup-if [char] ! emit tab . cr then ( exception handler of last resort )
 	again ;
 
@@ -937,7 +937,7 @@ to use the second. MAKE is a state aware word. )
 : defer immediate ( " ccc" -- , Run Time -- location :
 	creates a word that pushes a location to write an execution token into )
 	?exec
-	:: ' (do-defer) , (;) ;
+	:: ['] (do-defer) , (;) ;
 
 : is ( location " ccc" -- : make a deferred word execute a word )
 	find found? swap ! ;
@@ -991,7 +991,7 @@ hide tail
 	immediate
 	?comp
 	latest cell+
-	' branch ,
+	['] branch ,
 	here - cell+ , ;
 
 : factorial ( u -- u : factorial of u )
@@ -1151,39 +1151,37 @@ Forth, it allows the creation of words which can define new
 words in themselves, and thus allows us to extend the language
 easily. )
 
-: write-quote ( -- : A word that writes ' into the dictionary )
-	['] ' , ;
-
 : write-exit ( -- : A word that write exit into the dictionary )
 	['] _exit , ;
 
 : write-compile, ( -- : A word that writes , into the dictionary )
-	' , , ;
+	['] , , ;
 
-: command-mode ( -- : put the interpreter into command mode )
-	false state ! ;
+: create ( create a new work that pushes its data field )
+	::               ( compile a word )
+	dolit ,          ( write push into new word )
+	here 2 cells + , ( push a pointer to data field )
+	(;) ;            ( write exit, switch to command mode )
 
-: command-mode-create   ( create a new work that pushes its data field )
-	::              ( compile a word )
-	dolit ,         ( write push into new word )
-	here 2 cells + ,       ( push a pointer to data field )
-	(;) ;    ( write exit and switch to command mode )
+: <builds immediate
+	( @note ['] create , *nearly* works )
+	['] :: ,                           ( Make the defining word compile a header )
+	dolit , dolit , write-compile,     ( Write in push to the creating word )
+	['] here , ['] 3+ , write-compile, ( Write in the number we want the created word to push )
+	dolit , >mark write-compile,       ( Write in a place holder 0 and push a pointer to to be used by does> )
+	dolit , write-exit write-compile,  ( Write in an exit in the word we're compiling. )
+	['] [ , ;            ( Make sure to change the state back to command mode )
 
-: <build immediate
-	( @note ' command-mode-create , *nearly* works )
-	' :: ,                          ( Make the defining word compile a header )
-	write-quote dolit , write-compile,    ( Write in push to the creating word )
-	' here , ' 3+ , write-compile,        ( Write in the number we want the created word to push )
-	write-quote >mark write-compile,      ( Write in a place holder 0 and push a pointer to to be used by does> )
-	write-quote write-exit write-compile, ( Write in an exit in the word we're compiling. )
-	['] command-mode , ;            ( Make sure to change the state back to command mode )
+\ : <builds immediate
+\	['] create , 0 ,
+\	;
 
 : create immediate  ( create word is quite a complex forth word )
 	state @
 	if
-		postpone <build
+		postpone <builds
 	else
-		command-mode-create
+		create [ hide create ]
 	then ;
 
 
@@ -1194,7 +1192,7 @@ easily. )
 	here swap !  ( patch in the code fields to point to )
 	dolist , ;   ( write a run in )
 
-hide{ command-mode-create write-quote write-compile, write-exit }hide
+hide{ write-compile, write-exit }hide
 
 ( Now that we have create...does> we can use it to create
 arrays, variables and constants, as we mentioned before. )
@@ -1299,7 +1297,7 @@ the return stack )
 
 : do immediate  ( Run time: high low -- : begin do...loop construct )
 	?comp
-	' (do) ,
+	['] (do) ,
 	postpone begin ;
 
 : (unloop)    ( -- , R: i limit -- : remove limit and i from  )
@@ -1323,10 +1321,10 @@ the return stack )
 	u>= ;
 
 : loop  ( -- : end do...loop construct )
-	immediate ?comp ' (loop) , postpone until ' (unloop) , ;
+	immediate ?comp ['] (loop) , postpone until ['] (unloop) , ;
 
 : +loop ( x -- : end do...+loop loop construct )
-	immediate ?comp ' (+loop) , postpone until ' (unloop) , ;
+	immediate ?comp ['] (+loop) , postpone until ['] (unloop) , ;
 
 : leave ( -- , R: i limit return -- : break out of a do-loop construct )
 	(unloop)
@@ -1541,10 +1539,11 @@ hide delim
 	key drop >r 0 begin drop key dup rdup r> <> until rdrop ;
 
 : word ( c -- c-addr : parse until 'c' is encountered, push transient counted string  )
+	tib #tib 0 fill    ( zero terminal input buffer so we NUL terminate string )
 	dup skip tib 1+ c!
 	>r
 	tib 2+
-	#tib
+	#tib 1-
 	r> accepter 1+
 	tib c!
 	tib ;
@@ -1565,7 +1564,7 @@ hide skip
 	length and character address of the string are left on the
 	stack )
 	>r              ( save delimiter )
-	' branch ,      ( write in jump, this will jump past the string )
+	['] branch ,      ( write in jump, this will jump past the string )
 	>mark           ( make hole )
 	dup 1+ chars>   ( calculate address to write to )
 	max-string-length
@@ -1587,7 +1586,6 @@ hide skip
 : asciiz ( c-addr u -- : trim a string until NUL terminator )
 	2dup length nip ;
 
-
 : (type) ( c-addr -- : emit a single character )
 	c@ emit ;
 
@@ -1606,7 +1604,7 @@ hide sbuf
 
 ( @todo these strings really need rethinking, state awareness needs to be removed... )
 : type,
-	state @ if ' type , else type then ;
+	state @ if ['] type , else type then ;
 
 : c"
 	immediate key drop [char] " do-string ;
@@ -1649,7 +1647,7 @@ not checking of the returned values from write-file )
 	0 `source-id !  ( set source to read from file )
 	`stdin @ `fin ! ( read from stdin )
 	postpone [      ( back into command mode )
-	' interpret start! ; ( set interpreter starting word )
+	['] interpret start! ; ( set interpreter starting word )
 
 : quit ( -- : Empty return stack, go back to command mode, read from stdin, interpret input )
 	(quit)
@@ -1664,7 +1662,7 @@ not checking of the returned values from write-file )
 
 : abort" immediate
 	postpone "
-	' cr , ' (abort") , ;
+	['] cr , ['] (abort") , ;
 
 
 ( ==================== Error Messages ======================== )
@@ -1875,21 +1873,21 @@ of Forth Dimensions at http://www.forth.org/fd/contents.html )
 
 : case immediate
 	?comp
-	' branch , 3 cells , ( branch over the next branch )
-	here ' branch ,      ( mark: place endof branches back to with again )
+	['] branch , 3 cells , ( branch over the next branch )
+	here ['] branch ,      ( mark: place endof branches back to with again )
 	>mark swap ;         ( mark: place endcase writes jump to with then )
 
 : over= ( x y -- [x 0] | 1 : )
 	over = if drop 1 else 0 then ;
 
 : of
-	immediate ?comp ' over= , postpone if ;
+	immediate ?comp ['] over= , postpone if ;
 
 : endof
 	immediate ?comp over postpone again postpone then ;
 
 : endcase
-	immediate ?comp ' drop , 1+ postpone then drop ;
+	immediate ?comp ['] drop , 1+ postpone then drop ;
 
 ( ==================== CASE statements ======================= )
 
@@ -1964,14 +1962,17 @@ hide{
 of the machine that is currently being used to execute libforth,
 they make heavy use of conditional compilation )
 
-size 2 = [if] 0x0123           `x ! [then]
-size 4 = [if] 0x01234567       `x ! [then]
-size 8 = [if] 0x01234567abcdef `x ! [then]
+0 variable x
 
-: endian ( -- bool : returns the endianess of the processor, little = 0, big = 1 )
-	[ `x chars> c@ 0x01 = ] literal ;
+size 2 = [if] 0x0123           x ! [then]
+size 4 = [if] 0x01234567       x ! [then]
+size 8 = [if] 0x01234567abcdef x ! [then]
 
-: swap16 ( x -- x : swap the byte order a 16 bit number )
+x chars> c@ 0x01 = constant endian
+
+hide{ x }hide
+
+: swap16 ( x -- x : swap the byte order of a 16 bit number )
 	dup 256* 0xff00 and >r 256/ lsb r> or ;
 
 size 4 >= [if]
@@ -2116,7 +2117,7 @@ Usage:
 hide{ fp }hide
 
 : marker ( c" xxx" -- : make word the forgets itself and words after it)
-	:: latest [literal] ' (forget) , (;) ;
+	:: latest [literal] ['] (forget) , (;) ;
 here fence ! ( This should also be done at the end of the file )
 hide (forget)
 
@@ -3425,7 +3426,7 @@ Example usage:
 : decompress ( file-id-out file-id-in -- : decompress an RLE encoded file )
 	swap
 	redirect
-	begin dup ' command catch until ( process commands until input exhausted )
+	begin dup ['] command catch until ( process commands until input exhausted )
 	2drop ( drop twice because catch will restore stack before COMMAND )
 	restore ; ( restore input stream )
 
@@ -3534,7 +3535,7 @@ will be redirected to a file )
 : save-core ( c-addr u -- : save core file or throw error )
 	w/o open-file throw dup
 	redirect
-		' encore catch swap close-file throw
+		['] encore catch swap close-file throw
 	restore ;
 
 ( The following code illustrates an example of setting up a
@@ -3983,11 +3984,8 @@ address to the block buffer. )
 
 : buffer block ;
 
-( @warning uses hack, block buffer is NUL terminated, and evaluate requires
-a NUL terminated string, evaluate checks that the last character is NUL,
-hence the 1+ )
 : load ( n -- : load and execute a block )
-	block b/buf 1+ evaluate throw ;
+	block b/buf evaluate throw ;
 
 : +block ( n -- u : calculate new block number relative to current block )
 	blk @ + ;
@@ -4113,7 +4111,7 @@ hide{
  xt-instruction
  `source-id `sin `sidx `slen `start-address `fin `fout `stdin
  `stdout `stderr `argc `argv `debug `invalid `top `instruction
- `stack-size `error-handler `x `handler _emit `signal
+ `stack-size `error-handler `handler _emit `signal `x
 }hide
 
 (
@@ -4202,11 +4200,6 @@ and instructions, as well as the most common two and three
 sequences of words and instructions. This could be used to use
 to optimize the interpreter, in terms of both speed and size.
 
-* As a thought, a word for inlining other words could be
-made by copying everything into the current definition until
-it reaches a _exit, it would need to be aware of literals
-written into a word, like SEE is.
-
 * The source code for this file should go through a code
 review, which should focus on formatting, stack comments and
 reorganizing the code. Currently it is not clear that variables
@@ -4219,15 +4212,16 @@ including the new line at the end of the file.
 * A halt, a parse, and a print/type instruction could be
 added to the Forth virtual machine.
 
+* Make case sensitivity optional
+
 * u.r, or a more generic version should be added to the
 interpreter instead of the current simpler primitive. As
 should >number - for fast numeric input and output.
 
 * Throw/Catch need to be added and used in the virtual machine
 
-* Various edge cases and exceptions should be removed [for
-example counted strings are not used internally, and '0x'
-can be used as a prefix only when base is zero].
+* Integrate Travis Continous Integration into the Github
+project.
 
 * A potential optimization is to order the words in the
 dictionary by frequency order, this would mean chaning the
@@ -4398,6 +4392,7 @@ page cr
       q    quit editor loop
     # b    set block number
       s    save block and write it out
+      u    update block
 
  -- press any key to continue -- " cr ( " )
 char drop ;
@@ -4426,13 +4421,16 @@ char drop ;
 		page cr
 		" BLOCK EDITOR: TYPE 'HELP' FOR A LIST OF COMMANDS" cr
 		blk @ list
-		" [BLOCK: " blk @ u. " ] [DICTIONARY: " here u. " ]" cr
+		" [BLOCK: " blk @ u. " ] " 
+		" [HERE: " here u. " ] " 
+		" [SAVED: " blk @ updated? not u. " ] "
+		cr
 		postpone [ ( need to be in command mode )
 		read
 	again ;
 
 ( Extra niceties )
-c/l string yank
+c/l string yank 
 yank bl fill
 : u update ;
 : b block ;
@@ -4440,7 +4438,10 @@ yank bl fill
 : y (line) yank >r swap r> cmove ; ( n -- yank line number to buffer )
 : c (line) yank cmove ; ( n -- copy yank buffer to line )
 : ct swap y c ; ( n1 n2 -- copy line n1 to n2 )
+: ea (line) c/l evaluate throw ;
 : m retreat ; ( -- : forget everything since editor session began )
+
+: sw 2dup y (line) swap (line) swap c/l cmove c ;
 
 hide{ (block) (line) (clean) yank }hide
 
@@ -4510,5 +4511,5 @@ rendezvous
 
 : next immediate
 	?comp
-	' (next) , ' ?branch , here - , ;
+	['] (next) , ['] ?branch , here - , ;
  

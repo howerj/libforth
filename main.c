@@ -302,6 +302,7 @@ although some options take arguments immediately after them.
 A library for parsing command line options like *getopt* should be used,
 this would reduce the portability of the program. It is not recommended 
 that arguments are parsed in this manner.
+
 **/
 int main(int argc, char **argv)
 {

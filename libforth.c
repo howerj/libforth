@@ -14,6 +14,7 @@
 removed.
 @todo Add THROW/CATCH as virtual machine instructions, remove
 RESTART and current error handling scheme.
+@todo Add u.rc to the interpreter
 
 ## License
 
@@ -712,11 +713,13 @@ struct forth { /**< FORTH environment */
 	uint8_t header[sizeof(header)]; /**< ~~ header for core file */
 	forth_cell_t core_size;  /**< size of VM */
 	uint8_t *s;          /**< convenience pointer for string input buffer */
-	char word_fmt[16];   /**< calculated word format */
 	forth_cell_t *S;     /**< stack pointer */
 	forth_cell_t *vstart;/**< index into m[] where variable stack starts*/
 	forth_cell_t *vend;  /**< index into m[] where variable stack ends*/
 	const struct forth_functions *calls; /**< functions for CALL instruction */
+	int unget;           /**< single character of push back */
+	bool unget_set;      /**< character is in the push back buffer? */
+	size_t line;         /**< count of new lines read in */
 	forth_cell_t m[];    /**< ~~ Forth Virtual Machine memory */
 };
 
@@ -1083,20 +1086,50 @@ into a 'throw', but it is not handled yet.
 **/
 static int forth_get_char(forth_t *o)
 {
-	switch(o->m[SOURCE_ID]) {
-	case FILE_IN:   return fgetc((FILE*)(o->m[FIN]));
-	case STRING_IN: return o->m[SIDX] >= o->m[SLEN] ? 
-				EOF : 
-				((char*)(o->m[SIN]))[o->m[SIDX]++];
-	default:        return EOF;
+	assert(o);
+	int r = 0;
+	if(o->unget_set) {
+		o->unget_set = false;
+		return o->unget;
 	}
+	switch(o->m[SOURCE_ID]) {
+	case FILE_IN:   
+		r = fgetc((FILE*)(o->m[FIN])); 
+		break;
+	case STRING_IN: 
+		r = o->m[SIDX] >= o->m[SLEN] ? 
+			EOF : 
+			((char*)(o->m[SIN]))[o->m[SIDX]++];
+			break;
+	default:        r = EOF;
+	}
+	if(r == '\n')
+		o->line++;
+	return r;
+}
+
+/**
+@brief  Push back a single character into the input buffer.
+@param  o  initialized Forth environment
+@param  ch character to push back 
+@return ch on success, negative on failure, of it EOF was pushed back
+**/
+static int forth_unget_char(forth_t *o, int ch)
+{
+	assert(o);
+	if(o->unget_set)
+		return -1;
+	o->unget_set = true;
+	o->unget = ch;
+	return o->unget;
 }
 
 /**
 @brief get a word (space delimited, up to 31 chars) from a FILE\* or string-in
-@param o    initialized Forth environment.
-@param p    pointer to string to write into
-@return int return status of [fs]scanf
+@param  o      initialized Forth environment.
+@param  p      pointer to string to write into
+@param  length maximum length of string to get 
+@return int  0 on success, -1 on failure (EOF)
 
 This function reads in a space delimited word, limited to 
 **MAXIMUM_WORD_LENGTH**, the word is put into the pointer **\*p**, 
@@ -1105,25 +1138,28 @@ lexing gets. It can either read from a file handle or a string,
 like forth_get_char() 
 
 **/
-static int forth_get_word(forth_t *o, uint8_t *p)
+static int forth_get_word(forth_t *o, uint8_t *s, forth_cell_t length)
 {
-	int n = 0;
-	switch(o->m[SOURCE_ID]) {
-	case FILE_IN:   
-		n = fscanf((FILE*)(o->m[FIN]), o->word_fmt, p, &n);
-		if(!((char*)o->s)[0]) /* empty word */
-			return -1; /** @note this should throw -16 **/
-		return n;
-	case STRING_IN:
-		if(sscanf((char *)&(((char*)(o->m[SIN]))[o->m[SIDX]]), 
-					o->word_fmt, p, &n) <= 0)
-			return EOF;
-		if(!((char*)o->s)[0]) /* empty word */
-			return -1;  /** @note this should throw -16 **/
-		o->m[SIDX] += n;
-		return n;
-	default:       return EOF;
+	int ch;
+	memset(s, 0, length);
+	for(;;) {
+		ch = forth_get_char(o);
+		if(ch == EOF || !ch)
+			return -1;
+		if(!isspace(ch))
+			break;
 	}
+	s[0] = ch; /**@todo s[0] should be word length count */
+	for(size_t i = 1; i < (length - 1); i++) {
+		ch = forth_get_char(o);
+		if(ch == EOF || isspace(ch) || !ch)
+			goto unget;
+		s[i] = ch;
+	}
+	return 0;
+unget:
+	forth_unget_char(o, ch);
+	return 0;
 }
 
 /** 
@@ -1355,8 +1391,8 @@ static forth_cell_t check_bounds(forth_t *o, jmp_buf *on_error,
 	if(o->m[DEBUG] >= FORTH_DEBUG_CHECKS)
 		debug("0x%"PRIxCell " %u", f, line);
 	if(f >= bound) {
-		fatal("bounds check failed (%"PRIdCell" >= %zu) line %u", 
-				f, (size_t)bound, line);
+		fatal("bounds check failed (%"PRIdCell" >= %zu) C line %u Forth Line %zu", 
+				f, (size_t)bound, line, o->line);
 		longjmp(*on_error, FATAL);
 	}
 	return f;
@@ -1372,10 +1408,10 @@ static void check_depth(forth_t *o, jmp_buf *on_error,
 	if(o->m[DEBUG] >= FORTH_DEBUG_CHECKS)
 		debug("0x%"PRIxCell " %u", (forth_cell_t)(S - o->vstart), line);
 	if((uintptr_t)(S - o->vstart) < expected) {
-		error("stack underflow %p -> %u", S - o->vstart, line);
+		error("stack underflow %p -> %u (line %zu)", S - o->vstart, line, o->line);
 		longjmp(*on_error, RECOVERABLE);
 	} else if(S > o->vend) {
-		error("stack overflow %p -> %u", S - o->vend, line);
+		error("stack overflow %p -> %u (line %zu)", S - o->vend, line, o->line);
 		longjmp(*on_error, RECOVERABLE);
 	}
 }
@@ -1479,6 +1515,7 @@ void forth_set_file_input(forth_t *o, FILE *in)
 {
 	assert(o); 
 	assert(in);
+	o->unget_set    = false; /* discard character of push back */
 	o->m[SOURCE_ID] = FILE_IN;
 	o->m[FIN]       = (forth_cell_t)in;
 }
@@ -1490,14 +1527,29 @@ void forth_set_file_output(forth_t *o, FILE *out)
 	o->m[FOUT] = (forth_cell_t)out;
 }
 
-void forth_set_string_input(forth_t *o, const char *s)
+void forth_set_block_input(forth_t *o, const char *s, size_t length)
 {
 	assert(o);
 	assert(s);
-	o->m[SIDX] = 0;              /* m[SIDX] == current character in string */
-	o->m[SLEN] = strlen(s) + 1;  /* m[SLEN] == string len */
+	o->unget_set = false;        /* discard character of push back */
+	o->m[SIDX] = 0;              /* m[SIDX] == start of string input */
+	o->m[SLEN] = length;         /* m[SLEN] == string len */
 	o->m[SOURCE_ID] = STRING_IN; /* read from string, not a file handle */
 	o->m[SIN] = (forth_cell_t)s; /* sin  == pointer to string input */
+}
+
+void forth_set_string_input(forth_t *o, const char *s)
+{
+	assert(s);
+	forth_set_block_input(o, s, strlen(s) + 1);
+}
+
+int forth_eval_block(forth_t *o, const char *s, size_t length)
+{
+	assert(o);
+	assert(s);
+	forth_set_block_input(o, s, length);
+	return forth_run(o);
 }
 
 int forth_eval(forth_t *o, const char *s)
@@ -1593,7 +1645,6 @@ static void forth_make_default(forth_t *o, size_t size, FILE *in, FILE *out)
 	o->S       = o->m + size - (2 * o->m[STACK_SIZE]); /* v. stk pointer */
 	o->vstart  = o->m + size - (2 * o->m[STACK_SIZE]);
 	o->vend    = o->vstart + o->m[STACK_SIZE];
-	VERIFY(sprintf(o->word_fmt, "%%%ds%%n", MAXIMUM_WORD_LENGTH - 1) > 0);
 	forth_set_file_input(o, in);  /* set up input after our eval */
 }
 
@@ -1784,6 +1835,7 @@ set the input streams to point to a string, we need to reset them
 to they point to the file **in**
 **/
 	forth_set_file_input(o, in);  /*set up input after our eval */
+	o->line = 1;
 	return o;
 }
 
@@ -2246,7 +2298,7 @@ The CODE field contains the RUN instruction.
 **/
 		case DEFINE:
 			m[STATE] = 1; /* compile mode */
-			if(forth_get_word(o, o->s) < 0)
+			if(forth_get_word(o, o->s, MAXIMUM_WORD_LENGTH) < 0)
 				goto end;
 			compile(o, RUN, (char*)o->s, true, false);
 			break;
@@ -2296,7 +2348,7 @@ in **forth_init**, a simple word that calls **READ** in a loop (actually tail
 recursively).
 
 **/
-			if(forth_get_word(o, o->s) < 0)
+			if(forth_get_word(o, o->s, MAXIMUM_WORD_LENGTH) < 0)
 				goto end;
 			if ((w = forth_find(o, (char*)o->s)) > 1) {
 				pc = w;
@@ -2306,7 +2358,7 @@ recursively).
 				}
 				goto INNER; /* execute word */
 			} else if(forth_string_to_cell(o->m[BASE], &w, (char*)o->s)) {
-				error("'%s' is not a word", o->s);
+				error("'%s' is not a word (line %zu)", o->s, o->line);
 				longjmp(on_error, RECOVERABLE);
 				break;
 			}
@@ -2402,7 +2454,7 @@ pointer to that word if it found.
 **/
 		case FIND:
 			*++S = f;
-			if(forth_get_word(o, o->s) < 0)
+			if(forth_get_word(o, o->s, MAXIMUM_WORD_LENGTH) < 0)
 				goto end;
 			f = forth_find(o, (char*)o->s);
 			f = f < DICTIONARY_START ? 0 : f;
@@ -2464,6 +2516,7 @@ or from a file.
 				source = o->m[SOURCE_ID], r = m[RSTK];
 			char *s = NULL;
 			FILE *file = NULL;
+			forth_cell_t length;
 			int file_in = 0;
 			file_in = f; /*get file/string in bool*/
 			f = *S--;
@@ -2471,7 +2524,8 @@ or from a file.
 				file = (FILE*)(*S--);
 				f = *S--;
 			} else {
-				s = forth_get_string(o, &on_error, &S, f);
+				s = ((char*)o->m + *S--);
+				length = f;
 				f = *S--;
 			}
 			/* save the stack variables */
@@ -2483,7 +2537,7 @@ or from a file.
 				forth_set_file_input(o, file);
 				w = forth_run(o);
 			} else {
-				w = forth_eval(o, s);
+				w = forth_eval_block(o, s, length);
 			}
 			/* restore stack variables */
 			m[RSTK] = r;
