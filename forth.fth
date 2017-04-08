@@ -830,6 +830,22 @@ words to make sure they only execute in the correct state )
 : endif ( synonym for THEN )
 	immediate ?comp postpone then ;
 
+( Experimental FOR ... NEXT )
+: for immediate 
+	?comp
+	['] 1- ,
+	['] >r ,
+	here ;
+
+: (next) ( -- bool,  R: val -- | val+1 )
+	r> r> 1- dup 0< if drop >r 1 else >r >r 0 then ;
+
+: next immediate
+	?comp
+	['] (next) , 
+	['] ?branch , 
+	here - , ;
+
 ( ==================== Basic Word Set ======================== )
 
 ( ==================== DOER/MAKE ============================= )
@@ -994,8 +1010,19 @@ hide tail
 	['] branch ,
 	here - cell+ , ;
 
+( @todo better version of this )
 : factorial ( u -- u : factorial of u )
 	dup 2 u< if drop 1 exit then dup 1- recurse * ;
+
+: permutations ( u1 u2 -- u : number of ordered combinations )
+	over swap - factorial swap factorial swap / ;
+
+: combinations ( u1 u2 -- u : number of unordered combinations )
+	dup dup permutations >r permutations r> /
+	;
+
+: average ( u1 u2 -- u : average of u1 and u2 ) 
+	+ 2/ ;
 
 : gcd ( u1 u2 -- u : greatest common divisor )
 	dup if tuck mod tail then drop ;
@@ -4499,17 +4526,4 @@ rendezvous
 
 ( ==================== End of File Functions ================= )
 
-( Experimental FOR ... NEXT )
-: for immediate
-	?comp
-	['] >r ,
-	here
-	;
 
-: (next) ( -- bool,  R: val -- | val+1 )
-	r> r> 1- dup 0= if drop >r 1 else >r >r 0 then ;
-
-: next immediate
-	?comp
-	['] (next) , ['] ?branch , here - , ;
- 
