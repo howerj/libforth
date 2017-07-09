@@ -225,7 +225,17 @@ T{ 10 sqrt -> 3 }T
 T{ 16 sqrt -> 4 }T
 T{ 36 sqrt -> 6 }T
 
-: factorial ( n -- n! )
+: factorial-1 dup 1 <= if drop 1 exit then 1 swap 1+ 1 do i * loop ;
+
+T{ 0 factorial-1 -> 1 }T
+T{ 1 factorial-1 -> 1 }T
+T{ 2 factorial-1 -> 2 }T
+T{ 3 factorial-1 -> 6 }T
+T{ 4 factorial-1 -> 24 }T
+T{ 5 factorial-1 -> 120 }T
+T{ 6 factorial-1 -> 720 }T
+
+: factorial-2 ( n -- n! )
 	( This factorial is only here to test range, mul, do and loop )
 	dup 1 <=
 	if
@@ -237,7 +247,7 @@ T{ 36 sqrt -> 6 }T
 
 T{ 5 3 repeater 3 sum -> 15 }T
 T{ 6 1 range dup mul -> 720 }T
-T{ 5 factorial -> 120 }T
+T{ 5 factorial-2 -> 120 }T
 
 .( ===================== JUMP TABLES ===================== ) cr
 : j1 1 ;
