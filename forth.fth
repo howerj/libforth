@@ -433,7 +433,7 @@ when having to convert to and from character and cell address.)
 	2dup u< if drop else nip then ;
 
 : umax ( u u -- u : return the maximum of two unsigned numbers )
-	2dup > if drop else nip then ;
+	2dup u> if drop else nip then ;
 
 : limit ( x min max -- x : limit x with a minimum and maximum )
 	rot min max ;
