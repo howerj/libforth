@@ -4272,6 +4272,20 @@ function pointer and then attempts to call said function. This
 would allow us to assemble machine dependant code within the
 core file, generate a new function, then call it. It is just
 a thought.
+
+* The code in this file needs to be rethought and simplified,
+it sometimes does things in very odd, or suboptimal ways, this
+mainly applies to:
+ - The lack of vocabularies 
+ - Input parsing and handling
+ - Evaluation
+
+* A way of generating standalone Forth executables should
+be made, they should try to be as small as possible. This
+might actually make Forth practical as an application programming
+langauge, the programs could be compiled to C as an intermediate
+step perhaps. The C load and save functions would need to be
+modified.
  )
 
 verbose [if]

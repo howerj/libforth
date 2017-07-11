@@ -2712,6 +2712,11 @@ instruction, and would be a useful abstraction.
 The following memory functions can be used by the Forth interpreter
 for faster memory operations, but more importantly they can be used
 to interact with memory outside of the Forth core.
+
+@todo Subtract/Add base pointer (o->m) to all memory operations that 
+occur on real memory so this does not have to be done within the
+interpreter. This also requires character aligned memory addresses
+to be used to be useful. Both will simplify operations.
 **/
 		case MEMMOVE:
 			w = *S--;
