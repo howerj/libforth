@@ -19,6 +19,7 @@
 #ifdef _WIN32
 #include <io.h>
 #include <fcntl.h>
+extern int _fileno(FILE*);
 #endif
 
 #ifdef USE_BUILT_IN_CORE

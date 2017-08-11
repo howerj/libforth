@@ -11,7 +11,7 @@
 @todo Fix the special 'literal' word, moving it outside register area
 @todo Add 'parse', removing scanf/fscanf
 @todo The special case of base = 0 causes problems, this should be
-removed.
+removed, also '$' should be used instead of '0x'.
 @todo Add THROW/CATCH as virtual machine instructions, remove
 RESTART and current error handling scheme.
 @todo Add u.rc to the interpreter
