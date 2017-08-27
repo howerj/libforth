@@ -17,6 +17,9 @@ complete Forth interpreter.
 
 This interpreter is available at [here](https://github.com/howerj/libforth).
 
+![Libforth build status]( https://travis-ci.org/howerj/libforth.svg?branch=master "Build Status")
+
+
 # OPTIONS
 
 Command line switches must be given before any files, unless that switch takes
