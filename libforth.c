@@ -2701,7 +2701,7 @@ instruction, and would be a useful abstraction.
 				*++S = gmt->tm_min;
 				*++S = gmt->tm_hour;
 				*++S = gmt->tm_mday;
-				*++S = gmt->tm_mon;
+				*++S = gmt->tm_mon  + 1;
 				*++S = gmt->tm_year + 1900;
 				*++S = gmt->tm_wday;
 				*++S = gmt->tm_yday;

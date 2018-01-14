@@ -3651,10 +3651,8 @@ print out the correct address
 you can print out nicely formatted date strings. It implements
 the standard Forth word time&date and two words which interact
 with the libforth DATE instruction, which pushes the current
-time information onto the stack.
+time information onto the stack. )
 
-Rather annoyingly months are start from 1 but weekdays from
-0. )
 
 : >month ( month -- c-addr u : convert month to month string )
 	case
@@ -3684,7 +3682,7 @@ Rather annoyingly months are start from 1 but weekdays from
 
 : >day ( day -- c-addr u: add ordinal to day of month )
 	dup  1 10 within if .day   exit then
-	dup 10 20 within if drop c" th" exit then
+	dup 10 20 within if drop c" th " exit then
 	.day ;
 
 : >weekday ( weekday -- c-addr u : print the weekday )
