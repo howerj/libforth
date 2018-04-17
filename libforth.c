@@ -931,6 +931,7 @@ up for debugging purposes (like **pnum**).
  X(1, FREE,      "free",           " r-addr1 -- ior : free a block of memory")\
  X(2, RESIZE,    "resize",         " r-addr u -- r-addr ior : resize a block of memory")\
  X(2, GETENV,    "getenv",         " c-addr u -- r-addr u : return an environment variable")\
+ X(1, BYE,       "(bye)",          " u -- : bye, bye!")\
  X(0, LAST_INSTRUCTION, NULL, "")
 
 /** // @todo Implement these instructions? 
@@ -2110,7 +2111,7 @@ code interpreter (see <https://en.wikipedia.org/wiki/Threaded_code>, and
 **/
 int forth_run(forth_t *o)
 {
-	int errorval = 0;
+	int errorval = 0, rval = 0;
 	assert(o);
 	jmp_buf on_error;
 	if(forth_is_invalid(o)) {
@@ -2765,6 +2766,10 @@ requires that an error status is returned.
 			*++S = (forth_cell_t)s;
 			break;
 		}
+		case BYE:
+			rval = f;
+			f = *S--;
+			goto end;
 /**
 This should never happen, and if it does it is an indication that virtual
 machine memory has been corrupted somehow.
@@ -2784,7 +2789,7 @@ be called on the invalidated object any longer.
 end:	
 	o->S = S;
 	o->m[TOP] = f;
-	return 0;
+	return rval;
 }
 
 /**    

@@ -525,7 +525,7 @@ when having to convert to and from character and cell address.)
 	postpone until ;
 
 : bye ( -- : quit the interpreter )
-	0 r ! ;
+	0 (bye) ;
 
 : pick ( xu ... x1 x0 u -- xu ... x1 x0 xu )
 	sp@ swap cells - cell - @ ;
@@ -4134,6 +4134,7 @@ hide{
  evaluator
  TrueFalse >instruction
  xt-instruction
+ (bye)
  `source-id `sin `sidx `slen `start-address `fin `fout `stdin
  `stdout `stderr `argc `argv `debug `invalid `top `instruction
  `stack-size `error-handler `handler _emit `signal `x
