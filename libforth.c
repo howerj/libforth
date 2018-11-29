@@ -454,6 +454,14 @@ when they get to the Forth interpreter.
 **/
 #define BIAS_SIGNAL         (-512)
 
+/**
+@brief This is a useful function for performing what is in effect a
+static assert by abusing the language.
+@param conditions, condition to fail on if true
+*/
+#define BUILD_BUG_ON(condition) ((void)sizeof(char[1 - 2*!!(condition)]))
+
+
 /** 
 ## Enumerations and Constants
 **/
@@ -1699,7 +1707,7 @@ forth_t *forth_init(size_t size, FILE *in, FILE *out,
 	forth_t *o;
 	assert(in);
 	assert(out);
-	assert(sizeof(forth_cell_t) >= sizeof(uintptr_t));
+	BUILD_BUG_ON(sizeof(forth_cell_t) < sizeof(uintptr_t));
 	size = forth_round_up_pow2(size);
 	pow  = forth_blog2(size);
 /**
@@ -1991,11 +1999,17 @@ struct forth_functions *forth_new_function_list(forth_cell_t count)
 	struct forth_functions *ff = NULL;
 	errno = 0;
 	ff = calloc(sizeof(*ff), 1);
-	ff->functions = calloc(sizeof(ff->functions[0]) * count, 1);
-	if(!ff || !ff->functions) 
+	if(!ff) {
 		warning("calloc failed: %s", forth_strerror());
-	else
-		ff->count = count;
+		return NULL;
+	}
+	ff->functions = calloc(sizeof(ff->functions[0]) * count, 1);
+	if(!(ff->functions)) {
+		free(ff);
+		warning("calloc failed: %s", forth_strerror());
+		return NULL;
+	} 
+	ff->count = count;
 	return ff;
 }
 
@@ -2072,14 +2086,14 @@ char **forth_words(forth_t *o, size_t *length)
 {
 	assert(o);
 	assert(length);
-	forth_cell_t pwd = o->m[PWD], len;
+	forth_cell_t pwd = o->m[PWD];
 	forth_cell_t *m  = o->m;
 	size_t i;
 	char **n, **s = calloc(2, sizeof(*s));
 	if(!s)
 		return NULL;
 	for (i = 0 ;pwd > DICTIONARY_START; pwd = m[pwd], i++) {
-		len = WORD_LENGTH(m[pwd + 1]);
+		forth_cell_t len = WORD_LENGTH(m[pwd + 1]);
 		s[i] = forth_strdup((char*)(&m[pwd-len]));
 		if(!s[i]) {
 			forth_free_words(s, i);
@@ -2486,7 +2500,7 @@ SPSTORE (**sp!**) modifies the stack, setting it to the value on the top
 of the stack.
 **/
 		case SPSTORE:
-			w = *S--;
+			w = *S;
 			S = (forth_cell_t*)(f + o->m - 1);
 			f = w;
 			break;
@@ -2689,7 +2703,7 @@ instruction, and would be a useful abstraction.
 			}
 			break;
 		case RAISE:
-			f = raise((f*-1) - BIAS_SIGNAL);
+			f = raise((-f) - BIAS_SIGNAL);
 			break;
 		case DATE:
 			{

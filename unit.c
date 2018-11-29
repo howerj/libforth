@@ -99,7 +99,7 @@ static int unit_tester(test_t *t, const int test, const char *msg, unsigned line
 	} else { 
 		t->failed++;
 	       	if(!(t->is_silent))
-			fprintf(t->output, "  %sFAILED%s:\t%s (line %d)\n", red(t), reset(t), msg, line);
+			fprintf(t->output, "  %sFAILED%s:\t%s (line %u)\n", red(t), reset(t), msg, line);
 	}
 	return test;
 }

@@ -256,7 +256,7 @@ static void version(void)
 {
 	fprintf(stdout, 
 		"libforth:\n" 
-		"\tversion:     %d\n"
+		"\tversion:     %u\n"
 		"\tsize:        %u\n"
 		"\tendianess:   %u\n",
 		FORTH_CORE_VERSION, 
