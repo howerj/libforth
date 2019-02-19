@@ -15,6 +15,12 @@ forth - a forth interpreter
 A Forth interpreter built around a library, libforth, that implements a
 complete Forth interpreter.
 
+For a much better, albeit 16-bit only, Forth that is also very well documented
+and (slightly more) standards compliant, please visit the more up to date 
+[Embed](https://github.com/howerj/embed) virtual machine. Also of interest is
+the [Forth CPU](https://github.com/howerj/forth-cpu) I wrote, in VHDL, for an
+FPGA.
+
 This interpreter is available at [here](https://github.com/howerj/libforth).
 
 ![Libforth build status]( https://travis-ci.org/howerj/libforth.svg?branch=master "Build Status")
