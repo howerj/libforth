@@ -359,7 +359,7 @@ sacrifice portability.
 			   help(); 
 			   return -1;
 		case 'n':  use_line_editor = 1;
-			   /* XXX fall through */
+			   /* fall-through */
 		case 't':  readterm = 1; 
 			   if(verbose >= FORTH_DEBUG_NOTE)
 				   note("stdin on. line editor %s", use_line_editor ? "on" : "off");
@@ -391,7 +391,7 @@ sacrifice portability.
 			if(i >= (argc - 1))
 				goto fail;
 			dump_name = argv[++i];
-			/* XXX fall through */
+			/* fall-through */
 		case 'S':  /*use default name */
 			if(verbose >= FORTH_DEBUG_NOTE)
 				note("saving core file to '%s' (on exit)", dump_name);
@@ -412,6 +412,7 @@ sacrifice portability.
 			if(o || mset || (i >= argc - 1))
 				goto fail;
 			dump_name = argv[++i];
+			/* fall-through */
 		case 'L':
 			if(verbose >= FORTH_DEBUG_NOTE)
 				note("loading core file '%s'", dump_name);

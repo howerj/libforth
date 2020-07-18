@@ -2154,6 +2154,7 @@ int forth_run(forth_t *o)
 				switch(o->m[ERROR_HANDLER]) {
 				case ERROR_INVALIDATE: 
 					forth_invalidate(o);
+					/* fall-through */
 				case ERROR_HALT:       
 					return -forth_is_invalid(o);
 				case ERROR_RECOVER:    
