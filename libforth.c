@@ -440,7 +440,7 @@ higher bits are used for other purposes.
 regardless of whether **NDEBUG** is defined.
 @param X expression to verify
 **/
-#define VERIFY(X)           do { if(!(X)) { abort(); } } while(0)
+#define VERIFY(X)           do { if (!(X)) { abort(); } } while (0)
 
 /**
 @brief Errno are biased to fall in the range of -256...-511 when
@@ -1042,7 +1042,7 @@ const char *forth_strerror(void)
 {
 	static const char *unknown = "unknown reason";
 	const char *r = errno ? strerror(errno) : unknown;
-	if(!r) 
+	if (!r) 
 		r = unknown;
 	return r;
 }
@@ -1097,11 +1097,11 @@ static int forth_get_char(forth_t *o)
 {
 	assert(o);
 	int r = 0;
-	if(o->unget_set) {
+	if (o->unget_set) {
 		o->unget_set = false;
 		return o->unget;
 	}
-	switch(o->m[SOURCE_ID]) {
+	switch (o->m[SOURCE_ID]) {
 	case FILE_IN:   
 		r = fgetc((FILE*)(o->m[FIN])); 
 		break;
@@ -1112,7 +1112,7 @@ static int forth_get_char(forth_t *o)
 			break;
 	default:        r = EOF;
 	}
-	if(r == '\n')
+	if (r == '\n')
 		o->line++;
 	return r;
 }
@@ -1126,7 +1126,7 @@ static int forth_get_char(forth_t *o)
 static int forth_unget_char(forth_t *o, int ch)
 {
 	assert(o);
-	if(o->unget_set)
+	if (o->unget_set)
 		return -1;
 	o->unget_set = true;
 	o->unget = ch;
@@ -1151,17 +1151,17 @@ static int forth_get_word(forth_t *o, uint8_t *s, forth_cell_t length)
 {
 	int ch;
 	memset(s, 0, length);
-	for(;;) {
+	for (;;) {
 		ch = forth_get_char(o);
-		if(ch == EOF || !ch)
+		if (ch == EOF || !ch)
 			return -1;
-		if(!isspace(ch))
+		if (!isspace(ch))
 			break;
 	}
 	s[0] = ch; /**@todo s[0] should be word length count */
-	for(size_t i = 1; i < (length - 1); i++) {
+	for (size_t i = 1; i < (length - 1); i++) {
 		ch = forth_get_char(o);
-		if(ch == EOF || isspace(ch) || !ch)
+		if (ch == EOF || isspace(ch) || !ch)
 			goto unget;
 		s[i] = ch;
 	}
@@ -1250,10 +1250,10 @@ static forth_cell_t compile(forth_t *o, forth_cell_t code, const char *str,
 		forth_cell_t compiling, forth_cell_t hide)
 { 
 	assert(o && code < LAST_INSTRUCTION);
-	forth_cell_t *m = o->m, header = m[DIC], l = 0, cf = 0;
+	forth_cell_t *m = o->m, head = m[DIC], l = 0, cf = 0;
 	/*FORTH header structure */
 	/*Copy the new FORTH word into the new header */
-	strcpy((char *)(o->m + header), str); 
+	strcpy((char *)(o->m + head), str); 
 	/* align up to size of cell */
 	l = strlen(str) + 1;
 	l = (l + (sizeof(forth_cell_t) - 1)) & ~(sizeof(forth_cell_t) - 1); 
@@ -1307,7 +1307,7 @@ bring back the more logical, case sensitive, behavior.
 **/
 static int istrcmp(const char *a, const char *b)
 {
-	for(; ((*a == *b) || (tolower(*a) == tolower(*b))) && *a && *b; a++, b++)
+	for (; ((*a == *b) || (tolower(*a) == tolower(*b))) && *a && *b; a++, b++)
 		;
 	return tolower(*a) - tolower(*b);
 }
@@ -1348,7 +1348,7 @@ forth_cell_t forth_find(forth_t *o, const char *s)
 		parent = pwd;
 		pwd = m[pwd];
 	}
-	if(pwd > DICTIONARY_START && parent != m[PWD]) { 
+	if (pwd > DICTIONARY_START && parent != m[PWD]) { 
 		/* found - transpose it */
 		m[grandparent] = pwd; /* grandparent = current */
 		m[parent] = m[pwd];   /* parent = current next */
@@ -1374,15 +1374,15 @@ static int print_cell(forth_t *o, FILE *out, forth_cell_t u)
 	char s[64 + 1] = {0}; 
 	unsigned base = o->m[BASE];
 	base = base ? base : 10 ;
-	if(base >= 37)
+	if (base >= 37)
 		return -1;
-	if(base == 10)
+	if (base == 10)
 		return fprintf(out, "%"PRIdCell, u);
 	do 
 		s[i++] = conv[u % base];
 	while ((u /= base));
-	for(r = --i; i >= 0; i--)
-		if(fputc(s[i], out) != s[i])
+	for (r = --i; i >= 0; i--)
+		if (fputc(s[i], out) != s[i])
 			return -1;
 	return r;
 }
@@ -1397,9 +1397,9 @@ compile time defines, removing the check and the debugging code.
 static forth_cell_t check_bounds(forth_t *o, jmp_buf *on_error, 
 		forth_cell_t f, unsigned line, forth_cell_t bound)
 {
-	if(o->m[DEBUG] >= FORTH_DEBUG_CHECKS)
+	if (o->m[DEBUG] >= FORTH_DEBUG_CHECKS)
 		debug("0x%"PRIxCell " %u", f, line);
-	if(f >= bound) {
+	if (f >= bound) {
 		fatal("bounds check failed (%"PRIdCell" >= %zu) C line %u Forth Line %zu", 
 				f, (size_t)bound, line, o->line);
 		longjmp(*on_error, FATAL);
@@ -1414,12 +1414,12 @@ before an operation takes place. It is wrapped up in the **cd** macro.
 static void check_depth(forth_t *o, jmp_buf *on_error, 
 		forth_cell_t *S, forth_cell_t expected, unsigned line)
 {
-	if(o->m[DEBUG] >= FORTH_DEBUG_CHECKS)
+	if (o->m[DEBUG] >= FORTH_DEBUG_CHECKS)
 		debug("0x%"PRIxCell " %u", (forth_cell_t)(S - o->vstart), line);
-	if((uintptr_t)(S - o->vstart) < expected) {
+	if ((uintptr_t)(S - o->vstart) < expected) {
 		error("stack underflow %p -> %u (line %zu)", S - o->vstart, line, o->line);
 		longjmp(*on_error, RECOVERABLE);
-	} else if(S > o->vend) {
+	} else if (S > o->vend) {
 		error("stack overflow %p -> %u (line %zu)", S - o->vend, line, o->line);
 		longjmp(*on_error, RECOVERABLE);
 	}
@@ -1431,7 +1431,7 @@ Check that the dictionary pointer does not go into the stack area:
 static forth_cell_t check_dictionary(forth_t *o, jmp_buf *on_error, 
 		forth_cell_t dptr)
 {
-	if((o->m + dptr) >= (o->vstart)) {
+	if ((o->m + dptr) >= (o->vstart)) {
 		fatal("dictionary pointer is in stack area %"PRIdCell, dptr);
 		forth_invalidate(o);
 		longjmp(*on_error, FATAL);
@@ -1448,7 +1448,7 @@ are *NUL* terminated. This function helps to correct that.
 **/
 static void check_is_asciiz(jmp_buf *on_error, char *s, forth_cell_t end)
 {
-	if(*(s + end) != '\0') {
+	if (*(s + end) != '\0') {
 		error("not an ASCIIZ string at %p", s);
 		longjmp(*on_error, RECOVERABLE);
 	}
@@ -1476,7 +1476,7 @@ used by the C function **fopen**
 **/
 static const char* forth_get_fam(jmp_buf *on_error, forth_cell_t f)
 {
-	if(f >= LAST_FAM) {
+	if (f >= LAST_FAM) {
 		error("Invalid file access method %"PRIdCell, f);
 		longjmp(*on_error, RECOVERABLE);
 	}
@@ -1490,9 +1490,9 @@ static void print_stack(forth_t *o, FILE *out, forth_cell_t *S, forth_cell_t f)
 { 
 	forth_cell_t depth = (forth_cell_t)(S - o->vstart);
 	fprintf(out, "%"PRIdCell": ", depth);
-	if(!depth)
+	if (!depth)
 		return;
-	for(forth_cell_t j = (S - o->vstart), i = 1; i < j; i++) {
+	for (forth_cell_t j = (S - o->vstart), i = 1; i < j; i++) {
 		print_cell(o, out, *(o->S + i + 1));
 		fputc(' ', out);
 	}
@@ -1509,7 +1509,7 @@ is going on in the environment. This function will be compiled out if
 static void trace(forth_t *o, forth_cell_t instruction, 
 		forth_cell_t *S, forth_cell_t f)
 {
-	if(o->m[DEBUG] < FORTH_DEBUG_INSTRUCTION)
+	if (o->m[DEBUG] < FORTH_DEBUG_INSTRUCTION)
 		return;
 	fprintf(stderr, "\t( %s\t ", instruction_names[instruction]);
 	print_stack(o, stderr, S, f);
@@ -1574,9 +1574,9 @@ int forth_define_constant(forth_t *o, const char *name, forth_cell_t c)
 	assert(o);
 	assert(name);
 	compile(o, CONST, name, true, false);
-	if(strlen(name) >= MAXIMUM_WORD_LENGTH)
+	if (strlen(name) >= MAXIMUM_WORD_LENGTH)
 		return -1;
-	if(o->m[DIC] + 1 >= o->core_size)
+	if (o->m[DIC] + 1 >= o->core_size)
 		return -1;
 	o->m[o->m[DIC]++] = c; 
 	return 0;
@@ -1614,7 +1614,7 @@ FILE *forth_fopen_or_die(const char *name, char *mode)
 	assert(mode);
 	errno = 0;
 	file = fopen(name, mode);
-	if(!file) {
+	if (!file) {
 		fatal("opening file \"%s\" => %s", name, forth_strerror());
 		exit(EXIT_FAILURE);
 	}
@@ -1677,7 +1677,7 @@ This used for storing the size field in the header.
 forth_cell_t forth_blog2(forth_cell_t x)
 {
 	forth_cell_t b = 0;
-	while(x >>= 1)
+	while (x >>= 1)
 		b++;
 	return b;
 }
@@ -1688,7 +1688,7 @@ This rounds up an integer to the nearest power of two larger than that integer.
 forth_cell_t forth_round_up_pow2(forth_cell_t r)
 {
 	forth_cell_t up = 1;
-	while(up < r)
+	while (up < r)
 		up <<= 1;
 	return up;
 }
@@ -1733,7 +1733,7 @@ if we are passed a lower number the programmer has made a mistake somewhere
 and should be informed of this problem.
 **/
 	VERIFY(size >= MINIMUM_CORE_SIZE);
-	if(!(o = calloc(1, sizeof(*o) + sizeof(forth_cell_t)*size)))
+	if (!(o = calloc(1, sizeof(*o) + sizeof(forth_cell_t)*size)))
 		return NULL;
 
 /** 
@@ -1809,7 +1809,7 @@ words, except the compiling bit is set in the CODE field.
 The CODE field here also contains the VM instructions, the READ word will 
 compile pointers to this CODE field into the dictionary.
 **/
-	for(i = READ, w = READ; instruction_names[i]; i++)
+	for (i = READ, w = READ; instruction_names[i]; i++)
 		compile(o, w++, instruction_names[i], true, false);
 	compile(o, EXIT, "_exit", true, false); /* needed for 'see', trust me */
 	compile(o, PUSH, "'", true, false); /* crude starting version of ' */
@@ -1818,7 +1818,7 @@ compile pointers to this CODE field into the dictionary.
 We now name all the registers so we can refer to them by name instead of by
 number.
 **/
-	for(i = 0; register_names[i]; i++)
+	for (i = 0; register_names[i]; i++)
 		VERIFY(forth_define_constant(o, register_names[i], i+DIC) >= 0);
 
 /**
@@ -1828,7 +1828,7 @@ More constants are now defined:
 	VERIFY(forth_define_constant(o, "stack-start", w) >= 0);
 	VERIFY(forth_define_constant(o, "max-core", size) >= 0);
 
-	for(i = 0; constants[i].name; i++)
+	for (i = 0; constants[i].name; i++)
 		VERIFY(forth_define_constant(o, constants[i].name, constants[i].value) >= 0);
 
 /**
@@ -1871,11 +1871,11 @@ int forth_save_core_file(forth_t *o, FILE *dump)
 {
 	assert(o && dump);
 	uint64_t r1, r2, core_size = o->core_size;
-	if(forth_is_invalid(o))
+	if (forth_is_invalid(o))
 		return -1;
 	r1 = fwrite(o->header,  1, sizeof(o->header), dump);
 	r2 = fwrite(o->m,       1, sizeof(forth_cell_t) * core_size, dump);
-	if(r1+r2 != (sizeof(o->header) + sizeof(forth_cell_t) * core_size))
+	if (r1+r2 != (sizeof(o->header) + sizeof(forth_cell_t) * core_size))
 		return -1;
 	return 0;
 }
@@ -1899,26 +1899,26 @@ forth_t *forth_load_core_file(FILE *dump)
 	uint64_t w = 0, core_size = 0;
 	assert(dump);
 	make_header(expected, 0);
-	if(sizeof(actual) != fread(actual, 1, sizeof(actual), dump)) {
+	if (sizeof(actual) != fread(actual, 1, sizeof(actual), dump)) {
 		goto fail; /* no header */
 	}
-	if(memcmp(expected, actual, sizeof(header)-1)) {
+	if (memcmp(expected, actual, sizeof(header)-1)) {
 		goto fail; /* invalid or incompatible header */
 	}
 	core_size = 1 << actual[LOG2_SIZE];
 
-	if(core_size < MINIMUM_CORE_SIZE) {
+	if (core_size < MINIMUM_CORE_SIZE) {
 		error("core size of %"PRIdCell" is too small", core_size);
 		goto fail; 
 	}
 	w = sizeof(*o) + (sizeof(forth_cell_t) * core_size);
 	errno = 0;
-	if(!(o = calloc(w, 1))) {
+	if (!(o = calloc(w, 1))) {
 		error("allocation of size %"PRId64" failed, %s", w, forth_strerror());
 		goto fail; 
 	}
 	w = sizeof(forth_cell_t) * core_size;
-	if(w != fread(o->m, 1, w, dump)) {
+	if (w != fread(o->m, 1, w, dump)) {
 		error("file too small (expected %"PRId64")", w);
 		goto fail;
 	}
@@ -1943,7 +1943,7 @@ forth_t *forth_load_core_memory(char *m, size_t size)
 	size -= offset;
 	errno = 0;
 	o = calloc(sizeof(*o) + size, 1);
-	if(!o) {
+	if (!o) {
 		error("allocation of size %zu failed, %s", 
 				sizeof(*o) + size, forth_strerror());
 		return NULL;
@@ -1966,7 +1966,7 @@ char *forth_save_core_memory(forth_t *o, size_t *size)
 	errno = 0;
 	uint64_t w = o->core_size;
 	m = malloc(w * sizeof(forth_cell_t) + sizeof(o->header));
-	if(!m) {
+	if (!m) {
 		error("allocation of size %zu failed, %s", 
 				o->core_size * sizeof(forth_cell_t), forth_strerror());
 		return NULL;
@@ -1999,12 +1999,12 @@ struct forth_functions *forth_new_function_list(forth_cell_t count)
 	struct forth_functions *ff = NULL;
 	errno = 0;
 	ff = calloc(sizeof(*ff), 1);
-	if(!ff) {
+	if (!ff) {
 		warning("calloc failed: %s", forth_strerror());
 		return NULL;
 	}
 	ff->functions = calloc(sizeof(ff->functions[0]) * count, 1);
-	if(!(ff->functions)) {
+	if (!(ff->functions)) {
 		free(ff);
 		warning("calloc failed: %s", forth_strerror());
 		return NULL;
@@ -2077,7 +2077,7 @@ char *forth_strdup(const char *s)
 
 void forth_free_words(char **s, size_t length)
 {
-	for(size_t i = 0; i < length; i++)
+	for (size_t i = 0; i < length; i++)
 		free(s[i]);
 	free(s);
 }
@@ -2090,18 +2090,18 @@ char **forth_words(forth_t *o, size_t *length)
 	forth_cell_t *m  = o->m;
 	size_t i;
 	char **n, **s = calloc(2, sizeof(*s));
-	if(!s)
+	if (!s)
 		return NULL;
 	for (i = 0 ;pwd > DICTIONARY_START; pwd = m[pwd], i++) {
 		forth_cell_t len = WORD_LENGTH(m[pwd + 1]);
 		s[i] = forth_strdup((char*)(&m[pwd-len]));
-		if(!s[i]) {
+		if (!s[i]) {
 			forth_free_words(s, i);
 			*length = 0;
 			return NULL;
 		}
 		n = realloc(s, sizeof(*s) * (i+2));
-		if(!n) {
+		if (!n) {
 			forth_free_words(s, i);
 			*length = 0;
 			return NULL;
@@ -2128,7 +2128,7 @@ int forth_run(forth_t *o)
 	int errorval = 0, rval = 0;
 	assert(o);
 	jmp_buf on_error;
-	if(forth_is_invalid(o)) {
+	if (forth_is_invalid(o)) {
 		fatal("refusing to run an invalid forth, %"PRIdCell, forth_is_invalid(o));
 		return -1;
 	}
@@ -2140,9 +2140,9 @@ int forth_run(forth_t *o)
 	 * how "throw" and "catch" work in Forth. */
 	if ((errorval = setjmp(on_error)) || forth_is_invalid(o)) {
 		/* if the interpreter is invalid we always exit*/
-		if(forth_is_invalid(o))
+		if (forth_is_invalid(o))
 			return -1;
-		switch(errorval) {
+		switch (errorval) {
 			default:
 			case FATAL:
 				forth_invalidate(o);
@@ -2151,7 +2151,7 @@ int forth_run(forth_t *o)
 			 * a register which can be set within the running
 			 * virtual machine. */
 			case RECOVERABLE:
-				switch(o->m[ERROR_HANDLER]) {
+				switch (o->m[ERROR_HANDLER]) {
 				case ERROR_INVALIDATE: 
 					forth_invalidate(o);
 					/* fall-through */
@@ -2276,10 +2276,10 @@ other than **RUN**, they contain the instructions **DUP** and **MUL**
 respectively.
 
 **/
-	for(;(pc = m[ck(I++)]);) { 
+	for (;(pc = m[ck(I++)]);) { 
 	INNER:  
 		w = instruction(m[ck(pc++)]);
-		if(w < LAST_INSTRUCTION) {
+		if (w < LAST_INSTRUCTION) {
 			cd(stack_bounds[w]);
 			TRACE(o, w, S, f);
 		}
@@ -2314,7 +2314,7 @@ The CODE field contains the RUN instruction.
 **/
 		case DEFINE:
 			m[STATE] = 1; /* compile mode */
-			if(forth_get_word(o, o->s, MAXIMUM_WORD_LENGTH) < 0)
+			if (forth_get_word(o, o->s, MAXIMUM_WORD_LENGTH) < 0)
 				goto end;
 			compile(o, RUN, (char*)o->s, true, false);
 			break;
@@ -2364,19 +2364,18 @@ in **forth_init**, a simple word that calls **READ** in a loop (actually tail
 recursively).
 
 **/
-			if(forth_get_word(o, o->s, MAXIMUM_WORD_LENGTH) < 0)
+			if (forth_get_word(o, o->s, MAXIMUM_WORD_LENGTH) < 0)
 				goto end;
 			if ((w = forth_find(o, (char*)o->s)) > 1) {
 				pc = w;
-				if(m[STATE] && (m[ck(pc)] & COMPILING_BIT)) {
+				if (m[STATE] && (m[ck(pc)] & COMPILING_BIT)) {
 					m[dic(m[DIC]++)] = pc; /* compile word */
 					break;
 				}
 				goto INNER; /* execute word */
-			} else if(forth_string_to_cell(o->m[BASE], &w, (char*)o->s)) {
+			} else if (forth_string_to_cell(o->m[BASE], &w, (char*)o->s)) {
 				error("'%s' is not a word (line %zu)", o->s, o->line);
 				longjmp(on_error, RECOVERABLE);
-				break;
 			}
 
 			if (m[STATE]) { /* must be a number then */
@@ -2411,7 +2410,7 @@ require some explaining, but ADD, SUB and DIV will not.
 		case SHR:     f = *S-- >> f;                  break;
 		case MUL:     f = *S-- * f;                   break;
 		case DIV:
-			if(f) {
+			if (f) {
 				f = *S-- / f;
 			} else {
 				error("divide %"PRIdCell" by zero ", *S--);
@@ -2470,7 +2469,7 @@ pointer to that word if it found.
 **/
 		case FIND:
 			*++S = f;
-			if(forth_get_word(o, o->s, MAXIMUM_WORD_LENGTH) < 0)
+			if (forth_get_word(o, o->s, MAXIMUM_WORD_LENGTH) < 0)
 				goto end;
 			f = forth_find(o, (char*)o->s);
 			f = f < DICTIONARY_START ? 0 : f;
@@ -2536,7 +2535,7 @@ or from a file.
 			int file_in = 0;
 			file_in = f; /*get file/string in bool*/
 			f = *S--;
-			if(file_in) {
+			if (file_in) {
 				file = (FILE*)(*S--);
 				f = *S--;
 			} else {
@@ -2549,7 +2548,7 @@ or from a file.
 			o->m[TOP] = f;
 			/* push a fake call to forth_eval */
 			m[RSTK]++;
-			if(file_in) {
+			if (file_in) {
 				forth_set_file_input(o, file);
 				w = forth_run(o);
 			} else {
@@ -2566,7 +2565,7 @@ or from a file.
 			o->m[SLEN] = slen;
 			o->m[FIN]  = fin;
 			o->m[SOURCE_ID] = source;
-			if(forth_is_invalid(o))
+			if (forth_is_invalid(o))
 				return -1;
 			break;
 		}
@@ -2588,13 +2587,13 @@ and executes the function.
 **/
 		case CALL:
 		{
-			if(!(o->calls) || !(o->calls->count)) {
+			if (!(o->calls) || !(o->calls->count)) {
 				/* no call structure, or count is zero */
 				f = -1;
 				break;
 			}
 			forth_cell_t i = f;
-			if(i >= (o->calls->count)) {
+			if (i >= (o->calls->count)) {
 				f = -1;
 				break;
 			}
@@ -2833,21 +2832,21 @@ int main_forth(int argc, char **argv)
 	FILE *core = fopen("forth.core", "rb");
 	forth_t *o = NULL;
 	int r = 0;
-	if(core) {
+	if (core) {
 		o = forth_load_core_file(core);
 		fclose(core);
 	}
-	if(!o)
+	if (!o)
 		o = forth_init(DEFAULT_CORE_SIZE, stdin, stdout, NULL);
-	if(!o) {
+	if (!o) {
 		fatal("failed to initialize forth: %s", forth_strerror());
 		return -1;
 	}
 	forth_set_args(o, argc, argv);
-	if((r = forth_run(o)) < 0)
+	if ((r = forth_run(o)) < 0)
 		return r;
 	errno = 0;
-	if(!(core = fopen("forth.core", "wb"))) {
+	if (!(core = fopen("forth.core", "wb"))) {
 		fatal("failed to save core file: %s", forth_strerror());
 		return -1;
 	}

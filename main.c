@@ -60,10 +60,10 @@ static void sig_abrt_handler(int sig)
 	signal(sig, SIG_DFL);
         trace_size = backtrace(trace, TRACE_SIZE);
         messages = backtrace_symbols(trace, trace_size);
-        if(trace_size < 0)
+        if (trace_size < 0)
                 goto fail;
         fprintf(stderr, "SIGABRT was raised.\nStack trace:\n");
-        for(i = 0; i < trace_size; i++)
+        for (i = 0; i < trace_size; i++)
                 fprintf(stderr, "\t%s\n", messages[i]);
         fflush(stderr);
 fail:   
@@ -100,9 +100,9 @@ void forth_line_completion_callback(const char *line, size_t pos, line_completio
 	assert(global_forth_environment);
 	s = forth_words(global_forth_environment, &length);
 	(void)pos;
-	if(!s)
+	if (!s)
 		return;
-	for(size_t i = 0; i < length; i++) {
+	for (size_t i = 0; i < length; i++) {
 		/**@todo pattern matching on line versus s[i] */
 		line_add_completion(lc, s[i]);
 	}
@@ -123,18 +123,18 @@ static int forth_line_editor(forth_t *o, int mode)
 	assert(o);
 	line_set_vi_mode(mode);
 	errno = 0;
-	if(line_history_load(history_file) < 0) /* loading can fail, which is fine */
+	if (line_history_load(history_file) < 0) /* loading can fail, which is fine */
 		warning("failed to load history file %s, %s", history_file, forth_strerror());
 	line_set_completion_callback(forth_line_completion_callback);
-	while((line = line_editor(prompt))) {
+	while ((line = line_editor(prompt))) {
 		forth_set_string_input(o, line);
-		if((rval = forth_run(o)) < 0)
+		if ((rval = forth_run(o)) < 0)
 			goto end;
-		if(line_history_add(line) < 0) {
+		if (line_history_add(line) < 0) {
 			rval = -1;
 			goto end;
 		}
-		if(line_history_save(history_file) < 0) {
+		if (line_history_save(history_file) < 0) {
 			rval = -1;
 			goto end;
 		}
@@ -152,7 +152,7 @@ end:
 static void register_signal_handler(int sig, signal_handler handler)
 {
 	errno = 0; 
-	if(signal(SIGINT, handler) == SIG_ERR) {
+	if (signal(SIGINT, handler) == SIG_ERR) {
 		error("could not install %d handler: %s", sig, forth_strerror());
 		exit(EXIT_FAILURE);
 	}
@@ -160,7 +160,7 @@ static void register_signal_handler(int sig, signal_handler handler)
 
 static void sig_generic_handler(int sig)
 {
-	if(enable_signal_handling) {
+	if (enable_signal_handling) {
 		forth_signal(global_forth_environment, sig);
 		register_signal_handler(sig, sig_generic_handler);
 	} else {
@@ -181,7 +181,7 @@ whatsoever). It is simple, and only does one thing (but does it do it well?).
 **/
 static void fclose_input(FILE **in)
 {
-	if(*in && (*in != stdin))
+	if (*in && (*in != stdin))
 		fclose(*in);
 	*in = stdin;
 }
@@ -236,13 +236,13 @@ static int eval_file(forth_t *o, const char *file, enum forth_debug_level verbos
 	FILE *in = NULL;
 	int c = 0, rval = 0;
 	assert(file);
-	if(verbose >= FORTH_DEBUG_NOTE)
+	if (verbose >= FORTH_DEBUG_NOTE)
 		note("reading from file '%s'", file);
 	forth_set_file_input(o, in = forth_fopen_or_die(file, "rb"));
 	/* shebang line '#!', core files could also be detected */
-	if((c = fgetc(in)) == '#') 
-		while(((c = fgetc(in)) > 0) && (c != '\n'));
-	else if(c == EOF)
+	if ((c = fgetc(in)) == '#') 
+		while (((c = fgetc(in)) > 0) && (c != '\n'));
+	else if (c == EOF)
 		goto close;
 	else
 		ungetc(c, in);
@@ -270,7 +270,7 @@ static forth_t *forth_initial_enviroment(forth_t **o, forth_cell_t size,
 {
 	errno = 0;
 	assert(input && output && argv);
-	if(*o)
+	if (*o)
 		goto finished;
 
 #ifdef USE_BUILT_IN_CORE
@@ -283,7 +283,7 @@ static forth_t *forth_initial_enviroment(forth_t **o, forth_cell_t size,
 #else
 	*o = forth_init(size, input, output, NULL);
 #endif
-	if(!(*o)) {
+	if (!(*o)) {
 		fatal("forth initialization failed, %s", forth_strerror());
 		exit(EXIT_FAILURE);
 	}
@@ -348,12 +348,12 @@ ways of doing it (such as "getopt" and "getopts"), but by using them we
 sacrifice portability.
 **/
 
-	for(i = 1; i < argc && argv[i][0] == '-'; i++) {
-		if(strlen(argv[i]) > 2) {
+	for (i = 1; i < argc && argv[i][0] == '-'; i++) {
+		if (strlen(argv[i]) > 2) {
 			fatal("Only one option allowed at a time (got %s)", argv[i]);
 			goto fail;
 		}
-		switch(argv[i][1]) {
+		switch (argv[i][1]) {
 		case '\0': goto done; /* stop processing options */
 		case 'h':  usage(argv[0]); 
 			   help(); 
@@ -361,62 +361,62 @@ sacrifice portability.
 		case 'n':  use_line_editor = 1;
 			   /* fall-through */
 		case 't':  readterm = 1; 
-			   if(verbose >= FORTH_DEBUG_NOTE)
+			   if (verbose >= FORTH_DEBUG_NOTE)
 				   note("stdin on. line editor %s", use_line_editor ? "on" : "off");
 			   break;
 		case 'u':
 			   return libforth_unit_tests(0, 0, 0);
 		case 'e':
-			if(i >= (argc - 1))
+			if (i >= (argc - 1))
 				goto fail;
 			forth_initial_enviroment(&o, core_size, stdin, stdout, verbose, orig_argc, orig_argv);
 			optarg = argv[++i];
-			if(verbose >= FORTH_DEBUG_NOTE)
+			if (verbose >= FORTH_DEBUG_NOTE)
 				note("evaluating '%s'", optarg);
-			if(forth_eval(o, optarg) < 0)
+			if (forth_eval(o, optarg) < 0)
 				goto end;
 			eval = 1;
 			break;
 		case 'f':
-			if(i >= (argc - 1))
+			if (i >= (argc - 1))
 				goto fail;
 			forth_initial_enviroment(&o, core_size, stdin, stdout, verbose, orig_argc, orig_argv);
 			optarg = argv[++i];
-			if(verbose >= FORTH_DEBUG_NOTE)
+			if (verbose >= FORTH_DEBUG_NOTE)
 				note("reading from file '%s'", optarg);
-			if(eval_file(o, optarg, verbose) < 0)
+			if (eval_file(o, optarg, verbose) < 0)
 				goto end;
 			break;
 		case 's':
-			if(i >= (argc - 1))
+			if (i >= (argc - 1))
 				goto fail;
 			dump_name = argv[++i];
 			/* fall-through */
 		case 'S':  /*use default name */
-			if(verbose >= FORTH_DEBUG_NOTE)
+			if (verbose >= FORTH_DEBUG_NOTE)
 				note("saving core file to '%s' (on exit)", dump_name);
 			save = 1;
 			break;
 		case 'm':
-			if(o || (i >= argc - 1) || forth_string_to_cell(10, &core_size, argv[++i]))
+			if (o || (i >= argc - 1) || forth_string_to_cell(10, &core_size, argv[++i]))
 				goto fail;
-			if((core_size *= kbpc) < MINIMUM_CORE_SIZE) {
+			if ((core_size *= kbpc) < MINIMUM_CORE_SIZE) {
 				fatal("-m too small (minimum %zu)", MINIMUM_CORE_SIZE / kbpc);
 				return -1;
 			}
-			if(verbose >= FORTH_DEBUG_NOTE)
+			if (verbose >= FORTH_DEBUG_NOTE)
 				note("memory size set to %zu", core_size);
 			mset = 1;
 			break;
 		case 'l':
-			if(o || mset || (i >= argc - 1))
+			if (o || mset || (i >= argc - 1))
 				goto fail;
 			dump_name = argv[++i];
 			/* fall-through */
 		case 'L':
-			if(verbose >= FORTH_DEBUG_NOTE)
+			if (verbose >= FORTH_DEBUG_NOTE)
 				note("loading core file '%s'", dump_name);
-			if(!(o = forth_load_core_file(dump = forth_fopen_or_die(dump_name, "rb")))) {
+			if (!(o = forth_load_core_file(dump = forth_fopen_or_die(dump_name, "rb")))) {
 				fatal("%s, core load failed", dump_name);
 				return -1;
 			}
@@ -446,16 +446,16 @@ done:
 	readterm = (!eval && i == argc) || readterm;
 	forth_initial_enviroment(&o, core_size, stdin, stdout, verbose, orig_argc, orig_argv);
 
-	for(; i < argc; i++) /* process all files on command line */
-		if(eval_file(o, argv[i], verbose) < 0)
+	for (; i < argc; i++) /* process all files on command line */
+		if (eval_file(o, argv[i], verbose) < 0)
 			goto end;
 
-	if(readterm) { /* if '-t' or no files given, read from stdin */
-		if(verbose >= FORTH_DEBUG_NOTE)
+	if (readterm) { /* if '-t' or no files given, read from stdin */
+		if (verbose >= FORTH_DEBUG_NOTE)
 			note("reading from stdin (%p)", stdin);
 
 #ifdef USE_LINE_EDITOR
-		if(use_line_editor) {
+		if (use_line_editor) {
 			rval = forth_line_editor(o, 1);
 			goto end;
 		}
@@ -475,14 +475,14 @@ purposes, but in general we do not want to over write valid previously saved
 state with invalid data.
 **/
 
-	if(save) { /* save core file */
-		if(rval || forth_is_invalid(o)) {
+	if (save) { /* save core file */
+		if (rval || forth_is_invalid(o)) {
 			fatal("refusing to save invalid core, %u/%d", rval, forth_is_invalid(o));
 			return -1;
 		}
-		if(verbose >= FORTH_DEBUG_NOTE)
+		if (verbose >= FORTH_DEBUG_NOTE)
 			note("saving for file to '%s'", dump_name);
-		if(forth_save_core_file(o, dump = forth_fopen_or_die(dump_name, "wb"))) {
+		if (forth_save_core_file(o, dump = forth_fopen_or_die(dump_name, "wb"))) {
 			fatal("core file save to '%s' failed", dump_name);
 			rval = -1;
 		}

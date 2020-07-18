@@ -58,8 +58,8 @@ static char *(sig_lookup[]) = { /*List of C89 signals and their names*/
 /*
 static size_t compare(const char *restrict a, const char *restrict b, size_t c)
 {
-	for(size_t i = 0; i < c; i++)
-		if(a[i] != b[i])
+	for (size_t i = 0; i < c; i++)
+		if (a[i] != b[i])
 			return i;
 	return 0;
 }*/
@@ -67,9 +67,9 @@ static size_t compare(const char *restrict a, const char *restrict b, size_t c)
 static void print_caught_signal_name(test_t *t) 
 {
 	char *sig_name = "UNKNOWN SIGNAL";
-	if((t->caught_signal > 0) && (t->caught_signal < MAX_SIGNALS) && sig_lookup[t->caught_signal])
+	if ((t->caught_signal > 0) && (t->caught_signal < MAX_SIGNALS) && sig_lookup[t->caught_signal])
 		sig_name = sig_lookup[t->caught_signal];
-	if(!(t->is_silent))
+	if (!(t->is_silent))
 		fprintf(t->output, "caught %s (signal number %d)\n", sig_name, t->caught_signal);\
 }
 
@@ -77,7 +77,7 @@ static void print_caught_signal_name(test_t *t)
 static void sig_abrt_handler(int sig) 
 { /* catches assert() from within functions being exercised */
 	tb.caught_signal = sig;
-	if(tb.jmpbuf_active) {
+	if (tb.jmpbuf_active) {
 		tb.jmpbuf_active = 0;
 		longjmp(tb.current_test, 1);
 	}
@@ -92,13 +92,13 @@ static const char *blue(test_t *t)   { return t->color_on ? "\x1b[34m" : ""; }
 static int unit_tester(test_t *t, const int test, const char *msg, unsigned line) 
 {
 	assert(t && msg);
-	if(test) {
+	if (test) {
 	       	t->passed++; 
-		if(!(t->is_silent))
+		if (!(t->is_silent))
 			fprintf(t->output, "      %sok%s:\t%s\n", green(t), reset(t), msg); 
 	} else { 
 		t->failed++;
-	       	if(!(t->is_silent))
+	       	if (!(t->is_silent))
 			fprintf(t->output, "  %sFAILED%s:\t%s (line %u)\n", red(t), reset(t), msg, line);
 	}
 	return test;
@@ -107,21 +107,21 @@ static int unit_tester(test_t *t, const int test, const char *msg, unsigned line
 static void print_statement(test_t *t, const char *stmt) 
 {
 	assert(t);
-	if(!(t->is_silent))
+	if (!(t->is_silent))
 		fprintf(t->output, "   %sstate%s:\t%s\n", blue(t), reset(t), stmt);
 }
 
 static void print_must(test_t *t, const char *must) 
 {
 	assert(t);
-	if(!(t->is_silent))
+	if (!(t->is_silent))
 		fprintf(t->output, "    %smust%s:\t%s\n", blue(t), reset(t), must);
 }
 
 static void print_note(test_t *t, const char *name) 
 { 
 	assert(t);
-	if(!(t->is_silent))
+	if (!(t->is_silent))
 		fprintf(t->output, "%s%s%s\n", yellow(t), name, reset(t)); 
 }
 
@@ -138,7 +138,7 @@ static void _test(test_t *t, const int result, const char *expr, const unsigned 
 	t->current_line = line,
 	t->current_expr = expr;
 	signal(SIGABRT, sig_abrt_handler);
-	if(!setjmp(t->current_test)) {
+	if (!setjmp(t->current_test)) {
 		t->jmpbuf_active = 1;
 		t->current_result = unit_tester(t, result, t->current_expr, t->current_line);
 	} else {
@@ -161,14 +161,14 @@ static void _must(test_t *t, const int result, const char *expr, const unsigned 
 	assert(t && expr);
 	print_must(t, expr);
 	_test(t, result, expr, line);
-	if(!(t->current_result))
+	if (!(t->current_result))
 		exit(-1);
 }
 
 /**@brief print out and execute a statement that is needed to further a test
  * @param TESTBENCH The test bence to execute under
  * @param STMT A statement to print out (stringify first) and then execute**/
-#define state(TESTBENCH, STMT) do{ print_statement((TESTBENCH), #STMT ); STMT; } while(0);
+#define state(TESTBENCH, STMT) do{ print_statement((TESTBENCH), #STMT ); STMT; } while (0);
 
 static int unit_test_start(test_t *t, const char *unit_name, FILE *output) 
 {
@@ -177,12 +177,12 @@ static int unit_test_start(test_t *t, const char *unit_name, FILE *output)
 	time_t rawtime;
 	time(&rawtime);
 	t->output = output;
-	if(signal(SIGABRT, sig_abrt_handler) == SIG_ERR) {
+	if (signal(SIGABRT, sig_abrt_handler) == SIG_ERR) {
 		fprintf(stderr, "signal handler installation failed");
 		return -1;
 	}
 	t->start_time = clock();
-	if(!(t->is_silent))
+	if (!(t->is_silent))
 		fprintf(t->output, "%s unit tests\n%sbegin:\n\n", 
 				unit_name, asctime(localtime(&rawtime)));
 	return 0;
@@ -193,7 +193,7 @@ static unsigned unit_test_end(test_t *t, const char *unit_name)
 	assert(t && unit_name);
 	clock_t end_time = clock();
 	double total = ((double) (end_time - t->start_time)) / CLOCKS_PER_SEC;
-	if(!(t->is_silent))
+	if (!(t->is_silent))
 		fprintf(t->output, "\n\n%s unit tests\npassed  %u/%u\ntime    %fs\n", 
 				unit_name, t->passed, t->passed+t->failed, total);
 	return t->failed;
@@ -311,7 +311,7 @@ int libforth_unit_tests(int keep_files, int colorize, int silent)
 		test(&tb, forth_dump_core(f, core_dump) >= 0);
 		state(&tb, fclose(core_dump));
 		state(&tb, forth_free(f));
-		if(!keep_files)
+		if (!keep_files)
 			state(&tb, remove(name));
 	}
 	{
@@ -496,7 +496,7 @@ int libforth_unit_tests(int keep_files, int colorize, int silent)
 		state(&tb, free(m1));
 		state(&tb, free(m2));
 
-		if(!keep_files)
+		if (!keep_files)
 			state(&tb, remove("unit.core"));
 	}
 	return !!unit_test_end(&tb, "libforth");
