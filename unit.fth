@@ -155,7 +155,6 @@ T{ -5 s>d -> -5 -1 }T
 
 T{ 4 5 bounds -> 9 4 }T
 
-( @todo tests when alignment is 2 bytes )
 size 8 = [if]
 T{ 0  aligned -> 0 }T
 T{ 1  aligned -> size }T

@@ -10,8 +10,6 @@
 @license    MIT 
 @email      howe.r.j.89@gmail.com 
 
-@todo Some arguments accept their size in bytes, others in forth cells, this 
-needs to be changed so it is consistent
 **/
 #ifndef FORTH_H
 #define FORTH_H

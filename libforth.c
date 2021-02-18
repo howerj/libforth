@@ -8,14 +8,6 @@
 
 @brief      A FORTH library, written in a literate style.
 
-@todo Fix the special 'literal' word, moving it outside register area
-@todo Add 'parse', removing scanf/fscanf
-@todo The special case of base = 0 causes problems, this should be
-removed, also '$' should be used instead of '0x'.
-@todo Add THROW/CATCH as virtual machine instructions, remove
-RESTART and current error handling scheme.
-@todo Add u.rc to the interpreter
-
 ## License
 
 The MIT License (MIT)
@@ -942,13 +934,6 @@ up for debugging purposes (like **pnum**).
  X(1, BYE,       "(bye)",          " u -- : bye, bye!")\
  X(0, LAST_INSTRUCTION, NULL, "")
 
-/** // @todo Implement these instructions? 
- X(1, MLOAD,     "m@",        "raddr -- u : load a value, non-relative")\
- X(2, MSTORE,    "m!",        "u r-addr -- u : store a value, non-relative")\
- X(1, MCLOAD,    "mc@",       "rc-addr -- u : load character value, non-relative")\
- X(2, MCSTORE,   "mc!",       "u rc-addr -- : store character value, non-relative")\
-*/
-
 /**
 @brief All of the instructions that can be used by the Forth virtual machine.
 **/
@@ -1158,7 +1143,7 @@ static int forth_get_word(forth_t *o, uint8_t *s, forth_cell_t length)
 		if (!isspace(ch))
 			break;
 	}
-	s[0] = ch; /**@todo s[0] should be word length count */
+	s[0] = ch;
 	for (size_t i = 1; i < (length - 1); i++) {
 		ch = forth_get_char(o);
 		if (ch == EOF || isspace(ch) || !ch)
@@ -1373,7 +1358,7 @@ static int print_cell(forth_t *o, FILE *out, forth_cell_t u)
 	int i = 0, r = 0;
 	char s[64 + 1] = {0}; 
 	unsigned base = o->m[BASE];
-	base = base ? base : 10 ;
+	base = base != 0 ? base : 10 ;
 	if (base >= 37)
 		return -1;
 	if (base == 10)
@@ -2136,7 +2121,7 @@ int forth_run(forth_t *o)
 	/* The following code handles errors, if an error occurs, the
 	 * interpreter will jump back to here.
 	 *
-	 * @todo This code needs to be rethought to be made more compliant with
+	 * This code needs to be rethought to be made more compliant with
 	 * how "throw" and "catch" work in Forth. */
 	if ((errorval = setjmp(on_error)) || forth_is_invalid(o)) {
 		/* if the interpreter is invalid we always exit*/
@@ -2519,9 +2504,6 @@ the virtual machine. It saves and restores state which we do
 not usually need to do when the interpreter is not running (the usual case
 for **forth_eval** when called from C). It can read either from a string
 or from a file.
-
-@todo EVALUATOR needs to setjmp after forth_eval has been called.
-@todo EVALUATOR should accept a Forth string.
 **/
 		case EVALUATOR:
 		{ 
@@ -2728,10 +2710,6 @@ The following memory functions can be used by the Forth interpreter
 for faster memory operations, but more importantly they can be used
 to interact with memory outside of the Forth core.
 
-@todo Subtract/Add base pointer (o->m) to all memory operations that 
-occur on real memory so this does not have to be done within the
-interpreter. This also requires character aligned memory addresses
-to be used to be useful. Both will simplify operations.
 **/
 		case MEMMOVE:
 			w = *S--;

@@ -17,7 +17,7 @@
 #   |**/                              |
 #   |int main(void)                   |
 #   |{                                |
-#   |	return -1; /**@todo fix */    |
+#   |	return -1; /** fix this */    |
 #   |}                                |
 #   .---------------------------------.
 # Output:
@@ -27,11 +27,9 @@
 #   |                                 |
 #   |    int main(void)               |
 #   |    {                            |
-#   |	    return -1; /**@todo fix */|
+#   |	    return -1; /** fix this */|
 #   |    }                            |
 #   .---------------------------------.
-#
-# @todo remove gawk dependent features, so it works with mawk
 #
 
 BEGIN {

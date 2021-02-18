@@ -70,8 +70,6 @@ http://retroforth.org/pages/?PortsOfRetroEditor
 
 Which contains ports of an editor written for Retro Forth.
 
-@todo Improve the block editor
-
 - '\' needs extending to work with the block editor, for now,
 use parenthesis for comments
 - add multi line insertion mode
@@ -83,7 +81,7 @@ ANSI escape codes - thanks to CMD.EXE. Damned Windows.
 Adapted from http://retroforth.org/pages/?PortsOfRetroEditor )
 
 
-: help ( @todo rename to H once vocabularies are implemented )
+: help
 page cr
 " Block Editor Help Menu
 

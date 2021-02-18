@@ -116,7 +116,7 @@ a lot of space )
  3 constant  3
 
 0 constant false
-1 constant true ( @warning not standards compliant )
+1 constant true ( this is not standards compliant )
 
 ( Confusingly the word CR prints a line feed )
 10 constant lf   ( line feed )
@@ -137,10 +137,6 @@ cell size 8 * * constant address-unit-bits
 
 ( Bit corresponding to the sign in a number )
 -1 -1 1 rshift and invert constant sign-bit 
-
-( @todo test by how much, if at all, making words like 1+,
-1-, <>, and other simple words, part of the interpreter would
-speed things up )
 
 : 1+ ( x -- x : increment a number )
 	1 + ;
@@ -181,7 +177,7 @@ speed things up )
 : sliteral immediate ( I: c-addr u --, Run: -- c-addr u )
 	swap [literal] [literal] ;
 
-( @todo throw if not found )
+( NB. We could throw if not found )
 : ['] ( I: c" xxx", Run: -- xt  )
 	immediate find [literal] ;
 
@@ -219,21 +215,6 @@ use the pad area that much. )
 : pad ( -- addr : push pointer to the pad area )
 	here #pad + ;
 
-( @todo this can be improved a lot, currently it uses more
-space than it has to, 4 cells instead of three.
-
-It does:
-
-	push value
-	push value
-
-Instead of:
-
-	magic-2literal-word
-	value
-	value
-
-)
 : 2literal immediate ( n n -- : compile two literals )
 	swap [literal] [literal] ;
 
@@ -294,12 +275,10 @@ Instead of:
 : mod ( u1 u2 -- u : calculate the remainder of u1/u2 )
 	2dup / * - ;
 
-( @todo implement UM/MOD in the VM, then use this to implement
-'/' and MOD )
 : um/mod ( u1 u2 -- rem quot : remainder and quotient of u1/u2 )
 	2dup / >r mod r> ;
 
-( @warning this does not use a double cell for the multiply )
+( NB. this does not use a double cell for the multiply )
 : */ ( n1 n2 n3 -- n4 : [n2*n3]/n1 )
 	 * / ;
 
@@ -456,8 +435,6 @@ when having to convert to and from character and cell address.)
 
 : rp@ (  -- u, R: u -- )
 	r> r @ swap >r ;
-
-( @todo r!, rp! )
 
 : 0> ( n -- bool )
 	0 > ;
@@ -700,7 +677,7 @@ smudge
 	5 roll 5 roll ;
 
 : s>d ( x -- d : convert a signed value to a double width cell )
-	( @note the if...else...then is only necessary as this Forths
+	( The if...else...then is only necessary as this Forths
 	booleans are 0 and 1, not 0 and -1 as it usually is )
 	dup 0< if -1 else 0 then  ;
 
@@ -742,7 +719,6 @@ hide stdin?
 : cfa immediate ( find-address -- cfa )
 	( Given the address of the PWD field of a word this
 	function will return an execution token for the word )
-	( @todo if < dictionary start PWD is invalid )
 	 ;
 
 : again immediate
@@ -764,7 +740,6 @@ hide stdin?
 	!                   ( write an execution token to a hole )
 	[ 0 , ] ;           ( this is the hole we write )
 
-( @todo integrate catch/throw into the interpreter as primitives )
 : catch  ( xt -- exception# | 0 : return addr on stack )
 	sp@ >r        ( xt : save data stack pointer )
 	`handler @ >r ( xt : and previous handler )
@@ -774,7 +749,6 @@ hide stdin?
 	r> drop       (      discard saved stack ptr )
 	0 ;           ( 0  : normal completion )
 
-( @todo use this everywhere )
 : throw  ( ??? exception# -- ??? exception# )
 	?dup-if ( exc# \ 0 throw is no-op )
 		`handler @ r ! ( exc# : restore prev return stack )
@@ -1010,7 +984,6 @@ hide tail
 	['] branch ,
 	here - cell+ , ;
 
-( @todo better version of this )
 : factorial ( u -- u : factorial of u )
 	dup 2 u< if drop 1 exit then dup 1- recurse * ;
 
@@ -1034,7 +1007,7 @@ hide tail
 
 This function computes the integer square root of a number.
 
-@note this should be changed to the iterative algorithm so
+This should be changed to the iterative algorithm so
 it takes up less space on the stack - not that is takes up
 a hideous amount as it is. )
 
@@ -1191,7 +1164,7 @@ easily. )
 	(;) ;            ( write exit, switch to command mode )
 
 : <builds immediate
-	( @note ['] create , *nearly* works )
+	( ['] create , *nearly* works )
 	['] :: ,                           ( Make the defining word compile a header )
 	dolit , dolit , write-compile,     ( Write in push to the creating word )
 	['] here , ['] 3+ , write-compile, ( Write in the number we want the created word to push )
@@ -1363,10 +1336,6 @@ the return stack )
 		rdrop ( return to the caller's caller routine )
 	then ;
 
-\ @todo define '(i)', '(j)' and '(k)', then make their
-\ wrappers, 'i', 'j'  and 'k' call ?comp then compile a pointer
-\ to the thing that implements them,  likewise for leave,
-\ loop and +loop.
 : i ( -- i : Get current, or innermost, loop index in do...loop construct )
 	r> r>   ( pop off return address and i )
 	tuck    ( tuck i away )
@@ -1414,7 +1383,6 @@ make (banner) space
 
 hide{ (banner) banner }hide
 
-( @todo check u for negative )
 : fill ( c-addr u char -- : fill in an area of memory with a character, only if u is greater than zero )
 	-rot
 	0 do 2dup i + c! loop
@@ -1582,9 +1550,6 @@ hide skip
 0xFFFF constant max-string-length
 
 : (.")  ( char -- c-addr u )
-	( @todo This really needs simplifying, to do this
-	a set of words that operate on a temporary buffer can
-	be used )
 	( Write a string into word being currently defined, this
 	code has to jump over the string it has just put into the
 	dictionary so normal execution of a word can continue. The
@@ -1629,7 +1594,6 @@ hide (type)
 	key drop sbuf 0 fill sbuf [char] " accepter sbuf drop swap ;
 hide sbuf
 
-( @todo these strings really need rethinking, state awareness needs to be removed... )
 : type,
 	state @ if ['] type , else type then ;
 
@@ -2106,8 +2070,6 @@ size 8 = [if]
 		dup counted-column 1+ i ?.r i @ size .chars space
 	loop ;
 
-( @todo this function should make use of DEFER and IS, then different
-version of dump could be made that swapped out LISTER )
 : dump  ( addr u -- : dump out 'u' cells of memory starting from 'addr' )
 	1+ over + under lister drop
 	cr ;
@@ -2205,7 +2167,7 @@ numbers to the screen, this Forth has number output methods
 built into the Forth kernel and mostly uses them instead,
 but the mechanism is still useful so it has been added.
 
-@todo Pictured number output should act on a double cell
+NB. Pictured number output should act on a double cell
 number not a single cell number )
 
 0 variable hld
@@ -2703,7 +2665,6 @@ make debug-prompt prompt-default
 			[char] s of .s         endof
 			[char] R of r.s        endof
 			[char] c of exit       endof
-			( @todo add throw here )
 		endcase
 	again ;
 hide debug-prompt
@@ -2726,9 +2687,6 @@ cases for decompilation )
 : get-original-exit [ find _exit ] literal ;
 : get-quote   [ find ' ] literal ;
 
-( @todo replace 2- nos1+ nos1+ with appropriate word, like
-the string word that increments a string by an amount, but
-that operates on CELLS )
 : branch-increment ( addr branch -- increment : calculate decompile increment for "branch" )
 	1+ dup negative?
 	if
@@ -2824,18 +2782,18 @@ hide{
 	dup see.start
 	dup see.previous
 	dup see.immediate
-	dup see.instruction ( @todo look up instruction name )
+	dup see.instruction
 	see.defined ;
 
-( @todo This does not work for all words, so needs fixing.
- Specifically:
+( This does not work for all words. Specifically:
 
 	2variable
 	2constant
 	table
 	constant
 	variable
-	array
+	array 
+
 Which are all complex CREATE words
 
 A good way to test decompilation is with the following
@@ -2846,7 +2804,6 @@ Unix pipe:
 		| ./forth -t forth.fth &> decompiled.log
 )
 
-( @todo refactor into word that takes a PWD pointer and one that attempts to parse/find name )
 : see ( c" xxx" -- : decompile a word )
 	find
 	dup 0= if -32 throw then
@@ -2865,7 +2822,7 @@ Unix pipe:
 		then
 	then cr ;
 
-( @todo This has a bug, if any data within a word happens
+( NB. This has a bug, if any data within a word happens
 to match the address of _exit word.end calculates the wrong
 address, this needs to mirror the DECOMPILE word )
 : word.end ( addr -- addr : find the end of a word )
@@ -3043,9 +3000,10 @@ Would be easier to deal with, it preserves the file identifier
 and throws if there is any problem. It would be a bit more
 difficult to use when there are two files open at a time.
 
-@todo implement the other file access methods in terms of the
+The other file access methods could be implemented in terms of the
 built in ones.
-@todo read-line and write-line need their flag and ior setting
+
+NB. read-line and write-line need their flag and ior setting
 correctly
 
 	FILE-SIZE    [ use file-positions ]
@@ -3067,12 +3025,6 @@ See: [http://forth.sourceforge.net/std/dpans/dpans11.htm]  )
 
 : putchar ( char fileid -- ior )
 	swap x chars> c! x chars> swap write-char ;
-
-\ @todo This shouldn't affect the file position indicator.
-\ @todo This doesn't return a sensible error indicator.
-\ : file-size ( fileid -- ud ior )
-\	0 swap
-\	begin dup getchar nip 0= while nos1+ repeat drop ;
 
 
 hide{ x }hide
@@ -3141,10 +3093,7 @@ to the matching expression.
 As an example "*, World!" matches both "Hello, World!" and
 "Good bye, cruel World!". "Hello, ...." matches "Hello, Bill"
 and "Hello, Fred" but not "Hello, Tim" as there are two few
-characters in the last string.
-
-@todo make a matcher that expects a Forth string, which do
-not have to be NUL terminated )
+characters in the last string. )
 
 \ Translated from http://c-faq.com/lib/regex.html
 \ int match(char *pat, char *str)
@@ -3187,9 +3136,6 @@ defer matcher
 	2dup 0 1 ++ matcher if pass else *str advance-string then ;
 
 : match ( string regex -- bool : match a ASCIIZ pattern against an ASCIIZ string )
-	( @todo Add limits and accept two Forth strings, making sure they are both
-	  ASCIIZ strings as well
-	  @warning This uses a non-standards compliant version of case! )
 	*pat
 	case
 		       0 of drop c@ not   endof
@@ -3417,8 +3363,7 @@ Example usage:
 		decompress ;
 	extract
 
-@note file redirection could be used for the input as well
-@todo compression, and reading/writing to strings )
+File redirection could be used for the input as well )
 
 : cpad pad chars> ;
 
@@ -3518,8 +3463,6 @@ hide{ wbyte hexify count quote advance }hide
 
 ( ==================== Word Count Program ==================== )
 
-( @todo implement FILE-SIZE in terms of this program )
-( @todo extend wc to include line count and word count )
 : wc ( c-addr u -- u : count the bytes in a file )
 	r/o open-file throw
 	0 swap
@@ -3593,58 +3536,6 @@ application. )
 hide{ redirect restore data encore header }hide
 
 ( ==================== Save Core file ======================== )
-
-( ==================== Hex dump ============================== )
-
-( @todo hexdump can read in too many characters and it does not
-print out the correct address
-@todo utilities for easy redirecting of file input/output )
-\ : input >r cpad 128 r> read-file ; ( file-id -- u 0 | error )
-\ : clean  cpad 128 0 fill ; ( -- )
-\ : cdump  cpad chars swap aligned chars dump ; ( u -- )
-\ : hexdump ( file-id -- : [hex]dump a file to the screen )
-\ 	dup
-\ 	clean
-\ 	input if 2drop exit then
-\ 	?dup-if cdump else drop exit then
-\ 	tail ;
-\
-\ 0 variable u
-\ 0 variable u1
-\ 0 variable cdigs
-\ 0 variable digs
-\
-\ : address ( -- bool : is it time to print out a new line and an address )
-\ 	u @ u1 @ - 4 size * mod 0= ;
-\
-\ : (dump) ( u c-addr u : u -- )
-\ 	rot dup u ! u1 !
-\ 	cdigits cdigs !
-\ 	digits digs !
-\ 	bounds
-\ 	do
-\ 		address if cr u @ digs @ u.rz [char] : emit space then
-\ 		i c@ cdigs @ u.rz
-\ 		
-\ 		i 1+ size mod 0= if space then
-\ 		u 1+!
-\ 	loop
-\ 	u @
-\ 	;
-\
-\ : hexdump-file ( c-addr u )
-\ 	r/o open-file throw
-\ 	
-\ 	;
-\
-\ hide{ u u1 cdigs digs address }hide
-\ hex
-\ 999 0 197 (dump)
-\ decimal
-\
-\ hide{ cpad clean cdump input }hide
-\
-( ==================== Hex dump ============================== )
 
 ( ==================== Date ================================== )
 ( This word set implements a words for date processing, so
@@ -3740,10 +3631,6 @@ hide{ >weekday .day >day >month colon >gmt 0? }hide
 
 ( ==================== CRC =================================== )
 
-( @todo implement all common CRC algorithms, but only if the
-word size allows it [ie. 32 bit CRCs on a 32 or 64 bit machine,
-64 bit CRCs on a 64 bit machine] )
-
 ( Make a word to limit arithmetic to a 16-bit value )
 size 2 = [if]
 	: limit immediate ;  ( do nothing, no need to limit )
@@ -3792,12 +3679,7 @@ more information.
 
 This set of words use two cells to represent a fraction,
 however a single cell could be used, with the numerator and the
-denominator stored in upper and lower half of a single cell.
-
-@todo add saturating Q numbers to the interpreter, as well as
-arithmetic word for acting on double cells [d+, d-, etcetera]
-https://en.wikipedia.org/wiki/Q_%28number_format%29, this
-can be used in lieu of floating point numbers. )
+denominator stored in upper and lower half of a single cell. )
 
 : simplify ( a b -- a/gcd{a,b} b/gcd{a/b} : simplify a rational )
   2dup
@@ -3863,13 +3745,13 @@ can be used in lieu of floating point numbers. )
 : >=rat ( a/b c/d -- bool : rational greater or equal to )
 	<rat not ;
 
-( @todo >rational is a work in progress, make it better )
+( >rational is a work in progress, make it better )
 : 0>number 0 -rot >number ;
 0 0 2variable saved
 : failed 0 0 saved 2@ ;
 : >rational ( c-addr u -- a/b c-addr u )
 	2dup saved 2!
-	0>number 2dup 0= if 4drop failed exit then ( @note could convert to rational n/1 )
+	0>number 2dup 0= if 4drop failed exit then ( Could convert to rational n/1 )
 	c@ [char] / <> if 3drop failed exit then
 	1 /string
 	0>number ;
@@ -3921,10 +3803,7 @@ the memory option.
 To simplify the current code, and make the code portable
 to devices with EEPROM an instruction in the virtual machine
 could be made which does the task of transfering a block to
-disk. 
-
-@todo refactor BLOCK to use MAKE/DOER so its behavior can
-be changed. )
+disk. )
 
 0 variable dirty
 b/buf string buf  ( block buffer, only one exists )
@@ -3943,7 +3822,7 @@ b/buf string buf  ( block buffer, only one exists )
 : block.name ( n -- c-addr u : make a block name )
 	c" .blk" <# holds #s #> rot drop ;
 
-( @warning this will not work if we do not have permission,
+( This will not work if we do not have permission,
 or in various other cases where we cannot open the file,
 for whatever reason )
 : file-exists ( c-addr u : does a file exist? )
@@ -3952,7 +3831,7 @@ for whatever reason )
 : block.exists ( n -- bool : does a block buffer exist on disk? )
 	block.name file-exists ;
 
-( @note block.write and block.read do not check if they have
+( block.write and block.read do not check if they have
 wrote or read in 1024 bytes, nor do they check that they can
 only write or read 1024 and not a byte more )
 
@@ -4018,7 +3897,6 @@ address to the block buffer. )
 : --> ( -- : load next block )
 	1 +block load ;
 
-( @todo refactor into BLOCK.MAKE, which BLOCKS.MAKE would use )
 : blocks.make ( n1 n2 -- : make blocks on disk from n1 to n2 inclusive )
 	1+ swap do i block b/buf bl fill update loop save-buffers ;
 
@@ -4031,10 +3909,6 @@ address to the block buffer. )
 : block.delete ( n -- : delete block )
 	dup block.exists 0= if drop exit then
 	block.name delete-file drop ;
-
-\ @todo implement a word that splits a file into blocks
-\ : split ( c-addr u : split a file into blocks )
-\	;
 
 hide{
 	block.name invalid? block.write
@@ -4317,20 +4191,6 @@ and reveal words to the user, this was just an experiment.
 	: vocabulary
 		create does> drop 0 [ find forth 1- ] literal ! ; )
 
-\ @todo The built in primitives should be redefined so to make sure
-\ they are called and nested correctly, using the following words
-\ 0 variable csp
-\ : !csp sp@ csp ! ;
-\ : ?csp sp@ csp @ <> if -22 throw then ;
-
-\ @todo Make this work
-\ : >body ??? ;
-\ : noop ( -- ) ;
-\ : defer  create ( "name" -- ) ['] noop ,   does> ( -- ) @ execute ;
-\ : is ( xt "name" -- ) find >body ! ;
-\ defer lessthan
-\ find < is lessthan
-
 ( ==================== Test Code ============================= )
 
 ( ==================== Error checking ======================== )
@@ -4343,7 +4203,6 @@ structures a bit safer. )
 : begin immediate ?comp postpone begin [ hide begin ] ;
 : until immediate ?comp postpone until [ hide until ] ;
 : never immediate ?comp postpone never [ hide never ] ;
-\ : ;     immediate ?comp postpone ;     [ hide ; ]  ; ( @todo do nesting checking for control statements )
 
 ( ==================== Error checking ======================== )
 

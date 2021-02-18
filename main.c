@@ -44,11 +44,12 @@ typedef void (*signal_handler)(int sig); /**< functions for handling signals*/
 #define TRACE_SIZE      (64u)
 
 /** 
-@warning This hander calls functions (backtrace, printf) that are not 
+This hander calls functions (backtrace, printf) that are not 
 safe to call from a signal handler, however this is only going to
 be called in the event of an internal consistency failure,
 and only as a courtesy to the programmer.
-@todo make a windows version using information from:
+
+A windows version could be made using information from:
 https://msdn.microsoft.com/en-us/library/windows/desktop/bb204633%28v=vs.85%29.aspx and
 https://stackoverflow.com/questions/5693192/win32-backtrace-from-c-code
 **/
@@ -75,7 +76,6 @@ fail:
 #ifdef USE_LINE_EDITOR
 #include "libline.h"
 #define LINE_EDITOR_AVAILABLE (1) /**< line editor is available */
-/**@todo add list of words to auto complete */
 
 /**
 The Forth history file will be stored in this file, if the 
@@ -103,7 +103,6 @@ void forth_line_completion_callback(const char *line, size_t pos, line_completio
 	if (!s)
 		return;
 	for (size_t i = 0; i < length; i++) {
-		/**@todo pattern matching on line versus s[i] */
 		line_add_completion(lc, s[i]);
 	}
 	forth_free_words(s, length);

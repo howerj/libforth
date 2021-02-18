@@ -1,8 +1,4 @@
-# @todo clean up make file
-# @todo The standalone executable "libforth" needs a better name, but then so
-# does the normal executable "forth".
-# @note The makefile is not very Windows friendly, but it will work under
-# Cygwin
+# The makefile is not very Windows friendly, but it will work under Cygwin
 ECHO	= echo
 AR	= ar
 CC	= gcc

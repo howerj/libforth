@@ -241,7 +241,6 @@ int libforth_unit_tests(int keep_files, int colorize, int silent)
 	{
 		/**@note The following functions will not be tested:
 		 * 	- void forth_set_file_output(forth_t *o, FILE *out);
-		 * @todo Finish the testing of functions presented in the API
 		 * 	- void forth_set_args(forth_t *o, int argc, char **argv);
 		 * 	- void forth_signal(forth_t *o, int signal);
 		 *	- int main_forth(int argc, char **argv); **/
@@ -486,9 +485,6 @@ int libforth_unit_tests(int keep_files, int colorize, int silent)
 		must(&tb, m2 = forth_save_core_memory(f2, &size2));
 		must(&tb, size2 == size1);
 		test(&tb, size1/sizeof(forth_cell_t) > MINIMUM_CORE_SIZE);
-
-		/**@todo Get this working, might have to skip register section */
-		/*test(&tb, !memcmp(m1, m2, size1));*/
 
 		state(&tb, fclose(core));
 		state(&tb, forth_free(f1));
